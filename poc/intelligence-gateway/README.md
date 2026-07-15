@@ -138,6 +138,28 @@ blocked 后精确验证成功 -> verified，恢复 Planner 资格
 
 BrowserWing 会话还有一次受控自愈：如果导航明确返回连接已关闭、控制连接失效等诊断，Draft Explorer 会在共享 Profile 锁内替换默认浏览器实例并重试一次。普通网站错误不会无限触发浏览器重启。
 
+### 多站点 Draft 横向回归
+
+除百度外，`0.4.1` 又用三个公开搜索入口做了“样本验证 + 不同查询执行”：
+
+| 平台 | 验证样本 | 验证结果 | recipe 结果容器 | 不同查询 | 执行结果 |
+|---|---|---:|---|---|---:|
+| Bing 中文搜索 | 开源情报 | 7 条 | `h2` | 个人知识库 | 5 条 |
+| 搜狗 | 个人知识库 | 10 条 | `div.vrwrap` | 开源情报工具 | 5 条 |
+| CSDN | Python Agent | 10 条 | `h3` | FastAPI Agent | 5 条 |
+
+生成的运行时能力：
+
+```text
+bing.keyword_search.browserwing_recipe.v1
+sogou.keyword_search.browserwing_recipe.v1
+csdn.keyword_search.browserwing_recipe.v1
+```
+
+Bing 还验证了两个通用边界：入口从 `cn.bing.com` 跳到 `www.bing.com` 后，系统会对导航后的最终 URL 再做公共 DNS/IP 检查，并以这个已检查主机作为 recipe 边界；“Search using voice”等负向提交控件会被降权，当没有可信按钮时优先使用搜索输入所属 form 提交。
+
+三次不同查询均通过统一 `/tasks/execute`、使用 `persistence=none`，没有触发 fallback，也没有改变 documents、observations 和 search_runs 数量。
+
 只规划、不执行：
 
 ```powershell

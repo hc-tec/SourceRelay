@@ -24,6 +24,7 @@ var selector=function(el){
   return 'body > '+parts.join(' > ');
 };
 var terms=/search|query|keyword|搜索|搜一搜|检索/i;
+var negativeSubmitTerms=/voice|语音|camera|image|图片|feedback|反馈|settings|设置|download|下载/i;
 var inputs=Array.from(document.querySelectorAll('input,textarea,[contenteditable="true"]')).filter(visible).map(function(el){
   var text=[el.id,el.name,el.type,el.placeholder,el.getAttribute('aria-label')].filter(Boolean).join(' ');
   var score=(el.type==='search'?8:0)+(terms.test(text)?10:0)+(el.tagName==='TEXTAREA'?1:0);
@@ -31,7 +32,8 @@ var inputs=Array.from(document.querySelectorAll('input,textarea,[contenteditable
 }).sort(function(a,b){return b.score-a.score;}).slice(0,10);
 var submits=Array.from(document.querySelectorAll('button,input[type="submit"],[role="button"]')).filter(visible).map(function(el){
   var text=(el.innerText||el.value||el.getAttribute('aria-label')||'').trim().slice(0,100);
-  var score=(el.type==='submit'?6:0)+(terms.test(text)?10:0);
+  var formHasSearchInput=!!(el.form&&Array.from(el.form.querySelectorAll('input,textarea,[contenteditable="true"]')).filter(visible).some(function(input){var inputText=[input.id,input.name,input.type,input.placeholder,input.getAttribute('aria-label')].filter(Boolean).join(' ');return input.type==='search'||terms.test(inputText);}));
+  var score=(el.type==='submit'?6:0)+(terms.test(text)?10:0)+(formHasSearchInput?30:0)-(negativeSubmitTerms.test(text)?40:0);
   return {selector:selector(el),text:text,score:score};
 }).sort(function(a,b){return b.score-a.score;}).slice(0,10);
 var body=(document.body.innerText||'').slice(0,20000);
@@ -203,12 +205,18 @@ return {{ok:true,method:'enter'}};
         limit: int = 10,
     ) -> dict:
         inspection = await self._inspect_unlocked(url)
+        inspected_url = str(inspection.get("url") or url)
+        await validate_public_url(inspected_url)
         inputs = inspection.get("inputs") or []
         submits = inspection.get("submits") or []
         chosen_input = input_selector or (inputs[0].get("selector") if inputs else "")
         chosen_submit = submit_selector
         if chosen_submit is None:
-            chosen_submit = submits[0].get("selector") if submits else ""
+            chosen_submit = (
+                submits[0].get("selector")
+                if submits and int(submits[0].get("score") or 0) > 0
+                else ""
+            )
         if not chosen_input:
             return {
                 "inspection": inspection,
@@ -239,6 +247,7 @@ return {{ok:true,method:'enter'}};
         await asyncio.sleep(8)
         page_info = await self._command("exec", "page-info", timeout=30)
         final_url = str(page_info.get("data", {}).get("url") or "")
+        await validate_public_url(final_url)
         result_js = RESULT_JAVASCRIPT.replace(
             "__RESULT_SELECTOR__", json.dumps(result_selector or "", ensure_ascii=False)
         ).replace("__QUERY__", json.dumps(query, ensure_ascii=True)).replace(
@@ -246,7 +255,9 @@ return {{ok:true,method:'enter'}};
         )
         result_payload = await self._command("exec", "eval", result_js, timeout=30)
         result = result_payload.get("data", {}).get("result") or {}
-        start_host = (expected_host or urlsplit(url).hostname or "").lower()
+        start_host = (
+            expected_host or urlsplit(inspected_url).hostname or ""
+        ).lower()
         final_host = (urlsplit(final_url).hostname or "").lower()
         host_allowed = final_host == start_host or final_host.endswith(f".{start_host}")
         valid_items = [
@@ -327,6 +338,13 @@ return {{ok:true,method:'enter'}};
         async with self.lock:
             await self._ensure_browser()
             inspection = await self._inspect_unlocked(url)
+        submit_candidates = inspection.get("submits") or []
+        submit_selector = (
+            submit_candidates[0].get("selector", "")
+            if submit_candidates
+            and int(submit_candidates[0].get("score") or 0) > 0
+            else ""
+        )
         payload = {
             "inspection": inspection,
             "validation": None,
@@ -335,9 +353,7 @@ return {{ok:true,method:'enter'}};
                 "input_selector": (inspection.get("inputs") or [{}])[0].get(
                     "selector", ""
                 ),
-                "submit_selector": (inspection.get("submits") or [{}])[0].get(
-                    "selector", ""
-                ),
+                "submit_selector": submit_selector,
                 "result_item_selector": "",
             },
             "items": [],

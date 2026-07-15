@@ -18,7 +18,7 @@ research_*.md              开源项目、中文站点覆盖和架构调研
 - 全网和 `site:` 外部发现：SearXNG；
 - 公开 HTML/text 正文抽取：Trafilatura；
 - 未知公开搜索网站：Draft -> inspect -> validate -> recipe -> promote -> execute；
-- 百度公开搜索已通过能力生成闭环验证。
+- 百度、Bing、搜狗和 CSDN 公开搜索已通过能力生成闭环与不同查询回归。
 
 详细运行方式、API 和安全边界见 [Intelligence Gateway README](poc/intelligence-gateway/README.md)。真实运行证据见 [Gateway evaluation](poc/intelligence-gateway/evaluation.md)。
 
@@ -53,7 +53,7 @@ cd D:\AIProject\inteligence\poc\intelligence-gateway
 docker compose config --quiet
 ```
 
-当前基线：`45 passed`。
+当前基线：`46 passed`。
 
 ## 下一阶段
 

@@ -131,6 +131,88 @@ async def test_draft_explorer_retries_navigation_after_closed_connection() -> No
 
 
 @pytest.mark.asyncio
+async def test_validation_uses_checked_redirect_host_and_form_fallback(
+    monkeypatch,
+) -> None:
+    explorer = BrowserWingDraftExplorer(Settings.from_env(), asyncio.Lock())
+    checked_urls = []
+
+    async def public_url_ok(url):
+        checked_urls.append(url)
+
+    async def no_sleep(_seconds):
+        return None
+
+    async def inspect(_url):
+        return {
+            "url": "https://www.example.com/",
+            "title": "Example Search",
+            "inputs": [{"selector": "#query", "score": 18}],
+            "submits": [
+                {
+                    "selector": "div[aria-label=voice]",
+                    "text": "Search using voice",
+                    "score": -30,
+                }
+            ],
+            "authentication_markers": [],
+        }
+
+    async def command(*arguments, timeout=60):
+        if arguments[:2] == ("exec", "page-info"):
+            return {
+                "data": {
+                    "url": "https://www.example.com/search?q=test",
+                    "title": "test - Search",
+                }
+            }
+        assert arguments[:2] == ("exec", "eval")
+        script = arguments[2]
+        if "var el=document.querySelector" in script:
+            assert 'var submit=""' in script
+            return {"data": {"result": {"ok": True, "method": "form"}}}
+        return {
+            "data": {
+                "result": {
+                    "selected_selector": "h2",
+                    "candidates": [],
+                    "items": [
+                        {
+                            "rank": 1,
+                            "title": "test result one",
+                            "url": "https://one.example/result",
+                            "text": "test result one",
+                        },
+                        {
+                            "rank": 2,
+                            "title": "test result two",
+                            "url": "https://two.example/result",
+                            "text": "test result two",
+                        },
+                    ],
+                }
+            }
+        }
+
+    monkeypatch.setattr("app.drafts.validate_public_url", public_url_ok)
+    monkeypatch.setattr("app.drafts.asyncio.sleep", no_sleep)
+    explorer._inspect_unlocked = inspect
+    explorer._command = command
+    payload = await explorer._search_unlocked(
+        url="https://cn.example.com", query="test"
+    )
+
+    assert payload["validation"]["passed"] is True
+    assert payload["validation"]["submit_method"] == "form"
+    assert payload["recipe"]["start_url"] == "https://www.example.com/"
+    assert payload["recipe"]["expected_host"] == "www.example.com"
+    assert checked_urls == [
+        "https://www.example.com/",
+        "https://www.example.com/search?q=test",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_draft_validate_promote_plan_and_execute(tmp_path, monkeypatch) -> None:
     async def public_url_ok(_url):
         return None

@@ -400,6 +400,12 @@ Intelligence Gateway 已升级到 `0.4.0`。本轮没有接入 RSSHub，也没�
 
 百度真实运行中恰好出现 BrowserWing 控制连接失效，系统完整经历 `verified -> degraded -> blocked -> fallback -> repaired -> verified`，同时修复了 BrowserWing 的失效实例替换流程。这个结果说明能力目录不能只记录“最后一次成功时间”，还必须把故障隔离、降级规划和恢复门禁作为底层能力生命周期的一部分。
 
+### 2026-07-16：Bing、搜狗、CSDN 横向回归
+
+Draft Factory 已不再只有百度单点证据。Bing、搜狗和 CSDN 分别通过样本验证，并在晋升后使用另一关键词返回 5 条相关结果。Bing 首次因误点语音搜索而失败，相关性门禁没有允许晋升；加入负向按钮评分、form fallback 和导航后公共主机复检后才通过。
+
+因此当前可确认的是：对具有公开搜索表单和稳定结果标题结构的网站，能力工厂可以减少手写站点爬虫的工作；它仍不能推出“任意网站自动支持”，强登录、验证码、无公开搜索入口和高度定制交互仍需要专用 Adapter 或人工边界。
+
 ## 主要官方资料
 
 - [CLI-Anything](https://github.com/HKUDS/CLI-Anything)

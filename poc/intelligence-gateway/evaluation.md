@@ -375,6 +375,22 @@ planner selected      = baidu.keyword_search.browserwing_recipe.v1
 
 这说明可靠性层能够区分“当前不可用”和“永久删除”：失效能力会退出正常规划，但不会失去修复后的恢复入口。
 
+### 6.6 多站点能力工厂横向回归
+
+为了判断百度是否只是偶然成功，又选择三个无需账号的公开入口。每个站点先用 Draft 样本验证，晋升后再用不同查询执行：
+
+| 平台 | 起始入口 | 样本验证 | 有效结果 | recipe | 二次查询 | 二次结果 |
+|---|---|---|---:|---|---|---:|
+| Bing | `cn.bing.com` | 开源情报 | 7 | `#sb_form_q -> form -> h2` | 个人知识库 | 5 |
+| 搜狗 | `www.sogou.com` | 个人知识库 | 10 | `#query -> form -> div.vrwrap` | 开源情报工具 | 5 |
+| CSDN | `so.csdn.net/so/search` | Python Agent | 10 | `#keyword -> #search -> h3` | FastAPI Agent | 5 |
+
+Bing 第一轮曾失败：全局按钮启发式误点了“Search using voice”，页面留在首页，虽然抽到 9 个链接，但没有一个包含样本查询词，因此相关性门禁将 Draft 保持为 failed，没有误晋升。修复方式不是写死 Bing：通用评分降低语音、图片、反馈、设置和下载类控件；没有可信 submit 时，使用输入所属 form。再次验证后最终 URL 正确进入 `/search?q=...`。
+
+同一轮还把主机边界从“用户输入 URL 的原始主机”调整为“首次导航后、重新通过公共 DNS/IP 检查的最终主机”。因此 `cn.bing.com -> www.bing.com` 可以形成 recipe，但搜索提交后的页面仍必须位于这个已验证主机或其子域。
+
+晋升后本地 Catalog 共 8 个能力，其中生成能力为百度、Bing、搜狗和 CSDN。三次二次查询均 `success`、`degraded=false`、未 fallback；使用 `persistence=none` 后情报库仍为 8 documents、13 observations、3 search runs。
+
 ## 7. 当前结论
 
 这轮已经证明“万物皆接口”对你的中文个人情报需求有实际用处，但正确实现不是寻找一个万能 CLI，而是建立一个统一控制面，让每类来源使用最合适的获取层：
