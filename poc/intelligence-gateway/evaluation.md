@@ -2,7 +2,7 @@
 
 > 实测日期：2026-07-15  
 > 目录：`poc/intelligence-gateway`  
-> 网关版本：`0.4.0`  
+> 网关版本：`0.4.1`
 > 结论：第一版统一读取链路已经形成可运行闭环；适合作为个人低频 POC 和后续 Adapter 演进骨架，尚不能按无人值守生产系统承诺 SLA。
 
 ## 1. 本轮实际交付
@@ -246,7 +246,7 @@ SearXNG 的 `settings.yml` 由初始化脚本在被忽略的 `runtime/` 中生�
 docker compose config --quiet
 ```
 
-结果：`41 passed`。覆盖：
+结果：`45 passed`。覆盖：
 
 - URL 去跟踪与 fragment；
 - 规范 URL 去重和 rank 重排；
@@ -339,6 +339,41 @@ runtime/capabilities/baidu.keyword_search.browserwing_recipe.v1.json
 ### 6.4 结论变化
 
 `0.3.0` 证明了“已有 Adapter 可以统一规划与执行”；`0.4.0` 又证明了一步更接近用户目标的能力：未知公开搜索站点可以先形成 Draft，经真实样本门禁后生成确定性 recipe，并立刻进入同一 Capability Runtime。它仍不是 LLM 自主浏览器 Agent，也不是任意网站自动成功生成器，但已经把“人工写每个爬虫”推进为“机器探索候选、样本验证、受控晋升、统一执行”的可运行底座。
+
+### 6.5 0.4.1 recipe 漂移隔离与恢复验证
+
+`0.4.1` 增加持久化在运行时 Manifest 中的可靠性状态，并进行了两组验证。
+
+自动化测试模拟同一 recipe 连续失败：
+
+```text
+failure 1 -> degraded / consecutive_failures=1
+failure 2 -> degraded / consecutive_failures=2
+failure 3 -> blocked  / consecutive_failures=3
+```
+
+进入 blocked 后，百度任务规划不再选择旧 recipe，而是直接得到：
+
+```text
+selected = web.keyword_search.searxng.v1
+site     = www.baidu.com
+degraded = true
+```
+
+随后恢复执行器并对 blocked capability 做精确 verify，状态恢复为 `verified`，连续失败清零，Planner 再次直接选择百度 recipe。
+
+真实服务也完整经历了这一状态变化。前两次百度 verify 遇到 BrowserWing 已断开的控制连接，能力变为 degraded；第三次触发 blocked，Planner 自动 fallback。继续定位发现 BrowserWing 新实例允许暂时没有活动页，过早执行 `page-info` 会造成假失败。调整为“明确的连接断开导航错误 -> 替换实例 -> 由 navigate 创建活动页 -> 单次重试”后，精确 verify 返回：
+
+```text
+HTTP                  = 200
+status                = success
+capability_status     = verified
+consecutive_failures  = 0
+planner_eligible      = true
+planner selected      = baidu.keyword_search.browserwing_recipe.v1
+```
+
+这说明可靠性层能够区分“当前不可用”和“永久删除”：失效能力会退出正常规划，但不会失去修复后的恢复入口。
 
 ## 7. 当前结论
 

@@ -74,6 +74,18 @@ class AuthenticationRequirement(BaseModel):
     profile_id: str | None = None
 
 
+class CapabilityReliability(BaseModel):
+    last_verification_status: ResultStatus | None = None
+    consecutive_failures: int = Field(default=0, ge=0)
+    failure_threshold: int = Field(default=3, ge=1, le=20)
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_failure_at: datetime | None = None
+    blocked_at: datetime | None = None
+    last_error: str | None = None
+    last_warnings: list[str] = Field(default_factory=list)
+
+
 class CapabilityManifest(BaseModel):
     capability_id: str
     version: str
@@ -92,6 +104,7 @@ class CapabilityManifest(BaseModel):
     verification_input: dict[str, Any] | None = None
     recipe: dict[str, Any] | None = None
     last_verified_at: datetime | None = None
+    reliability: CapabilityReliability = Field(default_factory=CapabilityReliability)
     license: str = ""
     warnings: list[str] = Field(default_factory=list)
 
@@ -160,6 +173,14 @@ class CapabilityCheckResponse(BaseModel):
     checked_at: datetime = Field(default_factory=utc_now)
     details: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
+
+
+class CapabilityReliabilityResponse(BaseModel):
+    capability_id: str
+    capability_status: CapabilityStatus
+    planner_eligible: bool
+    runtime_mutable: bool
+    reliability: CapabilityReliability
 
 
 class ProfileStatus(BaseModel):

@@ -394,6 +394,12 @@ Intelligence Gateway 已升级到 `0.4.0`。本轮没有接入 RSSHub，也没�
 4. 最后再考虑 LLM 辅助探索，但 LLM 只能提议候选，不能跳过确定性样本验证；
 5. 强登录中文社媒仍走专用 Adapter 与人工 Profile，保持低频串行，不能把公开站点能力工厂误称为全平台通用破解方案。
 
+### 2026-07-16：0.4.1 能力可靠性补充
+
+生成 recipe 已增加运行时可靠性状态。连续验证失败会先降级，达到三次后自动 blocked；Planner 此后不再执行旧选择器，而是直接选择配置好的外部 fallback。blocked 能力仍可通过精确 verify 做修复回归，成功后连续失败清零并恢复为 verified。
+
+百度真实运行中恰好出现 BrowserWing 控制连接失效，系统完整经历 `verified -> degraded -> blocked -> fallback -> repaired -> verified`，同时修复了 BrowserWing 的失效实例替换流程。这个结果说明能力目录不能只记录“最后一次成功时间”，还必须把故障隔离、降级规划和恢复门禁作为底层能力生命周期的一部分。
+
 ## 主要官方资料
 
 - [CLI-Anything](https://github.com/HKUDS/CLI-Anything)

@@ -27,6 +27,7 @@ from .models import (
     CapabilityAction,
     CapabilityCheckResponse,
     CapabilityManifest,
+    CapabilityReliabilityResponse,
     CapabilityStatus,
     DraftCapabilityRecord,
     DraftCapabilityRequest,
@@ -76,7 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.4.0",
+        version="0.4.1",
         description="Explicit-status API for Bilibili, Xiaohongshu, web discovery and article extraction.",
     )
     app.state.settings = active_settings
@@ -107,7 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.4.0",
+            "version": "0.4.1",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
             "article_extraction": True,
@@ -146,18 +147,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             }
             missing = sorted(required - recipe.keys())
             binary_ready = draft_explorer.binary.is_file()
-            ready = not missing and binary_ready
+            blocked = manifest.status == CapabilityStatus.BLOCKED
+            ready = not missing and binary_ready and not blocked
             return CapabilityCheckResponse(
                 capability_id=manifest.capability_id,
                 ready=ready,
                 status=(
-                    ResultStatus.SUCCESS if ready else ResultStatus.MISCONFIGURED
+                    ResultStatus.SUCCESS
+                    if ready
+                    else (
+                        ResultStatus.SOURCE_UNAVAILABLE
+                        if blocked
+                        else ResultStatus.MISCONFIGURED
+                    )
                 ),
                 details={
                     "executor": manifest.executor,
                     "recipe_fields_complete": not missing,
                     "missing_recipe_fields": missing,
                     "browserwing_binary_exists": binary_ready,
+                    "capability_status": manifest.status.value,
+                    "planner_eligible": not blocked,
+                    "reliability": manifest.reliability.model_dump(mode="json"),
                     "network_access_verified_on_execute": True,
                 },
                 warnings=list(manifest.warnings),
@@ -217,6 +228,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def get_capability(capability_id: str):
         try:
             return catalog.get(capability_id).model_dump(mode="json")
+        except KeyError:
+            return JSONResponse(
+                status_code=404,
+                content={"ok": False, "status": "error", "error": "Capability was not found."},
+            )
+
+    @app.get(
+        "/capabilities/{capability_id}/reliability",
+        response_model=CapabilityReliabilityResponse,
+    )
+    async def get_capability_reliability(capability_id: str):
+        try:
+            return catalog.reliability(capability_id)
         except KeyError:
             return JSONResponse(
                 status_code=404,
@@ -381,6 +405,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             manifest = existing
         else:
+            promoted_at = datetime.now().astimezone()
             manifest = CapabilityManifest(
                 capability_id=capability_id,
                 version="1.0.0",
@@ -406,7 +431,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 fallback_site=str((draft.recipe or {})["expected_host"]),
                 verification_input={"query": draft.sample_query, "limit": 5},
                 recipe=draft.recipe,
-                last_verified_at=datetime.now().astimezone(),
+                last_verified_at=promoted_at,
+                reliability={
+                    "last_verification_status": "success",
+                    "last_attempt_at": promoted_at,
+                    "last_success_at": promoted_at,
+                },
                 license="Generated recipe; target-site terms and policies apply.",
                 warnings=[
                     "Generated BrowserWing adapter; selectors require regression maintenance.",
@@ -718,17 +748,90 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "error": "Capability has no safe verification input configured.",
                 },
             )
-        return await run_capability_task(
-            TaskExecutionRequest(
-                platform=manifest.platform,
-                action=manifest.action,
-                input=manifest.verification_input,
-                options={
-                    "allow_fallback": False,
-                    "fallback_on_no_results": False,
-                    "persistence": "none",
-                },
+        try:
+            result = await execute_manifest(
+                manifest, dict(manifest.verification_input), "none"
             )
+        except ValidationError as exc:
+            error = GatewayError(
+                "Capability verification input is invalid.",
+                status=ResultStatus.ERROR,
+                http_status=422,
+                warnings=[str(exc.errors()[0].get("msg", "Invalid verification input."))],
+            )
+            updated = catalog.record_verification(
+                capability_id,
+                succeeded=False,
+                result_status=error.status,
+                error=str(error),
+                warnings=error.warnings,
+            )
+            return JSONResponse(
+                status_code=error.http_status,
+                content=jsonable_encoder(
+                    {
+                        **_error_body(error),
+                        "capability_id": capability_id,
+                        "capability_status": updated.status.value,
+                        "reliability": updated.reliability.model_dump(mode="json"),
+                    }
+                ),
+            )
+        except GatewayError as exc:
+            updated = catalog.record_verification(
+                capability_id,
+                succeeded=False,
+                result_status=exc.status,
+                error=str(exc),
+                warnings=exc.warnings,
+            )
+            return JSONResponse(
+                status_code=exc.http_status,
+                content=jsonable_encoder(
+                    {
+                        **_error_body(exc),
+                        "capability_id": capability_id,
+                        "capability_status": updated.status.value,
+                        "reliability": updated.reliability.model_dump(mode="json"),
+                    }
+                ),
+            )
+
+        succeeded = result.ok and result.status == ResultStatus.SUCCESS
+        updated = catalog.record_verification(
+            capability_id,
+            succeeded=succeeded,
+            result_status=result.status,
+            error=result.error,
+            warnings=result.warnings,
+        )
+        reliability_warnings: list[str] = []
+        if catalog.is_runtime_mutable(capability_id):
+            reliability_warnings.append(
+                "Runtime verification succeeded and reset the consecutive failure counter."
+                if succeeded
+                else (
+                    "Runtime verification did not succeed; the consecutive failure counter was incremented."
+                )
+            )
+        return TaskExecutionResponse(
+            task_id=str(uuid.uuid4()),
+            ok=result.ok,
+            status=result.status,
+            requested_platform=manifest.platform,
+            requested_action=manifest.action,
+            executed_capability_id=manifest.capability_id,
+            executor=manifest.executor,
+            degraded=updated.status != CapabilityStatus.VERIFIED,
+            attempted_capabilities=[manifest.capability_id],
+            scope=manifest.scope,
+            result=result.model_dump(mode="json"),
+            warnings=list(
+                dict.fromkeys(
+                    [*manifest.warnings, *result.warnings, *reliability_warnings]
+                )
+            ),
+            error=result.error,
         )
 
     @app.get("/profiles")

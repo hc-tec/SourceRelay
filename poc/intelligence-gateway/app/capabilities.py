@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 from .config import GATEWAY_ROOT
 from .models import (
     CapabilityAction,
     CapabilityManifest,
+    CapabilityReliabilityResponse,
     CapabilityStatus,
+    ResultStatus,
     TaskPlanRequest,
     TaskPlanResponse,
+    utc_now,
 )
 
 
@@ -35,10 +39,13 @@ class CapabilityCatalog:
         self.directory = directory or (GATEWAY_ROOT / "capabilities")
         self.runtime_directory = runtime_directory
         self._manifests: dict[str, CapabilityManifest] = {}
+        self._manifest_paths: dict[str, Path] = {}
+        self._write_lock = RLock()
         self.reload()
 
     def _load(self) -> dict[str, CapabilityManifest]:
         manifests: dict[str, CapabilityManifest] = {}
+        manifest_paths: dict[str, Path] = {}
         directories = [self.directory]
         if self.runtime_directory is not None:
             directories.append(self.runtime_directory)
@@ -51,6 +58,7 @@ class CapabilityCatalog:
                 if manifest.capability_id in manifests:
                     raise ValueError(f"Duplicate capability ID: {manifest.capability_id}")
                 manifests[manifest.capability_id] = manifest
+                manifest_paths[manifest.capability_id] = path
         if not manifests:
             raise ValueError(f"No capability manifests found in {self.directory}")
         for manifest in manifests.values():
@@ -59,6 +67,7 @@ class CapabilityCatalog:
                 raise ValueError(
                     f"Capability {manifest.capability_id} has missing fallbacks: {missing}"
                 )
+        self._manifest_paths = manifest_paths
         return manifests
 
     def reload(self) -> list[CapabilityManifest]:
@@ -68,16 +77,76 @@ class CapabilityCatalog:
     def save_runtime_manifest(self, manifest: CapabilityManifest) -> Path:
         if self.runtime_directory is None:
             raise ValueError("Runtime capability directory is not configured.")
-        self.runtime_directory.mkdir(parents=True, exist_ok=True)
-        target = self.runtime_directory / f"{manifest.capability_id}.json"
-        temporary = target.with_suffix(".json.tmp")
-        temporary.write_text(
-            json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        temporary.replace(target)
-        self.reload()
+        with self._write_lock:
+            self.runtime_directory.mkdir(parents=True, exist_ok=True)
+            target = self.runtime_directory / f"{manifest.capability_id}.json"
+            temporary = target.with_suffix(".json.tmp")
+            temporary.write_text(
+                json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            temporary.replace(target)
+            self.reload()
         return target
+
+    def is_runtime_mutable(self, capability_id: str) -> bool:
+        if self.runtime_directory is None:
+            return False
+        path = self._manifest_paths.get(capability_id)
+        if path is None:
+            return False
+        return path.parent.resolve() == self.runtime_directory.resolve()
+
+    def reliability(self, capability_id: str) -> CapabilityReliabilityResponse:
+        manifest = self.get(capability_id)
+        return CapabilityReliabilityResponse(
+            capability_id=capability_id,
+            capability_status=manifest.status,
+            planner_eligible=manifest.status not in {
+                CapabilityStatus.BLOCKED,
+                CapabilityStatus.RETIRED,
+            },
+            runtime_mutable=self.is_runtime_mutable(capability_id),
+            reliability=manifest.reliability,
+        )
+
+    def record_verification(
+        self,
+        capability_id: str,
+        *,
+        succeeded: bool,
+        result_status: ResultStatus,
+        error: str | None = None,
+        warnings: list[str] | None = None,
+    ) -> CapabilityManifest:
+        if not self.is_runtime_mutable(capability_id):
+            return self.get(capability_id)
+        with self._write_lock:
+            self.reload()
+            manifest = self.get(capability_id).model_copy(deep=True)
+            reliability = manifest.reliability
+            timestamp = utc_now()
+            reliability.last_attempt_at = timestamp
+            reliability.last_verification_status = result_status
+            reliability.last_warnings = list(warnings or [])
+            if succeeded:
+                reliability.consecutive_failures = 0
+                reliability.last_success_at = timestamp
+                reliability.last_error = None
+                reliability.blocked_at = None
+                manifest.last_verified_at = timestamp
+                manifest.status = CapabilityStatus.VERIFIED
+            else:
+                reliability.consecutive_failures += 1
+                reliability.last_failure_at = timestamp
+                reliability.last_error = error or result_status.value
+                if reliability.consecutive_failures >= reliability.failure_threshold:
+                    reliability.blocked_at = timestamp
+                    manifest.status = CapabilityStatus.BLOCKED
+                else:
+                    manifest.status = CapabilityStatus.DEGRADED
+            self.save_runtime_manifest(manifest)
+            return self.get(capability_id)
 
     def list(
         self,
@@ -110,9 +179,10 @@ class CapabilityCatalog:
         return normalized if "." in normalized and "/" not in normalized else None
 
     def plan(self, request: TaskPlanRequest) -> TaskPlanResponse:
+        matching = self.list(platform=request.platform, action=request.action)
         candidates = [
             item
-            for item in self.list(platform=request.platform, action=request.action)
+            for item in matching
             if item.status not in {CapabilityStatus.RETIRED, CapabilityStatus.BLOCKED}
         ]
         status_priority = {
@@ -139,6 +209,34 @@ class CapabilityCatalog:
                 degraded=selected.status != CapabilityStatus.VERIFIED,
                 warnings=list(selected.warnings),
             )
+
+        blocked = [
+            item for item in matching if item.status == CapabilityStatus.BLOCKED
+        ]
+        if request.allow_fallback:
+            for unavailable in blocked:
+                for fallback_id in unavailable.fallback_ids:
+                    fallback = self.get(fallback_id)
+                    if fallback.status in {
+                        CapabilityStatus.BLOCKED,
+                        CapabilityStatus.RETIRED,
+                    }:
+                        continue
+                    effective_input = dict(request.input)
+                    if unavailable.fallback_site:
+                        effective_input["site"] = unavailable.fallback_site
+                    return TaskPlanResponse(
+                        available=True,
+                        requested_platform=request.platform,
+                        requested_action=request.action,
+                        selected_capability=fallback,
+                        effective_input=effective_input,
+                        degraded=True,
+                        warnings=[
+                            f"Capability {unavailable.capability_id} is blocked after repeated verification failures.",
+                            "Planning its configured fallback instead of executing the stale recipe.",
+                        ],
+                    )
 
         if request.action == CapabilityAction.KEYWORD_SEARCH and request.platform != "web":
             site = self.platform_site(request.platform, request.input)

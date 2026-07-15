@@ -108,6 +108,36 @@ proposed -> inspected -> validated -> promoted
 
 第一版边界很明确：只生成公开站点的 `keyword_search`；只读取首个渲染结果页；不自动登录、不处理或绕过验证码；选择器和标题/URL 抽取是启发式的，网站改版后必须重新验证。初始 URL 会做公共地址校验，结果页还会限制在起始主机或其子域；但浏览器导航层并不等同于带逐跳 DNS 校验的安全 HTTP 下载器，因此当前服务仍只绑定本机，不应作为多租户任意 URL 浏览服务暴露。
 
+### 生成能力可靠性与漂移隔离
+
+`0.4.1` 为运行时生成的 Manifest 增加可靠性状态：
+
+```text
+GET  /capabilities/{capability_id}/reliability
+POST /capabilities/{capability_id}/verify
+```
+
+每次精确 verify 会记录：
+
+- 最近验证状态与时间；
+- 最近成功和失败时间；
+- 连续失败次数；
+- 最近错误与 warnings；
+- 自动阻止时间。
+
+默认策略：
+
+```text
+成功                 -> verified，连续失败清零
+第 1、2 次连续失败   -> degraded，仍允许执行并保留 fallback
+第 3 次连续失败      -> blocked，Planner 不再执行旧 recipe
+blocked 后精确验证成功 -> verified，恢复 Planner 资格
+```
+
+当生成能力进入 `blocked` 时，Planner 会直接选择它配置的 fallback，并带上 `degraded=true` 和阻止原因。`verify` 始终精确执行 URL 中指定的 capability，不通过 Planner 重选，因此修复后的 recipe 即使仍处于 blocked，也能通过一次真实验证恢复。
+
+BrowserWing 会话还有一次受控自愈：如果导航明确返回连接已关闭、控制连接失效等诊断，Draft Explorer 会在共享 Profile 锁内替换默认浏览器实例并重试一次。普通网站错误不会无限触发浏览器重启。
+
 只规划、不执行：
 
 ```powershell

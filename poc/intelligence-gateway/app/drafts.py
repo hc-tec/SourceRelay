@@ -108,7 +108,7 @@ class BrowserWingDraftExplorer:
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise SourceUnavailableError("BrowserWing command did not return valid UTF-8 JSON.") from exc
 
-    async def _ensure_browser(self) -> None:
+    async def _start_service(self) -> None:
         start_script = self.settings.browserwing_root / "scripts" / "start.ps1"
         if not start_script.is_file():
             raise MisconfiguredError("BrowserWing start script is missing.")
@@ -124,19 +124,45 @@ class BrowserWingDraftExplorer:
             stderr=asyncio.subprocess.DEVNULL,
         )
         await service.wait()
+
+    async def _ensure_browser(self) -> None:
+        await self._start_service()
         try:
             await self._command("exec", "page-info", timeout=10)
             return
         except SourceUnavailableError:
             pass
+        # BrowserWing can retain an instance record after its Chrome control
+        # connection has died. Starting that record again only reports
+        # "already running", so replace the stale instance while holding the
+        # shared profile lock.
+        await self._replace_browser()
+
+    async def _replace_browser(self) -> None:
         try:
-            await self._command("browser", "start", "default", timeout=30)
+            await self._command("browser", "stop", "default", timeout=30)
         except SourceUnavailableError:
             pass
-        await self._command("exec", "page-info", timeout=10)
+        await self._command("browser", "start", "default", timeout=30)
+
+    async def _navigate(self, url: str) -> None:
+        try:
+            await self._command("exec", "navigate", url, timeout=60)
+        except SourceUnavailableError as exc:
+            diagnostic = " ".join([str(exc), *exc.warnings]).casefold()
+            stale_markers = (
+                "connection is closed",
+                "closed network connection",
+                "failed to get browser pages",
+                "browser connection is closed or invalid",
+            )
+            if not any(marker in diagnostic for marker in stale_markers):
+                raise
+            await self._replace_browser()
+            await self._command("exec", "navigate", url, timeout=60)
 
     async def _inspect_unlocked(self, url: str) -> dict:
-        await self._command("exec", "navigate", url, timeout=60)
+        await self._navigate(url)
         await asyncio.sleep(3)
         result = await self._command("exec", "eval", INSPECT_JAVASCRIPT, timeout=30)
         return result.get("data", {}).get("result") or {}
