@@ -1,0 +1,6 @@
+.env
+runtime/
+logs/
+cookies/
+node_modules/
+*.pid

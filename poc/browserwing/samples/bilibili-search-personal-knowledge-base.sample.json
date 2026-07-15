@@ -1,0 +1,257 @@
+﻿{
+    "source_platform":  "bilibili",
+    "operation":  "search",
+    "query":  "个人知识库",
+    "query_scope":  "anonymous-web-search-first-page",
+    "fetched_at":  "2026-07-15T16:53:15.1420396+08:00",
+    "partial":  true,
+    "item_count":  30,
+    "items_with_url":  23,
+    "warnings":  [
+                     "Only the first rendered page is collected.",
+                     "Search results may include promoted courses or cards without a video URL.",
+                     "The DOM selectors are versioned POC selectors and require health checks."
+                 ],
+    "items":  [
+                  {
+                      "author":  "摄影师云飞",
+                      "danmaku":  "765",
+                      "play":  "11.4万",
+                      "rank":  1,
+                      "title":  "个人知识库怎么搭？最简单Obsidian入门教程【保姆级教学】",
+                      "url":  "https://www.bilibili.com/video/BV1qqEj6oEEk/"
+                  },
+                  {
+                      "author":  "Xuan_酱",
+                      "danmaku":  "264",
+                      "play":  "21.6万",
+                      "rank":  2,
+                      "title":  "Codex联动Obsidian，搭建卡帕西同款知识库，手把手教程",
+                      "url":  "https://www.bilibili.com/video/BV1MJVb6cETR/"
+                  },
+                  {
+                      "author":  "龙猫_LongCat",
+                      "danmaku":  "10",
+                      "play":  "4638",
+                      "rank":  3,
+                      "title":  "知识库从 0 到 100+ 页，全程没动一下手",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "动力节点",
+                      "danmaku":  "",
+                      "play":  "1084",
+                      "rank":  4,
+                      "title":  "企业知识库AI项目，Pat老师主讲",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "Agent零基础入门",
+                      "danmaku":  "98",
+                      "play":  "1438",
+                      "rank":  5,
+                      "title":  "【B站强推】30分钟学会搭建私人知识库！DeepSeek+RAGFlow知识库搭建！2026最新个人知识库搭建教程，小白也能实现！AI大模型|LLM",
+                      "url":  "https://www.bilibili.com/video/BV1UkNx6MEQ2/"
+                  },
+                  {
+                      "author":  "AI应用开发-",
+                      "danmaku":  "220",
+                      "play":  "11.2万",
+                      "rank":  6,
+                      "title":  "【大模型RAG】2026年B站最全最细的RAG知识库搭建系统教程，手把手教你搭建私有知识库，从入门到实战全流程教学！全程干货！少走99%的弯路！",
+                      "url":  "https://www.bilibili.com/video/BV1otokBpENn/"
+                  },
+                  {
+                      "author":  "明立非Mingnify",
+                      "danmaku":  "0",
+                      "play":  "4214",
+                      "rank":  7,
+                      "title":  "Obsidian AI 知识库第 1 步：从 0 搭建最小可用系统，跑通 2 个真实场景｜PARA｜Claudian",
+                      "url":  "https://www.bilibili.com/video/BV1HDMb6gEbf/"
+                  },
+                  {
+                      "author":  "木羽Cheney",
+                      "danmaku":  "0",
+                      "play":  "1560",
+                      "rank":  8,
+                      "title":  "【附完整文档】LLM Wiki 个人/企业知识库开发实战，系统骨架搭建、问答引用、知识关联全流程，学完可判断自己的数据该走哪条路线｜VibeCoding",
+                      "url":  "https://www.bilibili.com/video/BV11JNn6mE3R/"
+                  },
+                  {
+                      "author":  "慢慢记BetterNote",
+                      "danmaku":  "1",
+                      "play":  "1371",
+                      "rank":  9,
+                      "title":  "Obsidian18 如果重做个人知识库，我会先建这5层",
+                      "url":  "https://www.bilibili.com/video/BV1XDN36vELL/"
+                  },
+                  {
+                      "author":  "杨彧鑫AI",
+                      "danmaku":  "",
+                      "play":  "3518",
+                      "rank":  10,
+                      "title":  "AI知识库有效搭建三天实战行动营",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "栗氪聊AI",
+                      "danmaku":  "188",
+                      "play":  "16.2万",
+                      "rank":  11,
+                      "title":  "保姆级教程 搭建出karpathy同款AI知识库！知识复利积累",
+                      "url":  "https://www.bilibili.com/video/BV1p4DeB8ECi/"
+                  },
+                  {
+                      "author":  "Chris就是Chris",
+                      "danmaku":  "1329",
+                      "play":  "60.9万",
+                      "rank":  12,
+                      "title":  "Obsidian入门保姆级教程：20分钟轻松上手Obsidian！",
+                      "url":  "https://www.bilibili.com/video/BV1Xi4y1h76C/"
+                  },
+                  {
+                      "author":  "嘉靖学长-只讲干货",
+                      "danmaku":  "496",
+                      "play":  "31.3万",
+                      "rank":  13,
+                      "title":  "准高三生听劝！五月开始发力，明年能多拿分！",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "糖果果的未来要发光",
+                      "danmaku":  "374",
+                      "play":  "50.6万",
+                      "rank":  14,
+                      "title":  "你的相册该整理了，存了一万张截图后，我决定治一治自己的知识囤积癖！",
+                      "url":  "https://www.bilibili.com/video/BV1jETF61EEn/"
+                  },
+                  {
+                      "author":  "40岁老头学AI",
+                      "danmaku":  "0",
+                      "play":  "318",
+                      "rank":  15,
+                      "title":  "obsidian个人知识库搭建零基础教学",
+                      "url":  "https://www.bilibili.com/video/BV188NM6pEY6/"
+                  },
+                  {
+                      "author":  "清涵__",
+                      "danmaku":  "1",
+                      "play":  "3100",
+                      "rank":  16,
+                      "title":  "Hermes + Obsidian 保姆级教程：搭建会自生长的 AI 知识库",
+                      "url":  "https://www.bilibili.com/video/BV1bENw6iEVJ/"
+                  },
+                  {
+                      "author":  "西瓜讲大模型",
+                      "danmaku":  "",
+                      "play":  "8477",
+                      "rank":  17,
+                      "title":  "GraphRAG深度剖析-基于知识图谱构建知识库",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "AI-智能体搭建教程",
+                      "danmaku":  "1035",
+                      "play":  "89.3万",
+                      "rank":  18,
+                      "title":  "【2026最新】B站最全最细的AI Agent智能体搭建教程，从入门到实战！手把手教你快速打造自己的专属智能体，一次性搞懂AI大模型智能体开发，学完薪资翻倍！",
+                      "url":  "https://www.bilibili.com/video/BV11NNAz5EKn/"
+                  },
+                  {
+                      "author":  "AI超元域",
+                      "danmaku":  "0",
+                      "play":  "5343",
+                      "rank":  19,
+                      "title":  "🚀LangChain新神器OpenWiki打造数据飞轮！开启LLM Wiki 2.0时代！ 让Codex、Claude Code等Agent共享知识库",
+                      "url":  "https://www.bilibili.com/video/BV1EaN86hEhV/"
+                  },
+                  {
+                      "author":  "我是阿众",
+                      "danmaku":  "179",
+                      "play":  "18.4万",
+                      "rank":  20,
+                      "title":  "保姆级教程！用deepseek搭建纯离线本地AI知识库，超简单！",
+                      "url":  "https://www.bilibili.com/video/BV15c1yB8Ewe/"
+                  },
+                  {
+                      "author":  "是子鱼AI",
+                      "danmaku":  "36",
+                      "play":  "6.0万",
+                      "rank":  21,
+                      "title":  "AI知识库那么多，究竟哪个才是适合自己的？全网最新测评来了！",
+                      "url":  "https://www.bilibili.com/video/BV1sKj8zUEut/"
+                  },
+                  {
+                      "author":  "Agent应用开发",
+                      "danmaku":  "91",
+                      "play":  "1041",
+                      "rank":  22,
+                      "title":  "【大模型RAG】2026年吃透B站最全最细的RAG知识库搭建系统教程，手把手教你训练RAG，从入门到实战全流程教学！全程干货！少走99%的弯路！",
+                      "url":  "https://www.bilibili.com/video/BV1ddN76xEQY/"
+                  },
+                  {
+                      "author":  "华得教育",
+                      "danmaku":  "0",
+                      "play":  "761",
+                      "rank":  23,
+                      "title":  "别再刷手机了！速速抓住 AI 行业风口搞钱",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "AI猿悟",
+                      "danmaku":  "",
+                      "play":  "3597",
+                      "rank":  24,
+                      "title":  "Dify入门与精通知识库检索[基础阶段]",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "Xuan_酱",
+                      "danmaku":  "319",
+                      "play":  "42.5万",
+                      "rank":  25,
+                      "title":  "最适合普通人的本地AI知识库！彻底颠覆办公/创作工作流！【小白教程】",
+                      "url":  "https://www.bilibili.com/video/BV1j7ojYREUQ/"
+                  },
+                  {
+                      "author":  "图寻不是图灵",
+                      "danmaku":  "0",
+                      "play":  "1166",
+                      "rank":  26,
+                      "title":  "手把手教你用WorkBuddy+ima搭建个人知识库！",
+                      "url":  "https://www.bilibili.com/video/BV1etN26MEsm/"
+                  },
+                  {
+                      "author":  "AI智能应用",
+                      "danmaku":  "111",
+                      "play":  "1360",
+                      "rank":  27,
+                      "title":  "【B站最新】DeepSeek搭建Agent智能体+个人知识库全套零基础入门教程,全程干货无废话，让你少走99%的弯路，100%提效，零基础小白也能学会~",
+                      "url":  "https://www.bilibili.com/video/BV1NiN46wEcf/"
+                  },
+                  {
+                      "author":  "吴恩达机器学习",
+                      "danmaku":  "44",
+                      "play":  "6374",
+                      "rank":  28,
+                      "title":  "【全748集】目前B站最全最细《AIAgent智能体》教程，2026最新版，包含所有干货！7天就能从小白到大神！少走99%的弯路！存下吧！很难找全的！",
+                      "url":  "https://www.bilibili.com/video/BV12GMq6MEss/"
+                  },
+                  {
+                      "author":  "AI产品经理入门教程",
+                      "danmaku":  "12",
+                      "play":  "3.0万",
+                      "rank":  29,
+                      "title":  "【全748集】目前B站最全最细的搭建知识库全套教程，2026最新版，包含所有干货！七天就能从小白到大神！少走99%的弯路！存下吧！很难找全的",
+                      "url":  "https://www.bilibili.com/video/BV1pbfbBAEax/"
+                  },
+                  {
+                      "author":  "廖定强AI笔记",
+                      "danmaku":  "0",
+                      "play":  "314",
+                      "rank":  30,
+                      "title":  "这才是AI+个人知识库的版本答案",
+                      "url":  "https://www.bilibili.com/video/BV169Ng6yEi4/"
+                  }
+              ]
+}

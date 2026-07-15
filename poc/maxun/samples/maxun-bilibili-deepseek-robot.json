@@ -1,0 +1,18 @@
+{
+  "statusCode": 200,
+  "messageCode": "success",
+  "robot": {
+    "id": "c9b093a6-d9d0-4054-b66a-eb53ff83762a",
+    "name": "bilibili-deepseek-poc",
+    "createdAt": 1784122713000,
+    "inputParameters": [
+      {
+        "type": "string",
+        "name": "originUrl",
+        "label": "Origin URL",
+        "required": true,
+        "defaultValue": "about:blank"
+      }
+    ]
+  }
+}

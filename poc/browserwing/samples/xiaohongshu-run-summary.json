@@ -1,0 +1,73 @@
+{
+  "browserwing_version": "1.1.1-beta.1",
+  "tested_at": "2026-07-15",
+  "profile": "isolated-user-authenticated-profile",
+  "built_in_script": {
+    "name": "xiaohongshu-search",
+    "anonymous_result": "empty-array-with-exit-code-0",
+    "authenticated_headless_result": "navigation-timeout-over-60-seconds",
+    "authenticated_visible_result": "navigation-timeout-over-90-seconds",
+    "cause": "The built-in script navigates directly to the legacy /search_result route and waits for navigation completion. The current site search flow uses /search_result_ai and stateful UI input."
+  },
+  "custom_adapter": {
+    "script": "scripts/run-xiaohongshu-search.ps1",
+    "method": "open Explore, close restored note overlay, type through the visible search control, enter the current search_result_ai route, then extract note cards",
+    "deepseek_runs": [
+      {
+        "iteration": 1,
+        "elapsed_ms": 20337,
+        "item_count": 22,
+        "items_with_url": 20,
+        "success": true
+      },
+      {
+        "iteration": 2,
+        "elapsed_ms": 19683,
+        "item_count": 22,
+        "items_with_url": 20,
+        "success": true
+      },
+      {
+        "iteration": 3,
+        "elapsed_ms": 19601,
+        "item_count": 22,
+        "items_with_url": 20,
+        "success": true
+      }
+    ],
+    "restart_persistence_run": {
+      "elapsed_ms": 19833,
+      "item_count": 22,
+      "items_with_url": 20,
+      "success": true
+    },
+    "additional_queries": [
+      {
+        "query": "\u4f4e\u7a7a\u7ecf\u6d4e",
+        "elapsed_ms": 19961,
+        "item_count": 20,
+        "items_with_url": 20,
+        "success": true
+      },
+      {
+        "query": "\u4e2a\u4eba\u77e5\u8bc6\u5e93",
+        "elapsed_ms": 19351,
+        "item_count": 22,
+        "items_with_url": 20,
+        "success": true
+      }
+    ],
+    "detail_test": {
+      "result": "failed-with-platform-404",
+      "final_path": "/404",
+      "observation": "Current search_result_ai note anchors expose canonical /explore/{id} paths without xsec_token. Clicking the first card through automation reached the platform page-not-found/app-scan view.",
+      "implication": "Search discovery works, but detail retrieval requires a separately managed temporary access context or another approved detail path."
+    },
+    "security": {
+      "cookie_exported": false,
+      "token_exported": false,
+      "xsec_token_saved_in_urls": false,
+      "credentials_requested": false
+    }
+  }
+}

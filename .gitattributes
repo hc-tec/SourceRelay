@@ -1,0 +1,17 @@
+# Keep repository text deterministic across Windows and Unix environments.
+* text=auto eol=lf
+
+# PowerShell scripts are primarily executed by Windows PowerShell.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Explicitly classify common project formats as text.
+*.py text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+

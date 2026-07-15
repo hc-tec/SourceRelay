@@ -1,0 +1,33 @@
+{
+  "capability_id": "web.keyword_search.searxng.v1",
+  "version": "1.0.0",
+  "platform": "web",
+  "action": "keyword_search",
+  "status": "verified",
+  "executor": "searxng",
+  "adapter": "SearXNGConnector",
+  "source": "web",
+  "authentication": {
+    "required": false,
+    "mode": "none"
+  },
+  "input_schema": {
+    "query": {"type": "string", "required": true, "max_length": 300},
+    "site": {"type": "hostname", "required": false},
+    "limit": {"type": "integer", "default": 20, "maximum": 100},
+    "language": {"type": "string", "default": "zh-CN"}
+  },
+  "output_schema": "search_response.v1",
+  "scope": {
+    "external_search_index": true,
+    "platform_complete_index": false,
+    "upstream_engines_variable": true
+  },
+  "fallback_ids": [],
+  "verification_input": {"query": "个人知识库", "limit": 5},
+  "last_verified_at": "2026-07-15T22:56:00+08:00",
+  "license": "AGPL-3.0",
+  "warnings": [
+    "Coverage depends on currently responsive upstream search engines."
+  ]
+}

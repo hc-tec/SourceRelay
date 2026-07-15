@@ -1,0 +1,35 @@
+{
+  "capability_id": "web.article_extract.trafilatura.v1",
+  "version": "1.0.0",
+  "platform": "web",
+  "action": "article_extract",
+  "status": "verified",
+  "executor": "trafilatura",
+  "adapter": "ArticleExtractor",
+  "source": null,
+  "authentication": {
+    "required": false,
+    "mode": "none"
+  },
+  "input_schema": {
+    "url": {"type": "url", "required": true},
+    "include_tables": {"type": "boolean", "default": true}
+  },
+  "output_schema": "fetch_response.v1",
+  "scope": {
+    "public_html_text_only": true,
+    "javascript_execution": false,
+    "maximum_body_bytes": 5242880,
+    "maximum_redirects": 5,
+    "private_networks_rejected": true
+  },
+  "fallback_ids": [],
+  "verification_input": {
+    "url": "https://www.gov.cn/zhengce/202407/content_6963770.htm"
+  },
+  "last_verified_at": "2026-07-15T22:57:00+08:00",
+  "license": "Apache-2.0",
+  "warnings": [
+    "Script-only pages, login walls and thin shell pages return no_results."
+  ]
+}

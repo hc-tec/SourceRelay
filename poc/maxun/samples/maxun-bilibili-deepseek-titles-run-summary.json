@@ -1,0 +1,50 @@
+{
+  "checkedAt": "2026-07-15T13:44:50.239Z",
+  "robotName": "bilibili-deepseek-titles-poc",
+  "query": "DeepSeek",
+  "runCount": 3,
+  "allRunsSuccessful": true,
+  "allRunsHaveThirtyRows": true,
+  "runs": [
+    {
+      "file": "maxun-bilibili-deepseek-titles-api-run.json",
+      "status": "success",
+      "rowCount": 30,
+      "nonEmptyTitles": 30,
+      "nonEmptyAuthors": 30,
+      "validVideoUrls": 28,
+      "promotedOrTrackingRows": 2,
+      "uniqueVideoUrls": 28
+    },
+    {
+      "file": "maxun-bilibili-deepseek-titles-run2-api-run-2026-07-15T13-43-36-139Z.json",
+      "status": "success",
+      "rowCount": 30,
+      "nonEmptyTitles": 30,
+      "nonEmptyAuthors": 30,
+      "validVideoUrls": 30,
+      "promotedOrTrackingRows": 0,
+      "uniqueVideoUrls": 30
+    },
+    {
+      "file": "maxun-bilibili-deepseek-titles-run3-api-run-2026-07-15T13-43-36-140Z.json",
+      "status": "success",
+      "rowCount": 30,
+      "nonEmptyTitles": 30,
+      "nonEmptyAuthors": 30,
+      "validVideoUrls": 28,
+      "promotedOrTrackingRows": 2,
+      "uniqueVideoUrls": 28
+    }
+  ],
+  "normalizedFirstRun": {
+    "rowCount": 30,
+    "validVideoUrls": 28,
+    "promotedOrTrackingRows": 2
+  },
+  "warnings": [
+    "Maxun uses generic Label 1..6 names unless the workflow is edited or normalized downstream.",
+    "Bilibili promoted cards can be mixed into organic results and may expose long tracking URLs.",
+    "The normalized sample removes tracking URLs and leaves promoted rows without a canonical video URL."
+  ]
+}

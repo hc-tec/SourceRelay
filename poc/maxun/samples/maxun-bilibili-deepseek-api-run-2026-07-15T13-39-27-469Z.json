@@ -1,0 +1,274 @@
+{
+  "statusCode": 200,
+  "messageCode": "success",
+  "run": {
+    "id": "8366f234-bdd7-46af-853e-30975258546d",
+    "status": "success",
+    "name": "bilibili-deepseek-poc",
+    "robotId": "c9b093a6-d9d0-4054-b66a-eb53ff83762a",
+    "startedAt": "7/15/2026, 1:39:15 PM",
+    "finishedAt": "7/15/2026, 1:39:26 PM",
+    "runId": "3f217f9c-b8c4-4299-a651-49769061bd7d",
+    "runByUserId": 1,
+    "runByScheduleId": null,
+    "runByAPI": true,
+    "runBySDK": false,
+    "runByMCP": false,
+    "runByCLI": false,
+    "data": {
+      "textData": {},
+      "listData": {
+        "List Data 1": [
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/b21bb9bd288e4264c75056d504f0ba172e7a4a78.png@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "1.7万",
+            "Label 5": "8",
+            "Label 6": "21:28"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i2.hdslb.com/bfs/archive/55de7f0d68ada76e18d0adf4ec1e197378e99c85.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "14.0万",
+            "Label 5": "38",
+            "Label 6": "13:06"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i0.hdslb.com/bfs/archive/17f655abee0170c27a5f42aecac14dd8ddbc256c.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "26.0万",
+            "Label 5": "193",
+            "Label 6": "00:56"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i2.hdslb.com/bfs/archive/da87a3ff19bf8f2afd2d7f6d727ee4ef1548e099.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "1.1万",
+            "Label 5": "6",
+            "Label 6": "04:07"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i0.hdslb.com/bfs/archive/1cb079ce6687c9df61288e88c6aac58d5ff5b25a.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "233",
+            "Label 5": "0",
+            "Label 6": "01:17"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/49f3dd7b7c2bb811900c5b378fda7ebc411ea722.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "11.5万",
+            "Label 5": "78",
+            "Label 6": "02:05"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i2.hdslb.com/bfs/archive/6a2fe0e1083b4457f157583e55c92616b6247609.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "3419",
+            "Label 5": "1",
+            "Label 6": "01:17"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/1611070e341cdea14882d48e48a1724a98b09c33.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "9.5万",
+            "Label 5": "34",
+            "Label 6": "00:42"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/3ecc3e62ea2645ebf682a720b00de1bbe08d82a7.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "2.5万",
+            "Label 5": "8",
+            "Label 6": "02:17"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i0.hdslb.com/bfs/archive/1b2836e19ac82bb9fb8095f8864fb2d4e632bca4.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "3.3万",
+            "Label 5": "22",
+            "Label 6": "00:25"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/b332a60604fef8ba75a3f8043da3f5a8a73a5568.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "2.9万",
+            "Label 5": "31",
+            "Label 6": "03:51"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i0.hdslb.com/bfs/archive/1cb079ce6687c9df61288e88c6aac58d5ff5b25a.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "1568",
+            "Label 5": "0",
+            "Label 6": "01:17"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/75d20e3b86039ca67ec73088ccc96915c1edbb43.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "11.7万",
+            "Label 5": "72",
+            "Label 6": "00:24"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i2.hdslb.com/bfs/archive/cee2bf95015448831f786cab3139492060e2ec9a.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "166.5万",
+            "Label 5": "1348",
+            "Label 6": "00:38"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i0.hdslb.com/bfs/archive/a9a31cf7afeb03ec72a98bb94be3cba8255dde9a.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "41.6万",
+            "Label 5": "128",
+            "Label 6": "02:02"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i0.hdslb.com/bfs/archive/3aea6f5fb89283316619fa450ef1e1cccc488dcf.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "119",
+            "Label 5": "0",
+            "Label 6": "01:17"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/e27342996ea696d057bbbb22758a223c338b3188.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "15.6万",
+            "Label 5": "59",
+            "Label 6": "01:40"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/6f0d899b215562769c4eb8ddc9b9062ecf44e6c7.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "2786",
+            "Label 5": "2",
+            "Label 6": "05:46"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/280e585c4871a3ae22e1a969d79443d891f401b7.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "1.4万",
+            "Label 5": "62",
+            "Label 6": "04:05:31"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/8f34829bb3cfdada26f5a96777f568825ec78c69.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "4.7万",
+            "Label 5": "124",
+            "Label 6": "07:31"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i0.hdslb.com/bfs/archive/10d350640202df53652496c1117bb47bfb6aa986.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "122.0万",
+            "Label 5": "446",
+            "Label 6": "05:27"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i0.hdslb.com/bfs/archive/c10ce67dc1f8ef6d30170a0d0ec57ce76bdcb378.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "1.5万",
+            "Label 5": "45",
+            "Label 6": "01:32:14"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/583937dd49f764ae5ca7b4db25b1fc96ea308535.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "6.3万",
+            "Label 5": "13",
+            "Label 6": "00:11"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/ef15c92e3f98acba037cf777aedb0499496e9fa6.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "10.4万",
+            "Label 5": "25",
+            "Label 6": "00:48"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i2.hdslb.com/bfs/archive/36a2e7b88ba767d910c4d12ce86afb9f8883cae8.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "4.5万",
+            "Label 5": "87",
+            "Label 6": "05:41"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i1.hdslb.com/bfs/archive/fe6d94dbc950afc0e4364c92fdea1dc46a3fbbef.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "3.3万",
+            "Label 5": "48",
+            "Label 6": "02:15"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i2.hdslb.com/bfs/archive/e6f93b8acd13756b8f79425058cba70d12400137.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "8519",
+            "Label 5": "7",
+            "Label 6": "03:29"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i2.hdslb.com/bfs/archive/ccb41f2348d8b3d21995ac020ff01fbd3f587550.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "2.5万",
+            "Label 5": "59",
+            "Label 6": "01:55:24"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i2.hdslb.com/bfs/archive/618dad37d47b8fcfea5cf2441b8ebce961ed4afa.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "26.4万",
+            "Label 5": "56",
+            "Label 6": "00:34"
+          },
+          {
+            "Label 1": "",
+            "Label 2": "https://i0.hdslb.com/bfs/archive/71f4ec7f2af505082c15e43130c491a0f6e46c9c.jpg@672w_378h_1c_!web-search-common-cover",
+            "Label 3": "稍后再看",
+            "Label 4": "3.1万",
+            "Label 5": "6",
+            "Label 6": "00:23"
+          }
+        ]
+      },
+      "crawlData": {},
+      "searchData": {},
+      "markdown": "",
+      "html": "",
+      "links": [],
+      "summary": null,
+      "promptResult": null
+    },
+    "screenshots": []
+  }
+}

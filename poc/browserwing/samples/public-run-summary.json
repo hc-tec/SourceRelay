@@ -1,0 +1,251 @@
+﻿[
+    {
+        "script":  "bilibili-hot",
+        "iteration":  1,
+        "timestamp":  "2026-07-15T16:46:30.7252078+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  7588,
+        "item_count":  100,
+        "fields":  [
+                       "author",
+                       "play",
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\bilibili-hot-1-20260715-164623.stderr.log"
+    },
+    {
+        "script":  "bilibili-hot",
+        "iteration":  2,
+        "timestamp":  "2026-07-15T16:46:37.8949655+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  7153,
+        "item_count":  100,
+        "fields":  [
+                       "author",
+                       "play",
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\bilibili-hot-2-20260715-164630.stderr.log"
+    },
+    {
+        "script":  "bilibili-hot",
+        "iteration":  3,
+        "timestamp":  "2026-07-15T16:46:45.4595533+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  7560,
+        "item_count":  100,
+        "fields":  [
+                       "author",
+                       "play",
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\bilibili-hot-3-20260715-164637.stderr.log"
+    },
+    {
+        "script":  "zhihu-hot",
+        "iteration":  1,
+        "timestamp":  "2026-07-15T16:46:54.3630348+08:00",
+        "success":  false,
+        "exit_code":  0,
+        "elapsed_ms":  8901,
+        "item_count":  0,
+        "fields":  [
+
+                   ],
+        "error":  "Command exited with code 0 or returned an empty result.",
+        "stderr_log":  "logs\\zhihu-hot-1-20260715-164645.stderr.log"
+    },
+    {
+        "script":  "zhihu-hot",
+        "iteration":  2,
+        "timestamp":  "2026-07-15T16:47:02.9141775+08:00",
+        "success":  false,
+        "exit_code":  0,
+        "elapsed_ms":  8549,
+        "item_count":  0,
+        "fields":  [
+
+                   ],
+        "error":  "Command exited with code 0 or returned an empty result.",
+        "stderr_log":  "logs\\zhihu-hot-2-20260715-164654.stderr.log"
+    },
+    {
+        "script":  "zhihu-hot",
+        "iteration":  3,
+        "timestamp":  "2026-07-15T16:47:11.5634174+08:00",
+        "success":  false,
+        "exit_code":  0,
+        "elapsed_ms":  8648,
+        "item_count":  0,
+        "fields":  [
+
+                   ],
+        "error":  "Command exited with code 0 or returned an empty result.",
+        "stderr_log":  "logs\\zhihu-hot-3-20260715-164702.stderr.log"
+    },
+    {
+        "script":  "weibo-hot",
+        "iteration":  1,
+        "timestamp":  "2026-07-15T16:47:20.2672255+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  8696,
+        "item_count":  30,
+        "fields":  [
+                       "category",
+                       "heat",
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\weibo-hot-1-20260715-164711.stderr.log"
+    },
+    {
+        "script":  "weibo-hot",
+        "iteration":  2,
+        "timestamp":  "2026-07-15T16:47:28.6211655+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  8352,
+        "item_count":  30,
+        "fields":  [
+                       "category",
+                       "heat",
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\weibo-hot-2-20260715-164720.stderr.log"
+    },
+    {
+        "script":  "weibo-hot",
+        "iteration":  3,
+        "timestamp":  "2026-07-15T16:47:36.9350065+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  8310,
+        "item_count":  30,
+        "fields":  [
+                       "category",
+                       "heat",
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\weibo-hot-3-20260715-164728.stderr.log"
+    },
+    {
+        "script":  "toutiao-hot",
+        "iteration":  1,
+        "timestamp":  "2026-07-15T16:47:48.2764931+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  11332,
+        "item_count":  50,
+        "fields":  [
+                       "heat",
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\toutiao-hot-1-20260715-164736.stderr.log"
+    },
+    {
+        "script":  "toutiao-hot",
+        "iteration":  2,
+        "timestamp":  "2026-07-15T16:48:00.3289750+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  12048,
+        "item_count":  50,
+        "fields":  [
+                       "heat",
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\toutiao-hot-2-20260715-164748.stderr.log"
+    },
+    {
+        "script":  "toutiao-hot",
+        "iteration":  3,
+        "timestamp":  "2026-07-15T16:48:11.3030619+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  10970,
+        "item_count":  50,
+        "fields":  [
+                       "heat",
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\toutiao-hot-3-20260715-164800.stderr.log"
+    },
+    {
+        "script":  "36kr-hot",
+        "iteration":  1,
+        "timestamp":  "2026-07-15T16:48:19.2314843+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  7923,
+        "item_count":  21,
+        "fields":  [
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\36kr-hot-1-20260715-164811.stderr.log"
+    },
+    {
+        "script":  "36kr-hot",
+        "iteration":  2,
+        "timestamp":  "2026-07-15T16:48:27.0434559+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  7809,
+        "item_count":  21,
+        "fields":  [
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\36kr-hot-2-20260715-164819.stderr.log"
+    },
+    {
+        "script":  "36kr-hot",
+        "iteration":  3,
+        "timestamp":  "2026-07-15T16:48:35.0055216+08:00",
+        "success":  true,
+        "exit_code":  0,
+        "elapsed_ms":  7959,
+        "item_count":  21,
+        "fields":  [
+                       "rank",
+                       "title",
+                       "url"
+                   ],
+        "error":  null,
+        "stderr_log":  "logs\\36kr-hot-3-20260715-164827.stderr.log"
+    }
+]

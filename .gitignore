@@ -1,0 +1,49 @@
+# Local agent/workspace metadata
+/.agents/
+/.codex/
+
+# Environment files and credentials
+**/.env
+**/.env.*
+!**/.env.example
+**/cookies/
+**/profiles/
+**/*credential*/
+**/*secret*/
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+
+# Language and package caches
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+**/.pytest_cache/
+**/node_modules/
+
+# Runtime state and collected browser artifacts
+**/runtime/
+**/downloads/
+**/screenshots/
+**/samples/raw/
+**/logs/*.log
+**/logs/*.err.log
+**/*.pid
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# Third-party source checkout; fetch separately when rebuilding the Maxun POC
+/poc/maxun/upstream/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.tmp
+

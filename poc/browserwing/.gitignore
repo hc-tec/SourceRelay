@@ -1,0 +1,10 @@
+node_modules/
+runtime/
+logs/*.log
+logs/*.err.log
+samples/raw/
+screenshots/private/
+*.pid
+.env
+cookies/
+profiles/

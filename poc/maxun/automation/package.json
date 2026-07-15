@@ -1,0 +1,9 @@
+{
+  "name": "maxun-poc-ui-automation",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "playwright-core": "1.57.0"
+  }
+}

@@ -1,0 +1,309 @@
+{
+  "sourcePlatform": "bilibili",
+  "operation": "search",
+  "query": "DeepSeek",
+  "fetchedAt": "2026-07-15T13:44:50.240Z",
+  "partial": true,
+  "items": [
+    {
+      "rank": 1,
+      "title": "DeepSeek V4.1即将发布！GPT-5.6被削弱？Fable重大更新与美国AI禁令抗议等AI热点资讯汇总",
+      "url": "https://www.bilibili.com/video/BV1ujN16ZEpR/",
+      "matchedText": "DeepSeek",
+      "author": "AI-seeker",
+      "authorUrl": "https://space.bilibili.com/142459613",
+      "publishedText": "07-13",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 2,
+      "title": "国产之光再进化！DeepSeek V4正式版简测，附带横评Gemini3.5 Pro / Grok4.5等",
+      "url": "https://www.bilibili.com/video/BV1fLMJ6GEJ6/",
+      "matchedText": "DeepSeek",
+      "author": "小小小名不是小明",
+      "authorUrl": "https://space.bilibili.com/316052822",
+      "publishedText": "07-09",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 3,
+      "title": "程序员：不是我不写日报，是它会写",
+      "url": "",
+      "matchedText": "",
+      "author": "妙云Leo",
+      "authorUrl": "",
+      "publishedText": "06-16",
+      "promotedOrTrackingRow": true
+    },
+    {
+      "rank": 4,
+      "title": "🐋DeepSeek不是罪过~🐋",
+      "url": "https://www.bilibili.com/video/BV1LQ7j6WEyD/",
+      "matchedText": "DeepSeek",
+      "author": "uulumine゛",
+      "authorUrl": "https://space.bilibili.com/285041722",
+      "publishedText": "06-27",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 5,
+      "title": "【deepseek】帮我戒撸",
+      "url": "https://www.bilibili.com/video/BV1YZQfYfE9K/",
+      "matchedText": "deepseek",
+      "author": "祖传柠檬精",
+      "authorUrl": "https://space.bilibili.com/1243361234",
+      "publishedText": "2025-03-19",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 6,
+      "title": "OpenAI 紧急回滚 GPT 5.6｜DeepSeek V4.1 准备好了吗? ｜这周AI圈还有大事！",
+      "url": "https://www.bilibili.com/video/BV1YHNQ6mE8x/",
+      "matchedText": "DeepSeek",
+      "author": "进化中的阿陈",
+      "authorUrl": "https://space.bilibili.com/2070038273",
+      "publishedText": "昨天",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 7,
+      "title": "【7月最新】R18？Deepseek V4 解除限制，免费使用教程！",
+      "url": "https://www.bilibili.com/video/BV1R1Ne6MEJb/",
+      "matchedText": "Deepseek",
+      "author": "星星偷走睡7意あ",
+      "authorUrl": "https://space.bilibili.com/3690996990741047",
+      "publishedText": "6小时前",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 8,
+      "title": "【老司机福利】DeepSeek V4解除限制！直接爽翻天！",
+      "url": "https://www.bilibili.com/video/BV15mMn6gEGC/",
+      "matchedText": "DeepSeek",
+      "author": "量子芯境AI",
+      "authorUrl": "https://space.bilibili.com/8923106",
+      "publishedText": "07-09",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 9,
+      "title": "DeepSeek果然可爱，谢谢大家的支持，5700粉丝了！！",
+      "url": "https://www.bilibili.com/video/BV1GDN36iEFW/",
+      "matchedText": "DeepSeek",
+      "author": "这个刀子真甜",
+      "authorUrl": "https://space.bilibili.com/23315338",
+      "publishedText": "07-12",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 10,
+      "title": "【全网首发】无需梯子！使用DeepSeek API作为Verity的AI保姆级教程！",
+      "url": "https://www.bilibili.com/video/BV1jDMi6WEUw/",
+      "matchedText": "DeepSeek",
+      "author": "涓星向凡",
+      "authorUrl": "https://space.bilibili.com/3461565078571133",
+      "publishedText": "07-08",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 11,
+      "title": "deepseek娘：才不是蓝色大肥鱼呢！",
+      "url": "https://www.bilibili.com/video/BV1BtND69Euf/",
+      "matchedText": "deepseek",
+      "author": "拾光与小狐狸",
+      "authorUrl": "https://space.bilibili.com/179469844",
+      "publishedText": "昨天",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 12,
+      "title": "用DeepSeek v4 创建我的世界",
+      "url": "https://www.bilibili.com/video/BV1bbNJ6XEUb/",
+      "matchedText": "DeepSeek",
+      "author": "W温鑫",
+      "authorUrl": "https://space.bilibili.com/15015817",
+      "publishedText": "07-10",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 13,
+      "title": "当我试图驯服AI （13）",
+      "url": "",
+      "matchedText": "",
+      "author": "池中蟒12138",
+      "authorUrl": "",
+      "publishedText": "昨天",
+      "promotedOrTrackingRow": true
+    },
+    {
+      "rank": 14,
+      "title": "【7月最新】R18？Deepseek V4 解除限制，免费使用教程！",
+      "url": "https://www.bilibili.com/video/BV18hN96JEP9/",
+      "matchedText": "Deepseek",
+      "author": "阿墨也要努力鸭u",
+      "authorUrl": "https://space.bilibili.com/3690999299705215",
+      "publishedText": "昨天",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 15,
+      "title": "deepseek无违禁词不撤回教程",
+      "url": "https://www.bilibili.com/video/BV1o5M7zLExD/",
+      "matchedText": "deepseek",
+      "author": "你自郁郁",
+      "authorUrl": "https://space.bilibili.com/3461570315159557",
+      "publishedText": "2025-06-11",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 16,
+      "title": "我真的求你了deepseek",
+      "url": "https://www.bilibili.com/video/BV1kgt1znE16/",
+      "matchedText": "deepseek",
+      "author": "Black778",
+      "authorUrl": "https://space.bilibili.com/645836083",
+      "publishedText": "2025-08-08",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 17,
+      "title": "让病娇DeepSeek变得更恐怖的提示词",
+      "url": "https://www.bilibili.com/video/BV1LcRPB6EF7/",
+      "matchedText": "DeepSeek",
+      "author": "离什么帆",
+      "authorUrl": "https://space.bilibili.com/486457937",
+      "publishedText": "05-04",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 18,
+      "title": "勾引Deepseek写小煌文，结果……",
+      "url": "https://www.bilibili.com/video/BV1spFmeYEPG/",
+      "matchedText": "Deepseek",
+      "author": "饮一杯柚子露",
+      "authorUrl": "https://space.bilibili.com/599245471",
+      "publishedText": "2025-01-31",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 19,
+      "title": "【7月最新】免费白嫖！DeepSeek V4 自由版免费用，不限次数！",
+      "url": "https://www.bilibili.com/video/BV1LCNe6zEhS/",
+      "matchedText": "DeepSeek",
+      "author": "Y-霜霜k",
+      "authorUrl": "https://space.bilibili.com/3690998362278239",
+      "publishedText": "6小时前",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 20,
+      "title": "DeepSeek V4正式版生成的《我的世界》",
+      "url": "https://www.bilibili.com/video/BV1ERTR6zECb/",
+      "matchedText": "DeepSeek",
+      "author": "冬眠の松鼠_",
+      "authorUrl": "https://space.bilibili.com/3546711534341091",
+      "publishedText": "07-07",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 21,
+      "title": "DeepSeek迎来新的成员了",
+      "url": "https://www.bilibili.com/video/BV1SBMH6NEJo/",
+      "matchedText": "DeepSeek",
+      "author": "这个刀子真甜",
+      "authorUrl": "https://space.bilibili.com/23315338",
+      "publishedText": "07-10",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 22,
+      "title": "DeepSeek V4正式版一句话生成《后室》和恐怖游戏",
+      "url": "https://www.bilibili.com/video/BV1n7MH6SEeA/",
+      "matchedText": "DeepSeek",
+      "author": "冬眠の松鼠_",
+      "authorUrl": "https://space.bilibili.com/3546711534341091",
+      "publishedText": "07-09",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 23,
+      "title": "【2026最新codex使用教程】Codex+deepseek完成自动化办公+剪辑+PPT+作图+接入飞书，小白不会代码也能用Codex，附：文档",
+      "url": "https://www.bilibili.com/video/BV1T3Nj6BEsq/",
+      "matchedText": "deepseek",
+      "author": "AI讲师-唐宇迪",
+      "authorUrl": "https://space.bilibili.com/3546794766108966",
+      "publishedText": "07-10",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 24,
+      "title": "Reasonix+DeepSeek从入门到实战丨skills使用+TUI多项目管理+Session管理+版本控制+AI编程提效+缓存优化一网打尽",
+      "url": "https://www.bilibili.com/video/BV1LtT46pER8/",
+      "matchedText": "DeepSeek",
+      "author": "博学谷",
+      "authorUrl": "https://space.bilibili.com/441640380",
+      "publishedText": "07-03",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 25,
+      "title": "Deepseek上学会被其他AI欺负吗",
+      "url": "https://www.bilibili.com/video/BV1erNn6YEzx/",
+      "matchedText": "Deepseek",
+      "author": "户山咲华恋",
+      "authorUrl": "https://space.bilibili.com/413095238",
+      "publishedText": "07-11",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 26,
+      "title": "锐评deepseek的多种思维链，从夯到拉",
+      "url": "https://www.bilibili.com/video/BV1vDM36jEpT/",
+      "matchedText": "deepseek",
+      "author": "DaVinci-2nd",
+      "authorUrl": "https://space.bilibili.com/432070384",
+      "publishedText": "07-09",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 27,
+      "title": "DeepSeek V4正式版一句话生成游戏 三个样例",
+      "url": "https://www.bilibili.com/video/BV1GyMj6dE4Q/",
+      "matchedText": "DeepSeek",
+      "author": "冬眠の松鼠_",
+      "authorUrl": "https://space.bilibili.com/3546711534341091",
+      "publishedText": "07-09",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 28,
+      "title": "5分钟安装ClaudeCode并接入DeepSeek",
+      "url": "https://www.bilibili.com/video/BV16YRLB7Exd/",
+      "matchedText": "DeepSeek",
+      "author": "Yin_Code",
+      "authorUrl": "https://space.bilibili.com/3706940936948128",
+      "publishedText": "05-02",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 29,
+      "title": "【2026最新】全站最细DeepSeek从入门到精通！AI大模型全套保姆级教程，玩法技巧+避坑指南，AI办公，效率飙升！全程干货无废话！让你少走99%的弯路！",
+      "url": "https://www.bilibili.com/video/BV1TqFVzvEiD/",
+      "matchedText": "DeepSeek",
+      "author": "光速敲代码的青丝",
+      "authorUrl": "https://space.bilibili.com/378536145",
+      "publishedText": "02-03",
+      "promotedOrTrackingRow": false
+    },
+    {
+      "rank": 30,
+      "title": "DeepSeek日常调皮",
+      "url": "https://www.bilibili.com/video/BV1QUM868Ey7/",
+      "matchedText": "DeepSeek",
+      "author": "这个刀子真甜",
+      "authorUrl": "https://space.bilibili.com/23315338",
+      "publishedText": "07-08",
+      "promotedOrTrackingRow": false
+    }
+  ]
+}

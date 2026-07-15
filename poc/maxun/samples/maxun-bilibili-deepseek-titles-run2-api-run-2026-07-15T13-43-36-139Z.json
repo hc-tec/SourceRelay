@@ -1,0 +1,274 @@
+{
+  "statusCode": 200,
+  "messageCode": "success",
+  "run": {
+    "id": "8a7c4246-fba5-4f74-bf53-e0db481095fc",
+    "status": "success",
+    "name": "bilibili-deepseek-titles-poc",
+    "robotId": "986638eb-a4d1-46e9-a73d-2958a99ee366",
+    "startedAt": "7/15/2026, 1:43:26 PM",
+    "finishedAt": "7/15/2026, 1:43:34 PM",
+    "runId": "db4557ef-77d5-403e-9a35-98ae11994ad4",
+    "runByUserId": 1,
+    "runByScheduleId": null,
+    "runByAPI": true,
+    "runBySDK": false,
+    "runByMCP": false,
+    "runByCLI": false,
+    "data": {
+      "textData": {},
+      "listData": {
+        "List Data 1": [
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1YHNQ6mE8x/",
+            "Label 2": "OpenAI 紧急回滚 GPT 5.6｜DeepSeek V4.1 准备好了吗? ｜这周AI圈还有大事！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/2070038273",
+            "Label 5": "进化中的阿陈",
+            "Label 6": "· 昨天"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1ujN16ZEpR/",
+            "Label 2": "DeepSeek V4.1即将发布！GPT-5.6被削弱？Fable重大更新与美国AI禁令抗议等AI热点资讯汇总",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/142459613",
+            "Label 5": "AI-seeker",
+            "Label 6": "· 07-13"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1fLMJ6GEJ6/",
+            "Label 2": "国产之光再进化！DeepSeek V4正式版简测，附带横评Gemini3.5 Pro / Grok4.5等",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/316052822",
+            "Label 5": "小小小名不是小明",
+            "Label 6": "· 07-09"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1r7NU6XEgH/",
+            "Label 2": "【硬核速递】DeepSeek V4.1 强势定档！GPT-5.6 竟跌下神坛！AI 圈大事彻底疯狂！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3546885149165615",
+            "Label 5": "宙流AI小工坊主",
+            "Label 6": "· 昨天"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV18hN96JEP9/",
+            "Label 2": "【7月最新】R18？Deepseek V4 解除限制，免费使用教程！",
+            "Label 3": "Deepseek",
+            "Label 4": "https://space.bilibili.com/3690999299705215",
+            "Label 5": "阿墨也要努力鸭u",
+            "Label 6": "· 昨天"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1R1Ne6MEJb/",
+            "Label 2": "【7月最新】R18？Deepseek V4 解除限制，免费使用教程！",
+            "Label 3": "Deepseek",
+            "Label 4": "https://space.bilibili.com/3690996990741047",
+            "Label 5": "星星偷走睡7意あ",
+            "Label 6": "· 6小时前"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1YZQfYfE9K/",
+            "Label 2": "【deepseek】帮我戒撸",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/1243361234",
+            "Label 5": "祖传柠檬精",
+            "Label 6": "· 2025-03-19"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1BtND69Euf/",
+            "Label 2": "deepseek娘：才不是蓝色大肥鱼呢！",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/179469844",
+            "Label 5": "拾光与小狐狸",
+            "Label 6": "· 昨天"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1N3MW6aEXm/",
+            "Label 2": "Deepseek对话上限后开启新对话承接教程",
+            "Label 3": "Deepseek",
+            "Label 4": "https://space.bilibili.com/479101993",
+            "Label 5": "宛林咯",
+            "Label 6": "· 07-10"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1LQ7j6WEyD/",
+            "Label 2": "🐋DeepSeek不是罪过~🐋",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/285041722",
+            "Label 5": "uulumine゛",
+            "Label 6": "· 06-27"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1jDMi6WEUw/",
+            "Label 2": "【全网首发】无需梯子！使用DeepSeek API作为Verity的AI保姆级教程！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3461565078571133",
+            "Label 5": "涓星向凡",
+            "Label 6": "· 07-08"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1FrNi6SEyJ/",
+            "Label 2": "Deepseek正式版灰度 木筏求生+我的世界（我的木筏）",
+            "Label 3": "Deepseek",
+            "Label 4": "https://space.bilibili.com/1699039750",
+            "Label 5": "Delight-linger",
+            "Label 6": "· 2小时前"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1GyMj6dE4Q/",
+            "Label 2": "DeepSeek V4正式版一句话生成游戏 三个样例",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3546711534341091",
+            "Label 5": "冬眠の松鼠_",
+            "Label 6": "· 07-09"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1VzEy6FEuf/",
+            "Label 2": "从“能用”到“超神”，DeepSeek++给网页版装上“大脑”和“手脚”，支持长期记忆、MCP工具与自动化任务!",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/493378795",
+            "Label 5": "阿幸要喝酒",
+            "Label 6": "· 06-12"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1spFmeYEPG/",
+            "Label 2": "勾引Deepseek写小煌文，结果……",
+            "Label 3": "Deepseek",
+            "Label 4": "https://space.bilibili.com/599245471",
+            "Label 5": "饮一杯柚子露",
+            "Label 6": "· 2025-01-31"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1bbNJ6XEUb/",
+            "Label 2": "用DeepSeek v4 创建我的世界",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/15015817",
+            "Label 5": "W温鑫",
+            "Label 6": "· 07-10"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV15mMn6gEGC/",
+            "Label 2": "【老司机福利】DeepSeek V4解除限制！直接爽翻天！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/8923106",
+            "Label 5": "量子芯境AI",
+            "Label 6": "· 07-09"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1LCNe6zEhS/",
+            "Label 2": "【7月最新】免费白嫖！DeepSeek V4 自由版免费用，不限次数！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3690998362278239",
+            "Label 5": "Y-霜霜k",
+            "Label 6": "· 6小时前"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1o5M7zLExD/",
+            "Label 2": "deepseek无违禁词不撤回教程",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/3461570315159557",
+            "Label 5": "你自郁郁",
+            "Label 6": "· 2025-06-11"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1ERTR6zECb/",
+            "Label 2": "DeepSeek V4正式版生成的《我的世界》",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3546711534341091",
+            "Label 5": "冬眠の松鼠_",
+            "Label 6": "· 07-07"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1qLNQ6QEc2/",
+            "Label 2": "DeepSeek再不更新真是蠢没边了",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/334175890",
+            "Label 5": "bobiys",
+            "Label 6": "· 昨天"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1b8AkePEw4/",
+            "Label 2": "【DeepSeek教程】清华大学带你从入门到精通，全程干货无废话！少走99%的弯路！存下吧！很难找全的！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3546845013870835",
+            "Label 5": "DeepSeek教程-",
+            "Label 6": "· 2025-02-19"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1kgt1znE16/",
+            "Label 2": "我真的求你了deepseek",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/645836083",
+            "Label 5": "Black778",
+            "Label 6": "· 2025-08-08"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1ueFqeLEWN/",
+            "Label 2": "【已深度思考】⚡当你比DeepSeek更像DeepSeek…",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/472765324",
+            "Label 5": "Neykast",
+            "Label 6": "· 2025-02-02"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1n7MH6SEeA/",
+            "Label 2": "DeepSeek V4正式版一句话生成《后室》和恐怖游戏",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3546711534341091",
+            "Label 5": "冬眠の松鼠_",
+            "Label 6": "· 07-09"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1GDN36iEFW/",
+            "Label 2": "DeepSeek果然可爱，谢谢大家的支持，5700粉丝了！！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/23315338",
+            "Label 5": "这个刀子真甜",
+            "Label 6": "· 07-12"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1erNn6YEzx/",
+            "Label 2": "Deepseek上学会被其他AI欺负吗",
+            "Label 3": "Deepseek",
+            "Label 4": "https://space.bilibili.com/413095238",
+            "Label 5": "户山咲华恋",
+            "Label 6": "· 07-11"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1TqFVzvEiD/",
+            "Label 2": "【2026最新】全站最细DeepSeek从入门到精通！AI大模型全套保姆级教程，玩法技巧+避坑指南，AI办公，效率飙升！全程干货无废话！让你少走99%的弯路！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/378536145",
+            "Label 5": "光速敲代码的青丝",
+            "Label 6": "· 02-03"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1Vd9UYMEmP/",
+            "Label 2": "【ASMR/无损Hires】99%人没听过！DeepSeek打造最强ASMR组合！挑战免疫党的耳膜极限！（针筒/针扎泡沫/太空沙/木块/深度掏耳/泡腾片）",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3546599177324843",
+            "Label 5": "咪茉Mimo_",
+            "Label 6": "· 2025-03-09"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1AsRiB5EXn/",
+            "Label 2": "这或许是目前为止最可爱的deepseek表情包",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/384404059",
+            "Label 5": "霜雪双白",
+            "Label 6": "· 05-04"
+          }
+        ]
+      },
+      "crawlData": {},
+      "searchData": {},
+      "markdown": "",
+      "html": "",
+      "links": [],
+      "summary": null,
+      "promptResult": null
+    },
+    "screenshots": []
+  }
+}

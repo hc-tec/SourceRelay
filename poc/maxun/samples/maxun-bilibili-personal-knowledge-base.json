@@ -1,0 +1,294 @@
+{
+  "keyword": "个人知识库",
+  "targetUrl": "https://search.bilibili.com/all?keyword=%E4%B8%AA%E4%BA%BA%E7%9F%A5%E8%AF%86%E5%BA%93",
+  "duplicateStatus": 201,
+  "robot": {
+    "id": "f4b257ba-f96e-4a23-a125-b55892c97071",
+    "name": "bilibili-deepseek-titles-poc (all?keyword=%E4%B8%AA%E4%BA%BA%E7%9F%A5%E8%AF%86%E5%BA%93)",
+    "createdAt": 1784123179000,
+    "inputParameters": [
+      {
+        "type": "string",
+        "name": "originUrl",
+        "label": "Origin URL",
+        "required": true,
+        "defaultValue": "https://search.bilibili.com/all?keyword=%E4%B8%AA%E4%BA%BA%E7%9F%A5%E8%AF%86%E5%BA%93"
+      }
+    ]
+  },
+  "runDurationMs": 10161,
+  "run": {
+    "statusCode": 200,
+    "messageCode": "success",
+    "run": {
+      "id": "18de7882-232f-4c28-a8df-1aa645464b12",
+      "status": "success",
+      "name": "bilibili-deepseek-titles-poc (all?keyword=%E4%B8%AA%E4%BA%BA%E7%9F%A5%E8%AF%86%E5%BA%93)",
+      "robotId": "f4b257ba-f96e-4a23-a125-b55892c97071",
+      "startedAt": "7/15/2026, 1:46:19 PM",
+      "finishedAt": "7/15/2026, 1:46:28 PM",
+      "runId": "5542446e-498a-4a70-ba50-22966cdd19ae",
+      "runByUserId": 1,
+      "runByScheduleId": null,
+      "runByAPI": true,
+      "runBySDK": false,
+      "runByMCP": false,
+      "runByCLI": false,
+      "data": {
+        "textData": {},
+        "listData": {
+          "List Data 1": [
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1qqEj6oEEk/",
+              "Label 2": "个人知识库怎么搭？最简单Obsidian入门教程【保姆级教学】",
+              "Label 3": "个人知识库",
+              "Label 4": "https://space.bilibili.com/17519822",
+              "Label 5": "摄影师云飞",
+              "Label 6": "· 06-09"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1MJVb6cETR/",
+              "Label 2": "Codex联动Obsidian，搭建卡帕西同款知识库，手把手教程",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/14848367",
+              "Label 5": "Xuan_酱",
+              "Label 6": "· 05-29"
+            },
+            {
+              "Label 1": "https://cm.bilibili.com/cm/api/fees/pc/sync/v2?msg=a%7C5647%2Cb%7Cbilibili%2Cc%7C1%2Cd%7C%2Ce%7CCIuw%2FxcQvoPK3QEYiPfkxwkgYCgBMJzTiAI4jyxCIDE3ODQxMjMxODQxMjZxMTBhODVhMTg0YTE0M3E1MDA1SP6nnbD2M1IAWgbpppnmuK9iBuS4reWbvWhkcAF4gICAgKAmgAEBiAEAkgENODkuMTg1LjI2LjE3OKABZ6gB1wGyASCMLGD0GRbU7StX1G%2F1NIVI0Vy8vhgYABzx5dPwUIkUbLoBtANodHRwczovL3d3dy5iaWxpYmlsaS5jb20vdmlkZW8vQlYxWWhOeTZ0RWM3P3RyYWNraWQ9NDYxNTc0MDQzMDcxMTc3NDUyMSZ0cmFja19pZD1wYmFlcy5UZ2NtQzNzWF9KTlBhRDJBNmY0QWN2ZXQyWlNFUVBMbHRZT0tYek02N0Z6ZTllTFZCSU5SYVZZVEc5UzlYTktxT3FHclN1Z0RwM0R6TlRVNk1CSG9DYVU2dDRVYldCalBDd2VzZnhzNmVoSXIwM1NsaVBtd2RMRjJmVUtweXpuSUlScktPSjluNkN0WEtJZXBXUS04S2Q4Vzlpem9zdHFXODBGVkNaeUZ6RlUmY2FpZD1fX0NBSURfXyZyZXNvdXJjZV9pZD1fX1JFU09VUkNFSURfXyZzb3VyY2VfaWQ9NTY0NyZmcm9tX3NwbWlkPV9fRlJPTVNQTUlEX18mcmVxdWVzdF9pZD0xNzg0MTIzMTg0MTI2cTEwYTg1YTE4NGExNDNxNTAwNSZjcmVhdGl2ZV9pZD0yNTY2MzMzMjc0JmxpbmtlZF9jcmVhdGl2ZV9pZD0yNTY2NDcwNTM2wgEBMNIBANgBsgLwAQD4AWCAAkCIAgCSAgCYAp6mA6AC5haoAobtAbAC9wu4AgDAAgDIApBO0AKw6gHYArDqAeoCAPgCAIgDAJIDAJoDDTE3ODQzMDM5OTk5OTmgAwGoAwCwAwC4AwDIAwDSA%2F8BeyIxIjoiMjU2NjQ3MDUzNiIsIjExIjoiMjMxIiwiMTIiOiI1NjQ3IiwiMTMiOiIzNDYzMzEzIiwiMTYiOiIzNDYzMzEzXzAiLCIyIjoiNDMzNjAyOCIsIjI0IjoiMSIsIjI1IjoiMTEyNiIsIjI2IjoiMTEyNyIsIjI4IjoiNTc1MGI2NTc2MzZiNGE3ZmVhNmE5N2I2NGNlNGUxMjMiLCIzIjoiNDMzNjAyOCIsIjQiOiIxMTI2IiwiNSI6IjExMjciLCI2IjoiNDMzNjAyOCIsIjciOiIxMTY5MTIwNjMyNTY0MDgiLCI4IjoiMzcwNjk5ODk2NzI0MTU2NyJ94AMA6AMA8AMA%2BgMFb3RoZXKCBAludWxsOm51bGyIBGeQBACgBAOqBAcI%2FOW%2BUxAEqgQHCP3lvlMQALgEAMAECcoEANAEANgEAOIEjwI1Ni57InBzSWQiOjEzODI1MywidjIiOiJBSnJVQVM2VWx6b0NINDFhZlJzTnhndy1LelpsekROVE5jaTFKYlJQemtEOU5JekE0c0dMVG8yT29mcWF6T252YmVfem5XVXhtUnYwc1RneGdwZEFrWmdZZDU4RVYwMEsybXkxUnRXXzV0VEUzTGMwV0Q5MmMzU1JTbzBMX0J0UWQ3cWEtZXRYV3BUNzE1SjNSMDdkeDdON3daNzNOQ3VUSlFVMTFuY2twUGhzZVFCeTdYUVNIdjNWdkEifTs2My57InBzSWQiOjEzODE4MywidjIiOiJHazQifTs3MC57InBzSWQiOjExNDc4MCwidjIiOiJBQSJ96AQA8AQA%2BgTFA3siYWNjZWxlcmF0ZV9mYWN0b3IiOjEuMCwiYWNjZWxlcmF0ZV9pZCI6MCwiYWRfdHlwZV9maXgiOiJjcG0iLCJiaWRfdHlwZSI6MSwiYml6X3R5cGUiOjEsImJpel90eXBlX2ZpeCI6MywiY3BhIjoie1wiY3BhX2xldmVsXCI6OTksXCJjcGFfc2V0XCI6MH0iLCJjcGFUYXJnZXRUeXBlIjo5LCJmcm9tVHJhY2tpZCI6IjQ2MTU3NDA0MzA3MTE3NzQ1MjEiLCJpYWFfY2hlYXRfZmxvdyI6MCwiaW5uZXIiOjAsImlzX29jcGNfYW50b3Vfb2NwbSI6MCwiaXNfdHJhY2tpbmdfdXJscyI6MCwibWluaV9nYW1lX2lkIjoiIiwibWluaV9nYW1lX3Bvc2l0aW9uX2lkIjoiIiwibW9kZWxTY29yZSI6IntcImN0clwiOlwiMjE1Ljc4OTA5M1wiLFwiZmluYWxfcGN0clwiOlwiMjE1Ljc4OTA5M1wiLFwiZmluYWxfcGN2clwiOlwiMTAwMDAuMDAwMDAwXCJ9IiwidmlkZW9fdXBfbWlkIjozNzA2OTk4OTY3MjQxNTY3fYAFAJAFKJAFM5AFOZAFQ5AFSJAFSZAFcpAF0AGQBdEBkAXXAZAFjgKQBZoCkAXAApAFwgKQBcMCkAXFApAFywKQBc4CkAXTApAF1gKQBdcCkAXYApAF2QKQBdoCkAXfApAF8AKQBfUCkAX7ApAF%2FwKQBZQDkAWgA5AFpQOQBacDkAWwA5AFzQOQBeADkAX1A5AF%2BAOQBf8DkAW0BJAFxgWQBaYGkAWBCJAFsBGgBdiugLDLyhq4BQnABZGx0wHIBQHgBQHoBQDyBWxDQUVRQVRBSlpRQkFIRVp0QUVBY1JuVUFBSUEvb0FHMnlNamRBYWdCMnNiY3h3bXdBUUc0QVFISUFRbnRBUUFBZ0QvMUFRQUFnRCtkQWdBQWdEK2xBZ0FBZ0QrdEFnQUFnRCsxQWdBQWdEOD34BbbIyN0BgAaw6gGIBtrG3McJkAYA%2Cf%7Cclick_sync_3%2Cg%7C1%2Ch%7C%2Ci%7C%2Cj%7C%2Ck%7C1784123185808%2Cl%7C5646%2Cm%7C1784123185613%2Cn%7C%2Co%7C2566470536%2Cp%7Cad_card&ts=1784123185808",
+              "Label 2": "知识库从 0 到 100+ 页，全程没动一下手",
+              "Label 3": "知识库",
+              "Label 4": "https://cm.bilibili.com/cm/api/fees/pc/sync/v2?msg=a%7C5647%2Cb%7Cbilibili%2Cc%7C1%2Cd%7C%2Ce%7CCIuw%2FxcQvoPK3QEYiPfkxwkgYCgBMJzTiAI4jyxCIDE3ODQxMjMxODQxMjZxMTBhODVhMTg0YTE0M3E1MDA1SP6nnbD2M1IAWgbpppnmuK9iBuS4reWbvWhkcAF4gICAgKAmgAEBiAEAkgENODkuMTg1LjI2LjE3OKABZ6gB1wGyASCMLGD0GRbU7StX1G%2F1NIVI0Vy8vhgYABzx5dPwUIkUbLoBtANodHRwczovL3d3dy5iaWxpYmlsaS5jb20vdmlkZW8vQlYxWWhOeTZ0RWM3P3RyYWNraWQ9NDYxNTc0MDQzMDcxMTc3NDUyMSZ0cmFja19pZD1wYmFlcy5UZ2NtQzNzWF9KTlBhRDJBNmY0QWN2ZXQyWlNFUVBMbHRZT0tYek02N0Z6ZTllTFZCSU5SYVZZVEc5UzlYTktxT3FHclN1Z0RwM0R6TlRVNk1CSG9DYVU2dDRVYldCalBDd2VzZnhzNmVoSXIwM1NsaVBtd2RMRjJmVUtweXpuSUlScktPSjluNkN0WEtJZXBXUS04S2Q4Vzlpem9zdHFXODBGVkNaeUZ6RlUmY2FpZD1fX0NBSURfXyZyZXNvdXJjZV9pZD1fX1JFU09VUkNFSURfXyZzb3VyY2VfaWQ9NTY0NyZmcm9tX3NwbWlkPV9fRlJPTVNQTUlEX18mcmVxdWVzdF9pZD0xNzg0MTIzMTg0MTI2cTEwYTg1YTE4NGExNDNxNTAwNSZjcmVhdGl2ZV9pZD0yNTY2MzMzMjc0JmxpbmtlZF9jcmVhdGl2ZV9pZD0yNTY2NDcwNTM2wgEBMNIBANgBsgLwAQD4AWCAAkCIAgCSAgCYAp6mA6AC5haoAobtAbAC9wu4AgDAAgDIApBO0AKw6gHYArDqAeoCAPgCAIgDAJIDAJoDDTE3ODQzMDM5OTk5OTmgAwGoAwCwAwC4AwDIAwDSA%2F8BeyIxIjoiMjU2NjQ3MDUzNiIsIjExIjoiMjMxIiwiMTIiOiI1NjQ3IiwiMTMiOiIzNDYzMzEzIiwiMTYiOiIzNDYzMzEzXzAiLCIyIjoiNDMzNjAyOCIsIjI0IjoiMSIsIjI1IjoiMTEyNiIsIjI2IjoiMTEyNyIsIjI4IjoiNTc1MGI2NTc2MzZiNGE3ZmVhNmE5N2I2NGNlNGUxMjMiLCIzIjoiNDMzNjAyOCIsIjQiOiIxMTI2IiwiNSI6IjExMjciLCI2IjoiNDMzNjAyOCIsIjciOiIxMTY5MTIwNjMyNTY0MDgiLCI4IjoiMzcwNjk5ODk2NzI0MTU2NyJ94AMA6AMA8AMA%2BgMFb3RoZXKCBAludWxsOm51bGyIBGeQBACgBAOqBAcI%2FOW%2BUxAEqgQHCP3lvlMQALgEAMAECcoEANAEANgEAOIEjwI1Ni57InBzSWQiOjEzODI1MywidjIiOiJBSnJVQVM2VWx6b0NINDFhZlJzTnhndy1LelpsekROVE5jaTFKYlJQemtEOU5JekE0c0dMVG8yT29mcWF6T252YmVfem5XVXhtUnYwc1RneGdwZEFrWmdZZDU4RVYwMEsybXkxUnRXXzV0VEUzTGMwV0Q5MmMzU1JTbzBMX0J0UWQ3cWEtZXRYV3BUNzE1SjNSMDdkeDdON3daNzNOQ3VUSlFVMTFuY2twUGhzZVFCeTdYUVNIdjNWdkEifTs2My57InBzSWQiOjEzODE4MywidjIiOiJHazQifTs3MC57InBzSWQiOjExNDc4MCwidjIiOiJBQSJ96AQA8AQA%2BgTFA3siYWNjZWxlcmF0ZV9mYWN0b3IiOjEuMCwiYWNjZWxlcmF0ZV9pZCI6MCwiYWRfdHlwZV9maXgiOiJjcG0iLCJiaWRfdHlwZSI6MSwiYml6X3R5cGUiOjEsImJpel90eXBlX2ZpeCI6MywiY3BhIjoie1wiY3BhX2xldmVsXCI6OTksXCJjcGFfc2V0XCI6MH0iLCJjcGFUYXJnZXRUeXBlIjo5LCJmcm9tVHJhY2tpZCI6IjQ2MTU3NDA0MzA3MTE3NzQ1MjEiLCJpYWFfY2hlYXRfZmxvdyI6MCwiaW5uZXIiOjAsImlzX29jcGNfYW50b3Vfb2NwbSI6MCwiaXNfdHJhY2tpbmdfdXJscyI6MCwibWluaV9nYW1lX2lkIjoiIiwibWluaV9nYW1lX3Bvc2l0aW9uX2lkIjoiIiwibW9kZWxTY29yZSI6IntcImN0clwiOlwiMjE1Ljc4OTA5M1wiLFwiZmluYWxfcGN0clwiOlwiMjE1Ljc4OTA5M1wiLFwiZmluYWxfcGN2clwiOlwiMTAwMDAuMDAwMDAwXCJ9IiwidmlkZW9fdXBfbWlkIjozNzA2OTk4OTY3MjQxNTY3fYAFAJAFKJAFM5AFOZAFQ5AFSJAFSZAFcpAF0AGQBdEBkAXXAZAFjgKQBZoCkAXAApAFwgKQBcMCkAXFApAFywKQBc4CkAXTApAF1gKQBdcCkAXYApAF2QKQBdoCkAXfApAF8AKQBfUCkAX7ApAF%2FwKQBZQDkAWgA5AFpQOQBacDkAWwA5AFzQOQBeADkAX1A5AF%2BAOQBf8DkAW0BJAFxgWQBaYGkAWBCJAFsBGgBdiugLDLyhq4BQnABZGx0wHIBQHgBQHoBQDyBWxDQUVRQVRBSlpRQkFIRVp0QUVBY1JuVUFBSUEvb0FHMnlNamRBYWdCMnNiY3h3bXdBUUc0QVFISUFRbnRBUUFBZ0QvMUFRQUFnRCtkQWdBQWdEK2xBZ0FBZ0QrdEFnQUFnRCsxQWdBQWdEOD34BbbIyN0BgAaw6gGIBtrG3McJkAYA%2Cf%7Cclick_sync_3%2Cg%7C1%2Ch%7C%2Ci%7C%2Cj%7C%2Ck%7C1784123185808%2Cl%7C5646%2Cm%7C1784123185613%2Cn%7C%2Co%7C2566470536%2Cp%7Cad_logo&ts=1784123185809",
+              "Label 5": "龙猫_LongCat",
+              "Label 6": "· 07-13"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/cheese/play/ss662383890?query_from=0&search_id=4615740430711774521&search_query=%E4%B8%AA%E4%BA%BA%E7%9F%A5%E8%AF%86%E5%BA%93&csource=common_hpsearch_null_null",
+              "Label 2": "企业知识库AI项目，Pat老师主讲",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/76542346",
+              "Label 5": "动力节点",
+              "Label 6": ""
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1UkNx6MEQ2/",
+              "Label 2": "【B站强推】30分钟学会搭建私人知识库！DeepSeek+RAGFlow知识库搭建！2026最新个人知识库搭建教程，小白也能实现！AI大模型|LLM",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/3546898826791012",
+              "Label 5": "Agent零基础入门",
+              "Label 6": "· 07-11"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1otokBpENn/",
+              "Label 2": "【大模型RAG】2026年B站最全最细的RAG知识库搭建系统教程，手把手教你搭建私有知识库，从入门到实战全流程教学！全程干货！少走99%的弯路！",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/3546769201826371",
+              "Label 5": "AI应用开发-",
+              "Label 6": "· 04-27"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV188NM6pEY6/",
+              "Label 2": "obsidian个人知识库搭建零基础教学",
+              "Label 3": "个人知识库",
+              "Label 4": "https://space.bilibili.com/483102181",
+              "Label 5": "40岁老头学AI",
+              "Label 6": "· 07-12"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1etN26MEsm/",
+              "Label 2": "手把手教你用WorkBuddy+ima搭建个人知识库！",
+              "Label 3": "个人知识库",
+              "Label 4": "https://space.bilibili.com/319954330",
+              "Label 5": "图寻不是图灵",
+              "Label 6": "· 07-13"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1sKj8zUEut/",
+              "Label 2": "AI知识库那么多，究竟哪个才是适合自己的？全网最新测评来了！",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/50984680",
+              "Label 5": "是子鱼AI",
+              "Label 6": "· 2025-05-24"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/cheese/play/ss682417853?query_from=0&search_id=4615740430711774521&search_query=%E4%B8%AA%E4%BA%BA%E7%9F%A5%E8%AF%86%E5%BA%93&csource=common_hpsearch_null_null",
+              "Label 2": "AI知识库有效搭建三天实战行动营",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/383382980",
+              "Label 5": "杨彧鑫AI",
+              "Label 6": ""
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV15c1yB8Ewe/",
+              "Label 2": "保姆级教程！用deepseek搭建纯离线本地AI知识库，超简单！",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/281120100",
+              "Label 5": "我是阿众",
+              "Label 6": "· 2025-11-04"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1bENw6iEVJ/",
+              "Label 2": "Hermes + Obsidian 保姆级教程：搭建会自生长的 AI 知识库",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/1161891017",
+              "Label 5": "清涵__",
+              "Label 6": "· 07-11"
+            },
+            {
+              "Label 1": "https://cm.bilibili.com/cm/api/fees/pc/sync/v2?msg=a%7C5652%2Cb%7Cbilibili%2Cc%7C1%2Cd%7C%2Ce%7CCKPDhBYQmdn12gEY57y7uQkgJigBMNG%2BhwI4lCxCIDE3ODQxMjMxODQxMjZxMTBhODVhMTg0YTE0M3E1MDA1SP6nnbD2M1IAWgbpppnmuK9iBuS4reWbvWhkcAF4gICAgKAmgAEBiAEAkgENODkuMTg1LjI2LjE3OKABYKgBarIBIOUbS2tVyCz%2BBuszHfN2%2BksGXVv65RNfnomY9OzSN8AEugGTBWh0dHBzOi8vd3d3LmJpbGliaWxpLmNvbS92aWRlby9CVjFqZktVNlVFcHQ%2FaW1hZ2VfbWF0ZXJpYWxfaWQ9MTcwMTg5NTM0JmZyb21fYmNnPWJjZ18xMV8yNDMxMTI2MDczJnRyYWNraWQ9NDYxNTc0MDQzMDcxMTc3NDUyMSZjcmVhdGl2ZV9pZD0yNDMxMTI2MDczJnRpdGxlX2VuY29kZT0lRTYlOEElOEElRTklODclOEQlRTUlQTQlOEQlRTUlOEElQjMlRTUlOEElQTglRTUlQjklQjIlRTYlOEUlODklRUYlQkMlOEMlRTYlOEElOEElRTYlOTclQjYlRTklOTclQjQlRTglQkYlOTglRTclQkIlOTklRTQlQkQlQTAmdHJhY2tfaWQ9cGJhZXMuVGdjbUMzc1hfSk5QYUQyQTZmNEFjdmV0MlpTRVFQTGx0WU9LWHpNNjdGemU5ZUxWQklOUmFWWVRHOVM5WE5LcU9xR3JTdWdEcDNEek5UVTZNQkhvQ2FVNnQ0VWJXQmpQQ3dlc2Z4czZlaExDQTBFUEJNMmZaQnd4TFZSVHE1ZnpYVjZKSXlGUEk0djhyZVE4WHN5ZzF2ZFItRTRYS25CZFZXVUxiVW1HS1U0JmNhaWQ9X19DQUlEX18mcmVzb3VyY2VfaWQ9X19SRVNPVVJDRUlEX18mc291cmNlX2lkPTU2NTImZnJvbV9zcG1pZD1fX0ZST01TUE1JRF9fJnJlcXVlc3RfaWQ9MTc4NDEyMzE4NDEyNnExMGE4NWExODRhMTQzcTUwMDUmdGl0bGVfbWF0ZXJpYWxfaWQ9MTcwMTkxMTA3JmxpbmtlZF9jcmVhdGl2ZV9pZD0yNTM2NDMxMjA3wgEBMNIBANgBsgLgAYCU69wD6AH%2F5ojYA%2FABAPgBCIACAogCAJICAJgC3NMCoAJsqAKUQrACE7gCAMACsK4VyAIP6gIA%2BAKVkwOIAwCSAwCoAwCwAwC4AwDIAwDSA%2FwBeyIxIjoiMjUzNjQzMTIwNyIsIjExIjoiMjMwIiwiMTIiOiI1NjUyIiwiMTMiOiIxNzEyNTMzIiwiMTYiOiIxNzEyNTMzXzUxNjA1IiwiMiI6IjQzMTcwMDkiLCIyNCI6IjEiLCIyNSI6IjEwMzgiLCIyNiI6IjIzMTEiLCIyOCI6IjkxYTc0NGYxNDVhYjEwNTYwNzUzYWI3MzA1ZWMzNjg0IiwiMyI6IjQzMTcwMDkiLCI0IjoiMTAzOCIsIjUiOiIyMzExIiwiNiI6IjQzMTcwMDkiLCI3IjoiMTE2ODMyNjczNDcxMDQ0IiwiOCI6IjUyMTA0MTg2NiJ94AMA6AMA8AMA%2BgMFb3RoZXKCBAludWxsOm51bGyIBGCQBACYBAGgBAOqBAcIg9KTURAEqgQHCN7Fk1EQAbgECsAEBMoEANAEANgEAOIEjwI1Ni57InBzSWQiOjEzODI1MywidjIiOiJBSnJVQVM2VWx6b0NINDFhZlJzTnhndy1LelpsekROVE5jaTFKYlJQemtEOU5JekE0c0dMVG8yT29mcWF6T252YmVfem5XVXhtUnYwc1RneGdwZEFrWmdZZDU4RVYwMEsybXkxUnRXXzV0VEUzTGMwV0Q5MmMzU1JTbzBMX0J0UWQ3cWEtZXRYV3BUNzE1SjNSMDdkeDdON3daNzNOQ3VUSlFVMTFuY2twUGhzZVFCeTdYUVNIdjNWdkEifTs2My57InBzSWQiOjEzODE4MywidjIiOiJHazQifTs3MC57InBzSWQiOjExNDc4MCwidjIiOiJBQSJ96AQA8AQA%2BgS8BXsiYWNjZWxlcmF0ZV9mYWN0b3IiOjEuMCwiYWNjZWxlcmF0ZV9pZCI6MCwiYWRfdHlwZV9maXgiOiJjcG0iLCJhZHZ2X2luZm8iOiJ7XCJhZGp1c3RfYmVmb3JlX2Nvc3RcIjpcIjg2LjQ5NlwiLFwiYWRqdXN0X3JhdGlvXCI6XCIwLjQ1MFwiLFwiYmFsYW5jZXJfaWRcIjowLFwiYmFsYW5jZXJfcmF0aW9cIjpcIjAuMDAwXCIsXCJjaGFyZ2VfZXhwX2tleV9kZXB0aFwiOlwiXCIsXCJjaGFyZ2VfZXhwX2tleV9saWdodFwiOlwiX2NwYV9jb3N0X3BpZF92MVwiLFwiY29zdF9kaWZmXCI6XCItNDcuNTczXCJ9IiwiYml6X3R5cGUiOjEyLCJiaXpfdHlwZV9maXgiOjMsImNwYSI6IntcImNwYV9sZXZlbFwiOjIsXCJjcGFfc2V0XCI6NjAwMH0iLCJjcGFUYXJnZXRUeXBlIjo0LCJmcm9tVHJhY2tpZCI6IjQ2MTU3NDA0MzA3MTE3NzQ1MjEiLCJpYWFfY2hlYXRfZmxvdyI6MCwiaW5uZXIiOjAsImlzX2NvbW1lcmNlIjoxLCJpc19vY3BjX2FudG91X29jcG0iOjAsImlzX3RyYWNraW5nX3VybHMiOjAsIm1pbmlfZ2FtZV9pZCI6IiIsIm1pbmlfZ2FtZV9wb3NpdGlvbl9pZCI6IiIsIm1vZGVsU2NvcmUiOiJ7XCJjdHJcIjpcIjEwNi4yOTg2NTNcIixcImN2cl9sMFwiOlwiMTUuMzUyMDMyXCIsXCJmaW5hbF9wY3RyXCI6XCIxMDYuMjk4NjUzXCIsXCJmaW5hbF9wY3ZyXCI6XCIxNS4zNTIwMzJcIn0iLCJ2aWRlb191cF9taWQiOjUyMTA0MTg2Nn2ABQCQBSOQBTOQBUiQBVOQBVWQBXKQBXOQBbQBkAXQAZAF0QGQBdgBkAWOApAFmgKQBZ8CkAXAApAFwgKQBcUCkAXLApAFzgKQBdMCkAXWApAF2AKQBdkCkAXaApAF3wKQBeECkAXjApAF5QKQBfACkAXxApAF9QKQBf8CkAWMA5AFjQOQBZADkAWTA5AFlAOQBZgDkAWZA5AFmgOQBZsDkAWlA5AFpwOQBawDkAW2A5AFtwOQBbwDkAW9A5AFwAOQBcEDkAXEA5AFzQOQBdADkAXUA5AF4AOQBeEDkAXkA5AF8wOQBfUDkAX4A5AF%2BgOQBfsDkAX%2FA5AFhwSQBYkEkAW0BJAFyQSQBcsEkAXNBJAF7QSQBYMFkAWgBZAFqgWQBa8FkAWxBZAFtQWQBcYFkAXOBZAF0gWQBdMFkAXZBZAF3wWQBe8FkAWPBpAFowaQBaYGkAW6BpAF2gaQBfAGkAX5BpAF%2BwaQBf8GkAWTB5AFoQeQBbsHkAXUB5AF8AeQBfUHkAWBCJAFtwiQBb0IkAXICJAFyxCQBZgRkAWhEZAFrxGgBcS0gNCjyBq4BQTABZXDaMgFAeAFAegFAPIFiAFDQXdRQVNqd0xqQUVWZlQ5ckVKZHdVbyt3bVhzb1hWQmJRQkFIRVoxQUFDQVA1VUI3S0YxUWFBQndLZTEwUUdvQWJtVW9JY0pzQUVCd0FId0xzZ0JCTzBCQUFDQVAvVUJBQUNBUDUwQ0FBQ0FQNlVDQUFDQVA2MENBQUNBUDdVQ0FBQ0FQdz09%2BAXAp7XRAYAG%2F5Pr3AOIBrmUoIcJkAYA%2Cf%7Cclick_sync_3%2Cg%7C1%2Ch%7C%2Ci%7C%2Cj%7C%2Ck%7C1784123185809%2Cl%7C5646%2Cm%7C1784123185613%2Cn%7C%2Co%7C2536431207%2Cp%7Cad_card&ts=1784123185809",
+              "Label 2": "把重复劳动干掉，把时间还给你",
+              "Label 3": "",
+              "Label 4": "https://cm.bilibili.com/cm/api/fees/pc/sync/v2?msg=a%7C5652%2Cb%7Cbilibili%2Cc%7C1%2Cd%7C%2Ce%7CCKPDhBYQmdn12gEY57y7uQkgJigBMNG%2BhwI4lCxCIDE3ODQxMjMxODQxMjZxMTBhODVhMTg0YTE0M3E1MDA1SP6nnbD2M1IAWgbpppnmuK9iBuS4reWbvWhkcAF4gICAgKAmgAEBiAEAkgENODkuMTg1LjI2LjE3OKABYKgBarIBIOUbS2tVyCz%2BBuszHfN2%2BksGXVv65RNfnomY9OzSN8AEugGTBWh0dHBzOi8vd3d3LmJpbGliaWxpLmNvbS92aWRlby9CVjFqZktVNlVFcHQ%2FaW1hZ2VfbWF0ZXJpYWxfaWQ9MTcwMTg5NTM0JmZyb21fYmNnPWJjZ18xMV8yNDMxMTI2MDczJnRyYWNraWQ9NDYxNTc0MDQzMDcxMTc3NDUyMSZjcmVhdGl2ZV9pZD0yNDMxMTI2MDczJnRpdGxlX2VuY29kZT0lRTYlOEElOEElRTklODclOEQlRTUlQTQlOEQlRTUlOEElQjMlRTUlOEElQTglRTUlQjklQjIlRTYlOEUlODklRUYlQkMlOEMlRTYlOEElOEElRTYlOTclQjYlRTklOTclQjQlRTglQkYlOTglRTclQkIlOTklRTQlQkQlQTAmdHJhY2tfaWQ9cGJhZXMuVGdjbUMzc1hfSk5QYUQyQTZmNEFjdmV0MlpTRVFQTGx0WU9LWHpNNjdGemU5ZUxWQklOUmFWWVRHOVM5WE5LcU9xR3JTdWdEcDNEek5UVTZNQkhvQ2FVNnQ0VWJXQmpQQ3dlc2Z4czZlaExDQTBFUEJNMmZaQnd4TFZSVHE1ZnpYVjZKSXlGUEk0djhyZVE4WHN5ZzF2ZFItRTRYS25CZFZXVUxiVW1HS1U0JmNhaWQ9X19DQUlEX18mcmVzb3VyY2VfaWQ9X19SRVNPVVJDRUlEX18mc291cmNlX2lkPTU2NTImZnJvbV9zcG1pZD1fX0ZST01TUE1JRF9fJnJlcXVlc3RfaWQ9MTc4NDEyMzE4NDEyNnExMGE4NWExODRhMTQzcTUwMDUmdGl0bGVfbWF0ZXJpYWxfaWQ9MTcwMTkxMTA3JmxpbmtlZF9jcmVhdGl2ZV9pZD0yNTM2NDMxMjA3wgEBMNIBANgBsgLgAYCU69wD6AH%2F5ojYA%2FABAPgBCIACAogCAJICAJgC3NMCoAJsqAKUQrACE7gCAMACsK4VyAIP6gIA%2BAKVkwOIAwCSAwCoAwCwAwC4AwDIAwDSA%2FwBeyIxIjoiMjUzNjQzMTIwNyIsIjExIjoiMjMwIiwiMTIiOiI1NjUyIiwiMTMiOiIxNzEyNTMzIiwiMTYiOiIxNzEyNTMzXzUxNjA1IiwiMiI6IjQzMTcwMDkiLCIyNCI6IjEiLCIyNSI6IjEwMzgiLCIyNiI6IjIzMTEiLCIyOCI6IjkxYTc0NGYxNDVhYjEwNTYwNzUzYWI3MzA1ZWMzNjg0IiwiMyI6IjQzMTcwMDkiLCI0IjoiMTAzOCIsIjUiOiIyMzExIiwiNiI6IjQzMTcwMDkiLCI3IjoiMTE2ODMyNjczNDcxMDQ0IiwiOCI6IjUyMTA0MTg2NiJ94AMA6AMA8AMA%2BgMFb3RoZXKCBAludWxsOm51bGyIBGCQBACYBAGgBAOqBAcIg9KTURAEqgQHCN7Fk1EQAbgECsAEBMoEANAEANgEAOIEjwI1Ni57InBzSWQiOjEzODI1MywidjIiOiJBSnJVQVM2VWx6b0NINDFhZlJzTnhndy1LelpsekROVE5jaTFKYlJQemtEOU5JekE0c0dMVG8yT29mcWF6T252YmVfem5XVXhtUnYwc1RneGdwZEFrWmdZZDU4RVYwMEsybXkxUnRXXzV0VEUzTGMwV0Q5MmMzU1JTbzBMX0J0UWQ3cWEtZXRYV3BUNzE1SjNSMDdkeDdON3daNzNOQ3VUSlFVMTFuY2twUGhzZVFCeTdYUVNIdjNWdkEifTs2My57InBzSWQiOjEzODE4MywidjIiOiJHazQifTs3MC57InBzSWQiOjExNDc4MCwidjIiOiJBQSJ96AQA8AQA%2BgS8BXsiYWNjZWxlcmF0ZV9mYWN0b3IiOjEuMCwiYWNjZWxlcmF0ZV9pZCI6MCwiYWRfdHlwZV9maXgiOiJjcG0iLCJhZHZ2X2luZm8iOiJ7XCJhZGp1c3RfYmVmb3JlX2Nvc3RcIjpcIjg2LjQ5NlwiLFwiYWRqdXN0X3JhdGlvXCI6XCIwLjQ1MFwiLFwiYmFsYW5jZXJfaWRcIjowLFwiYmFsYW5jZXJfcmF0aW9cIjpcIjAuMDAwXCIsXCJjaGFyZ2VfZXhwX2tleV9kZXB0aFwiOlwiXCIsXCJjaGFyZ2VfZXhwX2tleV9saWdodFwiOlwiX2NwYV9jb3N0X3BpZF92MVwiLFwiY29zdF9kaWZmXCI6XCItNDcuNTczXCJ9IiwiYml6X3R5cGUiOjEyLCJiaXpfdHlwZV9maXgiOjMsImNwYSI6IntcImNwYV9sZXZlbFwiOjIsXCJjcGFfc2V0XCI6NjAwMH0iLCJjcGFUYXJnZXRUeXBlIjo0LCJmcm9tVHJhY2tpZCI6IjQ2MTU3NDA0MzA3MTE3NzQ1MjEiLCJpYWFfY2hlYXRfZmxvdyI6MCwiaW5uZXIiOjAsImlzX2NvbW1lcmNlIjoxLCJpc19vY3BjX2FudG91X29jcG0iOjAsImlzX3RyYWNraW5nX3VybHMiOjAsIm1pbmlfZ2FtZV9pZCI6IiIsIm1pbmlfZ2FtZV9wb3NpdGlvbl9pZCI6IiIsIm1vZGVsU2NvcmUiOiJ7XCJjdHJcIjpcIjEwNi4yOTg2NTNcIixcImN2cl9sMFwiOlwiMTUuMzUyMDMyXCIsXCJmaW5hbF9wY3RyXCI6XCIxMDYuMjk4NjUzXCIsXCJmaW5hbF9wY3ZyXCI6XCIxNS4zNTIwMzJcIn0iLCJ2aWRlb191cF9taWQiOjUyMTA0MTg2Nn2ABQCQBSOQBTOQBUiQBVOQBVWQBXKQBXOQBbQBkAXQAZAF0QGQBdgBkAWOApAFmgKQBZ8CkAXAApAFwgKQBcUCkAXLApAFzgKQBdMCkAXWApAF2AKQBdkCkAXaApAF3wKQBeECkAXjApAF5QKQBfACkAXxApAF9QKQBf8CkAWMA5AFjQOQBZADkAWTA5AFlAOQBZgDkAWZA5AFmgOQBZsDkAWlA5AFpwOQBawDkAW2A5AFtwOQBbwDkAW9A5AFwAOQBcEDkAXEA5AFzQOQBdADkAXUA5AF4AOQBeEDkAXkA5AF8wOQBfUDkAX4A5AF%2BgOQBfsDkAX%2FA5AFhwSQBYkEkAW0BJAFyQSQBcsEkAXNBJAF7QSQBYMFkAWgBZAFqgWQBa8FkAWxBZAFtQWQBcYFkAXOBZAF0gWQBdMFkAXZBZAF3wWQBe8FkAWPBpAFowaQBaYGkAW6BpAF2gaQBfAGkAX5BpAF%2BwaQBf8GkAWTB5AFoQeQBbsHkAXUB5AF8AeQBfUHkAWBCJAFtwiQBb0IkAXICJAFyxCQBZgRkAWhEZAFrxGgBcS0gNCjyBq4BQTABZXDaMgFAeAFAegFAPIFiAFDQXdRQVNqd0xqQUVWZlQ5ckVKZHdVbyt3bVhzb1hWQmJRQkFIRVoxQUFDQVA1VUI3S0YxUWFBQndLZTEwUUdvQWJtVW9JY0pzQUVCd0FId0xzZ0JCTzBCQUFDQVAvVUJBQUNBUDUwQ0FBQ0FQNlVDQUFDQVA2MENBQUNBUDdVQ0FBQ0FQdz09%2BAXAp7XRAYAG%2F5Pr3AOIBrmUoIcJkAYA%2Cf%7Cclick_sync_3%2Cg%7C1%2Ch%7C%2Ci%7C%2Cj%7C%2Ck%7C1784123185809%2Cl%7C5646%2Cm%7C1784123185613%2Cn%7C%2Co%7C2536431207%2Cp%7Cad_logo&ts=1784123185809",
+              "Label 5": "爱听书的程序员阿超",
+              "Label 6": "· 06-29"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1j7ojYREUQ/",
+              "Label 2": "最适合普通人的本地AI知识库！彻底颠覆办公/创作工作流！【小白教程】",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/14848367",
+              "Label 5": "Xuan_酱",
+              "Label 6": "· 2025-04-14"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1XDN36vELL/",
+              "Label 2": "Obsidian18 如果重做个人知识库，我会先建这5层",
+              "Label 3": "个人知识库",
+              "Label 4": "https://space.bilibili.com/3706985637742952",
+              "Label 5": "慢慢记BetterNote",
+              "Label 6": "· 07-12"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1p4DeB8ECi/",
+              "Label 2": "保姆级教程 搭建出karpathy同款AI知识库！知识复利积累",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/67389029",
+              "Label 5": "栗氪聊AI",
+              "Label 6": "· 04-07"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/cheese/play/ss998790278?query_from=0&search_id=4615740430711774521&search_query=%E4%B8%AA%E4%BA%BA%E7%9F%A5%E8%AF%86%E5%BA%93&csource=common_hpsearch_null_null",
+              "Label 2": "Dify入门与精通知识库检索[基础阶段]",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/1383375880",
+              "Label 5": "AI猿悟",
+              "Label 6": ""
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1pbfbBAEax/",
+              "Label 2": "【全748集】目前B站最全最细的搭建知识库全套教程，2026最新版，包含所有干货！七天就能从小白到大神！少走99%的弯路！存下吧！很难找全的",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/3546813107800793",
+              "Label 5": "AI产品经理入门教程",
+              "Label 6": "· 02-25"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1f5Ng63E31/",
+              "Label 2": "上班摸鱼顺手用豆包搭建个人知识库...",
+              "Label 3": "个人知识库",
+              "Label 4": "https://space.bilibili.com/3546970450823505",
+              "Label 5": "我爱大模型",
+              "Label 6": "· 07-12"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV11JNn6mE3R/",
+              "Label 2": "【附完整文档】LLM Wiki 个人/企业知识库开发实战，系统骨架搭建、问答引用、知识关联全流程，学完可判断自己的数据该走哪条路线｜VibeCoding",
+              "Label 3": "个人",
+              "Label 4": "https://space.bilibili.com/3537113897241540",
+              "Label 5": "木羽Cheney",
+              "Label 6": "· 07-10"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV169Ng6yEi4/",
+              "Label 2": "这才是AI+个人知识库的版本答案",
+              "Label 3": "个人知识库",
+              "Label 4": "https://space.bilibili.com/13780567",
+              "Label 5": "廖定强AI笔记",
+              "Label 6": "· 07-12"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1785yzrEN8/",
+              "Label 2": "【知识库】30分钟学会搭建私人知识库！DeepSeek + RAGFlow知识库搭建！2025最新个人知识库搭建教程，小白也能实现！",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/3546886745098902",
+              "Label 5": "AI大模型基础知识",
+              "Label 6": "· 2025-04-21"
+            },
+            {
+              "Label 1": "https://cm.bilibili.com/cm/api/fees/pc/sync/v2?msg=a%7C5653%2Cb%7Cbilibili%2Cc%7C1%2Cd%7C%2Ce%7CCJv32BUQjbab1gEY%2F6iXoQkgAygBMP%2BUgQI4lSxCIDE3ODQxMjMxODQxMjZxMTBhODVhMTg0YTE0M3E1MDA1SP6nnbD2M1IAWgbpppnmuK9iBuS4reWbvWhkcAF4gICAgKAmgAEBiAEAkgENODkuMTg1LjI2LjE3OKABBqgBOLIBIEvi3PYgzD7N32pvdJUC41TK17f3MYxoDkh%2F1coqvENsugGJBmh0dHBzOi8vd3d3LmJpbGliaWxpLmNvbS92aWRlby9CVjFxR0V3Nm1FRUs%2FaW1hZ2VfbWF0ZXJpYWxfaWQ9MTczNjU5MTk0JmZyb21fYmNnPWJjZ18xMV8yNDg0ODI3Nzk1JnRyYWNraWQ9NDYxNTc0MDQzMDcxMTc3NDUyMSZjcmVhdGl2ZV9pZD0yNDg0ODI3Nzk1JnRpdGxlX2VuY29kZT0lRTUlQUQlQTYlRTUlQUUlOEMlRTYlOTUlOTklRTclQTglOEIlRTUlOTAlOEUlRTclQkIlODglRTQlQkElOEUlRTYlODklQkUlRTUlODglQjBBSSVFOCVBNyU4NiVFOSVBMiU5MSUzQ2VtJTIwY2xhc3MlM0QlMjJrZXl3b3JkJTIyJTNFJUU0JUJBJUJBJTNDJTJGZW0lM0UlRTclODklQTklRTQlQjglOEQlRTUlQjQlQTklRTclOUElODQlRTYlOTYlQjklRTYlQjMlOTUlMjBPaWlPaWkmdHJhY2tfaWQ9cGJhZXMuVGdjbUMzc1hfSk5QYUQyQTZmNEFjdmV0MlpTRVFQTGx0WU9LWHpNNjdGemU5ZUxWQklOUmFWWVRHOVM5WE5LcU9xR3JTdWdEcDNEek5UVTZNQkhvQ2FVNnQ0VWJXQmpQQ3dlc2Z4czZlaEpyTFJJdTB0c3k2YnhqQUpwa3RFR2ZGVUpvYzhMWGVkUmZXUUNfZWQ1cVdKazNyZEhYdXYxcmFsYV9oQ3VXVUw4Y2FYaGtuX1ZEQzN1Mk9aTkRibHNtJmNhaWQ9X19DQUlEX18mcmVzb3VyY2VfaWQ9X19SRVNPVVJDRUlEX18mc291cmNlX2lkPTU2NTMmZnJvbV9zcG1pZD1fX0ZST01TUE1JRF9fJnJlcXVlc3RfaWQ9MTc4NDEyMzE4NDEyNnExMGE4NWExODRhMTQzcTUwMDUmdGl0bGVfbWF0ZXJpYWxfaWQ9MjAwMDAwMDA2MDgxNDA1MSZsaW5rZWRfY3JlYXRpdmVfaWQ9MjQ4NTUwNzE5OcIBATDSAQDYAbIC4AGgwh7oAaiQEvABAPgBBYACAogCAJICAJgClVugAokBqALhDLACE7gCAMACwM8kyAII6gIA%2BALE%2FAKIAwCSAwCoAwCwAwC4AwDIAwDSA4MCeyIxIjoiMjQ4NTUwNzE5OSIsIjExIjoiMTIyIiwiMTIiOiI1NjUzIiwiMTMiOiIzNDA4NDI5IiwiMTYiOiIzNDA4NDI5XzQ4NzA4IiwiMiI6IjQyMTMzNzUiLCIyNCI6IjEiLCIyNSI6IjEwMzgiLCIyNiI6IjIzMTEiLCIyOCI6IjgwNDU0ZTEyNGEwMGQ3MTU2M2IzOGU0ODE2OTBkNDI3IiwiMyI6IjQyMTMzNzUiLCI0IjoiMTAzOCIsIjUiOiIyMzExIiwiNiI6IjQyMTMzNzUiLCI3IjoiMTE2NjkxNDQyOTMxODQxIiwiOCI6IjM3MDY5NDM0NTE0MzMzNTgifeADAOgDAPADAPoDBW90aGVyggQJbnVsbDpudWxsiAQGkAQAmAQBoAQDqgQLCOPls%2BnU38YDEASqBAcIuqjnUhABuAQKwAQEygQA0AQA2AQA4gSPAjU2LnsicHNJZCI6MTM4MjUzLCJ2MiI6IkFKclVBUzZVbHpvQ0g0MWFmUnNOeGd3LUt6Wmx6RE5UTmNpMUpiUlB6a0Q5Tkl6QTRzR0xUbzJPb2ZxYXpPbnZiZV96bldVeG1SdjBzVGd4Z3BkQWtaZ1lkNThFVjAwSzJteTFSdFdfNXRURTNMYzBXRDkyYzNTUlNvMExfQnRRZDdxYS1ldFhXcFQ3MTVKM1IwN2R4N043d1o3M05DdVRKUVUxMW5ja3BQaHNlUUJ5N1hRU0h2M1Z2QSJ9OzYzLnsicHNJZCI6MTM4MTgzLCJ2MiI6IkdrNCJ9OzcwLnsicHNJZCI6MTE0NzgwLCJ2MiI6IkFBIn3oBADwBAD6BPQFeyJhY2NlbGVyYXRlX2ZhY3RvciI6MS42LCJhY2NlbGVyYXRlX2lkIjoxMzYwNTY2NTgsImFkX3R5cGVfZml4IjoiY3BtIiwiYWR2dl9pbmZvIjoie1wiYWRqdXN0X2JlZm9yZV9jb3N0XCI6XCI1Ljk2OVwiLFwiYWRqdXN0X3JhdGlvXCI6XCIwLjY1MFwiLFwiYmFsYW5jZXJfaWRcIjowLFwiYmFsYW5jZXJfcmF0aW9cIjpcIjAuMDAwXCIsXCJjaGFyZ2VfZXhwX2tleV9kZXB0aFwiOlwiX2NwYV9kZWVwX2Nvc3RfcGlkX3YxXCIsXCJjaGFyZ2VfZXhwX2tleV9saWdodFwiOlwiX2NwYV9jb3N0X3BpZF92MVwiLFwiY29zdF9kaWZmXCI6XCItMi4wODlcIn0iLCJiaXpfdHlwZSI6MTIsImJpel90eXBlX2ZpeCI6MywiY3BhIjoie1wiY3BhX2xldmVsXCI6MixcImNwYV9zZXRcIjoxNTM2fSIsImNwYVRhcmdldFR5cGUiOjQsImZyb21UcmFja2lkIjoiNDYxNTc0MDQzMDcxMTc3NDUyMSIsImlhYV9jaGVhdF9mbG93IjowLCJpbm5lciI6MCwiaXNfY29tbWVyY2UiOjEsImlzX29jcGNfYW50b3Vfb2NwbSI6MCwiaXNfdHJhY2tpbmdfdXJscyI6MCwibWluaV9nYW1lX2lkIjoiIiwibWluaV9nYW1lX3Bvc2l0aW9uX2lkIjoiIiwibW9kZWxTY29yZSI6IntcImN0clwiOlwiNTYuMjQ2NzU0XCIsXCJjdnJfbDBcIjpcIjguMjY1Nzk3XCIsXCJjdnJfbDFcIjpcIjM0Ni4wMDExOTBcIixcImZpbmFsX3BjdHJcIjpcIjU2LjI0Njc1NFwiLFwiZmluYWxfcGN2clwiOlwiOC4yNjU3OTdcIn0iLCJ2aWRlb191cF9taWQiOjM3MDY5NDM0NTE0MzMzNTh9gAUAkAUjkAVVkAWOApAFmgKQBcACkAXCApAFxQKQBcsCkAXOApAF0wKQBdYCkAXYApAF2QKQBdoCkAXfApAF4QKQBeMCkAXlApAF8AKQBfECkAX1ApAF%2FwKQBYwDkAWNA5AFkwOQBZQDkAWYA5AFmQOQBZoDkAWbA5AFpQOQBacDkAW2A5AFtwOQBcADkAXBA5AFxAOQBc0DkAXgA5AF4QOQBeQDkAX1A5AF%2BAOQBf8DkAWHBJAFiQSQBckEkAXLBJAFzQSQBYMFkAWgBZAFqgWQBa8FkAWxBZAFtQWQBcYFkAXOBZAF0gWQBdMFkAXvBZAFowaQBdoGkAXwBpAF%2BQaQBf8GkAW7B5AFwgeQBdQHkAX1B5AFgQiQBaERkAWmEqAFgbGEwJXEGrgFBMAFrYTQAcgFAeAFAegFEvIFoAFDQXdRQVJnQ0tJQU1NQVE0Z01ZS1FCSkkyZ0pWREFLL1FGMHRzZ1hBWmJSQUJFRnRKd0N0UTNVQUFJQS9sUUcwUUFSQm1BR1F2d1dnQWJmVWxOWUJxQUdUN2UyZ0NiQUJBY0FCb0FiSUFRVFFBUkx0QWMzTXpELzFBUUFBZ0QrZEFwcVptVCtsQW8vQzlUK3RBZ0FBZ0QrMUFvL0M5VDg9%2BAW31JTWAYAG4KcSiAaT7e2gCZAGAA%3D%3D%2Cf%7Cclick_sync_3%2Cg%7C1%2Ch%7C%2Ci%7C%2Cj%7C%2Ck%7C1784123185810%2Cl%7C5646%2Cm%7C1784123185613%2Cn%7C%2Co%7C2485507199%2Cp%7Cad_card&ts=1784123185810",
+              "Label 2": "学完教程后终于找到AI视频人物不崩的方法 OiiOii",
+              "Label 3": "人",
+              "Label 4": "https://cm.bilibili.com/cm/api/fees/pc/sync/v2?msg=a%7C5653%2Cb%7Cbilibili%2Cc%7C1%2Cd%7C%2Ce%7CCJv32BUQjbab1gEY%2F6iXoQkgAygBMP%2BUgQI4lSxCIDE3ODQxMjMxODQxMjZxMTBhODVhMTg0YTE0M3E1MDA1SP6nnbD2M1IAWgbpppnmuK9iBuS4reWbvWhkcAF4gICAgKAmgAEBiAEAkgENODkuMTg1LjI2LjE3OKABBqgBOLIBIEvi3PYgzD7N32pvdJUC41TK17f3MYxoDkh%2F1coqvENsugGJBmh0dHBzOi8vd3d3LmJpbGliaWxpLmNvbS92aWRlby9CVjFxR0V3Nm1FRUs%2FaW1hZ2VfbWF0ZXJpYWxfaWQ9MTczNjU5MTk0JmZyb21fYmNnPWJjZ18xMV8yNDg0ODI3Nzk1JnRyYWNraWQ9NDYxNTc0MDQzMDcxMTc3NDUyMSZjcmVhdGl2ZV9pZD0yNDg0ODI3Nzk1JnRpdGxlX2VuY29kZT0lRTUlQUQlQTYlRTUlQUUlOEMlRTYlOTUlOTklRTclQTglOEIlRTUlOTAlOEUlRTclQkIlODglRTQlQkElOEUlRTYlODklQkUlRTUlODglQjBBSSVFOCVBNyU4NiVFOSVBMiU5MSUzQ2VtJTIwY2xhc3MlM0QlMjJrZXl3b3JkJTIyJTNFJUU0JUJBJUJBJTNDJTJGZW0lM0UlRTclODklQTklRTQlQjglOEQlRTUlQjQlQTklRTclOUElODQlRTYlOTYlQjklRTYlQjMlOTUlMjBPaWlPaWkmdHJhY2tfaWQ9cGJhZXMuVGdjbUMzc1hfSk5QYUQyQTZmNEFjdmV0MlpTRVFQTGx0WU9LWHpNNjdGemU5ZUxWQklOUmFWWVRHOVM5WE5LcU9xR3JTdWdEcDNEek5UVTZNQkhvQ2FVNnQ0VWJXQmpQQ3dlc2Z4czZlaEpyTFJJdTB0c3k2YnhqQUpwa3RFR2ZGVUpvYzhMWGVkUmZXUUNfZWQ1cVdKazNyZEhYdXYxcmFsYV9oQ3VXVUw4Y2FYaGtuX1ZEQzN1Mk9aTkRibHNtJmNhaWQ9X19DQUlEX18mcmVzb3VyY2VfaWQ9X19SRVNPVVJDRUlEX18mc291cmNlX2lkPTU2NTMmZnJvbV9zcG1pZD1fX0ZST01TUE1JRF9fJnJlcXVlc3RfaWQ9MTc4NDEyMzE4NDEyNnExMGE4NWExODRhMTQzcTUwMDUmdGl0bGVfbWF0ZXJpYWxfaWQ9MjAwMDAwMDA2MDgxNDA1MSZsaW5rZWRfY3JlYXRpdmVfaWQ9MjQ4NTUwNzE5OcIBATDSAQDYAbIC4AGgwh7oAaiQEvABAPgBBYACAogCAJICAJgClVugAokBqALhDLACE7gCAMACwM8kyAII6gIA%2BALE%2FAKIAwCSAwCoAwCwAwC4AwDIAwDSA4MCeyIxIjoiMjQ4NTUwNzE5OSIsIjExIjoiMTIyIiwiMTIiOiI1NjUzIiwiMTMiOiIzNDA4NDI5IiwiMTYiOiIzNDA4NDI5XzQ4NzA4IiwiMiI6IjQyMTMzNzUiLCIyNCI6IjEiLCIyNSI6IjEwMzgiLCIyNiI6IjIzMTEiLCIyOCI6IjgwNDU0ZTEyNGEwMGQ3MTU2M2IzOGU0ODE2OTBkNDI3IiwiMyI6IjQyMTMzNzUiLCI0IjoiMTAzOCIsIjUiOiIyMzExIiwiNiI6IjQyMTMzNzUiLCI3IjoiMTE2NjkxNDQyOTMxODQxIiwiOCI6IjM3MDY5NDM0NTE0MzMzNTgifeADAOgDAPADAPoDBW90aGVyggQJbnVsbDpudWxsiAQGkAQAmAQBoAQDqgQLCOPls%2BnU38YDEASqBAcIuqjnUhABuAQKwAQEygQA0AQA2AQA4gSPAjU2LnsicHNJZCI6MTM4MjUzLCJ2MiI6IkFKclVBUzZVbHpvQ0g0MWFmUnNOeGd3LUt6Wmx6RE5UTmNpMUpiUlB6a0Q5Tkl6QTRzR0xUbzJPb2ZxYXpPbnZiZV96bldVeG1SdjBzVGd4Z3BkQWtaZ1lkNThFVjAwSzJteTFSdFdfNXRURTNMYzBXRDkyYzNTUlNvMExfQnRRZDdxYS1ldFhXcFQ3MTVKM1IwN2R4N043d1o3M05DdVRKUVUxMW5ja3BQaHNlUUJ5N1hRU0h2M1Z2QSJ9OzYzLnsicHNJZCI6MTM4MTgzLCJ2MiI6IkdrNCJ9OzcwLnsicHNJZCI6MTE0NzgwLCJ2MiI6IkFBIn3oBADwBAD6BPQFeyJhY2NlbGVyYXRlX2ZhY3RvciI6MS42LCJhY2NlbGVyYXRlX2lkIjoxMzYwNTY2NTgsImFkX3R5cGVfZml4IjoiY3BtIiwiYWR2dl9pbmZvIjoie1wiYWRqdXN0X2JlZm9yZV9jb3N0XCI6XCI1Ljk2OVwiLFwiYWRqdXN0X3JhdGlvXCI6XCIwLjY1MFwiLFwiYmFsYW5jZXJfaWRcIjowLFwiYmFsYW5jZXJfcmF0aW9cIjpcIjAuMDAwXCIsXCJjaGFyZ2VfZXhwX2tleV9kZXB0aFwiOlwiX2NwYV9kZWVwX2Nvc3RfcGlkX3YxXCIsXCJjaGFyZ2VfZXhwX2tleV9saWdodFwiOlwiX2NwYV9jb3N0X3BpZF92MVwiLFwiY29zdF9kaWZmXCI6XCItMi4wODlcIn0iLCJiaXpfdHlwZSI6MTIsImJpel90eXBlX2ZpeCI6MywiY3BhIjoie1wiY3BhX2xldmVsXCI6MixcImNwYV9zZXRcIjoxNTM2fSIsImNwYVRhcmdldFR5cGUiOjQsImZyb21UcmFja2lkIjoiNDYxNTc0MDQzMDcxMTc3NDUyMSIsImlhYV9jaGVhdF9mbG93IjowLCJpbm5lciI6MCwiaXNfY29tbWVyY2UiOjEsImlzX29jcGNfYW50b3Vfb2NwbSI6MCwiaXNfdHJhY2tpbmdfdXJscyI6MCwibWluaV9nYW1lX2lkIjoiIiwibWluaV9nYW1lX3Bvc2l0aW9uX2lkIjoiIiwibW9kZWxTY29yZSI6IntcImN0clwiOlwiNTYuMjQ2NzU0XCIsXCJjdnJfbDBcIjpcIjguMjY1Nzk3XCIsXCJjdnJfbDFcIjpcIjM0Ni4wMDExOTBcIixcImZpbmFsX3BjdHJcIjpcIjU2LjI0Njc1NFwiLFwiZmluYWxfcGN2clwiOlwiOC4yNjU3OTdcIn0iLCJ2aWRlb191cF9taWQiOjM3MDY5NDM0NTE0MzMzNTh9gAUAkAUjkAVVkAWOApAFmgKQBcACkAXCApAFxQKQBcsCkAXOApAF0wKQBdYCkAXYApAF2QKQBdoCkAXfApAF4QKQBeMCkAXlApAF8AKQBfECkAX1ApAF%2FwKQBYwDkAWNA5AFkwOQBZQDkAWYA5AFmQOQBZoDkAWbA5AFpQOQBacDkAW2A5AFtwOQBcADkAXBA5AFxAOQBc0DkAXgA5AF4QOQBeQDkAX1A5AF%2BAOQBf8DkAWHBJAFiQSQBckEkAXLBJAFzQSQBYMFkAWgBZAFqgWQBa8FkAWxBZAFtQWQBcYFkAXOBZAF0gWQBdMFkAXvBZAFowaQBdoGkAXwBpAF%2BQaQBf8GkAW7B5AFwgeQBdQHkAX1B5AFgQiQBaERkAWmEqAFgbGEwJXEGrgFBMAFrYTQAcgFAeAFAegFEvIFoAFDQXdRQVJnQ0tJQU1NQVE0Z01ZS1FCSkkyZ0pWREFLL1FGMHRzZ1hBWmJSQUJFRnRKd0N0UTNVQUFJQS9sUUcwUUFSQm1BR1F2d1dnQWJmVWxOWUJxQUdUN2UyZ0NiQUJBY0FCb0FiSUFRVFFBUkx0QWMzTXpELzFBUUFBZ0QrZEFwcVptVCtsQW8vQzlUK3RBZ0FBZ0QrMUFvL0M5VDg9%2BAW31JTWAYAG4KcSiAaT7e2gCZAGAA%3D%3D%2Cf%7Cclick_sync_3%2Cg%7C1%2Ch%7C%2Ci%7C%2Cj%7C%2Ck%7C1784123185810%2Cl%7C5646%2Cm%7C1784123185613%2Cn%7C%2Co%7C2485507199%2Cp%7Cad_logo&ts=1784123185810",
+              "Label 5": "森森AI日记",
+              "Label 6": "· 06-04"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/cheese/play/ss987408986?query_from=0&search_id=4615740430711774521&search_query=%E4%B8%AA%E4%BA%BA%E7%9F%A5%E8%AF%86%E5%BA%93&csource=common_hpsearch_null_null",
+              "Label 2": "GraphRAG深度剖析-基于知识图谱构建知识库",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/3546725841111250",
+              "Label 5": "西瓜讲大模型",
+              "Label 6": ""
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1NiN46wEcf/",
+              "Label 2": "【B站最新】DeepSeek搭建Agent智能体+个人知识库全套零基础入门教程,全程干货无废话，让你少走99%的弯路，100%提效，零基础小白也能学会~",
+              "Label 3": "个人知识库",
+              "Label 4": "https://space.bilibili.com/3546913529924352",
+              "Label 5": "AI智能应用",
+              "Label 6": "· 07-11"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1Vup1zWEP3/",
+              "Label 2": "3步搭建个人知识库，学习力无痛暴涨300%🔥",
+              "Label 3": "个人知识库",
+              "Label 4": "https://space.bilibili.com/395611998",
+              "Label 5": "王小橙快跑",
+              "Label 6": "· 2025-09-16"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1neN16LEPB/",
+              "Label 2": "AI知识库构建，图片如何处理❓喂饭版",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/3546663866075740",
+              "Label 5": "亚慧AI产品经理",
+              "Label 6": "· 昨天"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1tkAUeJE1v/",
+              "Label 2": "超简单！deepseek一键搭建私人知识库，谁都能实现！",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/281120100",
+              "Label 5": "我是阿众",
+              "Label 6": "· 2025-02-23"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1p7E2zAE9m/",
+              "Label 2": "小心效率陷阱：为什么你不需要第二大脑或者个人知识库？",
+              "Label 3": "个人知识库",
+              "Label 4": "https://space.bilibili.com/1110739051",
+              "Label 5": "农夫Docker",
+              "Label 6": "· 2025-05-15"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1HDMb6gEbf/",
+              "Label 2": "Obsidian AI 知识库第 1 步：从 0 搭建最小可用系统，跑通 2 个真实场景｜PARA｜Claudian",
+              "Label 3": "知识库",
+              "Label 4": "https://space.bilibili.com/3690992343451884",
+              "Label 5": "明立非Mingnify",
+              "Label 6": "· 07-07"
+            }
+          ]
+        },
+        "crawlData": {},
+        "searchData": {},
+        "markdown": "",
+        "html": "",
+        "links": [],
+        "summary": null,
+        "promptResult": null
+      },
+      "screenshots": []
+    }
+  }
+}

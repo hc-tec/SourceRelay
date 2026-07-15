@@ -1,0 +1,36 @@
+{
+  "capability_id": "xiaohongshu.keyword_search.browserwing.v1",
+  "version": "1.0.0",
+  "platform": "xiaohongshu",
+  "action": "keyword_search",
+  "status": "verified",
+  "executor": "browserwing",
+  "adapter": "BrowserWingXiaohongshuConnector",
+  "source": "xiaohongshu",
+  "authentication": {
+    "required": true,
+    "mode": "manual_persistent_profile",
+    "profile_id": "browserwing-xiaohongshu-default"
+  },
+  "input_schema": {
+    "query": {"type": "string", "required": true, "max_length": 300},
+    "limit": {"type": "integer", "default": 20, "maximum": 30}
+  },
+  "output_schema": "search_response.v1",
+  "scope": {
+    "first_rendered_page_only": true,
+    "pagination": false,
+    "personalized_results": true,
+    "detail_content": false,
+    "comments": false
+  },
+  "fallback_ids": ["web.keyword_search.searxng.v1"],
+  "fallback_site": "xiaohongshu.com",
+  "verification_input": {"query": "DeepSeek", "limit": 5},
+  "last_verified_at": "2026-07-15T22:55:55+08:00",
+  "license": "MIT",
+  "warnings": [
+    "Requires a user-authenticated isolated Chrome profile.",
+    "Canonical note IDs do not guarantee that note detail pages can be opened later."
+  ]
+}

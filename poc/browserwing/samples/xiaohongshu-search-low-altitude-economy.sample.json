@@ -1,0 +1,180 @@
+﻿{
+    "source_platform":  "xiaohongshu",
+    "operation":  "search",
+    "query":  "低空经济",
+    "query_scope":  "authenticated-web-search-first-rendered-page",
+    "fetched_at":  "2026-07-15T17:33:29.4874883+08:00",
+    "final_route":  "/search_result_ai",
+    "partial":  true,
+    "item_count":  20,
+    "items_with_url":  20,
+    "warnings":  [
+                     "Requires a user-authenticated isolated Chrome profile.",
+                     "Only the first rendered result set is collected; pagination is not implemented.",
+                     "Search results can be personalized by account and platform ranking.",
+                     "Short-lived xsec_token query parameters are deliberately removed from stored URLs.",
+                     "Suggestion cards can appear among note cards and may have no canonical URL."
+                 ],
+    "items":  [
+                  {
+                      "author":  "东北机长",
+                      "likes":  "301",
+                      "rank":  1,
+                      "text":  "重创的低空经济\n东北机长\n3天前\n301",
+                      "title":  "重创的低空经济",
+                      "url":  "https://www.xiaohongshu.com/explore/6a52696c0000000011016844"
+                  },
+                  {
+                      "author":  "皮卡丘起床啦",
+                      "likes":  "5",
+                      "rank":  2,
+                      "text":  "低空经济初创\n皮卡丘起床啦\n1天前\n5",
+                      "title":  "低空经济初创",
+                      "url":  "https://www.xiaohongshu.com/explore/6a55cf5c000000001101fd22"
+                  },
+                  {
+                      "author":  "铿锵学者儒艮",
+                      "likes":  "4419",
+                      "rank":  3,
+                      "text":  "孙宇晨最近又说了四条未来主赛道…\n铿锵学者儒艮\n07-02\n4419",
+                      "title":  "孙宇晨最近又说了四条未来主赛道…",
+                      "url":  "https://www.xiaohongshu.com/explore/6a45e650000000000702f247"
+                  },
+                  {
+                      "author":  "王煜全-趋势",
+                      "likes":  "818",
+                      "rank":  4,
+                      "text":  "低空经济是伪风口\n王煜全-趋势\n06-04\n818",
+                      "title":  "低空经济是伪风口",
+                      "url":  "https://www.xiaohongshu.com/explore/6a21851700000000080013cd"
+                  },
+                  {
+                      "author":  "堃哥参上",
+                      "likes":  "3",
+                      "rank":  5,
+                      "text":  "低空经济，是真风口还是泡沫\n堃哥参上\n9小时前\n3",
+                      "title":  "低空经济，是真风口还是泡沫",
+                      "url":  "https://www.xiaohongshu.com/explore/6a5648a50000000017008e73"
+                  },
+                  {
+                      "author":  "沾衣欲湿杏花雨",
+                      "likes":  "1",
+                      "rank":  6,
+                      "text":  "低空经济到底是什么样的\n沾衣欲湿杏花雨\n5天前\n1",
+                      "title":  "低空经济到底是什么样的",
+                      "url":  "https://www.xiaohongshu.com/explore/6a4f9f8a000000000f030592"
+                  },
+                  {
+                      "author":  "抱薪",
+                      "likes":  "3",
+                      "rank":  7,
+                      "text":  "关于低空经济现在能做什么\n抱薪\n1天前\n3",
+                      "title":  "关于低空经济现在能做什么",
+                      "url":  "https://www.xiaohongshu.com/explore/6a54a0d90000000022017897"
+                  },
+                  {
+                      "author":  "程安AnnCheng",
+                      "likes":  "5344",
+                      "rank":  8,
+                      "text":  "一条视频讲透：低空经济全产业链+入行攻略\n程安AnnCheng\n2天前\n5344",
+                      "title":  "一条视频讲透：低空经济全产业链+入行攻略",
+                      "url":  "https://www.xiaohongshu.com/explore/69cba99e000000001b023d48"
+                  },
+                  {
+                      "author":  "脉脉此情浓如酒",
+                      "likes":  "赞",
+                      "rank":  9,
+                      "text":  "从广西无人机救灾看低空经济\n脉脉此情浓如酒\n25分钟前\n赞",
+                      "title":  "从广西无人机救灾看低空经济",
+                      "url":  "https://www.xiaohongshu.com/explore/6a574dcf000000000f004818"
+                  },
+                  {
+                      "author":  "J.com",
+                      "likes":  "84",
+                      "rank":  10,
+                      "text":  "在低空经济公司干了3个月，说点真话...\nJ.com\n05-25\n84",
+                      "title":  "在低空经济公司干了3个月，说点真话...",
+                      "url":  "https://www.xiaohongshu.com/explore/6a13bd7a000000000702e5fd"
+                  },
+                  {
+                      "author":  "雪哥",
+                      "likes":  "9",
+                      "rank":  11,
+                      "text":  "应该属于低空经济的应用范畴\n雪哥\n5天前\n9",
+                      "title":  "应该属于低空经济的应用范畴",
+                      "url":  "https://www.xiaohongshu.com/explore/6a50610a0000000016025df2"
+                  },
+                  {
+                      "author":  "钞级马力",
+                      "likes":  "49",
+                      "rank":  12,
+                      "text":  "🔥中国赚钱风口的五轮演变\n钞级马力\n6天前\n49",
+                      "title":  "🔥中国赚钱风口的五轮演变",
+                      "url":  "https://www.xiaohongshu.com/explore/6a4e8a2d000000001003d99e"
+                  },
+                  {
+                      "author":  "堃哥参上",
+                      "likes":  "5",
+                      "rank":  13,
+                      "text":  "「低空经济」到底是什么？\n堃哥参上\n6天前\n5",
+                      "title":  "「低空经济」到底是什么？",
+                      "url":  "https://www.xiaohongshu.com/explore/6a4e3fdc000000001c024f48"
+                  },
+                  {
+                      "author":  "爱小溪的山",
+                      "likes":  "3",
+                      "rank":  14,
+                      "text":  "7 月研报|低空经济的真实瓶颈与破局路径\n爱小溪的山\n1天前\n3",
+                      "title":  "7 月研报|低空经济的真实瓶颈与破局路径",
+                      "url":  "https://www.xiaohongshu.com/explore/6a55a3450000000011018d33"
+                  },
+                  {
+                      "author":  "阿坑摆交通",
+                      "likes":  "45",
+                      "rank":  15,
+                      "text":  "到底啥是低空经济？我们为何要发展它？\n阿坑摆交通\n07-02\n45",
+                      "title":  "到底啥是低空经济？我们为何要发展它？",
+                      "url":  "https://www.xiaohongshu.com/explore/6a46496c0000000006037a26"
+                  },
+                  {
+                      "author":  "9号风球",
+                      "likes":  "178",
+                      "rank":  16,
+                      "text":  "对话时的 每公里3元的空中的士要来了！\n9号风球\n06-17\n178",
+                      "title":  "对话时的 每公里3元的空中的士要来了！",
+                      "url":  "https://www.xiaohongshu.com/explore/6a326e7b000000001003efc6"
+                  },
+                  {
+                      "author":  "图灵科技站",
+                      "likes":  "59",
+                      "rank":  17,
+                      "text":  "大疆创新业务版图，无人机到高空作业机器人\n图灵科技站\n昨天 19:18\n59",
+                      "title":  "大疆创新业务版图，无人机到高空作业机器人",
+                      "url":  "https://www.xiaohongshu.com/explore/6a5611b0000000002003a310"
+                  },
+                  {
+                      "author":  "与ai同歌",
+                      "likes":  "1",
+                      "rank":  18,
+                      "text":  "与ai同歌\n1天前\n1",
+                      "title":  "",
+                      "url":  "https://www.xiaohongshu.com/explore/6a556dcf000000001101703a"
+                  },
+                  {
+                      "author":  "yyo",
+                      "likes":  "1",
+                      "rank":  19,
+                      "text":  "无人系统/低空经济AI方向，有人来吗？\nyyo\n1天前\n1",
+                      "title":  "无人系统/低空经济AI方向，有人来吗？",
+                      "url":  "https://www.xiaohongshu.com/explore/6a54f0d900000000160268e7"
+                  },
+                  {
+                      "author":  "Parker-Lee",
+                      "likes":  "20",
+                      "rank":  20,
+                      "text":  "未来5年押哪条赛道？\nParker-Lee\n06-22\n20",
+                      "title":  "未来5年押哪条赛道？",
+                      "url":  "https://www.xiaohongshu.com/explore/6a38409e00000000070214eb"
+                  }
+              ]
+}

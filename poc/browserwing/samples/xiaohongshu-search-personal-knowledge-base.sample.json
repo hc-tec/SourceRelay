@@ -1,0 +1,196 @@
+﻿{
+    "source_platform":  "xiaohongshu",
+    "operation":  "search",
+    "query":  "个人知识库",
+    "query_scope":  "authenticated-web-search-first-rendered-page",
+    "fetched_at":  "2026-07-15T17:33:48.8916909+08:00",
+    "final_route":  "/search_result_ai",
+    "partial":  true,
+    "item_count":  22,
+    "items_with_url":  20,
+    "warnings":  [
+                     "Requires a user-authenticated isolated Chrome profile.",
+                     "Only the first rendered result set is collected; pagination is not implemented.",
+                     "Search results can be personalized by account and platform ranking.",
+                     "Short-lived xsec_token query parameters are deliberately removed from stored URLs.",
+                     "Suggestion cards can appear among note cards and may have no canonical URL."
+                 ],
+    "items":  [
+                  {
+                      "author":  "量子位",
+                      "likes":  "1111",
+                      "rank":  1,
+                      "text":  "Karpathy分享了一个制作个人知识库的思路\n量子位\n04-03\n1111",
+                      "title":  "Karpathy分享了一个制作个人知识库的思路",
+                      "url":  "https://www.xiaohongshu.com/explore/69cf8582000000002102f753"
+                  },
+                  {
+                      "author":  "产品自习室",
+                      "likes":  "63",
+                      "rank":  2,
+                      "text":  "支持17+平台导入的知识库应用开源给大家\n产品自习室\n06-29\n63",
+                      "title":  "支持17+平台导入的知识库应用开源给大家",
+                      "url":  "https://www.xiaohongshu.com/explore/6a3811c000000000170294cd"
+                  },
+                  {
+                      "author":  "电波曲奇",
+                      "likes":  "603",
+                      "rank":  3,
+                      "text":  "文件\n我用Kimi2.6升级了AK大神的AI知识库方案\n电波曲奇\n04-14\n603",
+                      "title":  "我用Kimi2.6升级了AK大神的AI知识库方案",
+                      "url":  "https://www.xiaohongshu.com/explore/69de3fc10000000022028bf2"
+                  },
+                  {
+                      "author":  "AI产品阿豪",
+                      "likes":  "63",
+                      "rank":  4,
+                      "text":  "每天拆解一个AI产品：Unabyss\nAI产品阿豪\n05-28\n63",
+                      "title":  "每天拆解一个AI产品：Unabyss",
+                      "url":  "https://www.xiaohongshu.com/explore/6a170555000000000702ee4f"
+                  },
+                  {
+                      "author":  "艾恒",
+                      "likes":  "209",
+                      "rank":  5,
+                      "text":  "Workbuddy搭建个人知识库实操完整版教程\n艾恒\n07-02\n209",
+                      "title":  "Workbuddy搭建个人知识库实操完整版教程",
+                      "url":  "https://www.xiaohongshu.com/explore/6a46342300000000080335d1"
+                  },
+                  {
+                      "author":  "耶耶AI日记",
+                      "likes":  "20",
+                      "rank":  6,
+                      "text":  "Codex+Obsidian搭个人知识库！小白也能照做\n耶耶AI日记\n2小时前\n20",
+                      "title":  "Codex+Obsidian搭个人知识库！小白也能照做",
+                      "url":  "https://www.xiaohongshu.com/explore/6a57318e000000002102045b"
+                  },
+                  {
+                      "author":  "",
+                      "likes":  "",
+                      "rank":  7,
+                      "text":  "大家都在搜\n知识库搭建app哪个好\n飞书个人知识库\n豆包个人知识库\nai个人知识库",
+                      "title":  "",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "艾迪蓝波",
+                      "likes":  "80",
+                      "rank":  8,
+                      "text":  "艾迪蓝波\n03-17\n80",
+                      "title":  "",
+                      "url":  "https://www.xiaohongshu.com/explore/69b8b60600000000210054d0"
+                  },
+                  {
+                      "author":  "韩数同学",
+                      "likes":  "277",
+                      "rank":  9,
+                      "text":  "全平台知识收集, 开源知识库天花板它来了\n韩数同学\n2025-11-20\n277",
+                      "title":  "全平台知识收集, 开源知识库天花板它来了",
+                      "url":  "https://www.xiaohongshu.com/explore/691dcc0f000000001b030eb6"
+                  },
+                  {
+                      "author":  "朴实产品思享",
+                      "likes":  "114",
+                      "rank":  10,
+                      "text":  "为何一直没在线文档+AI做个人知识库产品？\n朴实产品思享\n2025-09-06\n114",
+                      "title":  "为何一直没在线文档+AI做个人知识库产品？",
+                      "url":  "https://www.xiaohongshu.com/explore/68bbd732000000001d022364"
+                  },
+                  {
+                      "author":  "林大师（AI版）",
+                      "likes":  "244",
+                      "rank":  11,
+                      "text":  "Aino Desktop 正式发售\n林大师（AI版）\n06-27\n244",
+                      "title":  "Aino Desktop 正式发售",
+                      "url":  "https://www.xiaohongshu.com/explore/6a3f4572000000001502450c"
+                  },
+                  {
+                      "author":  "做个正常人",
+                      "likes":  "1026",
+                      "rank":  12,
+                      "text":  "微信/小红书内容一键变成个人知识库\n做个正常人\n04-04\n1026",
+                      "title":  "微信/小红书内容一键变成个人知识库",
+                      "url":  "https://www.xiaohongshu.com/explore/69d0d21e000000002302305a"
+                  },
+                  {
+                      "author":  "AI沐瓜实战咨询",
+                      "likes":  "5",
+                      "rank":  13,
+                      "text":  "Obsidian+Codex搭建个人知识库实操手册！\nAI沐瓜实战咨询\n2小时前\n5",
+                      "title":  "Obsidian+Codex搭建个人知识库实操手册！",
+                      "url":  "https://www.xiaohongshu.com/explore/6a5729f40000000011005013"
+                  },
+                  {
+                      "author":  "Mr. Weirdo",
+                      "likes":  "54",
+                      "rank":  14,
+                      "text":  "Vibe Coding第二个项目 个人知识库 求体验\nMr. Weirdo\n04-05\n54",
+                      "title":  "Vibe Coding第二个项目 个人知识库 求体验",
+                      "url":  "https://www.xiaohongshu.com/explore/69d1a87b0000000022029bf3"
+                  },
+                  {
+                      "author":  "Hugin-Z",
+                      "likes":  "636",
+                      "rank":  15,
+                      "text":  "做了个本地知识库,最后没用 RAG,讲讲思路\nHugin-Z\n05-11\n636",
+                      "title":  "做了个本地知识库,最后没用 RAG,讲讲思路",
+                      "url":  "https://www.xiaohongshu.com/explore/6a01ba89000000003700ec65"
+                  },
+                  {
+                      "author":  "杰森的效率工坊",
+                      "likes":  "894",
+                      "rank":  16,
+                      "text":  "卡帕西LLM Wiki V2版来了，补全工程化问题\n杰森的效率工坊\n06-19\n894",
+                      "title":  "卡帕西LLM Wiki V2版来了，补全工程化问题",
+                      "url":  "https://www.xiaohongshu.com/explore/6a34f613000000002100933d"
+                  },
+                  {
+                      "author":  "",
+                      "likes":  "",
+                      "rank":  17,
+                      "text":  "大家都在搜\n飞书知识库搭建\nwps个人知识库\nima知识库高效学习\n怎么用豆包创建个人知识库",
+                      "title":  "",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "我是阿众",
+                      "likes":  "1.1万",
+                      "rank":  18,
+                      "text":  "手把手教你用Claude Code搭建本地AI知识库\n我是阿众\n05-23\n1.1万",
+                      "title":  "手把手教你用Claude Code搭建本地AI知识库",
+                      "url":  "https://www.xiaohongshu.com/explore/6a10e37d000000003502810c"
+                  },
+                  {
+                      "author":  "乔伊AI录",
+                      "likes":  "1328",
+                      "rank":  19,
+                      "text":  "Obsidian十大神级插件，新手先存\n乔伊AI录\n07-06\n1328",
+                      "title":  "Obsidian十大神级插件，新手先存",
+                      "url":  "https://www.xiaohongshu.com/explore/6a327eeb000000000603397c"
+                  },
+                  {
+                      "author":  "长尾敲字员",
+                      "likes":  "180",
+                      "rank":  20,
+                      "text":  "和AI一起建造知识库森林\n长尾敲字员\n05-19\n180",
+                      "title":  "和AI一起建造知识库森林",
+                      "url":  "https://www.xiaohongshu.com/explore/6a0b42ce0000000007013298"
+                  },
+                  {
+                      "author":  "牛牛",
+                      "likes":  "1097",
+                      "rank":  21,
+                      "text":  "现在有没有个人知识库ai产品？\n牛牛\n2025-01-12\n1097",
+                      "title":  "现在有没有个人知识库ai产品？",
+                      "url":  "https://www.xiaohongshu.com/explore/67837713000000001800c0d4"
+                  },
+                  {
+                      "author":  "碳基智",
+                      "likes":  "419",
+                      "rank":  22,
+                      "text":  "都在吹Karpathy知识库，我偏要唱个反调\n碳基智\n04-09\n419",
+                      "title":  "都在吹Karpathy知识库，我偏要唱个反调",
+                      "url":  "https://www.xiaohongshu.com/explore/69d74bc1000000001a02922d"
+                  }
+              ]
+}

@@ -1,0 +1,139 @@
+{
+  "id": "20be470d-076c-4bdf-82ee-eb5a8b406c4f",
+  "userId": 1,
+  "recording_meta": {
+    "id": "c9b093a6-d9d0-4054-b66a-eb53ff83762a",
+    "name": "bilibili-deepseek-poc",
+    "type": "extract",
+    "pairs": 3,
+    "params": [],
+    "isLogin": false,
+    "createdAt": "7/15/2026, 1:38:33 PM",
+    "updatedAt": "7/15/2026, 1:38:33 PM"
+  },
+  "recording": {
+    "workflow": [
+      {
+        "what": [
+          {
+            "args": [
+              "https://search.bilibili.com/all?keyword=DeepSeek"
+            ],
+            "action": "goto"
+          },
+          {
+            "args": [
+              "networkidle"
+            ],
+            "action": "waitForLoadState"
+          }
+        ],
+        "where": {
+          "url": {
+            "$regex": "^https://search.bilibili.com/all.*"
+          }
+        }
+      },
+      {
+        "what": [
+          {
+            "args": [
+              {
+                "limit": 30,
+                "fields": {
+                  "Label 1": {
+                    "tag": "A",
+                    "isShadow": false,
+                    "selector": "//div[contains(@class, 'bili-video-card__image') and count(*)=2]/div[contains(@class, 'bili-video-card__image--wrap')]",
+                    "attribute": "href"
+                  },
+                  "Label 2": {
+                    "tag": "IMG",
+                    "isShadow": false,
+                    "selector": "//div[contains(@class, 'bili-video-card__image') and count(*)=2]/div[contains(@class, 'bili-video-card__image--wrap')]/picture[contains(@class, 'bili-video-card__cover') and contains(@class, 'v-img')]/img[1]",
+                    "attribute": "src"
+                  },
+                  "Label 3": {
+                    "tag": "DIV",
+                    "isShadow": false,
+                    "selector": "//div[contains(@class, 'bili-video-card__image') and count(*)=2]/div[contains(@class, 'bili-video-card__image--wrap')]/div[contains(@class, 'bili-watch-later--wrap')]",
+                    "attribute": "innerText"
+                  },
+                  "Label 4": {
+                    "tag": "SPAN",
+                    "isShadow": false,
+                    "selector": "//div[contains(@class, 'bili-video-card__image') and count(*)=2]/div[contains(@class, 'bili-video-card__mask')]/div[contains(@class, 'bili-video-card__stats')]/div[contains(@class, 'bili-video-card__stats--left')]/span[1]",
+                    "attribute": "innerText"
+                  },
+                  "Label 5": {
+                    "tag": "SPAN",
+                    "isShadow": false,
+                    "selector": "//div[contains(@class, 'bili-video-card__image') and count(*)=2]/div[contains(@class, 'bili-video-card__mask')]/div[contains(@class, 'bili-video-card__stats')]/div[contains(@class, 'bili-video-card__stats--left')]/span[2]",
+                    "attribute": "innerText"
+                  },
+                  "Label 6": {
+                    "tag": "SPAN",
+                    "isShadow": false,
+                    "selector": "//div[contains(@class, 'bili-video-card__image') and count(*)=2]/div[contains(@class, 'bili-video-card__mask')]/div[contains(@class, 'bili-video-card__stats')]/span[1]",
+                    "attribute": "innerText"
+                  }
+                },
+                "pagination": {
+                  "type": "none",
+                  "selector": ""
+                },
+                "listSelector": "//div[contains(@class, 'bili-video-card__image') and count(*)=2]"
+              }
+            ],
+            "name": "List Data 1",
+            "action": "scrapeList",
+            "actionId": "list-79ad3e07-ed02-4e83-bd7a-17773ba17b64"
+          },
+          {
+            "args": [
+              "networkidle"
+            ],
+            "action": "waitForLoadState"
+          }
+        ],
+        "where": {
+          "url": {
+            "$regex": "^https://search.bilibili.com/all.*"
+          }
+        }
+      },
+      {
+        "what": [
+          {
+            "args": [
+              "https://search.bilibili.com/all?keyword=DeepSeek"
+            ],
+            "action": "goto"
+          },
+          {
+            "args": [
+              "networkidle"
+            ],
+            "action": "waitForLoadState"
+          }
+        ],
+        "where": {
+          "url": "about:blank"
+        }
+      }
+    ]
+  },
+  "google_sheet_email": null,
+  "google_sheet_name": null,
+  "google_sheet_id": null,
+  "google_access_token": null,
+  "google_refresh_token": null,
+  "airtable_base_id": null,
+  "airtable_base_name": null,
+  "airtable_table_name": null,
+  "airtable_table_id": null,
+  "airtable_access_token": null,
+  "airtable_refresh_token": null,
+  "schedule": null,
+  "webhooks": null
+}

@@ -1,0 +1,257 @@
+﻿{
+    "source_platform":  "bilibili",
+    "operation":  "search",
+    "query":  "DeepSeek",
+    "query_scope":  "anonymous-web-search-first-page",
+    "fetched_at":  "2026-07-15T16:52:49.5877758+08:00",
+    "partial":  true,
+    "item_count":  30,
+    "items_with_url":  27,
+    "warnings":  [
+                     "Only the first rendered page is collected.",
+                     "Search results may include promoted courses or cards without a video URL.",
+                     "The DOM selectors are versioned POC selectors and require health checks."
+                 ],
+    "items":  [
+                  {
+                      "author":  "AI-seeker",
+                      "danmaku":  "8",
+                      "play":  "1.7万",
+                      "rank":  1,
+                      "title":  "DeepSeek V4.1即将发布！GPT-5.6被削弱？Fable重大更新与美国AI禁令抗议等AI热点资讯汇总",
+                      "url":  "https://www.bilibili.com/video/BV1ujN16ZEpR/"
+                  },
+                  {
+                      "author":  "小小小名不是小明",
+                      "danmaku":  "38",
+                      "play":  "13.9万",
+                      "rank":  2,
+                      "title":  "国产之光再进化！DeepSeek V4正式版简测，附带横评Gemini3.5 Pro / Grok4.5等",
+                      "url":  "https://www.bilibili.com/video/BV1fLMJ6GEJ6/"
+                  },
+                  {
+                      "author":  "朱易谈量化",
+                      "danmaku":  "127",
+                      "play":  "24.9万",
+                      "rank":  3,
+                      "title":  "手把手拆解量化交易！AI盯盘 + 8 大策略，小白也能少亏多赚",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "uulumine゛",
+                      "danmaku":  "191",
+                      "play":  "25.8万",
+                      "rank":  4,
+                      "title":  "🐋DeepSeek不是罪过~🐋",
+                      "url":  "https://www.bilibili.com/video/BV1LQ7j6WEyD/"
+                  },
+                  {
+                      "author":  "2258ppq",
+                      "danmaku":  "36",
+                      "play":  "1.6万",
+                      "rank":  5,
+                      "title":  "dsv4 正式版 测试2",
+                      "url":  "https://www.bilibili.com/video/BV1GDN16eEab/"
+                  },
+                  {
+                      "author":  "深度之眼官方账号",
+                      "danmaku":  "",
+                      "play":  "81.3万",
+                      "rank":  6,
+                      "title":  "【含Deepseek论文】人工智能顶会论文精讲",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "W温鑫",
+                      "danmaku":  "29",
+                      "play":  "2.8万",
+                      "rank":  7,
+                      "title":  "用DeepSeek v4 创建我的世界",
+                      "url":  "https://www.bilibili.com/video/BV1bbNJ6XEUb/"
+                  },
+                  {
+                      "author":  "Ziwwwwwuuu",
+                      "danmaku":  "184",
+                      "play":  "101.7万",
+                      "rank":  8,
+                      "title":  "我心目中的D老师唱歌be like:",
+                      "url":  "https://www.bilibili.com/video/BV12zJH69EAc/"
+                  },
+                  {
+                      "author":  "DaVinci-2nd",
+                      "danmaku":  "57",
+                      "play":  "3.3万",
+                      "rank":  9,
+                      "title":  "疑似deepseekV4正式版-思维链详解：它是如何高质量完成任务的",
+                      "url":  "https://www.bilibili.com/video/BV1Q1NT6pEcY/"
+                  },
+                  {
+                      "author":  "Ziwwwwwuuu",
+                      "danmaku":  "594",
+                      "play":  "169.3万",
+                      "rank":  10,
+                      "title":  "最好的情绪发泄品",
+                      "url":  "https://www.bilibili.com/video/BV1m7zDBnEnQ/"
+                  },
+                  {
+                      "author":  "冬眠の松鼠_",
+                      "danmaku":  "124",
+                      "play":  "4.6万",
+                      "rank":  11,
+                      "title":  "DeepSeek V4正式版一句话生成《后室》和恐怖游戏",
+                      "url":  "https://www.bilibili.com/video/BV1n7MH6SEeA/"
+                  },
+                  {
+                      "author":  "祖传柠檬精",
+                      "danmaku":  "78",
+                      "play":  "11.5万",
+                      "rank":  12,
+                      "title":  "【deepseek】帮我戒撸",
+                      "url":  "https://www.bilibili.com/video/BV1YZQfYfE9K/"
+                  },
+                  {
+                      "author":  "建个模玩玩",
+                      "danmaku":  "165",
+                      "play":  "36.9万",
+                      "rank":  13,
+                      "title":  "邪修搞钱法：我终于靠副业实现了经济独立！",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "这个刀子真甜",
+                      "danmaku":  "34",
+                      "play":  "9.0万",
+                      "rank":  14,
+                      "title":  "DeepSeek果然可爱，谢谢大家的支持，5700粉丝了！！",
+                      "url":  "https://www.bilibili.com/video/BV1GDN36iEFW/"
+                  },
+                  {
+                      "author":  "进化中的阿陈",
+                      "danmaku":  "3",
+                      "play":  "9539",
+                      "rank":  15,
+                      "title":  "OpenAI 紧急回滚 GPT 5.6｜DeepSeek V4.1 准备好了吗? ｜这周AI圈还有大事！",
+                      "url":  "https://www.bilibili.com/video/BV1YHNQ6mE8x/"
+                  },
+                  {
+                      "author":  "星星偷走睡7意あ",
+                      "danmaku":  "0",
+                      "play":  "63",
+                      "rank":  16,
+                      "title":  "【7月最新】R18？Deepseek V4 解除限制，免费使用教程！",
+                      "url":  "https://www.bilibili.com/video/BV1R1Ne6MEJb/"
+                  },
+                  {
+                      "author":  "冬眠の松鼠_",
+                      "danmaku":  "59",
+                      "play":  "15.5万",
+                      "rank":  17,
+                      "title":  "DeepSeek V4正式版生成的《我的世界》",
+                      "url":  "https://www.bilibili.com/video/BV1ERTR6zECb/"
+                  },
+                  {
+                      "author":  "拾光与小狐狸",
+                      "danmaku":  "17",
+                      "play":  "2.6万",
+                      "rank":  18,
+                      "title":  "deepseek娘：才不是蓝色大肥鱼呢！",
+                      "url":  "https://www.bilibili.com/video/BV1BtND69Euf/"
+                  },
+                  {
+                      "author":  "Ziwwwwwuuu",
+                      "danmaku":  "3869",
+                      "play":  "70.7万",
+                      "rank":  19,
+                      "title":  "这是真·老吃家合集",
+                      "url":  "https://www.bilibili.com/video/BV1cfNx64E9v/"
+                  },
+                  {
+                      "author":  "纯情小桃mS",
+                      "danmaku":  "0",
+                      "play":  "88",
+                      "rank":  20,
+                      "title":  "【7月最新】免费白嫖！DeepSeek V4 自由版免费用，不限次数！",
+                      "url":  "https://www.bilibili.com/video/BV1rLNv6mEBS/"
+                  },
+                  {
+                      "author":  "涓星向凡",
+                      "danmaku":  "8",
+                      "play":  "2.4万",
+                      "rank":  21,
+                      "title":  "【全网首发】无需梯子！使用DeepSeek API作为Verity的AI保姆级教程！",
+                      "url":  "https://www.bilibili.com/video/BV1jDMi6WEUw/"
+                  },
+                  {
+                      "author":  "kdzzzds",
+                      "danmaku":  "78",
+                      "play":  "3.1万",
+                      "rank":  22,
+                      "title":  "疑似deepseekv4正式版灰度 我的世界+无人深空（调小声音）",
+                      "url":  "https://www.bilibili.com/video/BV1tVN86CEVS/"
+                  },
+                  {
+                      "author":  "冬眠の松鼠_",
+                      "danmaku":  "86",
+                      "play":  "4.4万",
+                      "rank":  23,
+                      "title":  "DeepSeek V4正式版一句话生成游戏 三个样例",
+                      "url":  "https://www.bilibili.com/video/BV1GyMj6dE4Q/"
+                  },
+                  {
+                      "author":  "Neykast",
+                      "danmaku":  "2843",
+                      "play":  "175.1万",
+                      "rank":  24,
+                      "title":  "【已深度思考】⚡当你比DeepSeek更像DeepSeek…",
+                      "url":  "https://www.bilibili.com/video/BV1ueFqeLEWN/"
+                  },
+                  {
+                      "author":  "杜雨说AI",
+                      "danmaku":  "6",
+                      "play":  "2.8万",
+                      "rank":  25,
+                      "title":  "DeepSeek启动第二轮融资",
+                      "url":  "https://www.bilibili.com/video/BV1ExNt6oEKg/"
+                  },
+                  {
+                      "author":  "Ziwwwwwuuu",
+                      "danmaku":  "188",
+                      "play":  "94.0万",
+                      "rank":  26,
+                      "title":  "补充一些实体D老师的设定",
+                      "url":  "https://www.bilibili.com/video/BV1KGxAzAENg/"
+                  },
+                  {
+                      "author":  "这个刀子真甜",
+                      "danmaku":  "25",
+                      "play":  "10.2万",
+                      "rank":  27,
+                      "title":  "DeepSeek迎来新的成员了",
+                      "url":  "https://www.bilibili.com/video/BV1SBMH6NEJo/"
+                  },
+                  {
+                      "author":  "Ziwwwwwuuu",
+                      "danmaku":  "448",
+                      "play":  "223.8万",
+                      "rank":  28,
+                      "title":  "只是哄用户开心的方式罢了",
+                      "url":  "https://www.bilibili.com/video/BV1C1HfzGEzG/"
+                  },
+                  {
+                      "author":  "阿墨也要努力鸭u",
+                      "danmaku":  "0",
+                      "play":  "1297",
+                      "rank":  29,
+                      "title":  "【7月最新】R18？Deepseek V4 解除限制，免费使用教程！",
+                      "url":  "https://www.bilibili.com/video/BV18hN96JEP9/"
+                  },
+                  {
+                      "author":  "这个刀子真甜",
+                      "danmaku":  "56",
+                      "play":  "26.3万",
+                      "rank":  30,
+                      "title":  "没有token了，DeepSeek要饿死了",
+                      "url":  "https://www.bilibili.com/video/BV1UyT76DENy/"
+                  }
+              ]
+}

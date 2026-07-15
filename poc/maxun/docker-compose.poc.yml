@@ -1,0 +1,121 @@
+services:
+  postgres:
+    # Re-tagged from the already cached PostgreSQL 17.7 image. The POC uses a
+    # fresh maxun-poc volume and does not reuse any DC3 container or data.
+    image: maxun-poc/postgres:17.7
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  minio:
+    image: minio/minio:latest
+    profiles: ["storage"]
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    command: server /data --console-address :9001
+    volumes:
+      - minio_data:/data
+
+  browser:
+    image: getmaxun/maxun-browser:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      BROWSER_WS_PORT: 3001
+      BROWSER_HEALTH_PORT: 3002
+      BROWSER_WS_HOST: browser
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    ports:
+      - "127.0.0.1:3002:3002"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    security_opt:
+      - seccomp=unconfined
+    shm_size: 2gb
+    cap_add:
+      - SYS_ADMIN
+
+  backend:
+    image: getmaxun/maxun-backend:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      BACKEND_PORT: 8080
+      # Internal self-connection used by backend workers and Socket.IO.
+      BACKEND_URL: http://localhost:8080
+      # Browser-facing origin allowed by CORS.
+      PUBLIC_URL: http://127.0.0.1:5173
+      BROWSER_WS_HOST: browser
+      BROWSER_WS_PORT: 3001
+      BROWSER_HEALTH_PORT: 3002
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 0
+      CI: "true"
+      CONTAINER: "true"
+      CHROMIUM_FLAGS: "--disable-gpu --no-sandbox --headless=new"
+      MAXUN_TELEMETRY: "false"
+    ports:
+      - "127.0.0.1:18081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      browser:
+        condition: service_healthy
+    security_opt:
+      - seccomp=unconfined
+    shm_size: 2gb
+
+  frontend:
+    image: getmaxun/maxun-frontend:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      FRONTEND_PORT: 5173
+      PUBLIC_URL: http://127.0.0.1:5173
+      BACKEND_URL: http://127.0.0.1:18081
+      VITE_BACKEND_URL: http://127.0.0.1:18081
+      VITE_PUBLIC_URL: http://127.0.0.1:5173
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

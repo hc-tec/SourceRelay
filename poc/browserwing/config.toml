@@ -1,0 +1,26 @@
+[server]
+host = "127.0.0.1"
+port = "8080"
+
+[database]
+path = "./runtime/data/browserwing.db"
+
+[llm]
+provider = ""
+api_key = ""
+model = ""
+
+[browser]
+headless = true
+bin_path = "C:/Program Files/Google/Chrome/Application/chrome.exe"
+control_url = ""
+user_data_dir = "./runtime/chrome-user-data"
+assets_dir = "./runtime/assets"
+
+[log]
+level = "info"
+file = "./logs/browserwing.log"
+max_size = 20
+max_backups = 2
+max_age = 7
+compress = false

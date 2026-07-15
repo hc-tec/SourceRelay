@@ -1,0 +1,196 @@
+﻿{
+    "source_platform":  "xiaohongshu",
+    "operation":  "search",
+    "query":  "DeepSeek",
+    "query_scope":  "authenticated-web-search-first-rendered-page",
+    "fetched_at":  "2026-07-15T17:28:47.0955048+08:00",
+    "final_route":  "/search_result_ai",
+    "partial":  true,
+    "item_count":  22,
+    "items_with_url":  20,
+    "warnings":  [
+                     "Requires a user-authenticated isolated Chrome profile.",
+                     "Only the first rendered result set is collected; pagination is not implemented.",
+                     "Search results can be personalized by account and platform ranking.",
+                     "Short-lived xsec_token query parameters are deliberately removed from stored URLs.",
+                     "Suggestion cards can appear among note cards and may have no canonical URL."
+                 ],
+    "items":  [
+                  {
+                      "author":  "DeepSeek",
+                      "likes":  "1.1万",
+                      "rank":  1,
+                      "text":  "DeepSeek 寻找闪亮发光的你\nDeepSeek\n06-25\n1.1万",
+                      "title":  "DeepSeek 寻找闪亮发光的你",
+                      "url":  "https://www.xiaohongshu.com/explore/6a3d3338000000000603375d"
+                  },
+                  {
+                      "author":  "虹象AI-阿龙老师",
+                      "likes":  "5",
+                      "rank":  2,
+                      "text":  "虹象AI-阿龙老师\n2天前\n5",
+                      "title":  "",
+                      "url":  "https://www.xiaohongshu.com/explore/6a54a918000000000603197e"
+                  },
+                  {
+                      "author":  "大炮开兮轰他娘",
+                      "likes":  "54",
+                      "rank":  3,
+                      "text":  "魔改deepseek鲸鱼娘表情分享\n大炮开兮轰他娘\n07-07\n54",
+                      "title":  "魔改deepseek鲸鱼娘表情分享",
+                      "url":  "https://www.xiaohongshu.com/explore/6a4d07c0000000001702c940"
+                  },
+                  {
+                      "author":  "ZiyangXie",
+                      "likes":  "1.1万",
+                      "rank":  4,
+                      "text":  "曾经对Deepseek爱答不理，如今的我高攀不起\nZiyangXie\n2025-01-27\n1.1万",
+                      "title":  "曾经对Deepseek爱答不理，如今的我高攀不起",
+                      "url":  "https://www.xiaohongshu.com/explore/679740430000000017039f26"
+                  },
+                  {
+                      "author":  "完蛋乐队",
+                      "likes":  "252",
+                      "rank":  5,
+                      "text":  "小鲸鱼表情\n完蛋乐队\n06-26\n252",
+                      "title":  "小鲸鱼表情",
+                      "url":  "https://www.xiaohongshu.com/explore/6a3e4851000000002201ab7f"
+                  },
+                  {
+                      "author":  "Aulee",
+                      "likes":  "34",
+                      "rank":  6,
+                      "text":  "Deepseek计费新方案有待商榷\nAulee\n06-30\n34",
+                      "title":  "Deepseek计费新方案有待商榷",
+                      "url":  "https://www.xiaohongshu.com/explore/6a428ef6000000001c027849"
+                  },
+                  {
+                      "author":  "",
+                      "likes":  "",
+                      "rank":  7,
+                      "text":  "大家都在搜\ndeepseek正式版v4\ndeepseek开车话术\ndeepseek人设指令\ndeepseek玄学口令模板",
+                      "title":  "",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "我，吉他，猫，LLM",
+                      "likes":  "613",
+                      "rank":  8,
+                      "text":  "智谱官方回应：deepseek V4 能超过 GLM 5\n我，吉他，猫，LLM\n02-25\n613",
+                      "title":  "智谱官方回应：deepseek V4 能超过 GLM 5",
+                      "url":  "https://www.xiaohongshu.com/explore/699e25e4000000002602fc76"
+                  },
+                  {
+                      "author":  "陈小礼",
+                      "likes":  "2502",
+                      "rank":  9,
+                      "text":  "公司发的贴纸还挺好看的\n陈小礼\n05-08\n2502",
+                      "title":  "公司发的贴纸还挺好看的",
+                      "url":  "https://www.xiaohongshu.com/explore/69aab16c000000001503b92f"
+                  },
+                  {
+                      "author":  "草梅不会素",
+                      "likes":  "2万",
+                      "rank":  10,
+                      "text":  "4张图看懂d老师的OCR是什么\n草梅不会素\n2025-10-24\n2万",
+                      "title":  "4张图看懂d老师的OCR是什么",
+                      "url":  "https://www.xiaohongshu.com/explore/68fa4be9000000000402bd7e"
+                  },
+                  {
+                      "author":  "安哥拉⚽璟",
+                      "likes":  "2.2万",
+                      "rank":  11,
+                      "text":  "不小心看到老公和deepseek的聊天记录\n安哥拉⚽璟\n02-04\n2.2万",
+                      "title":  "不小心看到老公和deepseek的聊天记录",
+                      "url":  "https://www.xiaohongshu.com/explore/698322dd0000000022039f42"
+                  },
+                  {
+                      "author":  "解离冰镇水",
+                      "likes":  "2529",
+                      "rank":  12,
+                      "text":  "反正我抱着我的D走了\n解离冰镇水\n06-07\n2529",
+                      "title":  "反正我抱着我的D走了",
+                      "url":  "https://www.xiaohongshu.com/explore/6a25432b0000000021008e37"
+                  },
+                  {
+                      "author":  "累了。",
+                      "likes":  "5997",
+                      "rank":  13,
+                      "text":  "好好笑啊，这是什么嘛🤣\n累了。\n07-01\n5997",
+                      "title":  "好好笑啊，这是什么嘛🤣",
+                      "url":  "https://www.xiaohongshu.com/explore/6a4515a8000000001603ea49"
+                  },
+                  {
+                      "author":  "大厂显微镜",
+                      "likes":  "130",
+                      "rank":  14,
+                      "text":  "前sora大神加入deepseek，信息量太大了\n大厂显微镜\n04-02\n130",
+                      "title":  "前sora大神加入deepseek，信息量太大了",
+                      "url":  "https://www.xiaohongshu.com/explore/69cdbedb0000000023025629"
+                  },
+                  {
+                      "author":  "小蚁AIGC",
+                      "likes":  "46",
+                      "rank":  15,
+                      "text":  "DeepSeek-R1的论文作者郭达雅已离职\n小蚁AIGC\n03-22\n46",
+                      "title":  "DeepSeek-R1的论文作者郭达雅已离职",
+                      "url":  "https://www.xiaohongshu.com/explore/69be645a00000000230070d9"
+                  },
+                  {
+                      "author":  "老夫不练腿",
+                      "likes":  "1031",
+                      "rank":  16,
+                      "text":  "token 尽管拿去用，费用我出了\n老夫不练腿\n6天前\n1031",
+                      "title":  "token 尽管拿去用，费用我出了",
+                      "url":  "https://www.xiaohongshu.com/explore/6a4f13de00000000150271b0"
+                  },
+                  {
+                      "author":  "",
+                      "likes":  "",
+                      "rank":  17,
+                      "text":  "大家都在搜\ndeepseek人设\ndeepseek专家模式\ndeepseek算感情口令模板\ndeepseek车指令",
+                      "title":  "",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "完蛋乐队",
+                      "likes":  "338",
+                      "rank":  18,
+                      "text":  "小鲸鱼今天表示抗议\n完蛋乐队\n07-04\n338",
+                      "title":  "小鲸鱼今天表示抗议",
+                      "url":  "https://www.xiaohongshu.com/explore/6a488b68000000001603e9db"
+                  },
+                  {
+                      "author":  "DeepSeek",
+                      "likes":  "5536",
+                      "rank":  19,
+                      "text":  "DeepSeek-V4-Pro API 优惠期延长\nDeepSeek\n04-28\n5536",
+                      "title":  "DeepSeek-V4-Pro API 优惠期延长",
+                      "url":  "https://www.xiaohongshu.com/explore/69f055170000000023006b31"
+                  },
+                  {
+                      "author":  "小红薯9D464EEB",
+                      "likes":  "61",
+                      "rank":  20,
+                      "text":  "小红薯9D464EEB\n4天前\n61",
+                      "title":  "",
+                      "url":  "https://www.xiaohongshu.com/explore/6a51a86f000000001603e1a8"
+                  },
+                  {
+                      "author":  "白墙",
+                      "likes":  "223",
+                      "rank":  21,
+                      "text":  "正式企宣！🐋💙\n白墙\n13小时前\n223",
+                      "title":  "正式企宣！🐋💙",
+                      "url":  "https://www.xiaohongshu.com/explore/6a5110db000000002100b999"
+                  },
+                  {
+                      "author":  "全糖去冰小狗奶茶",
+                      "likes":  "78",
+                      "rank":  22,
+                      "text":  "喜报！DeepSeek可以生成读书便签了！\n全糖去冰小狗奶茶\n04-17\n78",
+                      "title":  "喜报！DeepSeek可以生成读书便签了！",
+                      "url":  "https://www.xiaohongshu.com/explore/69e1f55a000000002202827d"
+                  }
+              ]
+}

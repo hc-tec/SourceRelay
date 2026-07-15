@@ -1,0 +1,257 @@
+﻿{
+    "source_platform":  "bilibili",
+    "operation":  "search",
+    "query":  "低空经济",
+    "query_scope":  "anonymous-web-search-first-page",
+    "fetched_at":  "2026-07-15T16:53:08.4217765+08:00",
+    "partial":  true,
+    "item_count":  30,
+    "items_with_url":  25,
+    "warnings":  [
+                     "Only the first rendered page is collected.",
+                     "Search results may include promoted courses or cards without a video URL.",
+                     "The DOM selectors are versioned POC selectors and require health checks."
+                 ],
+    "items":  [
+                  {
+                      "author":  "小Lin竖着说",
+                      "danmaku":  "479",
+                      "play":  "68.2万",
+                      "rank":  1,
+                      "title":  "6700亿的低空经济，是真风口？还是\"空中泡沫\"？",
+                      "url":  "https://www.bilibili.com/video/BV1D6ju6REyy/"
+                  },
+                  {
+                      "author":  "无人机生产线",
+                      "danmaku":  "0",
+                      "play":  "0",
+                      "rank":  2,
+                      "title":  "无人机汛期抢险刷屏，应急无人机订单爆发，产能跟不上量产速度，这套无人机柔性自动化生产线助力无人机工厂稳定量产#无人机生产线 #低空飞行 #低空经济 #吊运无人机",
+                      "url":  "https://www.bilibili.com/video/BV1JNNQ6bE9K/"
+                  },
+                  {
+                      "author":  "朱易谈量化",
+                      "danmaku":  "145",
+                      "play":  "11.3万",
+                      "rank":  3,
+                      "title":  "普通人AI量化炒股速成训练：5天从手动转向AI辅助模式",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "智元法律课堂",
+                      "danmaku":  "",
+                      "play":  "1083",
+                      "rank":  4,
+                      "title":  "刘胜军：低空经济法律服务体系搭建和落地",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "自动化生产线专家",
+                      "danmaku":  "0",
+                      "play":  "0",
+                      "rank":  5,
+                      "title":  "中东抛出370亿无人机采购意向！定制化需求繁杂，普通产线很难灵活调整规格，柔性化产线！#无人机自动化生产线 #低空经济智造 #无人机工厂升级 #整厂产线定制",
+                      "url":  "https://www.bilibili.com/video/BV1k1NQ6wEs3/"
+                  },
+                  {
+                      "author":  "东北老机长",
+                      "danmaku":  "7",
+                      "play":  "6478",
+                      "rank":  6,
+                      "title":  "重创的低空经济",
+                      "url":  "https://www.bilibili.com/video/BV1kLNA6xEjf/"
+                  },
+                  {
+                      "author":  "科普中国",
+                      "danmaku":  "15",
+                      "play":  "5.5万",
+                      "rank":  7,
+                      "title":  "《天空之城，中国的低空革命》第1集—什么是低空经济",
+                      "url":  "https://www.bilibili.com/video/BV1aBq3B2ER8/"
+                  },
+                  {
+                      "author":  "马卡耶夫Makayev",
+                      "danmaku":  "326",
+                      "play":  "6.6万",
+                      "rank":  8,
+                      "title":  "2026年，全球低空经济发展到哪一步了",
+                      "url":  "https://www.bilibili.com/video/BV1G39aBCEnr/"
+                  },
+                  {
+                      "author":  "阅知人间",
+                      "danmaku":  "8",
+                      "play":  "2.0万",
+                      "rank":  9,
+                      "title":  "低空经济未来有前景吗？张雪峰这段话太权威了",
+                      "url":  "https://www.bilibili.com/video/BV1fLFfzjEZM/"
+                  },
+                  {
+                      "author":  "大师教你申论行测",
+                      "danmaku":  "",
+                      "play":  "1.7万",
+                      "rank":  10,
+                      "title":  "低空经济“万金油” ——R44直升机POH精讲",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "羊羊的地理教室",
+                      "danmaku":  "49",
+                      "play":  "4356",
+                      "rank":  11,
+                      "title":  "什么是低空经济？一起来看看吧【看纪录片学地理】",
+                      "url":  "https://www.bilibili.com/video/BV15gNs63ES7/"
+                  },
+                  {
+                      "author":  "张雪峰知识课堂",
+                      "danmaku":  "10",
+                      "play":  "6.6万",
+                      "rank":  12,
+                      "title":  "25年爆火的低空经济是个啥？张雪峰：避雷！",
+                      "url":  "https://www.bilibili.com/video/BV1ZF3XzpEeW/"
+                  },
+                  {
+                      "author":  "朱易谈量化",
+                      "danmaku":  "145",
+                      "play":  "11.3万",
+                      "rank":  13,
+                      "title":  "普通人AI量化炒股速成训练：5天从手动转向AI辅助模式",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "投研部杨摸鱼",
+                      "danmaku":  "2112",
+                      "play":  "44.1万",
+                      "rank":  14,
+                      "title":  "低空经济是万亿风口还是大饼？爆肝万字文案，验证低空产业逻辑，飞行汽车什么时候才能起飞？【深度报告】",
+                      "url":  "https://www.bilibili.com/video/BV1UVAoe3Efj/"
+                  },
+                  {
+                      "author":  "江湖说-产业与金融圈",
+                      "danmaku":  "22",
+                      "play":  "6.5万",
+                      "rank":  15,
+                      "title":  "【低空经济】百篇研报领取，20分钟全盘梳理低空经济/无人机/evtol",
+                      "url":  "https://www.bilibili.com/video/BV1GBZbYXEBx/"
+                  },
+                  {
+                      "author":  "每日政情",
+                      "danmaku":  "0",
+                      "play":  "73",
+                      "rank":  16,
+                      "title":  "低空经济起飞，第一关到底卡在哪？（低空经济政情20260713）",
+                      "url":  "https://www.bilibili.com/video/BV1WbNV6bErm/"
+                  },
+                  {
+                      "author":  "智元法律课堂",
+                      "danmaku":  "",
+                      "play":  "59",
+                      "rank":  17,
+                      "title":  "刘胜军:低空经济法律服务体系搭建和落地",
+                      "url":  ""
+                  },
+                  {
+                      "author":  "东方嘉富",
+                      "danmaku":  "5",
+                      "play":  "4629",
+                      "rank":  18,
+                      "title":  "vol.03|低空经济能否复制新能源奇迹？",
+                      "url":  "https://www.bilibili.com/video/BV1E3jd6cEvr/"
+                  },
+                  {
+                      "author":  "卢克文工作室",
+                      "danmaku":  "1848",
+                      "play":  "77.4万",
+                      "rank":  19,
+                      "title":  "中国低空经济：一个不可忽视的未来趋势",
+                      "url":  "https://www.bilibili.com/video/BV1fZc3edEHE/"
+                  },
+                  {
+                      "author":  "林仕低空经济",
+                      "danmaku":  "0",
+                      "play":  "182",
+                      "rank":  20,
+                      "title":  "中国人民大学低空智能与智慧治理——《低空经济10讲》",
+                      "url":  "https://www.bilibili.com/video/BV1siMP6CEoP/"
+                  },
+                  {
+                      "author":  "央视网",
+                      "danmaku":  "24",
+                      "play":  "3.2万",
+                      "rank":  21,
+                      "title":  "上天搞事业，低空经济就是把地上的事情在天上再做一遍？",
+                      "url":  "https://www.bilibili.com/video/BV15YwXzbEFx/"
+                  },
+                  {
+                      "author":  "每日政情",
+                      "danmaku":  "0",
+                      "play":  "56",
+                      "rank":  22,
+                      "title":  "低空险“不敢保”如何用数据破局？（低空经济政情20260715）",
+                      "url":  "https://www.bilibili.com/video/BV1rCNb6PEvD/"
+                  },
+                  {
+                      "author":  "爱学习的小刚子",
+                      "danmaku":  "13",
+                      "play":  "1.6万",
+                      "rank":  23,
+                      "title":  "无人机结构与系统【全122讲】【国家级精品课】【重复内容请自行忽略】",
+                      "url":  "https://www.bilibili.com/video/BV1a47X6jEbJ/"
+                  },
+                  {
+                      "author":  "阿冬_CrossHub",
+                      "danmaku":  "305",
+                      "play":  "4.2万",
+                      "rank":  24,
+                      "title":  "海外博主从拼夕夕低价淘国产载人飞行汽车！开箱试飞全程捏一把汗",
+                      "url":  "https://www.bilibili.com/video/BV158Nx6jE2D/"
+                  },
+                  {
+                      "author":  "低空博览",
+                      "danmaku":  "0",
+                      "play":  "47",
+                      "rank":  25,
+                      "title":  "低空经济走进大众生活",
+                      "url":  "https://www.bilibili.com/video/BV1MGNC6QEXX/"
+                  },
+                  {
+                      "author":  "李大霄",
+                      "danmaku":  "112",
+                      "play":  "5.7万",
+                      "rank":  26,
+                      "title":  "2026年谨防华尔街收割",
+                      "url":  "https://www.bilibili.com/video/BV1J9N96eEhm/"
+                  },
+                  {
+                      "author":  "知识研究猿",
+                      "danmaku":  "402",
+                      "play":  "58.3万",
+                      "rank":  27,
+                      "title":  "2026中国经济复苏是假象？真正的寒冬才刚开始？！",
+                      "url":  "https://www.bilibili.com/video/BV1qcLu6tEtP/"
+                  },
+                  {
+                      "author":  "吾爱财经",
+                      "danmaku":  "174",
+                      "play":  "9.6万",
+                      "rank":  28,
+                      "title":  "周末大事情来啦，1/4上市公司亏损，低空经济毁灭进行时",
+                      "url":  "https://www.bilibili.com/video/BV1JWTK6iEe8/"
+                  },
+                  {
+                      "author":  "阿坑摆交通",
+                      "danmaku":  "9",
+                      "play":  "2241",
+                      "rank":  29,
+                      "title":  "到底啥是低空经济？我们为何要发展它？",
+                      "url":  "https://www.bilibili.com/video/BV1efTE6cEyF/"
+                  },
+                  {
+                      "author":  "和讯和你",
+                      "danmaku":  "4",
+                      "play":  "5242",
+                      "rank":  30,
+                      "title":  "万亿级低空经济“凉了”？",
+                      "url":  "https://www.bilibili.com/video/BV1BwER6NEq6/"
+                  }
+              ]
+}

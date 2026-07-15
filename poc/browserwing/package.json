@@ -1,0 +1,15 @@
+{
+  "name": "browserwing-chinese-intelligence-poc",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Reproducible BrowserWing evaluation for Chinese public-information sources.",
+  "scripts": {
+    "browserwing": "browserwing",
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start.ps1",
+    "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/stop.ps1",
+    "list": "browserwing ls --format=json"
+  },
+  "dependencies": {
+    "browserwing": "1.1.1-beta.1"
+  }
+}

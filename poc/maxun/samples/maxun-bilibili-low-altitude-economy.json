@@ -1,0 +1,294 @@
+{
+  "keyword": "低空经济",
+  "targetUrl": "https://search.bilibili.com/all?keyword=%E4%BD%8E%E7%A9%BA%E7%BB%8F%E6%B5%8E",
+  "duplicateStatus": 201,
+  "robot": {
+    "id": "42fe4f12-7495-462f-8448-8709ec7b15d9",
+    "name": "bilibili-deepseek-titles-poc (all?keyword=%E4%BD%8E%E7%A9%BA%E7%BB%8F%E6%B5%8E)",
+    "createdAt": 1784123179000,
+    "inputParameters": [
+      {
+        "type": "string",
+        "name": "originUrl",
+        "label": "Origin URL",
+        "required": true,
+        "defaultValue": "https://search.bilibili.com/all?keyword=%E4%BD%8E%E7%A9%BA%E7%BB%8F%E6%B5%8E"
+      }
+    ]
+  },
+  "runDurationMs": 10160,
+  "run": {
+    "statusCode": 200,
+    "messageCode": "success",
+    "run": {
+      "id": "ed4237be-033e-469a-bbf0-f533470bbdfa",
+      "status": "success",
+      "name": "bilibili-deepseek-titles-poc (all?keyword=%E4%BD%8E%E7%A9%BA%E7%BB%8F%E6%B5%8E)",
+      "robotId": "42fe4f12-7495-462f-8448-8709ec7b15d9",
+      "startedAt": "7/15/2026, 1:46:19 PM",
+      "finishedAt": "7/15/2026, 1:46:28 PM",
+      "runId": "42d9d9c8-2d01-464a-9ddf-8139bb8061ee",
+      "runByUserId": 1,
+      "runByScheduleId": null,
+      "runByAPI": true,
+      "runBySDK": false,
+      "runByMCP": false,
+      "runByCLI": false,
+      "data": {
+        "textData": {},
+        "listData": {
+          "List Data 1": [
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1D6ju6REyy/",
+              "Label 2": "6700亿的低空经济，是真风口？还是\"空中泡沫\"？",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3546638236781247",
+              "Label 5": "小Lin竖着说",
+              "Label 6": "· 06-16"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1kLNA6xEjf/",
+              "Label 2": "重创的低空经济",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/1912737197",
+              "Label 5": "东北老机长",
+              "Label 6": "· 07-12"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1aBq3B2ER8/",
+              "Label 2": "《天空之城，中国的低空革命》第1集—什么是低空经济",
+              "Label 3": "低空",
+              "Label 4": "https://space.bilibili.com/92601724",
+              "Label 5": "科普中国",
+              "Label 6": "· 2025-12-20"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1G39aBCEnr/",
+              "Label 2": "2026年，全球低空经济发展到哪一步了",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/357806775",
+              "Label 5": "马卡耶夫Makayev",
+              "Label 6": "· 04-30"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/cheese/play/ss433473180?query_from=0&search_id=3713371500431067285&search_query=%E4%BD%8E%E7%A9%BA%E7%BB%8F%E6%B5%8E&csource=common_hpsearch_null_null",
+              "Label 2": "刘胜军：低空经济法律服务体系搭建和落地",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/2101817057",
+              "Label 5": "智元法律课堂",
+              "Label 6": ""
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1fLFfzjEZM/",
+              "Label 2": "低空经济未来有前景吗？张雪峰这段话太权威了",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3546592216877865",
+              "Label 5": "阅知人间",
+              "Label 6": "· 02-08"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1ZF3XzpEeW/",
+              "Label 2": "25年爆火的低空经济是个啥？张雪峰：避雷！",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3494358781265951",
+              "Label 5": "张雪峰知识课堂",
+              "Label 6": "· 2025-07-16"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV15gNs63ES7/",
+              "Label 2": "什么是低空经济？一起来看看吧【看纪录片学地理】",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/471009583",
+              "Label 5": "羊羊的地理教室",
+              "Label 6": "· 07-11"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1WbNV6bErm/",
+              "Label 2": "低空经济起飞，第一关到底卡在哪？（低空经济政情20260713）",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/1671117745",
+              "Label 5": "每日政情",
+              "Label 6": "· 07-13"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1E3jd6cEvr/",
+              "Label 2": "vol.03|低空经济能否复制新能源奇迹？",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3706939261323658",
+              "Label 5": "东方嘉富",
+              "Label 6": "· 06-24"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/cheese/play/ss26462?query_from=0&search_id=3713371500431067285&search_query=%E4%BD%8E%E7%A9%BA%E7%BB%8F%E6%B5%8E&csource=common_hpsearch_null_null",
+              "Label 2": "低空经济“万金油” ——R44直升机POH精讲",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/129587085",
+              "Label 5": "大师教你申论行测",
+              "Label 6": ""
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1MGNC6QEXX/",
+              "Label 2": "低空经济走进大众生活",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3546967898589813",
+              "Label 5": "低空博览",
+              "Label 6": "· 14小时前"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1zwNi6LEN7/",
+              "Label 2": "清华兰旭东没说错：万亿低空经济，正在加速兑现！#低空经济 #六大新兴支柱产业 #无人机 #低空物流 #eVTOL #民用航空法修订 #低空空域开放 #低空经济政",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3707007599118860",
+              "Label 5": "多式联运智慧物流展",
+              "Label 6": "· 9小时前"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1siMP6CEoP/",
+              "Label 2": "中国人民大学低空智能与智慧治理——《低空经济10讲》",
+              "Label 3": "低空",
+              "Label 4": "https://space.bilibili.com/3691002319603746",
+              "Label 5": "林仕低空经济",
+              "Label 6": "· 07-04"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1fZc3edEHE/",
+              "Label 2": "中国低空经济：一个不可忽视的未来趋势",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/438173577",
+              "Label 5": "卢克文工作室",
+              "Label 6": "· 2025-01-12"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1GBZbYXEBx/",
+              "Label 2": "【低空经济】百篇研报领取，20分钟全盘梳理低空经济/无人机/evtol",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3546737979427376",
+              "Label 5": "江湖说-产业与金融圈",
+              "Label 6": "· 2025-04-01"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/cheese/play/ss740779373?query_from=0&search_id=3713371500431067285&search_query=%E4%BD%8E%E7%A9%BA%E7%BB%8F%E6%B5%8E&csource=common_hpsearch_null_null",
+              "Label 2": "刘胜军:低空经济法律服务体系搭建和落地",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/2101817057",
+              "Label 5": "智元法律课堂",
+              "Label 6": ""
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1yJ7h6rEvy/",
+              "Label 2": "交付4架亏1.26亿：低空经济\"第一股\"泡沫破了？",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3546957679168203",
+              "Label 5": "涛哥低空视界",
+              "Label 6": "· 06-25"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1UVAoe3Efj/",
+              "Label 2": "低空经济是万亿风口还是大饼？爆肝万字文案，验证低空产业逻辑，飞行汽车什么时候才能起飞？【深度报告】",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/13611123",
+              "Label 5": "投研部杨摸鱼",
+              "Label 6": "· 2025-02-21"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1DBNq6zE8m/",
+              "Label 2": "低空经济短片创作",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3493258984426018",
+              "Label 5": "bili_89217418111",
+              "Label 6": "· 4小时前"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1RBNX6REaj/",
+              "Label 2": "低空经济火了，但考个证就能翻身的人，可能想多了",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/97042522",
+              "Label 5": "杰哥B计划",
+              "Label 6": "· 昨天"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1mawvzNEDz/",
+              "Label 2": "现在看此言论是否正确？马斯克：不看好低空经济，有一个致命原因会导致低空经济失败！",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/186761115",
+              "Label 5": "ElonMuskDaily",
+              "Label 6": "· 03-18"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1JWTK6iEe8/",
+              "Label 2": "周末大事情来啦，1/4上市公司亏损，低空经济毁灭进行时",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/96081167",
+              "Label 5": "吾爱财经",
+              "Label 6": "· 06-28"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1eC411j7fP/",
+              "Label 2": "【低空经济】未来的无限可能",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/416296675",
+              "Label 5": "Reed云魂",
+              "Label 6": "· 2024-05-10"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1BwER6NEq6/",
+              "Label 2": "万亿级低空经济“凉了”？",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3690998410512724",
+              "Label 5": "和讯和你",
+              "Label 6": "· 06-10"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1jmC5YJEyK/",
+              "Label 2": "什么是低空经济",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/119671580",
+              "Label 5": "你好低空",
+              "Label 6": "· 2024-12-23"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1rCNb6PEvD/",
+              "Label 2": "低空险“不敢保”如何用数据破局？（低空经济政情20260715）",
+              "Label 3": "低空",
+              "Label 4": "https://space.bilibili.com/1671117745",
+              "Label 5": "每日政情",
+              "Label 6": "· 19小时前"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1RPiuBMEQd/",
+              "Label 2": "（一）低空经济是不是伪命题？来自从业者的吐槽",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/2120591467",
+              "Label 5": "邱名沸",
+              "Label 6": "· 2025-12-31"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV1eWX5YMECL/",
+              "Label 2": "为什么马斯克不看好低空经济？",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/3493115553909127",
+              "Label 5": "蓝桥财经历史",
+              "Label 6": "· 2025-03-18"
+            },
+            {
+              "Label 1": "https://www.bilibili.com/video/BV17y411b7eM/",
+              "Label 2": "2024万亿产业的新风口？“低空经济”和我们有什么关系？",
+              "Label 3": "低空经济",
+              "Label 4": "https://space.bilibili.com/584685158",
+              "Label 5": "正解局",
+              "Label 6": "· 2024-06-04"
+            }
+          ]
+        },
+        "crawlData": {},
+        "searchData": {},
+        "markdown": "",
+        "html": "",
+        "links": [],
+        "summary": null,
+        "promptResult": null
+      },
+      "screenshots": []
+    }
+  }
+}

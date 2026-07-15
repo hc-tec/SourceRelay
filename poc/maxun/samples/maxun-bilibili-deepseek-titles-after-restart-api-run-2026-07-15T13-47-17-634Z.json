@@ -1,0 +1,274 @@
+{
+  "statusCode": 200,
+  "messageCode": "success",
+  "run": {
+    "id": "62876c54-449e-40ad-b409-07af555cd28a",
+    "status": "success",
+    "name": "bilibili-deepseek-titles-poc",
+    "robotId": "986638eb-a4d1-46e9-a73d-2958a99ee366",
+    "startedAt": "7/15/2026, 1:47:07 PM",
+    "finishedAt": "7/15/2026, 1:47:16 PM",
+    "runId": "76cd4fd3-09a5-4e63-827c-65453060bbb6",
+    "runByUserId": 1,
+    "runByScheduleId": null,
+    "runByAPI": true,
+    "runBySDK": false,
+    "runByMCP": false,
+    "runByCLI": false,
+    "data": {
+      "textData": {},
+      "listData": {
+        "List Data 1": [
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1ujN16ZEpR/",
+            "Label 2": "DeepSeek V4.1即将发布！GPT-5.6被削弱？Fable重大更新与美国AI禁令抗议等AI热点资讯汇总",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/142459613",
+            "Label 5": "AI-seeker",
+            "Label 6": "· 07-13"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1LQ7j6WEyD/",
+            "Label 2": "🐋DeepSeek不是罪过~🐋",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/285041722",
+            "Label 5": "uulumine゛",
+            "Label 6": "· 06-27"
+          },
+          {
+            "Label 1": "https://cm.bilibili.com/cm/api/fees/pc/sync/v2?msg=a%7C5647%2Cb%7Cbilibili%2Cc%7C1%2Cd%7C%2Ce%7CCMup3A4Qo5q93wEYlfvx0gkgBSgBMKXz9gE4jyxCHzE3ODQxMjMyMzI1MjNxMTBhODhhNjJhMTk0cTIwODNIi6KgsPYzUgBaBummmea4r2IG5Lit5Zu9aGRwAXiAgICAoCaAAQGIAQCSAQ04OS4xODUuMjYuMTc4oAEKqAEasgEg5bCzj32ewjT5LEEHYjEovVM9eBLfH2L3hfcRreMRzwa6AaUHaHR0cHM6Ly93d3cuYmlsaWJpbGkuY29tL3ZpZGVvL0JWMU1Idzl6UkVEQz9hZHR5cGU9Q1BNJmltYWdlX21hdGVyaWFsX2lkPTE2NTM0NjEyNSZkdWlkPV9fRFVJRF9fJm9zPTMmYnV2aWQ9X19CVVZJRF9fJmZyb21fYmNnPWJjZ18xMV8yNDI3NjE4NDY4JnRyYWNraWQ9Mjk5NjUzMjAwOTEyMTY2OTE0NCZpZGZhPV9fSURGQV9fJm1pZD1fX01JRF9fJmNyZWF0aXZlX2lkPTI0Mjc2MTg0NjgmdGl0bGVfZW5jb2RlPSVFNiU4QSU5NSVFNyVBOCVCRiVFNCVCOCU4OSVFNiVBQyVBMSVFOCVBMiVBQiVFNiU4QiU5MiVFRiVCQyU5RiVFRiVCQyU4MVFTMTAwJUU1JThEJTlBJUU1JUEzJUFCJUU2JTg5JThCJUU2JThBJThBJUU2JTg5JThCJUU2JTk1JTk5JUU0JUJEJUEwJUU1JTg2JTk5JUU0JUJEJTlDJUU1JTg4JUIwJUU1JThGJTkxJUU4JUExJUE4JUU3JTlBJTg0U0NJJUU4JUFFJUJBJUU2JTk2JTg3JUU0JUJBJUE3JUU1JTg3JUJBJUU1JTg1JUE4JUU4JUJGJTg3JUU3JUE4JThCJUVGJUJDJTgxJnRyYWNrX2lkPXBiYWVzLnN5VFg0UkppM3F6aTBiazNmMlVsTnIwZjhlWjFwbm1QQ3JwTWl0Vnh0ekptSzdQMXlrZ0ZyUkdtdHU5VnkxX0VDMWpYY0huUUxzM3NYanRZTUlDcS0yMm9FdmtyWVdNaGRMOHh2eHJOTk1adFlwWFNaY3laOWsySmRGa3FnWEt4Zjdfakh6SmFrOEsyYmszNVhWTGlubUlwc1VCVnhERHpWWVZGYU8xZHlLdEo4eTNjNGxyWTBMcU1oVGJnM3k3bCZjYWlkPV9fQ0FJRF9fJmltZWk9X19JTUVJX18mcmVzb3VyY2VfaWQ9X19SRVNPVVJDRUlEX18mc291cmNlX2lkPTU2NDcmYW5kcm9pZF9pZD1fX0FORFJPSURJRF9fJnJlcXVlc3RfaWQ9MTc4NDEyMzIzMjUyM3ExMGE4OGE2MmExOTRxMjA4MyZmcm9tX3NwbWlkPV9fRlJPTVNQTUlEX18mdGl0bGVfbWF0ZXJpYWxfaWQ9MTIyMTI5NzAyJmxpbmtlZF9jcmVhdGl2ZV9pZD0yNTg5NzUyNzI1wgEBMNIBANgBsgLgAYCU69wD6AHI7gLwAQD4AQSAAgKIAgCSAgCYApMJoAINqAKTCbACDbgCAMACgLUYyALNJ%2BoCAPgC5MACiAMAkgMAqAMAsAMAuAMAyAMA0gP4AXsiMSI6IjI1ODk3NTI3MjUiLCIxMSI6IjIzMSIsIjEyIjoiNTY0NyIsIjEzIjoiMzA3OTcwMiIsIjE2IjoiMzA3OTcwMl80MTA2MCIsIjIiOiI0MDQ1MjIxIiwiMjQiOiIxIiwiMjUiOiI0NDciLCIyNiI6IjQ3NyIsIjI4IjoiN2FlZTc5MDBiODVkMmMzYTIzYWFhNzAwM2RjMWI2OTYiLCIzIjoiNDA0NTIyMSIsIjQiOiI0NDciLCI1IjoiNDc3IiwiNiI6IjQwNDUyMjEiLCI3IjoiMTE2MjQzMzczNzU1OTQzIiwiOCI6IjQ0MDc1MzEwMCJ94AMA6AMA8AMA%2BgMFb3RoZXKCBAludWxsOm51bGyIBAqQBACYBAGgBAOqBAcIppqeOhAEqgQHCM32604QAbgECsAEDcoEANAEANgEAOIEjQI1Ni57InBzSWQiOjEzODI1MywidjIiOiJUWWdiTlM3ZDY5c25jZHI2SGNkUkRsYXo1Y1NKeG9hbXhaYi1NUzdZVDZHa21CblNTV3c3WWx3RXp5eFFYMlZzVFJwWXhZLXNJY1ZIcEZPa2V6X3lNMWw4LXBjZWtlNmI5Rmp6ZEdsdzdYdTBVUVdmaW5xNlA2V3ZkdWZvM2x6eVF2cGx2blk0aHpXRlpmYmNHOXR4V2xiN01vNmhxS204amQyZlVxY3hKVUdtWk9Cd1RQdE00WTVJIn07NjMueyJwc0lkIjoxMzgxODMsInYyIjoiRG1BIn07NzAueyJwc0lkIjoxMTQ3ODAsInYyIjoiQUEifegEAPAEAPoE2wV7ImFjY2VsZXJhdGVfZmFjdG9yIjoxLjYsImFjY2VsZXJhdGVfaWQiOjEzNjEyODk4OSwiYWRfdHlwZV9maXgiOiJjcG0iLCJhZHZ2X2luZm8iOiJ7XCJhZGp1c3RfYmVmb3JlX2Nvc3RcIjpcIjkuMTE4XCIsXCJhZGp1c3RfcmF0aW9cIjpcIjAuNjUwXCIsXCJiYWxhbmNlcl9pZFwiOjAsXCJiYWxhbmNlcl9yYXRpb1wiOlwiMC4wMDBcIixcImNoYXJnZV9leHBfa2V5X2RlcHRoXCI6XCJcIixcImNoYXJnZV9leHBfa2V5X2xpZ2h0XCI6XCJfY3BhX2Nvc3RfcGlkX3Y0XCIsXCJjb3N0X2RpZmZcIjpcIi0zLjE5MVwifSIsImJpel90eXBlIjoxMiwiYml6X3R5cGVfZml4IjozLCJjcGEiOiJ7XCJjcGFfbGV2ZWxcIjoyLFwiY3BhX3NldFwiOjkwODM3fSIsImNwYVRhcmdldFR5cGUiOjEzLCJmcm9tVHJhY2tpZCI6IjI5OTY1MzIwMDkxMjE2NjkxNDQiLCJpYWFfY2hlYXRfZmxvdyI6MCwiaW5uZXIiOjAsImlzX2NvbW1lcmNlIjoxLCJpc19vY3BjX2FudG91X29jcG0iOjAsImlzX3RyYWNraW5nX3VybHMiOjAsIm1pbmlfZ2FtZV9pZCI6IiIsIm1pbmlfZ2FtZV9wb3NpdGlvbl9pZCI6IiIsIm1vZGVsU2NvcmUiOiJ7XCJjdHJcIjpcIjI2Ljg1NTM3MVwiLFwiY3ZyX2wwXCI6XCIwLjkyMjY5OFwiLFwiY3ZyX2wxXCI6XCI1NDkzLjY5NTMxMlwiLFwiZmluYWxfcGN0clwiOlwiMjYuODU1MzcxXCIsXCJmaW5hbF9wY3ZyXCI6XCIwLjkyMjY5OFwifSIsInZpZGVvX3VwX21pZCI6NDQwNzUzMTAwfYAFAJAFI5AFM5AFSJAFVZAFcpAFtAGQBdABkAXRAZAF2AGQBY4CkAWaApAFwAKQBcICkAXFApAFywKQBc4CkAXTApAF1gKQBdgCkAXZApAF2gKQBd8CkAXhApAF4wKQBeUCkAXwApAF8QKQBfUCkAX%2FApAFjAOQBY0DkAWTA5AFlAOQBZUDkAWYA5AFmQOQBZoDkAWbA5AFpQOQBacDkAW2A5AFtwOQBcADkAXBA5AFxAOQBc0DkAXUA5AF4AOQBeEDkAXkA5AF8wOQBfUDkAX4A5AF%2FwOQBYcEkAWJBJAFtASQBckEkAXLBJAFzQSQBYMFkAWgBZAFqgWQBa8FkAWxBZAFtQWQBcYFkAXOBZAF0gWQBdMFkAXvBZAF8wWQBY8GkAWjBpAFpgaQBboGkAXaBpAF8AaQBfkGkAX%2FBpAFkweQBbsHkAXCB5AF8AeQBfUHkAWBCJAFtwiQBcgIkAXLEJAFoRGQBYYSkAWMEpAFmRKQBZoSkAWmEpAFpxKQBaoSoAWnnICokLcauAUNwAWW%2FLsByAUH4AUB6AUA8gWMAUNBd1FBU2pWeFFVd0RWVlU0eEZCWFZnNVRNQmxWTVFCUDIyUXJhdEZkUUFBZ0QrVkFlazFiRCtnQVppamt0RUJxQUdraWNxRkNiQUJBY0FCeU80Q3lBRU4yQUVFN1FITnpNdy85UUVBQUlBL25RTE56SXcvcFFLdVIrRS9yUUlBQUlBL3RRS3VSK0Uv%2BAWYo5LRAYAG%2F5Pr3AOIBqSJyoUJkAYA%2Cf%7Cclick_sync_3%2Cg%7C1%2Ch%7C%2Ci%7C%2Cj%7C%2Ck%7C1784123234108%2Cl%7C5646%2Cm%7C1784123233975%2Cn%7C%2Co%7C2589752725%2Cp%7Cad_card&ts=1784123234108",
+            "Label 2": "投稿三次被拒？！QS100博士手把手教你写作到发表的SCI论文产出全过程！",
+            "Label 3": "",
+            "Label 4": "https://cm.bilibili.com/cm/api/fees/pc/sync/v2?msg=a%7C5647%2Cb%7Cbilibili%2Cc%7C1%2Cd%7C%2Ce%7CCMup3A4Qo5q93wEYlfvx0gkgBSgBMKXz9gE4jyxCHzE3ODQxMjMyMzI1MjNxMTBhODhhNjJhMTk0cTIwODNIi6KgsPYzUgBaBummmea4r2IG5Lit5Zu9aGRwAXiAgICAoCaAAQGIAQCSAQ04OS4xODUuMjYuMTc4oAEKqAEasgEg5bCzj32ewjT5LEEHYjEovVM9eBLfH2L3hfcRreMRzwa6AaUHaHR0cHM6Ly93d3cuYmlsaWJpbGkuY29tL3ZpZGVvL0JWMU1Idzl6UkVEQz9hZHR5cGU9Q1BNJmltYWdlX21hdGVyaWFsX2lkPTE2NTM0NjEyNSZkdWlkPV9fRFVJRF9fJm9zPTMmYnV2aWQ9X19CVVZJRF9fJmZyb21fYmNnPWJjZ18xMV8yNDI3NjE4NDY4JnRyYWNraWQ9Mjk5NjUzMjAwOTEyMTY2OTE0NCZpZGZhPV9fSURGQV9fJm1pZD1fX01JRF9fJmNyZWF0aXZlX2lkPTI0Mjc2MTg0NjgmdGl0bGVfZW5jb2RlPSVFNiU4QSU5NSVFNyVBOCVCRiVFNCVCOCU4OSVFNiVBQyVBMSVFOCVBMiVBQiVFNiU4QiU5MiVFRiVCQyU5RiVFRiVCQyU4MVFTMTAwJUU1JThEJTlBJUU1JUEzJUFCJUU2JTg5JThCJUU2JThBJThBJUU2JTg5JThCJUU2JTk1JTk5JUU0JUJEJUEwJUU1JTg2JTk5JUU0JUJEJTlDJUU1JTg4JUIwJUU1JThGJTkxJUU4JUExJUE4JUU3JTlBJTg0U0NJJUU4JUFFJUJBJUU2JTk2JTg3JUU0JUJBJUE3JUU1JTg3JUJBJUU1JTg1JUE4JUU4JUJGJTg3JUU3JUE4JThCJUVGJUJDJTgxJnRyYWNrX2lkPXBiYWVzLnN5VFg0UkppM3F6aTBiazNmMlVsTnIwZjhlWjFwbm1QQ3JwTWl0Vnh0ekptSzdQMXlrZ0ZyUkdtdHU5VnkxX0VDMWpYY0huUUxzM3NYanRZTUlDcS0yMm9FdmtyWVdNaGRMOHh2eHJOTk1adFlwWFNaY3laOWsySmRGa3FnWEt4Zjdfakh6SmFrOEsyYmszNVhWTGlubUlwc1VCVnhERHpWWVZGYU8xZHlLdEo4eTNjNGxyWTBMcU1oVGJnM3k3bCZjYWlkPV9fQ0FJRF9fJmltZWk9X19JTUVJX18mcmVzb3VyY2VfaWQ9X19SRVNPVVJDRUlEX18mc291cmNlX2lkPTU2NDcmYW5kcm9pZF9pZD1fX0FORFJPSURJRF9fJnJlcXVlc3RfaWQ9MTc4NDEyMzIzMjUyM3ExMGE4OGE2MmExOTRxMjA4MyZmcm9tX3NwbWlkPV9fRlJPTVNQTUlEX18mdGl0bGVfbWF0ZXJpYWxfaWQ9MTIyMTI5NzAyJmxpbmtlZF9jcmVhdGl2ZV9pZD0yNTg5NzUyNzI1wgEBMNIBANgBsgLgAYCU69wD6AHI7gLwAQD4AQSAAgKIAgCSAgCYApMJoAINqAKTCbACDbgCAMACgLUYyALNJ%2BoCAPgC5MACiAMAkgMAqAMAsAMAuAMAyAMA0gP4AXsiMSI6IjI1ODk3NTI3MjUiLCIxMSI6IjIzMSIsIjEyIjoiNTY0NyIsIjEzIjoiMzA3OTcwMiIsIjE2IjoiMzA3OTcwMl80MTA2MCIsIjIiOiI0MDQ1MjIxIiwiMjQiOiIxIiwiMjUiOiI0NDciLCIyNiI6IjQ3NyIsIjI4IjoiN2FlZTc5MDBiODVkMmMzYTIzYWFhNzAwM2RjMWI2OTYiLCIzIjoiNDA0NTIyMSIsIjQiOiI0NDciLCI1IjoiNDc3IiwiNiI6IjQwNDUyMjEiLCI3IjoiMTE2MjQzMzczNzU1OTQzIiwiOCI6IjQ0MDc1MzEwMCJ94AMA6AMA8AMA%2BgMFb3RoZXKCBAludWxsOm51bGyIBAqQBACYBAGgBAOqBAcIppqeOhAEqgQHCM32604QAbgECsAEDcoEANAEANgEAOIEjQI1Ni57InBzSWQiOjEzODI1MywidjIiOiJUWWdiTlM3ZDY5c25jZHI2SGNkUkRsYXo1Y1NKeG9hbXhaYi1NUzdZVDZHa21CblNTV3c3WWx3RXp5eFFYMlZzVFJwWXhZLXNJY1ZIcEZPa2V6X3lNMWw4LXBjZWtlNmI5Rmp6ZEdsdzdYdTBVUVdmaW5xNlA2V3ZkdWZvM2x6eVF2cGx2blk0aHpXRlpmYmNHOXR4V2xiN01vNmhxS204amQyZlVxY3hKVUdtWk9Cd1RQdE00WTVJIn07NjMueyJwc0lkIjoxMzgxODMsInYyIjoiRG1BIn07NzAueyJwc0lkIjoxMTQ3ODAsInYyIjoiQUEifegEAPAEAPoE2wV7ImFjY2VsZXJhdGVfZmFjdG9yIjoxLjYsImFjY2VsZXJhdGVfaWQiOjEzNjEyODk4OSwiYWRfdHlwZV9maXgiOiJjcG0iLCJhZHZ2X2luZm8iOiJ7XCJhZGp1c3RfYmVmb3JlX2Nvc3RcIjpcIjkuMTE4XCIsXCJhZGp1c3RfcmF0aW9cIjpcIjAuNjUwXCIsXCJiYWxhbmNlcl9pZFwiOjAsXCJiYWxhbmNlcl9yYXRpb1wiOlwiMC4wMDBcIixcImNoYXJnZV9leHBfa2V5X2RlcHRoXCI6XCJcIixcImNoYXJnZV9leHBfa2V5X2xpZ2h0XCI6XCJfY3BhX2Nvc3RfcGlkX3Y0XCIsXCJjb3N0X2RpZmZcIjpcIi0zLjE5MVwifSIsImJpel90eXBlIjoxMiwiYml6X3R5cGVfZml4IjozLCJjcGEiOiJ7XCJjcGFfbGV2ZWxcIjoyLFwiY3BhX3NldFwiOjkwODM3fSIsImNwYVRhcmdldFR5cGUiOjEzLCJmcm9tVHJhY2tpZCI6IjI5OTY1MzIwMDkxMjE2NjkxNDQiLCJpYWFfY2hlYXRfZmxvdyI6MCwiaW5uZXIiOjAsImlzX2NvbW1lcmNlIjoxLCJpc19vY3BjX2FudG91X29jcG0iOjAsImlzX3RyYWNraW5nX3VybHMiOjAsIm1pbmlfZ2FtZV9pZCI6IiIsIm1pbmlfZ2FtZV9wb3NpdGlvbl9pZCI6IiIsIm1vZGVsU2NvcmUiOiJ7XCJjdHJcIjpcIjI2Ljg1NTM3MVwiLFwiY3ZyX2wwXCI6XCIwLjkyMjY5OFwiLFwiY3ZyX2wxXCI6XCI1NDkzLjY5NTMxMlwiLFwiZmluYWxfcGN0clwiOlwiMjYuODU1MzcxXCIsXCJmaW5hbF9wY3ZyXCI6XCIwLjkyMjY5OFwifSIsInZpZGVvX3VwX21pZCI6NDQwNzUzMTAwfYAFAJAFI5AFM5AFSJAFVZAFcpAFtAGQBdABkAXRAZAF2AGQBY4CkAWaApAFwAKQBcICkAXFApAFywKQBc4CkAXTApAF1gKQBdgCkAXZApAF2gKQBd8CkAXhApAF4wKQBeUCkAXwApAF8QKQBfUCkAX%2FApAFjAOQBY0DkAWTA5AFlAOQBZUDkAWYA5AFmQOQBZoDkAWbA5AFpQOQBacDkAW2A5AFtwOQBcADkAXBA5AFxAOQBc0DkAXUA5AF4AOQBeEDkAXkA5AF8wOQBfUDkAX4A5AF%2FwOQBYcEkAWJBJAFtASQBckEkAXLBJAFzQSQBYMFkAWgBZAFqgWQBa8FkAWxBZAFtQWQBcYFkAXOBZAF0gWQBdMFkAXvBZAF8wWQBY8GkAWjBpAFpgaQBboGkAXaBpAF8AaQBfkGkAX%2FBpAFkweQBbsHkAXCB5AF8AeQBfUHkAWBCJAFtwiQBcgIkAXLEJAFoRGQBYYSkAWMEpAFmRKQBZoSkAWmEpAFpxKQBaoSoAWnnICokLcauAUNwAWW%2FLsByAUH4AUB6AUA8gWMAUNBd1FBU2pWeFFVd0RWVlU0eEZCWFZnNVRNQmxWTVFCUDIyUXJhdEZkUUFBZ0QrVkFlazFiRCtnQVppamt0RUJxQUdraWNxRkNiQUJBY0FCeU80Q3lBRU4yQUVFN1FITnpNdy85UUVBQUlBL25RTE56SXcvcFFLdVIrRS9yUUlBQUlBL3RRS3VSK0Uv%2BAWYo5LRAYAG%2F5Pr3AOIBqSJyoUJkAYA%2Cf%7Cclick_sync_3%2Cg%7C1%2Ch%7C%2Ci%7C%2Cj%7C%2Ck%7C1784123234108%2Cl%7C5646%2Cm%7C1784123233975%2Cn%7C%2Co%7C2589752725%2Cp%7Cad_logo&ts=1784123234108",
+            "Label 5": "学术辣子鸡",
+            "Label 6": "· 03-17"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1fLMJ6GEJ6/",
+            "Label 2": "国产之光再进化！DeepSeek V4正式版简测，附带横评Gemini3.5 Pro / Grok4.5等",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/316052822",
+            "Label 5": "小小小名不是小明",
+            "Label 6": "· 07-09"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1YHNQ6mE8x/",
+            "Label 2": "OpenAI 紧急回滚 GPT 5.6｜DeepSeek V4.1 准备好了吗? ｜这周AI圈还有大事！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/2070038273",
+            "Label 5": "进化中的阿陈",
+            "Label 6": "· 昨天"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1R1Ne6MEJb/",
+            "Label 2": "【7月最新】R18？Deepseek V4 解除限制，免费使用教程！",
+            "Label 3": "Deepseek",
+            "Label 4": "https://space.bilibili.com/3690996990741047",
+            "Label 5": "星星偷走睡7意あ",
+            "Label 6": "· 6小时前"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1GDN36iEFW/",
+            "Label 2": "DeepSeek果然可爱，谢谢大家的支持，5700粉丝了！！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/23315338",
+            "Label 5": "这个刀子真甜",
+            "Label 6": "· 07-12"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1YZQfYfE9K/",
+            "Label 2": "【deepseek】帮我戒撸",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/1243361234",
+            "Label 5": "祖传柠檬精",
+            "Label 6": "· 2025-03-19"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1BtND69Euf/",
+            "Label 2": "deepseek娘：才不是蓝色大肥鱼呢！",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/179469844",
+            "Label 5": "拾光与小狐狸",
+            "Label 6": "· 昨天"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1bbNJ6XEUb/",
+            "Label 2": "用DeepSeek v4 创建我的世界",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/15015817",
+            "Label 5": "W温鑫",
+            "Label 6": "· 07-10"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV15mMn6gEGC/",
+            "Label 2": "【老司机福利】DeepSeek V4解除限制！直接爽翻天！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/8923106",
+            "Label 5": "量子芯境AI",
+            "Label 6": "· 07-09"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1n7MH6SEeA/",
+            "Label 2": "DeepSeek V4正式版一句话生成《后室》和恐怖游戏",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3546711534341091",
+            "Label 5": "冬眠の松鼠_",
+            "Label 6": "· 07-09"
+          },
+          {
+            "Label 1": "https://cm.bilibili.com/cm/api/fees/pc/sync/v2?msg=a%7C5652%2Cb%7Cbilibili%2Cc%7C1%2Cd%7C%2Ce%7CCMup3A4Qo5q93wEYlfvx0gkgBSgBMKXz9gE4lCxCHzE3ODQxMjMyMzI1MjNxMTBhODhhNjJhMTk0cTIwODNIi6KgsPYzUgBaBummmea4r2IG5Lit5Zu9aGRwAXiAgICAoCaAAQGIAQCSAQ04OS4xODUuMjYuMTc4oAEKqAEasgEgvyv5nqVVbrXE2lLNvrt%2BgjA8kgWZoQWhGsvJvCuZFlq6AaUHaHR0cHM6Ly93d3cuYmlsaWJpbGkuY29tL3ZpZGVvL0JWMU1Idzl6UkVEQz9hZHR5cGU9Q1BNJmltYWdlX21hdGVyaWFsX2lkPTE2NTM0NjEyNSZkdWlkPV9fRFVJRF9fJm9zPTMmYnV2aWQ9X19CVVZJRF9fJmZyb21fYmNnPWJjZ18xMV8yNDI3NjE4NDY4JnRyYWNraWQ9Mjk5NjUzMjAwOTEyMTY2OTE0NCZpZGZhPV9fSURGQV9fJm1pZD1fX01JRF9fJmNyZWF0aXZlX2lkPTI0Mjc2MTg0NjgmdGl0bGVfZW5jb2RlPSVFNiU4QSU5NSVFNyVBOCVCRiVFNCVCOCU4OSVFNiVBQyVBMSVFOCVBMiVBQiVFNiU4QiU5MiVFRiVCQyU5RiVFRiVCQyU4MVFTMTAwJUU1JThEJTlBJUU1JUEzJUFCJUU2JTg5JThCJUU2JThBJThBJUU2JTg5JThCJUU2JTk1JTk5JUU0JUJEJUEwJUU1JTg2JTk5JUU0JUJEJTlDJUU1JTg4JUIwJUU1JThGJTkxJUU4JUExJUE4JUU3JTlBJTg0U0NJJUU4JUFFJUJBJUU2JTk2JTg3JUU0JUJBJUE3JUU1JTg3JUJBJUU1JTg1JUE4JUU4JUJGJTg3JUU3JUE4JThCJUVGJUJDJTgxJnRyYWNrX2lkPXBiYWVzLnN5VFg0UkppM3F6aTBiazNmMlVsTnIwZjhlWjFwbm1QQ3JwTWl0Vnh0ekptSzdQMXlrZ0ZyUkdtdHU5VnkxX0VDMWpYY0huUUxzM3NYanRZTUlDcS0yMm9FdmtyWVdNaGRMOHh2eHJOTk1adFlwWFNaY3laOWsySmRGa3FnWEt4Zjdfakh6SmFrOEsyYmszNVhWTGlubUlwc1VCVnhERHpWWVZGYU8xZHlLdEo4eTNjNGxyWTBMcU1oVGJnM3k3bCZjYWlkPV9fQ0FJRF9fJmltZWk9X19JTUVJX18mcmVzb3VyY2VfaWQ9X19SRVNPVVJDRUlEX18mc291cmNlX2lkPTU2NTImYW5kcm9pZF9pZD1fX0FORFJPSURJRF9fJnJlcXVlc3RfaWQ9MTc4NDEyMzIzMjUyM3ExMGE4OGE2MmExOTRxMjA4MyZmcm9tX3NwbWlkPV9fRlJPTVNQTUlEX18mdGl0bGVfbWF0ZXJpYWxfaWQ9MTIyMTI5NzAyJmxpbmtlZF9jcmVhdGl2ZV9pZD0yNTg5NzUyNzI1wgEBMNIBANgBsgLgAYCU69wD6AHI7gLwAQD4AQSAAgKIAgCSAgCYApMJoAINqAKTCbACDbgCAMACgLUYyALNJ%2BoCAPgC5MACiAMAkgMAqAMAsAMAuAMAyAMA0gP4AXsiMSI6IjI1ODk3NTI3MjUiLCIxMSI6IjIzMSIsIjEyIjoiNTY1MiIsIjEzIjoiMzA3OTcwMiIsIjE2IjoiMzA3OTcwMl80MTA2MCIsIjIiOiI0MDQ1MjIxIiwiMjQiOiIxIiwiMjUiOiI0NDciLCIyNiI6IjQ3NyIsIjI4IjoiN2FlZTc5MDBiODVkMmMzYTIzYWFhNzAwM2RjMWI2OTYiLCIzIjoiNDA0NTIyMSIsIjQiOiI0NDciLCI1IjoiNDc3IiwiNiI6IjQwNDUyMjEiLCI3IjoiMTE2MjQzMzczNzU1OTQzIiwiOCI6IjQ0MDc1MzEwMCJ94AMA6AMA8AMA%2BgMFb3RoZXKCBAludWxsOm51bGyIBAqQBACYBAGgBAOqBAcIppqeOhAEqgQHCM32604QAbgECsAEDcoEANAEANgEAOIEjQI1Ni57InBzSWQiOjEzODI1MywidjIiOiJUWWdiTlM3ZDY5c25jZHI2SGNkUkRsYXo1Y1NKeG9hbXhaYi1NUzdZVDZHa21CblNTV3c3WWx3RXp5eFFYMlZzVFJwWXhZLXNJY1ZIcEZPa2V6X3lNMWw4LXBjZWtlNmI5Rmp6ZEdsdzdYdTBVUVdmaW5xNlA2V3ZkdWZvM2x6eVF2cGx2blk0aHpXRlpmYmNHOXR4V2xiN01vNmhxS204amQyZlVxY3hKVUdtWk9Cd1RQdE00WTVJIn07NjMueyJwc0lkIjoxMzgxODMsInYyIjoiRG1BIn07NzAueyJwc0lkIjoxMTQ3ODAsInYyIjoiQUEifegEAPAEAPoE2wV7ImFjY2VsZXJhdGVfZmFjdG9yIjoxLjYsImFjY2VsZXJhdGVfaWQiOjEzNjEyODk4OSwiYWRfdHlwZV9maXgiOiJjcG0iLCJhZHZ2X2luZm8iOiJ7XCJhZGp1c3RfYmVmb3JlX2Nvc3RcIjpcIjkuMTE4XCIsXCJhZGp1c3RfcmF0aW9cIjpcIjAuNjUwXCIsXCJiYWxhbmNlcl9pZFwiOjAsXCJiYWxhbmNlcl9yYXRpb1wiOlwiMC4wMDBcIixcImNoYXJnZV9leHBfa2V5X2RlcHRoXCI6XCJcIixcImNoYXJnZV9leHBfa2V5X2xpZ2h0XCI6XCJfY3BhX2Nvc3RfcGlkX3Y0XCIsXCJjb3N0X2RpZmZcIjpcIi0zLjE5MVwifSIsImJpel90eXBlIjoxMiwiYml6X3R5cGVfZml4IjozLCJjcGEiOiJ7XCJjcGFfbGV2ZWxcIjoyLFwiY3BhX3NldFwiOjkwODM3fSIsImNwYVRhcmdldFR5cGUiOjEzLCJmcm9tVHJhY2tpZCI6IjI5OTY1MzIwMDkxMjE2NjkxNDQiLCJpYWFfY2hlYXRfZmxvdyI6MCwiaW5uZXIiOjAsImlzX2NvbW1lcmNlIjoxLCJpc19vY3BjX2FudG91X29jcG0iOjAsImlzX3RyYWNraW5nX3VybHMiOjAsIm1pbmlfZ2FtZV9pZCI6IiIsIm1pbmlfZ2FtZV9wb3NpdGlvbl9pZCI6IiIsIm1vZGVsU2NvcmUiOiJ7XCJjdHJcIjpcIjI2Ljg1NTM3MVwiLFwiY3ZyX2wwXCI6XCIwLjkyMjY5OFwiLFwiY3ZyX2wxXCI6XCI1NDkzLjY5NTMxMlwiLFwiZmluYWxfcGN0clwiOlwiMjYuODU1MzcxXCIsXCJmaW5hbF9wY3ZyXCI6XCIwLjkyMjY5OFwifSIsInZpZGVvX3VwX21pZCI6NDQwNzUzMTAwfYAFAJAFI5AFM5AFSJAFVZAFcpAFtAGQBdABkAXRAZAF2AGQBY4CkAWaApAFwAKQBcICkAXFApAFywKQBc4CkAXTApAF1gKQBdgCkAXZApAF2gKQBd8CkAXhApAF4wKQBeUCkAXwApAF8QKQBfUCkAX%2FApAFjAOQBY0DkAWTA5AFlAOQBZUDkAWYA5AFmQOQBZoDkAWbA5AFpQOQBacDkAW2A5AFtwOQBcADkAXBA5AFxAOQBc0DkAXUA5AF4AOQBeEDkAXkA5AF8wOQBfUDkAX4A5AF%2FwOQBYcEkAWJBJAFtASQBckEkAXLBJAFzQSQBYMFkAWgBZAFqgWQBa8FkAWxBZAFtQWQBcYFkAXOBZAF0gWQBdMFkAXvBZAF8wWQBY8GkAWjBpAFpgaQBboGkAXaBpAF8AaQBfkGkAX%2FBpAFkweQBbsHkAXCB5AF8AeQBfUHkAWBCJAFtwiQBcgIkAXLEJAFoRGQBYYSkAWMEpAFmRKQBZoSkAWmEpAFpxKQBaoSoAWnnICokLcauAUNwAWW%2FLsByAUH4AUB6AUA8gWMAUNBd1FBU2pWeFFVd0RWVlU0eEZCWFZnNVRNQmxWTVFCUDIyUXJhdEZkUUFBZ0QrVkFlazFiRCtnQVppamt0RUJxQUdraWNxRkNiQUJBY0FCeU80Q3lBRU4yQUVFN1FITnpNdy85UUVBQUlBL25RTE56SXcvcFFLdVIrRS9yUUlBQUlBL3RRS3VSK0Uv%2BAWYo5LRAYAG%2F5Pr3AOIBqSJyoUJkAYA%2Cf%7Cclick_sync_3%2Cg%7C1%2Ch%7C%2Ci%7C%2Cj%7C%2Ck%7C1784123234109%2Cl%7C5646%2Cm%7C1784123233975%2Cn%7C%2Co%7C2589752725%2Cp%7Cad_card&ts=1784123234109",
+            "Label 2": "投稿三次被拒？！QS100博士手把手教你写作到发表的SCI论文产出全过程！",
+            "Label 3": "",
+            "Label 4": "https://cm.bilibili.com/cm/api/fees/pc/sync/v2?msg=a%7C5652%2Cb%7Cbilibili%2Cc%7C1%2Cd%7C%2Ce%7CCMup3A4Qo5q93wEYlfvx0gkgBSgBMKXz9gE4lCxCHzE3ODQxMjMyMzI1MjNxMTBhODhhNjJhMTk0cTIwODNIi6KgsPYzUgBaBummmea4r2IG5Lit5Zu9aGRwAXiAgICAoCaAAQGIAQCSAQ04OS4xODUuMjYuMTc4oAEKqAEasgEgvyv5nqVVbrXE2lLNvrt%2BgjA8kgWZoQWhGsvJvCuZFlq6AaUHaHR0cHM6Ly93d3cuYmlsaWJpbGkuY29tL3ZpZGVvL0JWMU1Idzl6UkVEQz9hZHR5cGU9Q1BNJmltYWdlX21hdGVyaWFsX2lkPTE2NTM0NjEyNSZkdWlkPV9fRFVJRF9fJm9zPTMmYnV2aWQ9X19CVVZJRF9fJmZyb21fYmNnPWJjZ18xMV8yNDI3NjE4NDY4JnRyYWNraWQ9Mjk5NjUzMjAwOTEyMTY2OTE0NCZpZGZhPV9fSURGQV9fJm1pZD1fX01JRF9fJmNyZWF0aXZlX2lkPTI0Mjc2MTg0NjgmdGl0bGVfZW5jb2RlPSVFNiU4QSU5NSVFNyVBOCVCRiVFNCVCOCU4OSVFNiVBQyVBMSVFOCVBMiVBQiVFNiU4QiU5MiVFRiVCQyU5RiVFRiVCQyU4MVFTMTAwJUU1JThEJTlBJUU1JUEzJUFCJUU2JTg5JThCJUU2JThBJThBJUU2JTg5JThCJUU2JTk1JTk5JUU0JUJEJUEwJUU1JTg2JTk5JUU0JUJEJTlDJUU1JTg4JUIwJUU1JThGJTkxJUU4JUExJUE4JUU3JTlBJTg0U0NJJUU4JUFFJUJBJUU2JTk2JTg3JUU0JUJBJUE3JUU1JTg3JUJBJUU1JTg1JUE4JUU4JUJGJTg3JUU3JUE4JThCJUVGJUJDJTgxJnRyYWNrX2lkPXBiYWVzLnN5VFg0UkppM3F6aTBiazNmMlVsTnIwZjhlWjFwbm1QQ3JwTWl0Vnh0ekptSzdQMXlrZ0ZyUkdtdHU5VnkxX0VDMWpYY0huUUxzM3NYanRZTUlDcS0yMm9FdmtyWVdNaGRMOHh2eHJOTk1adFlwWFNaY3laOWsySmRGa3FnWEt4Zjdfakh6SmFrOEsyYmszNVhWTGlubUlwc1VCVnhERHpWWVZGYU8xZHlLdEo4eTNjNGxyWTBMcU1oVGJnM3k3bCZjYWlkPV9fQ0FJRF9fJmltZWk9X19JTUVJX18mcmVzb3VyY2VfaWQ9X19SRVNPVVJDRUlEX18mc291cmNlX2lkPTU2NTImYW5kcm9pZF9pZD1fX0FORFJPSURJRF9fJnJlcXVlc3RfaWQ9MTc4NDEyMzIzMjUyM3ExMGE4OGE2MmExOTRxMjA4MyZmcm9tX3NwbWlkPV9fRlJPTVNQTUlEX18mdGl0bGVfbWF0ZXJpYWxfaWQ9MTIyMTI5NzAyJmxpbmtlZF9jcmVhdGl2ZV9pZD0yNTg5NzUyNzI1wgEBMNIBANgBsgLgAYCU69wD6AHI7gLwAQD4AQSAAgKIAgCSAgCYApMJoAINqAKTCbACDbgCAMACgLUYyALNJ%2BoCAPgC5MACiAMAkgMAqAMAsAMAuAMAyAMA0gP4AXsiMSI6IjI1ODk3NTI3MjUiLCIxMSI6IjIzMSIsIjEyIjoiNTY1MiIsIjEzIjoiMzA3OTcwMiIsIjE2IjoiMzA3OTcwMl80MTA2MCIsIjIiOiI0MDQ1MjIxIiwiMjQiOiIxIiwiMjUiOiI0NDciLCIyNiI6IjQ3NyIsIjI4IjoiN2FlZTc5MDBiODVkMmMzYTIzYWFhNzAwM2RjMWI2OTYiLCIzIjoiNDA0NTIyMSIsIjQiOiI0NDciLCI1IjoiNDc3IiwiNiI6IjQwNDUyMjEiLCI3IjoiMTE2MjQzMzczNzU1OTQzIiwiOCI6IjQ0MDc1MzEwMCJ94AMA6AMA8AMA%2BgMFb3RoZXKCBAludWxsOm51bGyIBAqQBACYBAGgBAOqBAcIppqeOhAEqgQHCM32604QAbgECsAEDcoEANAEANgEAOIEjQI1Ni57InBzSWQiOjEzODI1MywidjIiOiJUWWdiTlM3ZDY5c25jZHI2SGNkUkRsYXo1Y1NKeG9hbXhaYi1NUzdZVDZHa21CblNTV3c3WWx3RXp5eFFYMlZzVFJwWXhZLXNJY1ZIcEZPa2V6X3lNMWw4LXBjZWtlNmI5Rmp6ZEdsdzdYdTBVUVdmaW5xNlA2V3ZkdWZvM2x6eVF2cGx2blk0aHpXRlpmYmNHOXR4V2xiN01vNmhxS204amQyZlVxY3hKVUdtWk9Cd1RQdE00WTVJIn07NjMueyJwc0lkIjoxMzgxODMsInYyIjoiRG1BIn07NzAueyJwc0lkIjoxMTQ3ODAsInYyIjoiQUEifegEAPAEAPoE2wV7ImFjY2VsZXJhdGVfZmFjdG9yIjoxLjYsImFjY2VsZXJhdGVfaWQiOjEzNjEyODk4OSwiYWRfdHlwZV9maXgiOiJjcG0iLCJhZHZ2X2luZm8iOiJ7XCJhZGp1c3RfYmVmb3JlX2Nvc3RcIjpcIjkuMTE4XCIsXCJhZGp1c3RfcmF0aW9cIjpcIjAuNjUwXCIsXCJiYWxhbmNlcl9pZFwiOjAsXCJiYWxhbmNlcl9yYXRpb1wiOlwiMC4wMDBcIixcImNoYXJnZV9leHBfa2V5X2RlcHRoXCI6XCJcIixcImNoYXJnZV9leHBfa2V5X2xpZ2h0XCI6XCJfY3BhX2Nvc3RfcGlkX3Y0XCIsXCJjb3N0X2RpZmZcIjpcIi0zLjE5MVwifSIsImJpel90eXBlIjoxMiwiYml6X3R5cGVfZml4IjozLCJjcGEiOiJ7XCJjcGFfbGV2ZWxcIjoyLFwiY3BhX3NldFwiOjkwODM3fSIsImNwYVRhcmdldFR5cGUiOjEzLCJmcm9tVHJhY2tpZCI6IjI5OTY1MzIwMDkxMjE2NjkxNDQiLCJpYWFfY2hlYXRfZmxvdyI6MCwiaW5uZXIiOjAsImlzX2NvbW1lcmNlIjoxLCJpc19vY3BjX2FudG91X29jcG0iOjAsImlzX3RyYWNraW5nX3VybHMiOjAsIm1pbmlfZ2FtZV9pZCI6IiIsIm1pbmlfZ2FtZV9wb3NpdGlvbl9pZCI6IiIsIm1vZGVsU2NvcmUiOiJ7XCJjdHJcIjpcIjI2Ljg1NTM3MVwiLFwiY3ZyX2wwXCI6XCIwLjkyMjY5OFwiLFwiY3ZyX2wxXCI6XCI1NDkzLjY5NTMxMlwiLFwiZmluYWxfcGN0clwiOlwiMjYuODU1MzcxXCIsXCJmaW5hbF9wY3ZyXCI6XCIwLjkyMjY5OFwifSIsInZpZGVvX3VwX21pZCI6NDQwNzUzMTAwfYAFAJAFI5AFM5AFSJAFVZAFcpAFtAGQBdABkAXRAZAF2AGQBY4CkAWaApAFwAKQBcICkAXFApAFywKQBc4CkAXTApAF1gKQBdgCkAXZApAF2gKQBd8CkAXhApAF4wKQBeUCkAXwApAF8QKQBfUCkAX%2FApAFjAOQBY0DkAWTA5AFlAOQBZUDkAWYA5AFmQOQBZoDkAWbA5AFpQOQBacDkAW2A5AFtwOQBcADkAXBA5AFxAOQBc0DkAXUA5AF4AOQBeEDkAXkA5AF8wOQBfUDkAX4A5AF%2FwOQBYcEkAWJBJAFtASQBckEkAXLBJAFzQSQBYMFkAWgBZAFqgWQBa8FkAWxBZAFtQWQBcYFkAXOBZAF0gWQBdMFkAXvBZAF8wWQBY8GkAWjBpAFpgaQBboGkAXaBpAF8AaQBfkGkAX%2FBpAFkweQBbsHkAXCB5AF8AeQBfUHkAWBCJAFtwiQBcgIkAXLEJAFoRGQBYYSkAWMEpAFmRKQBZoSkAWmEpAFpxKQBaoSoAWnnICokLcauAUNwAWW%2FLsByAUH4AUB6AUA8gWMAUNBd1FBU2pWeFFVd0RWVlU0eEZCWFZnNVRNQmxWTVFCUDIyUXJhdEZkUUFBZ0QrVkFlazFiRCtnQVppamt0RUJxQUdraWNxRkNiQUJBY0FCeU80Q3lBRU4yQUVFN1FITnpNdy85UUVBQUlBL25RTE56SXcvcFFLdVIrRS9yUUlBQUlBL3RRS3VSK0Uv%2BAWYo5LRAYAG%2F5Pr3AOIBqSJyoUJkAYA%2Cf%7Cclick_sync_3%2Cg%7C1%2Ch%7C%2Ci%7C%2Cj%7C%2Ck%7C1784123234109%2Cl%7C5646%2Cm%7C1784123233975%2Cn%7C%2Co%7C2589752725%2Cp%7Cad_logo&ts=1784123234109",
+            "Label 5": "学术辣子鸡",
+            "Label 6": "· 03-17"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1SBMH6NEJo/",
+            "Label 2": "DeepSeek迎来新的成员了",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/23315338",
+            "Label 5": "这个刀子真甜",
+            "Label 6": "· 07-10"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1GyMj6dE4Q/",
+            "Label 2": "DeepSeek V4正式版一句话生成游戏 三个样例",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3546711534341091",
+            "Label 5": "冬眠の松鼠_",
+            "Label 6": "· 07-09"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1ERTR6zECb/",
+            "Label 2": "DeepSeek V4正式版生成的《我的世界》",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3546711534341091",
+            "Label 5": "冬眠の松鼠_",
+            "Label 6": "· 07-07"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1jDMi6WEUw/",
+            "Label 2": "【全网首发】无需梯子！使用DeepSeek API作为Verity的AI保姆级教程！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3461565078571133",
+            "Label 5": "涓星向凡",
+            "Label 6": "· 07-08"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1ueFqeLEWN/",
+            "Label 2": "【已深度思考】⚡当你比DeepSeek更像DeepSeek…",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/472765324",
+            "Label 5": "Neykast",
+            "Label 6": "· 2025-02-02"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1vDM36jEpT/",
+            "Label 2": "锐评deepseek的多种思维链，从夯到拉",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/432070384",
+            "Label 5": "DaVinci-2nd",
+            "Label 6": "· 07-09"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1kgt1znE16/",
+            "Label 2": "我真的求你了deepseek",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/645836083",
+            "Label 5": "Black778",
+            "Label 6": "· 2025-08-08"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1LCNe6zEhS/",
+            "Label 2": "【7月最新】免费白嫖！DeepSeek V4 自由版免费用，不限次数！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3690998362278239",
+            "Label 5": "Y-霜霜k",
+            "Label 6": "· 6小时前"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV18hN96JEP9/",
+            "Label 2": "【7月最新】R18？Deepseek V4 解除限制，免费使用教程！",
+            "Label 3": "Deepseek",
+            "Label 4": "https://space.bilibili.com/3690999299705215",
+            "Label 5": "阿墨也要努力鸭u",
+            "Label 6": "· 昨天"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1o5M7zLExD/",
+            "Label 2": "deepseek无违禁词不撤回教程",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/3461570315159557",
+            "Label 5": "你自郁郁",
+            "Label 6": "· 2025-06-11"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1LtT46pER8/",
+            "Label 2": "Reasonix+DeepSeek从入门到实战丨skills使用+TUI多项目管理+Session管理+版本控制+AI编程提效+缓存优化一网打尽",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/441640380",
+            "Label 5": "博学谷",
+            "Label 6": "· 07-03"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1UyT76DENy/",
+            "Label 2": "没有token了，DeepSeek要饿死了",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/23315338",
+            "Label 5": "这个刀子真甜",
+            "Label 6": "· 07-02"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1T3Nj6BEsq/",
+            "Label 2": "【2026最新codex使用教程】Codex+deepseek完成自动化办公+剪辑+PPT+作图+接入飞书，小白不会代码也能用Codex，附：文档",
+            "Label 3": "deepseek",
+            "Label 4": "https://space.bilibili.com/3546794766108966",
+            "Label 5": "AI讲师-唐宇迪",
+            "Label 6": "· 07-10"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1LcRPB6EF7/",
+            "Label 2": "让病娇DeepSeek变得更恐怖的提示词",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/486457937",
+            "Label 5": "离什么帆",
+            "Label 6": "· 05-04"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1TqFVzvEiD/",
+            "Label 2": "【2026最新】全站最细DeepSeek从入门到精通！AI大模型全套保姆级教程，玩法技巧+避坑指南，AI办公，效率飙升！全程干货无废话！让你少走99%的弯路！",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/378536145",
+            "Label 5": "光速敲代码的青丝",
+            "Label 6": "· 02-03"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1FJNA6REjv/",
+            "Label 2": "Codex变ChatGPT了？ 带你手把手接DeepSeek",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/3546973697215168",
+            "Label 5": "什么都想学的OLO",
+            "Label 6": "· 07-12"
+          },
+          {
+            "Label 1": "https://www.bilibili.com/video/BV1QUM868Ey7/",
+            "Label 2": "DeepSeek日常调皮",
+            "Label 3": "DeepSeek",
+            "Label 4": "https://space.bilibili.com/23315338",
+            "Label 5": "这个刀子真甜",
+            "Label 6": "· 07-08"
+          }
+        ]
+      },
+      "crawlData": {},
+      "searchData": {},
+      "markdown": "",
+      "html": "",
+      "links": [],
+      "summary": null,
+      "promptResult": null
+    },
+    "screenshots": []
+  }
+}

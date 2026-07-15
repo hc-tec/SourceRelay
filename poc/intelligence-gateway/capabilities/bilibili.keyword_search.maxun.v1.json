@@ -1,0 +1,33 @@
+{
+  "capability_id": "bilibili.keyword_search.maxun.v1",
+  "version": "1.0.0",
+  "platform": "bilibili",
+  "action": "keyword_search",
+  "status": "verified",
+  "executor": "maxun",
+  "adapter": "MaxunBilibiliConnector",
+  "source": "bilibili",
+  "authentication": {
+    "required": true,
+    "mode": "local_api_key"
+  },
+  "input_schema": {
+    "query": {"type": "string", "required": true, "max_length": 300},
+    "limit": {"type": "integer", "default": 20, "maximum": 100},
+    "include_promoted": {"type": "boolean", "default": true}
+  },
+  "output_schema": "search_response.v1",
+  "scope": {
+    "first_rendered_page_only": true,
+    "pagination": false,
+    "promoted_rows_explicit": true
+  },
+  "fallback_ids": ["web.keyword_search.searxng.v1"],
+  "fallback_site": "bilibili.com",
+  "verification_input": {"query": "DeepSeek", "limit": 5},
+  "last_verified_at": "2026-07-15T22:37:00+08:00",
+  "license": "AGPL-3.0",
+  "warnings": [
+    "New query terms may require duplicating the configured template Robot."
+  ]
+}
