@@ -198,7 +198,7 @@ GitHub 仓库公开可读不等于其代码自动获得开源许可。没有 Lic
 | NewsNow / DailyHotApi | 2026-06 / 2026-03 | MIT | 贴吧热榜/热议榜 | `hotlist_fetch` |
 | MediaCrawler | 2026-07-10 | 非商业学习许可 | 贴吧关键词、帖子、作者、评论 | 参考 |
 
-推荐先对 `aiotieba` 建一个只读薄 Adapter，禁止吧务、发帖、回复等写操作。TiebaScraper 留作未来明确需要长期指定吧监控时再评估。
+实施结果（2026-07-16）：Gateway `0.9.0` 已用 PyPI 稳定版 aiotieba 4.7.1 建成匿名只读薄 Adapter。`python吧` 主题列表真实得到 10 条；从中选择两个不同公开 tid，帖子详情分别得到 6 条与 2 条。完整返回转成约 23 KB、9.8 KB、3.5 KB 的本地 raw JSON，数据库不变。正式白名单仅有 `get_threads/get_posts`，不传 BDUSS/STOKEN，`get_posts` 固定不请求楼中楼；aiotieba 包内其他写操作对 Gateway 不可达。TiebaScraper 留作未来明确需要长期指定吧监控时再评估。
 
 ### 3.9 新闻、热点与公共站点
 
@@ -356,7 +356,7 @@ Gateway 可以当次临时提取 `rank/title/url/external_id` 便于显示和引
 | 微博 | BrowserWing 待实测 | NewsNow | 自有只读 Adapter；dataabc 参考 | 通用/专用详情 | 先热榜，后账号清单 |
 | 抖音 | 暂无正式能力 | NewsNow | 后续人工 Profile | Evil0ctal/lux 隔离 POC | 先热榜和已知 URL |
 | 快手 | 暂无正式能力 | NewsNow | 后续人工 Profile | lux 对照 | 先热榜 |
-| 贴吧 | aiotieba 待 POC | NewsNow | aiotieba 指定吧 | aiotieba | 优先只读薄 Adapter |
+| 贴吧 | aiotieba `forum_threads` 已验证 | NewsNow | aiotieba 指定吧 | aiotieba `post_detail` 已验证 | 匿名、只读、raw-first；不开放整包 API |
 | 新闻/政务 | SearXNG + Bing/搜狗 | NewsNow | 站点清单 | Trafilatura direct first | 当前最成熟 |
 
 ## 5. 推荐接入批次

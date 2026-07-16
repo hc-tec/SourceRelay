@@ -24,6 +24,8 @@ from .errors import AuthenticationRequiredError, GatewayError, SourceUnavailable
 from .models import (
     FetchRequest,
     FetchResponse,
+    ForumThreadsRequest,
+    ForumThreadsResponse,
     ArticleResult,
     ChangeType,
     CapabilityAction,
@@ -39,6 +41,8 @@ from .models import (
     JobRecord,
     HotlistRequest,
     HotlistResponse,
+    PostDetailRequest,
+    PostDetailResponse,
     ResultStatus,
     SearchRequest,
     SearchResponse,
@@ -143,7 +147,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.8.0",
+        version="0.9.0",
         description="Explicit-status API for Chinese-platform discovery, hotlists and public detail extraction.",
     )
     app.state.settings = active_settings
@@ -174,7 +178,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.8.0",
+            "version": "0.9.0",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
             "hotlist_providers": [
@@ -182,6 +186,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ],
             "video_detail_providers": [
                 entry["provider"] for entry in registry.video_detail_providers()
+            ],
+            "forum_read_providers": [
+                entry["provider"] for entry in registry.forum_read_providers()
             ],
             "article_extraction": True,
             "capability_runtime": True,
@@ -196,6 +203,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "sources": registry.sources(),
             "hotlist_providers": registry.hotlist_providers(),
             "video_detail_providers": registry.video_detail_providers(),
+            "forum_read_providers": registry.forum_read_providers(),
             "article_collector": registry.article.collector,
         }
 
@@ -204,10 +212,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         health = await registry.health()
         hotlist_health = await registry.newsnow.health()
         video_health = await registry.ytdlp.health()
+        forum_read_health = await registry.aiotieba.health()
         return {
             "sources": [item.model_dump(mode="json") for item in health],
             "hotlist_providers": [hotlist_health.model_dump(mode="json")],
             "video_detail_providers": [video_health.model_dump(mode="json")],
+            "forum_read_providers": [forum_read_health.model_dump(mode="json")],
         }
 
     @app.get("/health")
@@ -345,6 +355,52 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 warnings=[
                     *manifest.warnings,
                     *health.warnings,
+                    *(
+                        ["This declared capability must pass fixed-sample verification before planning."]
+                        if not planner_eligible
+                        else []
+                    ),
+                ],
+            )
+        if manifest.action in {
+            CapabilityAction.FORUM_THREADS,
+            CapabilityAction.POST_DETAIL,
+        }:
+            executor_valid = manifest.executor == "aiotieba"
+            scope_valid = (
+                manifest.platform == "tieba"
+                and manifest.scope.get("anonymous") is True
+                and manifest.scope.get("read_only") is True
+            )
+            planner_eligible = manifest.status in {
+                CapabilityStatus.VERIFIED,
+                CapabilityStatus.DEGRADED,
+            }
+            provider_health = await registry.aiotieba.health()
+            ready = provider_health.ready and executor_valid and scope_valid and planner_eligible
+            return CapabilityCheckResponse(
+                capability_id=manifest.capability_id,
+                ready=ready,
+                status=(
+                    ResultStatus.SUCCESS
+                    if ready
+                    else (
+                        ResultStatus.MISCONFIGURED
+                        if not executor_valid or not scope_valid
+                        else ResultStatus.SOURCE_UNAVAILABLE
+                    )
+                ),
+                details={
+                    **provider_health.details,
+                    "executor": manifest.executor,
+                    "executor_valid": executor_valid,
+                    "scope_valid": scope_valid,
+                    "capability_status": manifest.status.value,
+                    "planner_eligible": planner_eligible,
+                },
+                warnings=[
+                    *manifest.warnings,
+                    *provider_health.warnings,
                     *(
                         ["This declared capability must pass fixed-sample verification before planning."]
                         if not planner_eligible
@@ -795,7 +851,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         manifest: CapabilityManifest,
         task_input: dict[str, Any],
         persistence: str,
-    ) -> SearchResponse | FetchResponse | HotlistResponse | VideoDetailResponse:
+    ) -> (
+        SearchResponse
+        | FetchResponse
+        | HotlistResponse
+        | VideoDetailResponse
+        | ForumThreadsResponse
+        | PostDetailResponse
+    ):
         if manifest.action == CapabilityAction.KEYWORD_SEARCH:
             if manifest.executor == "browserwing_recipe":
                 if not manifest.recipe:
@@ -967,6 +1030,50 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if persistence == "result_only":
                 response.warnings.append(
                     "Video metadata was not written to the intelligence database; the raw local artifact is the durable result."
+                )
+            return response
+        if manifest.action == CapabilityAction.FORUM_THREADS:
+            if manifest.executor != "aiotieba":
+                raise GatewayError(
+                    "Forum threads capability has no supported provider executor.",
+                    status=ResultStatus.MISCONFIGURED,
+                    http_status=503,
+                )
+            forum_request = ForumThreadsRequest.model_validate(
+                {
+                    "forum_name": task_input.get("forum_name"),
+                    "page": task_input.get("page", 1),
+                    "limit": task_input.get("limit", 30),
+                }
+            )
+            response = await registry.forum_threads(
+                forum_request, capability_id=manifest.capability_id
+            )
+            if persistence == "result_only":
+                response.warnings.append(
+                    "Forum content was not written to the intelligence database; the raw local artifact is the durable result."
+                )
+            return response
+        if manifest.action == CapabilityAction.POST_DETAIL:
+            if manifest.executor != "aiotieba":
+                raise GatewayError(
+                    "Post detail capability has no supported provider executor.",
+                    status=ResultStatus.MISCONFIGURED,
+                    http_status=503,
+                )
+            post_request = PostDetailRequest.model_validate(
+                {
+                    "thread_id": task_input.get("thread_id"),
+                    "page": task_input.get("page", 1),
+                    "limit": task_input.get("limit", 30),
+                }
+            )
+            response = await registry.post_detail(
+                post_request, capability_id=manifest.capability_id
+            )
+            if persistence == "result_only":
+                response.warnings.append(
+                    "Post content was not written to the intelligence database; the raw local artifact is the durable result."
                 )
             return response
         if manifest.action in {

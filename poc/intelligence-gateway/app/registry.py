@@ -4,6 +4,7 @@ import asyncio
 
 from .config import Settings
 from .connectors.article import ArticleExtractor
+from .connectors.aiotieba import AiotiebaReadConnector
 from .connectors.base import SearchConnector
 from .connectors.browserwing import BrowserWingXiaohongshuConnector
 from .connectors.maxun import MaxunBilibiliConnector
@@ -13,8 +14,12 @@ from .connectors.ytdlp import YtDlpBilibiliVideoConnector
 from .models import (
     FetchRequest,
     FetchResponse,
+    ForumThreadsRequest,
+    ForumThreadsResponse,
     HotlistRequest,
     HotlistResponse,
+    PostDetailRequest,
+    PostDetailResponse,
     SearchRequest,
     SearchResponse,
     SourceHealth,
@@ -35,6 +40,7 @@ class ConnectorRegistry:
         self.article = ArticleExtractor(settings)
         self.newsnow = NewsNowHotlistConnector(settings)
         self.ytdlp = YtDlpBilibiliVideoConnector(settings)
+        self.aiotieba = AiotiebaReadConnector(settings)
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         return await self.connectors[request.source].search(request)
@@ -57,6 +63,16 @@ class ConnectorRegistry:
         capability_id: str,
     ) -> VideoDetailResponse:
         return await self.ytdlp.fetch(request, capability_id=capability_id)
+
+    async def forum_threads(
+        self, request: ForumThreadsRequest, *, capability_id: str
+    ) -> ForumThreadsResponse:
+        return await self.aiotieba.forum_threads(request, capability_id=capability_id)
+
+    async def post_detail(
+        self, request: PostDetailRequest, *, capability_id: str
+    ) -> PostDetailResponse:
+        return await self.aiotieba.post_detail(request, capability_id=capability_id)
 
     async def health(self) -> list[SourceHealth]:
         return list(await asyncio.gather(*(connector.health() for connector in self.connectors.values())))
@@ -83,5 +99,13 @@ class ConnectorRegistry:
             {
                 "provider": self.ytdlp.provider,
                 "collector": self.ytdlp.collector,
+            }
+        ]
+
+    def forum_read_providers(self) -> list[dict[str, str]]:
+        return [
+            {
+                "provider": self.aiotieba.provider,
+                "collector": self.aiotieba.collector,
             }
         ]

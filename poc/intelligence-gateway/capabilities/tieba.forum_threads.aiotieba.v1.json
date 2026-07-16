@@ -1,0 +1,33 @@
+{
+  "capability_id": "tieba.forum_threads.aiotieba.v1",
+  "version": "1.0.0",
+  "platform": "tieba",
+  "action": "forum_threads",
+  "status": "verified",
+  "executor": "aiotieba",
+  "adapter": "AiotiebaReadConnector",
+  "source": null,
+  "authentication": {"required": false, "mode": "none"},
+  "input_schema": {
+    "forum_name": {"type": "string", "required": true, "max_length": 100},
+    "page": {"type": "integer", "default": 1, "minimum": 1, "maximum": 1000},
+    "limit": {"type": "integer", "default": 30, "minimum": 1, "maximum": 30}
+  },
+  "output_schema": "forum_threads_response.v1",
+  "scope": {
+    "anonymous": true,
+    "read_only": true,
+    "approved_method": "get_threads",
+    "raw_first": true,
+    "database_persistence": false
+  },
+  "fallback_ids": [],
+  "verification_input": {"forum_name": "python", "page": 1, "limit": 10},
+  "last_verified_at": "2026-07-16T14:54:00+08:00",
+  "license": "Unlicense",
+  "warnings": [
+    "Only an explicitly named public Tieba forum can be read; this is not platform-wide keyword search.",
+    "The aiotieba package exposes write APIs, but this adapter does not expose or call them.",
+    "Verified anonymously with aiotieba 4.7.1 against the public python forum."
+  ]
+}

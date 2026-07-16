@@ -1,9 +1,10 @@
 [project]
 name = "intelligence-gateway"
-version = "0.8.0"
+version = "0.9.0"
 description = "Unified, explicit-status gateway for Chinese public-information sources."
 requires-python = ">=3.11"
 dependencies = [
+  "aiotieba==4.7.1",
   "fastapi>=0.115,<1",
   "httpx>=0.28,<1",
   "pydantic>=2.10,<3",

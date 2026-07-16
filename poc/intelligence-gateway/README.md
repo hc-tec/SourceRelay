@@ -8,6 +8,7 @@
 - `xiaohongshu`：由 BrowserWing 使用隔离且持久化的 Chrome Profile 执行人工登录后的搜索；
 - `web`：由本机 SearXNG 聚合公开搜索结果，也支持 `site` 限定知乎、新闻站等域名；
 - `hotlist_fetch`：由自托管 NewsNow 按 `platform + feed_id` 获取热榜，完整原始 JSON 保存为本地 artifact；
+- `forum_threads/post_detail`：由 aiotieba 匿名读取指定公开贴吧和已知主题，完整返回保存为本地 artifact；
 - `/fetch`：Trafilatura 抽取公开 HTML/text 页面的正文和元数据；
 - `/jobs/search`：把耗时搜索放入 SQLite 持久化作业。
 - 情报库：搜索结果自动写入 `documents`、`observations` 和 `search_runs`，区分新增、变化和重复出现。
@@ -55,7 +56,7 @@ API 文档：`http://127.0.0.1:8765/docs`
 Invoke-RestMethod http://127.0.0.1:8765/capabilities
 ```
 
-当前 16 个静态能力：15 个已验证，1 个保持声明未验证。已验证：
+当前 18 个静态能力：17 个已验证，1 个保持声明未验证。已验证：
 
 ```text
 bilibili.keyword_search.maxun.v1
@@ -73,6 +74,8 @@ tieba.hotlist_fetch.newsnow.v1
 36kr.hotlist_fetch.newsnow.v1
 thepaper.hotlist_fetch.newsnow.v1
 bilibili.video_detail.yt-dlp.v1
+tieba.forum_threads.aiotieba.v1
+tieba.post_detail.aiotieba.v1
 ```
 
 保持 `declared_unverified`、不会被 Planner 选择：
@@ -233,6 +236,47 @@ manifest 只记录 `proxy_used=true/false`，不记录代理 URL，避免未来�
 | lux | 0.24.1 | 2/2 成功 | 7,201 / 7,332 bytes | 主要为 `streams/caption`，JSON 更小 | 隔离对照，不进入默认链 |
 
 lux 对照使用 `-j`，两次运行均没有在工作目录生成媒体文件。
+
+### 贴吧指定吧与已知主题：aiotieba 匿名只读
+
+`0.9.0` 新增两个不同语义的能力：
+
+```text
+forum_threads -> 输入 forum_name，读取指定公开贴吧的一页主题
+post_detail   -> 输入已知 thread_id，读取该公开主题的一页帖子
+```
+
+调用示例：
+
+```powershell
+$threads = @{
+  platform = "tieba"
+  action = "forum_threads"
+  input = @{ forum_name = "python"; page = 1; limit = 10 }
+  options = @{ persistence = "result_only" }
+} | ConvertTo-Json -Depth 6
+
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/tasks/execute `
+  -ContentType application/json -Body $threads
+```
+
+响应只提供 `thread_id/title/url` 或 `post_id/floor/text_preview/url` 等轻量预览。aiotieba 的嵌套 dataclass 返回会转换为完整 JSON，保存到：
+
+```text
+runtime/artifacts/aiotieba/YYYY-MM-DD/<run-id>/manifest.json
+runtime/artifacts/aiotieba/YYYY-MM-DD/<run-id>/raw.json
+```
+
+安全边界：
+
+- 固定使用空 BDUSS/STOKEN 的匿名 Client，不需要人工登录；
+- Adapter 只调用 `Client.get_threads` 与 `Client.get_posts`，不暴露 aiotieba 的发帖、回复、点赞、关注、删除或吧务 API；
+- `post_detail` 当前固定 `with_comments=false`，不顺带抓取楼中楼；
+- 原始对象序列化只遍历返回 dataclass 的公开字段，显式排除 `err/account/bduss/stoken/cookie/token` 等字段；
+- `persistence=result_only` 也不写 SQLite，durable result 是本地 raw artifact；
+- `AIOTIEBA_PROXY=true` 时从标准 `HTTP_PROXY/HTTPS_PROXY` 环境读取代理，manifest 只记录 `proxy_used` 布尔值，不记录代理 URL。
+
+2026-07-16 固定样本中，aiotieba 4.7.1 匿名读取 `python吧` 得到 10 个主题；再对两个不同公开 tid 读取帖子，分别得到 6 条与 2 条，raw JSON 约 23 KB、9.8 KB 与 3.5 KB。两项 Capability 已提升为 `verified`。
 
 ### 人工登录与持久 Profile
 

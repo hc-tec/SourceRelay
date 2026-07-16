@@ -46,6 +46,8 @@ class CapabilityAction(StrEnum):
     VIDEO_DETAIL = "video_detail"
     ARTICLE_EXTRACT = "article_extract"
     DETAIL_FETCH = "detail_fetch"
+    FORUM_THREADS = "forum_threads"
+    POST_DETAIL = "post_detail"
 
 
 class CapabilityStatus(StrEnum):
@@ -399,6 +401,76 @@ class VideoDetailResponse(BaseModel):
     fetched_at: datetime = Field(default_factory=utc_now)
     duration_ms: int = Field(ge=0)
     video: VideoDetailPreview | None = None
+    artifact: ArtifactReference
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class ForumThreadsRequest(BaseModel):
+    forum_name: str = Field(min_length=1, max_length=100)
+    page: int = Field(default=1, ge=1, le=1000)
+    limit: int = Field(default=30, ge=1, le=30)
+
+    @field_validator("forum_name")
+    @classmethod
+    def clean_forum_name(cls, value: str) -> str:
+        cleaned = " ".join(value.split()).strip()
+        if not cleaned or any(character in cleaned for character in "\\/?#&=\x00"):
+            raise ValueError("forum_name must be a plain Tieba forum name")
+        return cleaned
+
+
+class ForumThreadPreview(BaseModel):
+    thread_id: int = Field(gt=0)
+    title: str = ""
+    url: str
+
+
+class ForumThreadsResponse(BaseModel):
+    ok: bool
+    status: ResultStatus
+    platform: str = "tieba"
+    provider: str
+    provider_version: str
+    forum_name: str
+    page: int = Field(ge=1)
+    fetched_at: datetime = Field(default_factory=utc_now)
+    duration_ms: int = Field(ge=0)
+    item_count: int = Field(ge=0)
+    has_more: bool = False
+    items: list[ForumThreadPreview] = Field(default_factory=list)
+    artifact: ArtifactReference
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class PostDetailRequest(BaseModel):
+    thread_id: int = Field(gt=0)
+    page: int = Field(default=1, ge=1, le=1000)
+    limit: int = Field(default=30, ge=1, le=30)
+
+
+class PostPreview(BaseModel):
+    post_id: int = Field(gt=0)
+    floor: int = Field(ge=0)
+    text_preview: str = ""
+    url: str
+
+
+class PostDetailResponse(BaseModel):
+    ok: bool
+    status: ResultStatus
+    platform: str = "tieba"
+    provider: str
+    provider_version: str
+    thread_id: int = Field(gt=0)
+    thread_title: str = ""
+    page: int = Field(ge=1)
+    fetched_at: datetime = Field(default_factory=utc_now)
+    duration_ms: int = Field(ge=0)
+    item_count: int = Field(ge=0)
+    has_more: bool = False
+    posts: list[PostPreview] = Field(default_factory=list)
     artifact: ArtifactReference
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None

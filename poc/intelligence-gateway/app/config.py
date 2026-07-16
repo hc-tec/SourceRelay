@@ -28,6 +28,7 @@ class Settings:
     searxng_base_url: str
     newsnow_base_url: str
     ytdlp_proxy: str
+    aiotieba_proxy: bool
     runtime_dir: Path
 
     @classmethod
@@ -51,5 +52,7 @@ class Settings:
             searxng_base_url=os.getenv("SEARXNG_BASE_URL", "http://127.0.0.1:8888").rstrip("/"),
             newsnow_base_url=os.getenv("NEWSNOW_BASE_URL", "http://127.0.0.1:4444").rstrip("/"),
             ytdlp_proxy=os.getenv("YTDLP_PROXY", "").strip(),
+            aiotieba_proxy=os.getenv("AIOTIEBA_PROXY", "").strip().lower()
+            in {"1", "true", "yes", "on"},
             runtime_dir=runtime_dir,
         )

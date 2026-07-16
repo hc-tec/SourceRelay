@@ -122,7 +122,8 @@ search_runs = 3
 | 中国政府网详情 | Trafilatura | 22,364 字；即使 Browser recipe 已注册也不抢占 Tier 1 | L3 | 公开 HTML 长文能力稳定 |
 | 公众号外部发现 | SearXNG `site:mp.weixin.qq.com` | 曾返回 5 条标题均为“微信公众平台”、0 条有查询证据 | L1 | 原结果是平台壳页，不是有效文章发现；现已加入壳页质量过滤，仍不能称公众号全局搜索 |
 | B站视频详情 | yt-dlp metadata-only | 两个不同公开 BV URL 真实成功，原始 JSON 约 30 KB；统一 API 返回规范 URL 与 artifact，数据库不变 | L3 | 独立 `video_detail` 已实现；不下载媒体、不读 Cookie，lux `-j` 对同 URL 2/2 成功 |
-| 微博、抖音、快手、贴吧 | 无正式 Capability | 未进入本轮运行目录 | L0 | 不能写成当前支持；候选项目声明不等于数据源已接入 |
+| 贴吧指定吧与已知主题 | aiotieba 4.7.1 匿名只读薄 Adapter | `python吧` 主题列表及两个公开 tid 真实成功；完整 dataclass 结果转 JSON artifact，数据库不变 | L3 | `forum_threads/post_detail` 已实现；只开放 `get_threads/get_posts`，不请求楼中楼，不暴露写操作 |
+| 微博、抖音、快手 | 无正式平台内检索/详情 Capability | 未进入本轮运行目录 | L0 | 不能写成当前支持；候选项目声明不等于数据源已接入 |
 
 ## 4. 本轮公共搜索冗余决策
 
@@ -189,7 +190,7 @@ error = SearXNG returned only generic WeChat platform shell results.
 
 ### P2：再增加新平台
 
-微博、抖音、快手、贴吧按“固定公开样本 -> 认证边界 -> 输出质量 -> 许可证”逐个进入 Draft。没有真实样本和验收证据前，不因 GitHub 项目 README 宣称覆盖就注册为正式 Capability。
+贴吧匿名只读薄 Adapter 已完成；微博、抖音、快手仍按“固定公开样本 -> 认证边界 -> 输出质量 -> 许可证”逐个进入 Draft。没有真实样本和验收证据前，不因 GitHub 项目 README 宣称覆盖就注册为正式 Capability。
 
 ## 7. 给未来 DeepResearch 的稳定接口
 

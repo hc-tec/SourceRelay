@@ -1,0 +1,35 @@
+{
+  "capability_id": "tieba.post_detail.aiotieba.v1",
+  "version": "1.0.0",
+  "platform": "tieba",
+  "action": "post_detail",
+  "status": "verified",
+  "executor": "aiotieba",
+  "adapter": "AiotiebaReadConnector",
+  "source": null,
+  "authentication": {"required": false, "mode": "none"},
+  "input_schema": {
+    "thread_id": {"type": "integer", "required": true, "minimum": 1},
+    "page": {"type": "integer", "default": 1, "minimum": 1, "maximum": 1000},
+    "limit": {"type": "integer", "default": 30, "minimum": 1, "maximum": 30}
+  },
+  "output_schema": "post_detail_response.v1",
+  "scope": {
+    "anonymous": true,
+    "read_only": true,
+    "approved_method": "get_posts",
+    "with_comments": false,
+    "known_public_thread_id_only": true,
+    "raw_first": true,
+    "database_persistence": false
+  },
+  "fallback_ids": [],
+  "verification_input": {"thread_id": 10870410524, "page": 1, "limit": 10},
+  "last_verified_at": "2026-07-16T14:54:00+08:00",
+  "license": "Unlicense",
+  "warnings": [
+    "Only a known public Tieba thread ID can be read; this is not a discovery or search capability.",
+    "Nested comments are intentionally not requested in version 1.",
+    "Verified anonymously with aiotieba 4.7.1 against two distinct public thread IDs."
+  ]
+}

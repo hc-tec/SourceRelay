@@ -11,7 +11,7 @@ poc/intelligence-gateway/  统一 Capability Runtime 与 Draft Capability Factor
 research_*.md              开源项目、中文站点覆盖和架构调研
 ```
 
-核心 Gateway 当前为 `0.8.0`，已经真实验证：
+核心 Gateway 当前为 `0.9.0`，已经真实验证：
 
 - B站关键词搜索：Maxun；
 - 小红书人工登录后的低频搜索：BrowserWing；
@@ -25,6 +25,7 @@ research_*.md              开源项目、中文站点覆盖和架构调研
 - NewsNow 按需热榜：B站三类 feed、微博、知乎、快手、贴吧、36氪和澎湃已通过自托管真实样本；原始 JSON 作为本地 artifact 保留，不写入情报数据库。
 - 抖音 NewsNow feed 当前真实返回 HTTP 500，Capability 保持 `declared_unverified`，不进入 Planner。
 - B站已知公开视频详情：yt-dlp metadata-only 对两个不同 BV URL 真实通过，完整 JSON 落本地 artifact，不下载视频、不使用 Cookie；lux 对同 URL 成功对照。
+- 贴吧指定吧主题与已知帖子详情：aiotieba 4.7.1 匿名只读真实通过；只开放 `get_threads/get_posts`，完整返回落本地 artifact，不把内容拆入数据库。
 
 详细运行方式、API 和安全边界见 [Intelligence Gateway README](poc/intelligence-gateway/README.md)。真实运行证据见 [Gateway evaluation](poc/intelligence-gateway/evaluation.md)。
 
@@ -65,7 +66,7 @@ docker compose config --quiet
 
 ## 下一阶段
 
-`0.8.0` 已经完成 NewsNow `hotlist_fetch` 与 B站 yt-dlp `video_detail` 的 raw-first artifact 闭环。当前阶段继续稳定数据源层，不在 Gateway 内加入长报告、多智能体研究或结论生成：
+`0.9.0` 已经完成 NewsNow `hotlist_fetch`、B站 yt-dlp `video_detail`，以及贴吧 aiotieba `forum_threads/post_detail` 的 raw-first artifact 闭环。当前阶段继续稳定数据源层，不在 Gateway 内加入长报告、多智能体研究或结论生成：
 
 1. 修 B站相关性/规范 URL、小红书实时认证状态、搜狗跳转 URL 和公众号壳页等现有质量问题；
 2. 实现 aiotieba 只读薄 Adapter，只开放公开吧主题和帖子详情；
