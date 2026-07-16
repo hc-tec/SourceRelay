@@ -2,7 +2,7 @@
 
 > 实测日期：2026-07-15  
 > 目录：`poc/intelligence-gateway`  
-> 网关版本：`0.4.1`
+> 网关版本：`0.5.0`
 > 结论：第一版统一读取链路已经形成可运行闭环；适合作为个人低频 POC 和后续 Adapter 演进骨架，尚不能按无人值守生产系统承诺 SLA。
 
 ## 1. 本轮实际交付
@@ -191,6 +191,7 @@ SearXNG 的 `settings.yml` 由初始化脚本在被忽略的 `runtime/` 中生�
 | `xiaohongshu.keyword_search.browserwing.v1` | 小红书关键词搜索 | BrowserWing | 人工登录持久 Profile | SearXNG `site:xiaohongshu.com` |
 | `web.keyword_search.searxng.v1` | 全网/域名限定搜索 | SearXNG | 无 | 无 |
 | `web.article_extract.trafilatura.v1` | 公开文章抽取 | Trafilatura | 无 | 无 |
+| `web.detail_fetch.trafilatura.v1` | 搜索结果公开详情读取 | Trafilatura | 无 | 无 |
 
 每个 Manifest 独立记录：
 
@@ -213,7 +214,7 @@ SearXNG 的 `settings.yml` 由初始化脚本在被忽略的 `runtime/` 中生�
 
 真实验证：
 
-1. 四个能力的依赖检查均为 `ready=true / success`；
+1. 五个静态能力的依赖检查均为 `ready=true / success`；
 2. `zhihu.keyword_search` 在没有站内 Adapter 时自动规划为 `web.keyword_search.searxng.v1 + site:zhihu.com`；
 3. 该降级任务返回 5 条并明确 `degraded=true`；
 4. 使用 `persistence=none` 后，执行前后仍为 8 个 documents、13 条 observations、3 个 search_runs，没有因临时任务落库；
@@ -246,7 +247,7 @@ SearXNG 的 `settings.yml` 由初始化脚本在被忽略的 `runtime/` 中生�
 docker compose config --quiet
 ```
 
-结果：`45 passed`。覆盖：
+结果：`53 passed`。覆盖：
 
 - URL 去跟踪与 fragment；
 - 规范 URL 去重和 rank 重排；
@@ -391,6 +392,34 @@ Bing 第一轮曾失败：全局按钮启发式误点了“Search using voice”
 
 晋升后本地 Catalog 共 8 个能力，其中生成能力为百度、Bing、搜狗和 CSDN。三次二次查询均 `success`、`degraded=false`、未 fallback；使用 `persistence=none` 后情报库仍为 8 documents、13 observations、3 search runs。
 
+### 6.7 0.5.0 搜索到详情组合任务
+
+`0.5.0` 把公开正文读取注册为正式能力：
+
+```text
+web.detail_fetch.trafilatura.v1
+```
+
+它可通过 `/tasks/execute` 单独规划，也可由 `/tasks/search-and-fetch` 在平台搜索后组合调用。详情最多选择 5 个去重后的 HTTP(S) URL；现有下载器会在初始请求和每次重定向前重新做公共 DNS/IP 校验，并保持 5 次重定向、5 MB 和 HTML/text 类型限制。
+
+Bing 真实组合任务：
+
+| 搜索词 | 搜索能力 | 详情能力 | 尝试 | 成功 | 正文长度 |
+|---|---|---|---:|---:|---|
+| 国务院 政府工作报告 | `bing.keyword_search.browserwing_recipe.v1` | `web.detail_fetch.trafilatura.v1` | 3 | 3 | 18,400 / 19,938 / 3,841 |
+
+前三条分别落到中国政府网 2025 政府工作报告、中国政府网 2026 政府工作报告和观察者网页面。整体为 `success`、`partial=false`。
+
+CSDN 真实组合任务体现部分失败语义：
+
+| 搜索词 | 尝试 | 成功 | 失败 | 整体状态 |
+|---|---:|---:|---:|---|
+| FastAPI Agent | 2 | 1 | 1（HTTP 521） | `success / partial=true` |
+
+成功文章抽取到 3,493 字；失败项保留 `source_unavailable` 和源站 HTTP 521，不会导致成功正文丢失。
+
+详情 Manifest 的真实 verify 返回 `200 / success`。服务当前版本 `0.5.0`，本地 Catalog 为 9 个能力：5 个静态能力加 4 个生成搜索能力。所有真实组合调用均使用 `persistence=none`，完成后仍为 8 documents、13 observations、3 search runs。
+
 ## 7. 当前结论
 
 这轮已经证明“万物皆接口”对你的中文个人情报需求有实际用处，但正确实现不是寻找一个万能 CLI，而是建立一个统一控制面，让每类来源使用最合适的获取层：
@@ -413,7 +442,7 @@ Trafilatura         -> 公开文章正文
 
 1. 选择 3 至 5 个结构不同的公开搜索站做 Draft 横向回归，优先验证普通新闻、社区/文档和客户端渲染页面；
 2. 为运行时 recipe 增加定期 `verify`、选择器漂移告警、版本升级和回滚，不允许失效后静默输出无关结果；
-3. 新增 `detail_fetch` Draft 类型，把已经找到的结果 URL 交给公开正文抽取器，形成“发现 -> 详情”组合任务；
+3. 为需要脚本渲染但无需绕过认证的页面增加 `detail_fetch` Draft；公开 HTML 继续优先使用已验证的 Trafilatura 能力；
 4. 再评估 LLM 辅助探索，让模型提出候选选择器和动作，但确定性验证门禁仍不可跳过；
 5. 强登录平台继续使用专用 Adapter 与用户人工 Profile；知乎、微博等优先做小样本对照，不把外部 `site:` 发现误称为站内完整索引；
 6. 在任何商业化或多人服务之前，单独评估 Maxun 与 SearXNG 的 AGPL 网络服务义务，以及平台条款、个人信息、浏览器 URL 安全和内容存储周期。

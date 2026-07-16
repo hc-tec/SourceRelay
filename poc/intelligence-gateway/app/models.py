@@ -43,6 +43,7 @@ class ChangeType(StrEnum):
 class CapabilityAction(StrEnum):
     KEYWORD_SEARCH = "keyword_search"
     ARTICLE_EXTRACT = "article_extract"
+    DETAIL_FETCH = "detail_fetch"
 
 
 class CapabilityStatus(StrEnum):
@@ -349,6 +350,60 @@ class FetchResponse(BaseModel):
     status: ResultStatus
     duration_ms: int = Field(ge=0)
     article: ArticleResult | None = None
+    error: str | None = None
+
+
+class SearchAndFetchRequest(BaseModel):
+    platform: str = Field(min_length=1, max_length=100)
+    query: str = Field(min_length=1, max_length=300)
+    search_limit: int = Field(default=10, ge=1, le=50)
+    detail_limit: int = Field(default=3, ge=1, le=5)
+    include_tables: bool = True
+    options: TaskExecutionOptions = Field(
+        default_factory=lambda: TaskExecutionOptions(persistence="none")
+    )
+
+    @field_validator("query")
+    @classmethod
+    def clean_search_and_fetch_query(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("query must contain non-whitespace characters")
+        return cleaned
+
+    @field_validator("platform")
+    @classmethod
+    def normalize_search_and_fetch_platform(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class DetailFetchItem(BaseModel):
+    rank: int = Field(ge=1)
+    search_item: SearchItem
+    url: str
+    ok: bool
+    status: ResultStatus
+    duration_ms: int = Field(default=0, ge=0)
+    article: ArticleResult | None = None
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class SearchAndFetchResponse(BaseModel):
+    task_id: str
+    ok: bool
+    status: ResultStatus
+    requested_platform: str
+    query: str
+    search: TaskExecutionResponse
+    detail_capability_id: str
+    requested_detail_limit: int = Field(ge=1, le=5)
+    attempted_detail_count: int = Field(ge=0)
+    successful_detail_count: int = Field(ge=0)
+    failed_detail_count: int = Field(ge=0)
+    partial: bool = False
+    items: list[DetailFetchItem] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     error: str | None = None
 
 

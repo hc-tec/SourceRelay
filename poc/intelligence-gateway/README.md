@@ -52,13 +52,14 @@ API 文档：`http://127.0.0.1:8765/docs`
 Invoke-RestMethod http://127.0.0.1:8765/capabilities
 ```
 
-当前四个经过验证的能力：
+当前五个静态、经过验证的能力：
 
 ```text
 bilibili.keyword_search.maxun.v1
 xiaohongshu.keyword_search.browserwing.v1
 web.keyword_search.searxng.v1
 web.article_extract.trafilatura.v1
+web.detail_fetch.trafilatura.v1
 ```
 
 运行时还可以包含已经通过样本验证并晋升的生成能力。本轮真实生成：
@@ -159,6 +160,54 @@ csdn.keyword_search.browserwing_recipe.v1
 Bing 还验证了两个通用边界：入口从 `cn.bing.com` 跳到 `www.bing.com` 后，系统会对导航后的最终 URL 再做公共 DNS/IP 检查，并以这个已检查主机作为 recipe 边界；“Search using voice”等负向提交控件会被降权，当没有可信按钮时优先使用搜索输入所属 form 提交。
 
 三次不同查询均通过统一 `/tasks/execute`、使用 `persistence=none`，没有触发 fallback，也没有改变 documents、observations 和 search_runs 数量。
+
+### 搜索结果到公开详情
+
+`0.5.0` 新增组合接口：
+
+```text
+POST /tasks/search-and-fetch
+```
+
+示例：
+
+```json
+{
+  "platform": "bing",
+  "query": "国务院 政府工作报告",
+  "search_limit": 8,
+  "detail_limit": 3,
+  "include_tables": true,
+  "options": {
+    "allow_fallback": true,
+    "persistence": "none"
+  }
+}
+```
+
+执行链：
+
+```text
+平台 keyword_search Capability
+  -> 规范化并去重结果 URL
+  -> 最多选择 5 条
+  -> web.detail_fetch.trafilatura.v1
+  -> 每次重定向前重新检查 DNS/IP
+  -> 逐条返回正文或显式错误
+```
+
+正文能力也可以独立调用：
+
+```json
+{
+  "platform": "web",
+  "action": "detail_fetch",
+  "input": {"url": "https://www.gov.cn/example/article.html"},
+  "options": {"persistence": "none"}
+}
+```
+
+组合任务不会因为一篇文章失败而丢弃其他成功正文。如果至少一篇成功，整体为 `success`；同时存在失败项时 `partial=true`。如果全部没有可读正文，整体为 `no_results`。第一版详情只处理公开 HTML/text，不执行页面脚本，不使用 BrowserWing 登录态；返回的正文不会由该接口写入情报库。
 
 只规划、不执行：
 

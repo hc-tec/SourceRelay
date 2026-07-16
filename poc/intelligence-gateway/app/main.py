@@ -39,6 +39,9 @@ from .models import (
     SearchRequest,
     SearchResponse,
     SearchItem,
+    SearchAndFetchRequest,
+    SearchAndFetchResponse,
+    DetailFetchItem,
     SourceName,
     ProfileStatus,
     TaskExecutionRequest,
@@ -77,7 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.4.1",
+        version="0.5.0",
         description="Explicit-status API for Bilibili, Xiaohongshu, web discovery and article extraction.",
     )
     app.state.settings = active_settings
@@ -108,13 +111,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.4.1",
+            "version": "0.5.0",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
             "article_extraction": True,
             "capability_runtime": True,
             "capabilities": "/capabilities",
             "capability_drafts": "/capability-drafts",
+            "search_and_fetch": "/tasks/search-and-fetch",
         }
 
     @app.get("/sources")
@@ -173,7 +177,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 },
                 warnings=list(manifest.warnings),
             )
-        if manifest.action == CapabilityAction.ARTICLE_EXTRACT:
+        if manifest.action in {
+            CapabilityAction.ARTICLE_EXTRACT,
+            CapabilityAction.DETAIL_FETCH,
+        }:
             return CapabilityCheckResponse(
                 capability_id=manifest.capability_id,
                 ready=True,
@@ -602,7 +609,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if persistence == "result_only":
                 return await execute_search(search_request)
             return await registry.search(search_request)
-        if manifest.action == CapabilityAction.ARTICLE_EXTRACT:
+        if manifest.action in {
+            CapabilityAction.ARTICLE_EXTRACT,
+            CapabilityAction.DETAIL_FETCH,
+        }:
             fetch_request = FetchRequest.model_validate(
                 {
                     "url": task_input.get("url"),
@@ -730,6 +740,135 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 },
             )
 
+    @app.post("/tasks/search-and-fetch", response_model=SearchAndFetchResponse)
+    async def search_and_fetch(request: SearchAndFetchRequest):
+        task_id = str(uuid.uuid4())
+        try:
+            search_task = await run_capability_task(
+                TaskExecutionRequest(
+                    platform=request.platform,
+                    action=CapabilityAction.KEYWORD_SEARCH,
+                    input={"query": request.query, "limit": request.search_limit},
+                    options=request.options,
+                )
+            )
+        except GatewayError as exc:
+            return JSONResponse(
+                status_code=exc.http_status,
+                content={
+                    **_error_body(exc),
+                    "task_id": task_id,
+                    "requested_platform": request.platform,
+                    "query": request.query,
+                    "operation": "search_and_fetch",
+                },
+            )
+
+        selected_items: list[SearchItem] = []
+        seen_urls: set[str] = set()
+        for payload in (search_task.result or {}).get("items", []):
+            try:
+                search_item = SearchItem.model_validate(payload)
+            except ValidationError:
+                continue
+            url = canonicalize_url(search_item.url)
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            search_item.url = url
+            selected_items.append(search_item)
+            if len(selected_items) >= request.detail_limit:
+                break
+
+        detail_manifest = catalog.get("web.detail_fetch.trafilatura.v1")
+        details: list[DetailFetchItem] = []
+        for search_item in selected_items:
+            fetch_request = FetchRequest(
+                url=search_item.url, include_tables=request.include_tables
+            )
+            try:
+                fetched = await execute_manifest(
+                    detail_manifest,
+                    fetch_request.model_dump(mode="json"),
+                    "none",
+                )
+            except GatewayError as exc:
+                details.append(
+                    DetailFetchItem(
+                        rank=search_item.rank,
+                        search_item=search_item,
+                        url=search_item.url,
+                        ok=False,
+                        status=exc.status,
+                        warnings=exc.warnings,
+                        error=str(exc),
+                    )
+                )
+                continue
+            except Exception as exc:
+                details.append(
+                    DetailFetchItem(
+                        rank=search_item.rank,
+                        search_item=search_item,
+                        url=search_item.url,
+                        ok=False,
+                        status=ResultStatus.ERROR,
+                        error=f"Detail fetch failed with {exc.__class__.__name__}.",
+                    )
+                )
+                continue
+            details.append(
+                DetailFetchItem(
+                    rank=search_item.rank,
+                    search_item=search_item,
+                    url=search_item.url,
+                    ok=fetched.ok,
+                    status=fetched.status,
+                    duration_ms=fetched.duration_ms,
+                    article=fetched.article,
+                    warnings=(fetched.article.warnings if fetched.article else []),
+                    error=fetched.error,
+                )
+            )
+
+        successful = sum(item.ok for item in details)
+        failed = len(details) - successful
+        warnings = [
+            "Detail hydration is limited to public HTML/text and at most five selected search results.",
+            "Each redirect is revalidated against public-network URL rules before download.",
+            "Detail articles are returned in the response but are not persisted by this endpoint.",
+        ]
+        if len(selected_items) < request.detail_limit:
+            warnings.append(
+                f"Only {len(selected_items)} unique HTTP(S) search-result URLs were available for detail fetching."
+            )
+        if failed:
+            warnings.append(
+                f"{failed} selected search result(s) did not produce readable public article text."
+            )
+        ok = successful > 0
+        return SearchAndFetchResponse(
+            task_id=task_id,
+            ok=ok,
+            status=ResultStatus.SUCCESS if ok else ResultStatus.NO_RESULTS,
+            requested_platform=request.platform,
+            query=request.query,
+            search=search_task,
+            detail_capability_id=detail_manifest.capability_id,
+            requested_detail_limit=request.detail_limit,
+            attempted_detail_count=len(details),
+            successful_detail_count=successful,
+            failed_detail_count=failed,
+            partial=failed > 0 or len(selected_items) < request.detail_limit,
+            items=details,
+            warnings=warnings,
+            error=(
+                None
+                if ok
+                else "No selected search result produced readable public article text."
+            ),
+        )
+
     @app.post("/capabilities/{capability_id}/verify", response_model=TaskExecutionResponse)
     async def verify_capability(capability_id: str):
         try:
@@ -797,13 +936,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 ),
             )
 
+        result_warnings = list(getattr(result, "warnings", []) or [])
+        if isinstance(result, FetchResponse) and result.article is not None:
+            result_warnings.extend(result.article.warnings)
         succeeded = result.ok and result.status == ResultStatus.SUCCESS
         updated = catalog.record_verification(
             capability_id,
             succeeded=succeeded,
             result_status=result.status,
             error=result.error,
-            warnings=result.warnings,
+            warnings=result_warnings,
         )
         reliability_warnings: list[str] = []
         if catalog.is_runtime_mutable(capability_id):
@@ -828,7 +970,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             result=result.model_dump(mode="json"),
             warnings=list(
                 dict.fromkeys(
-                    [*manifest.warnings, *result.warnings, *reliability_warnings]
+                    [*manifest.warnings, *result_warnings, *reliability_warnings]
                 )
             ),
             error=result.error,

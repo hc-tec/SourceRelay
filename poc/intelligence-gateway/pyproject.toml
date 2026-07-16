@@ -1,6 +1,6 @@
 [project]
 name = "intelligence-gateway"
-version = "0.4.1"
+version = "0.5.0"
 description = "Unified, explicit-status gateway for Chinese public-information sources."
 requires-python = ">=3.11"
 dependencies = [

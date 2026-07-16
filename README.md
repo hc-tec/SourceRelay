@@ -11,7 +11,7 @@ poc/intelligence-gateway/  统一 Capability Runtime 与 Draft Capability Factor
 research_*.md              开源项目、中文站点覆盖和架构调研
 ```
 
-核心 Gateway 当前为 `0.4.1`，已经真实验证：
+核心 Gateway 当前为 `0.5.0`，已经真实验证：
 
 - B站关键词搜索：Maxun；
 - 小红书人工登录后的低频搜索：BrowserWing；
@@ -19,6 +19,7 @@ research_*.md              开源项目、中文站点覆盖和架构调研
 - 公开 HTML/text 正文抽取：Trafilatura；
 - 未知公开搜索网站：Draft -> inspect -> validate -> recipe -> promote -> execute；
 - 百度、Bing、搜狗和 CSDN 公开搜索已通过能力生成闭环与不同查询回归。
+- `keyword_search -> detail_fetch` 组合任务可按需读取公开正文，默认不落库。
 
 详细运行方式、API 和安全边界见 [Intelligence Gateway README](poc/intelligence-gateway/README.md)。真实运行证据见 [Gateway evaluation](poc/intelligence-gateway/evaluation.md)。
 
@@ -53,13 +54,13 @@ cd D:\AIProject\inteligence\poc\intelligence-gateway
 docker compose config --quiet
 ```
 
-当前基线：`46 passed`。
+当前基线：`53 passed`。
 
 ## 下一阶段
 
-`0.4.1` 已经完成生成 recipe 的连续失败、自动阻止、fallback 与恢复验证。下一条主线仍是能力可靠性，而不是增加持续采集量：
+`0.5.0` 已经完成公开搜索结果到安全正文读取的组合闭环。下一条主线仍是能力可靠性，而不是增加持续采集量：
 
 1. 用结构不同的公开搜索站回归 Draft Factory；
 2. 给可靠性状态增加人工审计记录和 recipe 版本回滚；
-3. 增加 `detail_fetch` Draft，把“发现链接”和“读取详情”组合起来；
+3. 增加面向脚本渲染页的 `detail_fetch` Draft，公开 HTML 继续优先走 Trafilatura；
 4. LLM 只负责提出探索候选，不能跳过确定性样本验证门禁。

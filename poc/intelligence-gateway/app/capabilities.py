@@ -256,8 +256,16 @@ class CapabilityCatalog:
                     ],
                 )
 
-        if request.action == CapabilityAction.ARTICLE_EXTRACT and request.input.get("url"):
-            generic = self.get("web.article_extract.trafilatura.v1")
+        if request.action in {
+            CapabilityAction.ARTICLE_EXTRACT,
+            CapabilityAction.DETAIL_FETCH,
+        } and request.input.get("url"):
+            capability_id = (
+                "web.detail_fetch.trafilatura.v1"
+                if request.action == CapabilityAction.DETAIL_FETCH
+                else "web.article_extract.trafilatura.v1"
+            )
+            generic = self.get(capability_id)
             return TaskPlanResponse(
                 available=True,
                 requested_platform=request.platform,
