@@ -55,7 +55,7 @@ API 文档：`http://127.0.0.1:8765/docs`
 Invoke-RestMethod http://127.0.0.1:8765/capabilities
 ```
 
-当前 15 个静态能力：14 个已验证，1 个保持声明未验证。已验证：
+当前 16 个静态能力：15 个已验证，1 个保持声明未验证。已验证：
 
 ```text
 bilibili.keyword_search.maxun.v1
@@ -72,6 +72,7 @@ kuaishou.hotlist_fetch.newsnow.v1
 tieba.hotlist_fetch.newsnow.v1
 36kr.hotlist_fetch.newsnow.v1
 thepaper.hotlist_fetch.newsnow.v1
+bilibili.video_detail.yt-dlp.v1
 ```
 
 保持 `declared_unverified`、不会被 Planner 选择：
@@ -156,6 +157,107 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/tasks/execute `
 - 原始 artifact 不保存请求头、Cookie、Token、密码或验证码。
 
 2026-07-16 自托管固定样本中，B站三个 feed、微博、知乎、快手、贴吧、36氪和澎湃成功；抖音上游请求在 NewsNow 中返回 HTTP 500，所以仍为 `declared_unverified`。公共实例受 Cloudflare 403 限制，正式能力使用自托管实例。
+
+### B站已知视频详情：yt-dlp metadata-only
+
+`0.8.0` 新增 `video_detail`，当前只接受已知、公开、规范的 B站视频 URL：
+
+```text
+https://www.bilibili.com/video/BV...
+https://www.bilibili.com/video/BV...?p=2
+```
+
+不接受短链、HTTP、播放列表、非视频路径、带凭据 URL 或除数字 `p` 以外的查询参数。调用示例：
+
+```powershell
+$body = @{
+  platform = "bilibili"
+  action = "video_detail"
+  input = @{
+    url = "https://www.bilibili.com/video/BV1XTNR69Etx"
+  }
+  options = @{ persistence = "none" }
+} | ConvertTo-Json -Depth 6
+
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/tasks/execute `
+  -ContentType application/json -Body $body
+```
+
+当次预览只返回：
+
+```json
+{
+  "platform": "bilibili",
+  "provider": "yt-dlp",
+  "provider_version": "2026.7.4",
+  "video": {
+    "external_id": "BV1XTNR69Etx",
+    "title": "...",
+    "url": "https://www.bilibili.com/video/BV1XTNR69Etx"
+  },
+  "artifact": {
+    "manifest_file": "artifacts/yt-dlp/2026-07-16/<run-id>/manifest.json",
+    "raw_file": "artifacts/yt-dlp/2026-07-16/<run-id>/raw.json",
+    "sha256": "..."
+  }
+}
+```
+
+`raw.json` 保留 yt-dlp 完整元数据，真实样本已确认包含 `id/title/description/uploader/uploader_id/timestamp/duration/view_count/like_count/comment_count/thumbnail/subtitles/formats`。Gateway 不把这些平台字段拆入 SQLite，后续由 AI 按需读取原始 JSON。`formats` 可能包含有时效的公开媒体分发 URL，因此 artifact 必须保持本地、被 Git 忽略，后续应配置保留周期。
+
+固定安全参数：
+
+```text
+--ignore-config
+--no-config-locations
+--no-playlist
+--skip-download
+--dump-single-json
+```
+
+因此能力不读取用户全局 yt-dlp 配置，不传 Cookie，不写字幕/封面/视频文件，不处理播放列表。元数据显示 `needs_auth/premium_only/subscriber_only` 时返回认证边界，不自动提供 Cookie 或绕过付费限制。失败时 stderr 不保存到 artifact 或 API，避免工具诊断意外携带敏感信息。
+
+如果当前网络需要代理，可在本地 `.env` 中设置：
+
+```dotenv
+YTDLP_PROXY=http://127.0.0.1:7897
+```
+
+manifest 只记录 `proxy_used=true/false`，不记录代理 URL，避免未来带凭据的代理地址被落盘。
+
+真实对照：
+
+| 工具 | 版本 | 两个 BV URL | JSON 大小 | 主要特点 | 默认角色 |
+|---|---:|---:|---:|---|---|
+| yt-dlp | 2026.7.4 | 2/2 成功 | 30,803 / 31,217 bytes | 作者、简介、时间、统计、字幕、formats 更完整 | 正式 `video_detail` |
+| lux | 0.24.1 | 2/2 成功 | 7,201 / 7,332 bytes | 主要为 `streams/caption`，JSON 更小 | 隔离对照，不进入默认链 |
+
+lux 对照使用 `-j`，两次运行均没有在工作目录生成媒体文件。
+
+### 人工登录与持久 Profile
+
+当公开路径确实不足、且平台允许用户本人在浏览器中访问时，Gateway 可以使用 BrowserWing 的隔离持久 Profile。当前配置将 Chrome `user_data_dir` 固定在被 Git 忽略的 POC `runtime/chrome-user-data`，BrowserWing 停止和重启后仍复用这个目录。小红书已验证过 Profile 重启复用。
+
+边界：
+
+- 用户只在可见 Chrome 窗口中人工登录；
+- Gateway 不索取、导出、返回或记录 Cookie、Token、密码、验证码和二维码；
+- 持久的是 Chrome Profile 中由浏览器自行管理的会话，不是 Gateway 凭据表；
+- Profile 目录存在只能说明本地依赖存在，不能证明登录仍有效；
+- 平台仍可主动让会话过期、触发验证或要求重新登录，因此 `authentication_state` 默认为 `unknown_until_search`；
+- 每个需登录的 Capability 都必须用固定样本真实执行才能判断当前认证状态；
+- 不把 BrowserWing Profile 直接转成 yt-dlp `--cookies-from-browser`。如果 B站未来确实需要登录内容，应新建独立、人工授权、只读的 B站 Profile Adapter，不改变当前无登录 yt-dlp Capability 的安全含义。
+
+当前已有的可见登录入口支持小红书、知乎和微博：
+
+```powershell
+cd D:\AIProject\inteligence\poc\browserwing
+.\scripts\start-login-session.ps1 -Platform xiaohongshu
+.\scripts\start-login-session.ps1 -Platform zhihu
+.\scripts\start-login-session.ps1 -Platform weibo
+```
+
+只有当后续固定样本明确返回 `authentication_required`时，才需要用户协助重新登录。
 
 ### 未知公开网站生成按需搜索或详情能力
 
@@ -367,7 +469,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/tasks/execute `
 - `none`：只在当前请求返回结果，不写入 documents、observations 或 search_runs；
 - `result_only`：把结果和运行记录写入当前情报库。
 
-两种模式下，需要本地执行证据的 Connector 仍可写入被 Git 忽略的 raw artifact。对 `hotlist_fetch`，数据库模型不适用，即使传入 `result_only` 也只保存原始 artifact，不写入 documents、observations 或 search_runs。
+两种模式下，需要本地执行证据的 Connector 仍可写入被 Git 忽略的 raw artifact。对 `hotlist_fetch` 和 `video_detail`，数据库模型不适用，即使传入 `result_only` 也只保存原始 artifact，不写入 documents、observations 或 search_runs。
 
 检查能力依赖，但不执行真实搜索：
 
@@ -495,4 +597,4 @@ Invoke-RestMethod "http://127.0.0.1:8765/clusters?min_documents=2&limit=20"
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-当前基线：`82 passed`。
+当前基线：`89 passed`。

@@ -10,10 +10,11 @@ from app.models import (
 def test_catalog_loads_versioned_manifests() -> None:
     catalog = CapabilityCatalog()
     capabilities = catalog.list()
-    assert len(capabilities) == 15
+    assert len(capabilities) == 16
     assert {item.capability_id for item in capabilities} == {
         "36kr.hotlist_fetch.newsnow.v1",
         "bilibili.keyword_search.maxun.v1",
+        "bilibili.video_detail.yt-dlp.v1",
         "bilibili.hotlist_fetch.newsnow-hot-search.v1",
         "bilibili.hotlist_fetch.newsnow-hot-video.v1",
         "bilibili.hotlist_fetch.newsnow-ranking.v1",
@@ -78,6 +79,22 @@ def test_hotlist_plan_requires_feed_id_instead_of_guessing_a_platform_default() 
     assert plan.warnings == [
         "feed_id is required to select an exact hotlist capability."
     ]
+
+
+def test_verified_video_detail_enters_planner_after_live_sample() -> None:
+    catalog = CapabilityCatalog()
+    capability = catalog.get("bilibili.video_detail.yt-dlp.v1")
+    plan = catalog.plan(
+        TaskPlanRequest(
+            platform="bilibili",
+            action=CapabilityAction.VIDEO_DETAIL,
+            input={"url": "https://www.bilibili.com/video/BV1XTNR69Etx"},
+        )
+    )
+
+    assert capability.status == CapabilityStatus.VERIFIED
+    assert plan.available is True
+    assert plan.selected_capability.capability_id == capability.capability_id
 
 
 def test_direct_platform_plan_includes_safe_fallback() -> None:

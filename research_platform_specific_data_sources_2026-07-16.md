@@ -143,6 +143,8 @@ video_detail   -> yt-dlp metadata-only，lux 对照
 字幕/媒体      -> 以后单列动作与用户授权，不进入默认详情
 ```
 
+2026-07-16 后续实施状态：Gateway `0.8.0` 已实现 `bilibili.video_detail.yt-dlp.v1`。yt-dlp 2026.7.4 对两个不同公开 BV URL 均成功，完整原始 JSON 约 30 KB，存在作者、简介、时间、时长、播放/点赞/评论、字幕和 formats 等字段；这些字段只保留在 raw artifact，不拆入数据库。lux 0.24.1 `-j` 对同两个 URL 也成功且没有生成媒体文件，但 JSON 主要为 streams/caption，因此保留为对照而不是默认 provider。
+
 ### 3.5 知乎
 
 本轮 GitHub HTML 搜索按最近更新排序，没有发现一个同时满足“维护活跃、许可清晰、站内关键词搜索且无需绕过认证”的专用仓库。搜索结果多数是个人小爬虫、课程项目或小说下载器。

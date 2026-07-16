@@ -19,12 +19,18 @@ class GatewayError(Exception):
 
 
 class AuthenticationRequiredError(GatewayError):
-    def __init__(self, message: str, warnings: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        warnings: list[str] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(
             message=message,
             status=ResultStatus.AUTHENTICATION_REQUIRED,
             http_status=424,
             warnings=warnings or [],
+            context=context or {},
         )
 
 

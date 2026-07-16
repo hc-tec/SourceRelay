@@ -1,0 +1,38 @@
+{
+  "capability_id": "bilibili.video_detail.yt-dlp.v1",
+  "version": "1.0.0",
+  "platform": "bilibili",
+  "action": "video_detail",
+  "status": "verified",
+  "executor": "yt-dlp",
+  "adapter": "YtDlpBilibiliVideoConnector",
+  "source": null,
+  "authentication": {"required": false, "mode": "none"},
+  "input_schema": {
+    "url": {
+      "type": "string",
+      "required": true,
+      "format": "uri",
+      "pattern": "^https://www\\.bilibili\\.com/video/(BV[0-9A-Za-z]+|av[0-9]+)"
+    }
+  },
+  "output_schema": "video_detail_response.v1",
+  "scope": {
+    "known_public_url_only": true,
+    "metadata_only": true,
+    "media_download": false,
+    "cookies": false,
+    "global_config_ignored": true,
+    "raw_first": true
+  },
+  "fallback_ids": [],
+  "verification_input": {
+    "url": "https://www.bilibili.com/video/BV1XTNR69Etx"
+  },
+  "last_verified_at": "2026-07-16T11:43:15+08:00",
+  "license": "Unlicense",
+  "warnings": [
+    "Verified with yt-dlp 2026.07.04 against two distinct public Bilibili BV URLs.",
+    "Only metadata is requested; media, cookies, login and paid content are outside this capability."
+  ]
+}

@@ -244,4 +244,4 @@ B站负面样本说明本 ADR 的 `detail_fetch` 第一版实际是长文详情�
 
 知乎首次候选选择了包含推荐内容的 `main[role="main"]`。加入多主标题和嵌套文章聚合惩罚后，候选收敛到单篇 `article.Post-Main.Post-NormalMain`；Draft 重新验证后再次 promote 会更新 recipe、清零旧失败状态并递增 manifest patch 版本，本次从 `1.0.0` 更新到 `1.0.1`。
 
-当前完整 Gateway 自动化回归为 `82 passed`；其中详情能力继续覆盖 Draft 模型与 SQLite 兼容、正文容器验证、认证门禁、主机越界、selector 漂移、direct-first、无 recipe/host 不匹配时禁止启动浏览器，以及默认不持久化。
+当前完整 Gateway 自动化回归为 `89 passed`；其中详情能力继续覆盖 Draft 模型与 SQLite 兼容、正文容器验证、认证门禁、主机越界、selector 漂移、direct-first、无 recipe/host 不匹配时禁止启动浏览器，以及默认不持久化。

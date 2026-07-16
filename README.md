@@ -11,7 +11,7 @@ poc/intelligence-gateway/  统一 Capability Runtime 与 Draft Capability Factor
 research_*.md              开源项目、中文站点覆盖和架构调研
 ```
 
-核心 Gateway 当前为 `0.7.0`，已经真实验证：
+核心 Gateway 当前为 `0.8.0`，已经真实验证：
 
 - B站关键词搜索：Maxun；
 - 小红书人工登录后的低频搜索：BrowserWing；
@@ -24,6 +24,7 @@ research_*.md              开源项目、中文站点覆盖和架构调研
 - 知乎专栏真实闭环中，Trafilatura 收到 HTTP 403 后，BrowserWing recipe 成功读取两篇不同文章的 3,358 / 1,916 字精确正文。
 - NewsNow 按需热榜：B站三类 feed、微博、知乎、快手、贴吧、36氪和澎湃已通过自托管真实样本；原始 JSON 作为本地 artifact 保留，不写入情报数据库。
 - 抖音 NewsNow feed 当前真实返回 HTTP 500，Capability 保持 `declared_unverified`，不进入 Planner。
+- B站已知公开视频详情：yt-dlp metadata-only 对两个不同 BV URL 真实通过，完整 JSON 落本地 artifact，不下载视频、不使用 Cookie；lux 对同 URL 成功对照。
 
 详细运行方式、API 和安全边界见 [Intelligence Gateway README](poc/intelligence-gateway/README.md)。真实运行证据见 [Gateway evaluation](poc/intelligence-gateway/evaluation.md)。
 
@@ -60,17 +61,16 @@ cd D:\AIProject\inteligence\poc\intelligence-gateway
 docker compose config --quiet
 ```
 
-当前基线：`82 passed`。
+当前基线：`89 passed`。
 
 ## 下一阶段
 
-`0.7.0` 已经完成 NewsNow `hotlist_fetch` 与 raw-first artifact 闭环。当前阶段继续稳定数据源层，不在 Gateway 内加入长报告、多智能体研究或结论生成：
+`0.8.0` 已经完成 NewsNow `hotlist_fetch` 与 B站 yt-dlp `video_detail` 的 raw-first artifact 闭环。当前阶段继续稳定数据源层，不在 Gateway 内加入长报告、多智能体研究或结论生成：
 
 1. 修 B站相关性/规范 URL、小红书实时认证状态、搜狗跳转 URL 和公众号壳页等现有质量问题；
-2. 实现 B站 `video_detail`：先用 yt-dlp metadata-only，完整原始 JSON 落本地 artifact，lux 做同 URL 对照；
-3. 实现 aiotieba 只读薄 Adapter，只开放公开吧主题和帖子详情；
-4. 对 WeRSS 与 WeWe RSS 做已知公众号历史小样本，只选一个合适的按需数据源，不扩写成全公众号搜索；
-5. DailyHotApi 保留为 NewsNow 对照候选，本地真实样本和失败契约未通过前不进入自动 fallback；
-6. 数据层达到稳定验收条件后，再调研 DeerFlow、天工系 DeepResearch 等仓库作为上层分析消费者。
+2. 实现 aiotieba 只读薄 Adapter，只开放公开吧主题和帖子详情；
+3. 对 WeRSS 与 WeWe RSS 做已知公众号历史小样本，只选一个合适的按需数据源，不扩写成全公众号搜索；
+4. DailyHotApi 保留为 NewsNow 对照候选，本地真实样本和失败契约未通过前不进入自动 fallback；
+5. 数据层达到稳定验收条件后，再调研 DeerFlow、天工系 DeepResearch 等仓库作为上层分析消费者。
 
 数据源分层、就绪等级和原始文件优先的保存边界见 [数据源层 ADR](docs/design/data-source-layer.md)。不同平台、不同动作的 GitHub 仓库选型与 NewsNow/DailyHotApi 接口级核验见 [平台专用数据源调研](research_platform_specific_data_sources_2026-07-16.md)。

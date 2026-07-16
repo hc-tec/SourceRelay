@@ -43,6 +43,7 @@ class ChangeType(StrEnum):
 class CapabilityAction(StrEnum):
     KEYWORD_SEARCH = "keyword_search"
     HOTLIST_FETCH = "hotlist_fetch"
+    VIDEO_DETAIL = "video_detail"
     ARTICLE_EXTRACT = "article_extract"
     DETAIL_FETCH = "detail_fetch"
 
@@ -374,6 +375,30 @@ class HotlistResponse(BaseModel):
     duration_ms: int = Field(ge=0)
     item_count: int = Field(ge=0)
     items: list[HotlistPreviewItem] = Field(default_factory=list)
+    artifact: ArtifactReference
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class VideoDetailRequest(BaseModel):
+    url: HttpUrl
+
+
+class VideoDetailPreview(BaseModel):
+    external_id: str = ""
+    title: str
+    url: str
+
+
+class VideoDetailResponse(BaseModel):
+    ok: bool
+    status: ResultStatus
+    platform: str
+    provider: str
+    provider_version: str
+    fetched_at: datetime = Field(default_factory=utc_now)
+    duration_ms: int = Field(ge=0)
+    video: VideoDetailPreview | None = None
     artifact: ArtifactReference
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None

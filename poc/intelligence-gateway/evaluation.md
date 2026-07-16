@@ -2,7 +2,7 @@
 
 > 实测日期：2026-07-15 至 2026-07-16
 > 目录：`poc/intelligence-gateway`
-> 网关版本：`0.7.0`
+> 网关版本：`0.8.0`
 > 结论：第一版统一读取链路已经形成可运行闭环；适合作为个人低频 POC 和后续 Adapter 演进骨架，尚不能按无人值守生产系统承诺 SLA。
 
 ## 1. 本轮实际交付
@@ -248,7 +248,7 @@ SearXNG 的 `settings.yml` 由初始化脚本在被忽略的 `runtime/` 中生�
 docker compose config --quiet
 ```
 
-结果：`82 passed`。覆盖：
+结果：`89 passed`。覆盖：
 
 - URL 去跟踪与 fragment；
 - 规范 URL 去重和 rank 重排；
@@ -520,6 +520,46 @@ runtime/artifacts/newsnow/YYYY-MM-DD/<run-id>/
 
 最终静态状态：B站、微博、知乎、快手、贴吧、36氪和澎湃为 `verified`；抖音仍为 `declared_unverified`，Planner 明确返回不可用，不会因为同一个 NewsNow 仓库的其他 feed 成功就被一起标记为已支持。B站三个 feed 也分别注册为三个 Capability，Planner 按 `feed_id` 精确选择，某一榜单漂移不会污染其他榜单的验证状态。
 
+### 6.11 0.8.0 B站 video_detail 与 yt-dlp/lux 对照
+
+`0.8.0` 增加 `bilibili.video_detail.yt-dlp.v1`，只处理已知规范 `https://www.bilibili.com/video/BV...` 公开 URL。yt-dlp 以 Python 依赖 `2026.7.4` 安装，执行时固定使用：
+
+```text
+--ignore-config
+--no-config-locations
+--no-playlist
+--skip-download
+--dump-single-json
+```
+
+这些参数保证不加载用户全局 yt-dlp 配置、不读 Cookie、不扩展播放列表、不写媒体/封面/字幕文件。如果配置 `YTDLP_PROXY`，artifact 只保存 `proxy_used=true`，不保存可能带凭据的代理 URL。stderr 同样不写入 artifact 或 API。
+
+两个不同 NewsNow 公开 BV URL 真实结果：
+
+| URL | yt-dlp | 标题 | 原始 JSON | 耗时 |
+|---|---|---|---:|---:|
+| `BV1XTNR69Etx` | success | 路边摊吃盒饭 吃成摊主 | 31,217 bytes | 2,453 ms |
+| `BV1gVN16fEs5` | success | 如何正确安慰兄弟 | 30,803 bytes | 约 3 s |
+
+原始 JSON 中实际存在：
+
+```text
+id, title, description, uploader, uploader_id,
+timestamp, duration, view_count, like_count, comment_count,
+thumbnail, subtitles, formats
+```
+
+Gateway 预览只返回 `external_id/title/url`，其他字段保持在 `runtime/artifacts/yt-dlp/.../raw.json`，没有建立视频字段数据表。统一 `/tasks/execute` 真实返回 HTTP 200，Planner 精确选择 `bilibili.video_detail.yt-dlp.v1`；即使传入 `persistence=result_only`，数据库统计仍完全不变。
+
+lux 使用官方 Windows x86_64 Release `0.24.1` 做隔离对照：
+
+| URL | lux `-j` | 标题是否与 yt-dlp 一致 | JSON 大小 | 生成媒体文件 |
+|---|---|---|---:|---:|
+| `BV1XTNR69Etx` | success | 是 | 7,332 bytes | 0 |
+| `BV1gVN16fEs5` | success | 是 | 7,201 bytes | 0 |
+
+lux JSON 主要是 `url/site/title/type/streams/caption/err`，比 yt-dlp 更小，但不适合取代当前需要的完整原始元数据。因此 yt-dlp 是正式 provider，lux 保留为已验证的手工故障对照，不进入默认 fallback。
+
 ## 7. 当前结论
 
 这轮已经证明“万物皆接口”对你的中文个人情报需求有实际用处，但正确实现不是寻找一个万能 CLI，而是建立一个统一控制面，让每类来源使用最合适的获取层：
@@ -532,6 +572,7 @@ BrowserWing Detail  -> 已验证主机的公开渲染正文 fallback
 SearXNG             -> 全网和域名限定发现
 Trafilatura         -> 公开文章正文
 NewsNow             -> 多平台独立 feed 热榜 + 本地原始 artifact
+yt-dlp              -> B站已知公开视频元数据 + 本地原始 artifact
         ↓
 统一 Gateway -> 明确状态、最小溯源、原始文件、可选 SQLite 索引
 ```

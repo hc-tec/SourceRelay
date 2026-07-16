@@ -9,6 +9,7 @@ from .connectors.browserwing import BrowserWingXiaohongshuConnector
 from .connectors.maxun import MaxunBilibiliConnector
 from .connectors.newsnow import NewsNowHotlistConnector
 from .connectors.searxng import SearXNGConnector
+from .connectors.ytdlp import YtDlpBilibiliVideoConnector
 from .models import (
     FetchRequest,
     FetchResponse,
@@ -18,6 +19,8 @@ from .models import (
     SearchResponse,
     SourceHealth,
     SourceName,
+    VideoDetailRequest,
+    VideoDetailResponse,
 )
 from .storage import GatewayStore
 
@@ -31,6 +34,7 @@ class ConnectorRegistry:
         }
         self.article = ArticleExtractor(settings)
         self.newsnow = NewsNowHotlistConnector(settings)
+        self.ytdlp = YtDlpBilibiliVideoConnector(settings)
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         return await self.connectors[request.source].search(request)
@@ -45,6 +49,14 @@ class ConnectorRegistry:
         capability_id: str,
     ) -> HotlistResponse:
         return await self.newsnow.fetch(request, capability_id=capability_id)
+
+    async def video_detail(
+        self,
+        request: VideoDetailRequest,
+        *,
+        capability_id: str,
+    ) -> VideoDetailResponse:
+        return await self.ytdlp.fetch(request, capability_id=capability_id)
 
     async def health(self) -> list[SourceHealth]:
         return list(await asyncio.gather(*(connector.health() for connector in self.connectors.values())))
@@ -63,5 +75,13 @@ class ConnectorRegistry:
             {
                 "provider": self.newsnow.provider,
                 "collector": self.newsnow.collector,
+            }
+        ]
+
+    def video_detail_providers(self) -> list[dict[str, str]]:
+        return [
+            {
+                "provider": self.ytdlp.provider,
+                "collector": self.ytdlp.collector,
             }
         ]

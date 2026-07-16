@@ -65,6 +65,12 @@ sha256
 
 安全边界不变：artifact 不保存请求头、Cookie、Token、密码或验证码；人工 Profile 与原始内容目录仍保持隔离。
 
+### 1.2 登录持久化只使用隔离浏览器 Profile
+
+当公开无登录能力不足时，用户可以在 BrowserWing 的可见 Chrome 窗口中人工登录。Chrome `user_data_dir` 固定位于被 Git 忽略的隔离 `runtime/chrome-user-data`，因此同一机器、同一 OS 用户和同一 Profile 目录下可以跨 BrowserWing 重启复用会话。
+
+但 Profile 目录存在不等于当前仍已登录。平台可以使会话过期或要求再验证，所以认证状态必须通过真实固定样本判断，不能通过文件存在性推断。Gateway 不导出 Profile Cookie，也不把它转交给 yt-dlp 等命令行工具；需登录的平台必须拥有独立的 `manual_persistent_profile` 只读 Capability。
+
 ## 2. “数据源可用”的定义
 
 健康检查通过不等于数据源可用。一个来源至少要分开报告以下维度：
@@ -115,7 +121,7 @@ search_runs = 3
 | 政务/新闻搜索 | SearXNG `site:gov.cn` | `人工智能` 返回 5 条，5 条均有查询词证据，覆盖 gov.cn、网信办、教育部、发改委 | L3 | 公开政务发现和长文读取当前质量较好 |
 | 中国政府网详情 | Trafilatura | 22,364 字；即使 Browser recipe 已注册也不抢占 Tier 1 | L3 | 公开 HTML 长文能力稳定 |
 | 公众号外部发现 | SearXNG `site:mp.weixin.qq.com` | 曾返回 5 条标题均为“微信公众平台”、0 条有查询证据 | L1 | 原结果是平台壳页，不是有效文章发现；现已加入壳页质量过滤，仍不能称公众号全局搜索 |
-| B站视频详情 | Trafilatura / article Draft | Trafilatura no_results；Draft 有标题但无合格长文容器 | L0（视频详情） | 需要独立 `video_detail` 契约，不能降低文章门槛制造成功 |
+| B站视频详情 | yt-dlp metadata-only | 两个不同公开 BV URL 真实成功，原始 JSON 约 30 KB；统一 API 返回规范 URL 与 artifact，数据库不变 | L3 | 独立 `video_detail` 已实现；不下载媒体、不读 Cookie，lux `-j` 对同 URL 2/2 成功 |
 | 微博、抖音、快手、贴吧 | 无正式 Capability | 未进入本轮运行目录 | L0 | 不能写成当前支持；候选项目声明不等于数据源已接入 |
 
 ## 4. 本轮公共搜索冗余决策
@@ -176,7 +182,7 @@ error = SearXNG returned only generic WeChat platform shell results.
 
 ### P1：补资源类型
 
-1. `video_detail`：先做 B站公开视频标题、UP 主、简介、发布时间和稳定指标；
+1. `video_detail`：B站 yt-dlp raw-first 已完成；抖音/快手仍要分别通过已知公开 URL 小样本才能注册；
 2. `qa_detail`：知乎问题与回答分开，不抓整个聚合页面；
 3. `post_detail`：小红书/微博/贴吧帖子使用平台专用契约；
 4. `article_detail`：公众号已知公开文章、新闻和专栏继续复用 direct-first 长文链。
@@ -214,4 +220,4 @@ degraded / partial / warnings
 
 届时调研重点应是查询规划、迭代检索、引用、上下文压缩、模型可替换性和数据源工具协议，而不是让 DeepResearch 框架替代数据源治理。
 
-当前相关自动化回归纳入完整 Gateway 测试集，共 `82 passed`。
+当前相关自动化回归纳入完整 Gateway 测试集，共 `89 passed`。

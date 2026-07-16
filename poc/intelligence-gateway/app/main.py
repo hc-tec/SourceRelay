@@ -52,6 +52,8 @@ from .models import (
     TaskExecutionResponse,
     TaskPlanRequest,
     TaskPlanResponse,
+    VideoDetailRequest,
+    VideoDetailResponse,
 )
 from .normalization import canonicalize_url, deduplicate_items
 from .registry import ConnectorRegistry
@@ -141,7 +143,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.7.0",
+        version="0.8.0",
         description="Explicit-status API for Chinese-platform discovery, hotlists and public detail extraction.",
     )
     app.state.settings = active_settings
@@ -172,11 +174,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.7.0",
+            "version": "0.8.0",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
             "hotlist_providers": [
                 entry["provider"] for entry in registry.hotlist_providers()
+            ],
+            "video_detail_providers": [
+                entry["provider"] for entry in registry.video_detail_providers()
             ],
             "article_extraction": True,
             "capability_runtime": True,
@@ -190,6 +195,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "sources": registry.sources(),
             "hotlist_providers": registry.hotlist_providers(),
+            "video_detail_providers": registry.video_detail_providers(),
             "article_collector": registry.article.collector,
         }
 
@@ -197,9 +203,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def source_health() -> dict[str, Any]:
         health = await registry.health()
         hotlist_health = await registry.newsnow.health()
+        video_health = await registry.ytdlp.health()
         return {
             "sources": [item.model_dump(mode="json") for item in health],
             "hotlist_providers": [hotlist_health.model_dump(mode="json")],
+            "video_detail_providers": [video_health.model_dump(mode="json")],
         }
 
     @app.get("/health")
@@ -291,6 +299,48 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "capability_status": manifest.status.value,
                     "planner_eligible": planner_eligible,
                     "network_access_verified_on_execute": True,
+                },
+                warnings=[
+                    *manifest.warnings,
+                    *health.warnings,
+                    *(
+                        ["This declared capability must pass fixed-sample verification before planning."]
+                        if not planner_eligible
+                        else []
+                    ),
+                ],
+            )
+        if manifest.action == CapabilityAction.VIDEO_DETAIL:
+            executor_valid = manifest.executor == "yt-dlp"
+            scope_valid = (
+                manifest.platform == "bilibili"
+                and manifest.scope.get("known_public_url_only") is True
+            )
+            planner_eligible = manifest.status in {
+                CapabilityStatus.VERIFIED,
+                CapabilityStatus.DEGRADED,
+            }
+            health = await registry.ytdlp.health()
+            ready = health.ready and executor_valid and scope_valid and planner_eligible
+            return CapabilityCheckResponse(
+                capability_id=manifest.capability_id,
+                ready=ready,
+                status=(
+                    ResultStatus.SUCCESS
+                    if ready
+                    else (
+                        ResultStatus.MISCONFIGURED
+                        if not executor_valid or not scope_valid
+                        else ResultStatus.SOURCE_UNAVAILABLE
+                    )
+                ),
+                details={
+                    **health.details,
+                    "executor": manifest.executor,
+                    "executor_valid": executor_valid,
+                    "scope_valid": scope_valid,
+                    "capability_status": manifest.status.value,
+                    "planner_eligible": planner_eligible,
                 },
                 warnings=[
                     *manifest.warnings,
@@ -745,7 +795,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         manifest: CapabilityManifest,
         task_input: dict[str, Any],
         persistence: str,
-    ) -> SearchResponse | FetchResponse | HotlistResponse:
+    ) -> SearchResponse | FetchResponse | HotlistResponse | VideoDetailResponse:
         if manifest.action == CapabilityAction.KEYWORD_SEARCH:
             if manifest.executor == "browserwing_recipe":
                 if not manifest.recipe:
@@ -898,6 +948,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if persistence == "result_only":
                 response.warnings.append(
                     "Hotlist content was not written to the intelligence database; the raw local artifact is the durable result."
+                )
+            return response
+        if manifest.action == CapabilityAction.VIDEO_DETAIL:
+            if manifest.executor != "yt-dlp":
+                raise GatewayError(
+                    "Video detail capability has no supported provider executor.",
+                    status=ResultStatus.MISCONFIGURED,
+                    http_status=503,
+                )
+            video_request = VideoDetailRequest.model_validate(
+                {"url": task_input.get("url")}
+            )
+            response = await registry.video_detail(
+                video_request,
+                capability_id=manifest.capability_id,
+            )
+            if persistence == "result_only":
+                response.warnings.append(
+                    "Video metadata was not written to the intelligence database; the raw local artifact is the durable result."
                 )
             return response
         if manifest.action in {
