@@ -1,0 +1,23 @@
+{
+  "capability_id": "thepaper.hotlist_fetch.newsnow.v1",
+  "version": "1.0.0",
+  "platform": "thepaper",
+  "action": "hotlist_fetch",
+  "status": "verified",
+  "executor": "newsnow",
+  "adapter": "NewsNowHotlistConnector",
+  "source": null,
+  "authentication": {"required": false, "mode": "none"},
+  "input_schema": {
+    "feed_id": {"type": "string", "required": true, "enum": ["thepaper"]},
+    "limit": {"type": "integer", "default": 20, "maximum": 30},
+    "force_latest": {"type": "boolean", "default": false}
+  },
+  "output_schema": "hotlist_response.v1",
+  "scope": {"allowed_feed_ids": ["thepaper"], "raw_first": true, "keyword_search": false},
+  "fallback_ids": [],
+  "verification_input": {"feed_id": "thepaper", "limit": 5, "force_latest": false},
+  "last_verified_at": "2026-07-16T11:15:08+08:00",
+  "license": "MIT",
+  "warnings": ["Verified against the self-hosted NewsNow single-feed API with local raw artifact retention."]
+}

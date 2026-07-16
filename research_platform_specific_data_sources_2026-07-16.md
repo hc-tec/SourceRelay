@@ -330,6 +330,8 @@ raw payload
 
 Gateway 可以当次临时提取 `rank/title/url/external_id` 便于显示和引用，但这不是要求把 `HotlistItem` 的每个可能字段入库。作者、热度、图片、摘要和平台特有指标保留在 raw payload 中，以后由 AI 按需读取。
 
+2026-07-16 后续实施状态：Gateway `0.7.0` 已按上述契约实现 NewsNow Connector 和 raw artifact。自托管真实样本中，B站三个 feed、微博、知乎、快手、贴吧、36氪和澎湃通过；抖音返回 NewsNow HTTP 500，仍为 `declared_unverified`。所有成功与失败响应都尽可能保留原始文件，调用前后情报数据库不变。
+
 ### 3.10 通用网页抽取
 
 | 仓库 | 最近提交 | License | 适合范围 | 边界 |

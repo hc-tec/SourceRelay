@@ -7,6 +7,7 @@
 - `bilibili`：由本地 Maxun Robot 执行关键词搜索；
 - `xiaohongshu`：由 BrowserWing 使用隔离且持久化的 Chrome Profile 执行人工登录后的搜索；
 - `web`：由本机 SearXNG 聚合公开搜索结果，也支持 `site` 限定知乎、新闻站等域名；
+- `hotlist_fetch`：由自托管 NewsNow 按 `platform + feed_id` 获取热榜，完整原始 JSON 保存为本地 artifact；
 - `/fetch`：Trafilatura 抽取公开 HTML/text 页面的正文和元数据；
 - `/jobs/search`：把耗时搜索放入 SQLite 持久化作业。
 - 情报库：搜索结果自动写入 `documents`、`observations` 和 `search_runs`，区分新增、变化和重复出现。
@@ -29,6 +30,7 @@
 cd D:\AIProject\inteligence\poc\intelligence-gateway
 .\scripts\setup.ps1
 .\scripts\start-searxng.ps1
+.\scripts\start-newsnow.ps1
 .\scripts\start.ps1
 .\scripts\status.ps1
 ```
@@ -40,6 +42,7 @@ API 文档：`http://127.0.0.1:8765/docs`
 ```powershell
 .\scripts\stop.ps1
 .\scripts\stop-searxng.ps1
+.\scripts\stop-newsnow.ps1
 ```
 
 ## API 示例
@@ -52,7 +55,7 @@ API 文档：`http://127.0.0.1:8765/docs`
 Invoke-RestMethod http://127.0.0.1:8765/capabilities
 ```
 
-当前五个静态、经过验证的能力：
+当前 15 个静态能力：14 个已验证，1 个保持声明未验证。已验证：
 
 ```text
 bilibili.keyword_search.maxun.v1
@@ -60,6 +63,21 @@ xiaohongshu.keyword_search.browserwing.v1
 web.keyword_search.searxng.v1
 web.article_extract.trafilatura.v1
 web.detail_fetch.trafilatura.v1
+bilibili.hotlist_fetch.newsnow-hot-search.v1
+bilibili.hotlist_fetch.newsnow-hot-video.v1
+bilibili.hotlist_fetch.newsnow-ranking.v1
+weibo.hotlist_fetch.newsnow.v1
+zhihu.hotlist_fetch.newsnow.v1
+kuaishou.hotlist_fetch.newsnow.v1
+tieba.hotlist_fetch.newsnow.v1
+36kr.hotlist_fetch.newsnow.v1
+thepaper.hotlist_fetch.newsnow.v1
+```
+
+保持 `declared_unverified`、不会被 Planner 选择：
+
+```text
+douyin.hotlist_fetch.newsnow.v1
 ```
 
 运行时还可以包含已经通过样本验证并晋升的生成能力。本轮真实生成：
@@ -72,6 +90,72 @@ csdn.keyword_search.browserwing_recipe.v1
 gov-cn.detail_fetch.browserwing_recipe.v1
 zhihu.detail_fetch.browserwing_recipe.v1
 ```
+
+### 按需热榜与本地原始 artifact
+
+`0.7.0` 新增独立 `hotlist_fetch`，不把热榜伪装成关键词搜索。同一平台可以有多个 feed，例如 B站：
+
+```text
+bilibili-hot-search -> 热搜词
+bilibili-hot-video  -> 热门视频
+bilibili-ranking    -> 排行视频
+```
+
+调用示例：
+
+```powershell
+$body = @{
+  platform = "bilibili"
+  action = "hotlist_fetch"
+  input = @{
+    feed_id = "bilibili-hot-video"
+    limit = 5
+    force_latest = $false
+  }
+  options = @{ persistence = "none" }
+} | ConvertTo-Json -Depth 6
+
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/tasks/execute `
+  -ContentType application/json -Body $body
+```
+
+响应只提供当次使用的轻量预览：
+
+```json
+{
+  "platform": "bilibili",
+  "feed_id": "bilibili-hot-video",
+  "provider": "newsnow",
+  "provider_status": "success",
+  "from_cache": false,
+  "upstream_updated_at": 1234567890,
+  "items": [
+    {
+      "rank": 1,
+      "external_id": "BV...",
+      "title": "...",
+      "url": "https://www.bilibili.com/video/BV..."
+    }
+  ],
+  "artifact": {
+    "manifest_file": "artifacts/newsnow/2026-07-16/<run-id>/manifest.json",
+    "raw_file": "artifacts/newsnow/2026-07-16/<run-id>/raw.json",
+    "sha256": "..."
+  }
+}
+```
+
+`raw.json` 保留 NewsNow 完整原始响应，包括平台特有的 `extra`、图片、摘要和指标；`manifest.json` 只保留来源、时间、Capability、feed、缓存状态、原文件与 SHA-256。它们位于被 Git 忽略的 `runtime/artifacts/`，不把内容字段拆入 SQLite。
+
+数据源语义：
+
+- `provider_status=success`：NewsNow 返回当前或 source interval 内的数据；
+- `provider_status=cache`：NewsNow 在 TTL 或上游失败回退路径中返回缓存，必须结合 `upstream_updated_at` 判断新旧；
+- `force_latest=true` 只映射 NewsNow `latest=true`，不承诺绕过 source interval 和服务器状态；
+- HTTP 错误、非 JSON、feed 不匹配或预览字段漂移都显式返回 `source_unavailable`，并尽可能保留失败原始响应；
+- 原始 artifact 不保存请求头、Cookie、Token、密码或验证码。
+
+2026-07-16 自托管固定样本中，B站三个 feed、微博、知乎、快手、贴吧、36氪和澎湃成功；抖音上游请求在 NewsNow 中返回 HTTP 500，所以仍为 `declared_unverified`。公共实例受 Cloudflare 403 限制，正式能力使用自托管实例。
 
 ### 未知公开网站生成按需搜索或详情能力
 
@@ -283,6 +367,8 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/tasks/execute `
 - `none`：只在当前请求返回结果，不写入 documents、observations 或 search_runs；
 - `result_only`：把结果和运行记录写入当前情报库。
 
+两种模式下，需要本地执行证据的 Connector 仍可写入被 Git 忽略的 raw artifact。对 `hotlist_fetch`，数据库模型不适用，即使传入 `result_only` 也只保存原始 artifact，不写入 documents、observations 或 search_runs。
+
 检查能力依赖，但不执行真实搜索：
 
 ```text
@@ -409,4 +495,4 @@ Invoke-RestMethod "http://127.0.0.1:8765/clusters?min_documents=2&limit=20"
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-当前基线：`73 passed`。
+当前基线：`82 passed`。

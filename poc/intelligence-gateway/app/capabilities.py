@@ -103,9 +103,9 @@ class CapabilityCatalog:
         return CapabilityReliabilityResponse(
             capability_id=capability_id,
             capability_status=manifest.status,
-            planner_eligible=manifest.status not in {
-                CapabilityStatus.BLOCKED,
-                CapabilityStatus.RETIRED,
+            planner_eligible=manifest.status in {
+                CapabilityStatus.VERIFIED,
+                CapabilityStatus.DEGRADED,
             },
             runtime_mutable=self.is_runtime_mutable(capability_id),
             reliability=manifest.reliability,
@@ -225,10 +225,30 @@ class CapabilityCatalog:
 
     def plan(self, request: TaskPlanRequest) -> TaskPlanResponse:
         matching = self.list(platform=request.platform, action=request.action)
+        if request.action == CapabilityAction.HOTLIST_FETCH:
+            requested_feed_id = str(request.input.get("feed_id") or "").strip().lower()
+            if not requested_feed_id:
+                return TaskPlanResponse(
+                    available=False,
+                    requested_platform=request.platform,
+                    requested_action=request.action,
+                    effective_input=dict(request.input),
+                    warnings=[
+                        "feed_id is required to select an exact hotlist capability."
+                    ],
+                )
+            matching = [
+                item
+                for item in matching
+                if requested_feed_id in (item.scope.get("allowed_feed_ids") or [])
+            ]
         candidates = [
             item
             for item in matching
-            if item.status not in {CapabilityStatus.RETIRED, CapabilityStatus.BLOCKED}
+            if item.status in {
+                CapabilityStatus.VERIFIED,
+                CapabilityStatus.DEGRADED,
+            }
         ]
         status_priority = {
             CapabilityStatus.VERIFIED: 0,
@@ -400,6 +420,16 @@ class CapabilityCatalog:
             requested_action=request.action,
             effective_input=dict(request.input),
             warnings=[
-                "No matching capability or safe external-discovery fallback is registered."
+                *(
+                    [
+                        "Matching capabilities are declared but have not passed fixed-sample verification."
+                    ]
+                    if any(
+                        item.status == CapabilityStatus.DECLARED_UNVERIFIED
+                        for item in matching
+                    )
+                    else []
+                ),
+                "No matching capability or safe external-discovery fallback is registered.",
             ],
         )

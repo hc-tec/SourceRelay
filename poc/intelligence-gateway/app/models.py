@@ -42,6 +42,7 @@ class ChangeType(StrEnum):
 
 class CapabilityAction(StrEnum):
     KEYWORD_SEARCH = "keyword_search"
+    HOTLIST_FETCH = "hotlist_fetch"
     ARTICLE_EXTRACT = "article_extract"
     DETAIL_FETCH = "detail_fetch"
 
@@ -327,6 +328,55 @@ class SearchResponse(BaseModel):
     error: str | None = None
     run_id: str = ""
     persistence: PersistenceSummary | None = None
+
+
+class HotlistRequest(BaseModel):
+    platform: str = Field(min_length=1, max_length=100)
+    feed_id: str = Field(
+        min_length=1,
+        max_length=100,
+        pattern=r"^[a-z0-9][a-z0-9-]*$",
+    )
+    limit: int = Field(default=20, ge=1, le=30)
+    force_latest: bool = False
+
+    @field_validator("platform", "feed_id")
+    @classmethod
+    def normalize_hotlist_identifier(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class ArtifactReference(BaseModel):
+    manifest_file: str
+    raw_file: str | None = None
+    media_type: str = "application/octet-stream"
+    byte_count: int = Field(default=0, ge=0)
+    sha256: str | None = None
+
+
+class HotlistPreviewItem(BaseModel):
+    rank: int = Field(ge=1)
+    external_id: str = ""
+    title: str = ""
+    url: str = ""
+
+
+class HotlistResponse(BaseModel):
+    ok: bool
+    status: ResultStatus
+    platform: str
+    feed_id: str
+    provider: str
+    provider_status: Literal["success", "cache"] | None = None
+    from_cache: bool = False
+    upstream_updated_at: int | str | None = None
+    fetched_at: datetime = Field(default_factory=utc_now)
+    duration_ms: int = Field(ge=0)
+    item_count: int = Field(ge=0)
+    items: list[HotlistPreviewItem] = Field(default_factory=list)
+    artifact: ArtifactReference
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
 
 
 class SourceHealth(BaseModel):

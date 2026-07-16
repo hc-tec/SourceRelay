@@ -1,0 +1,22 @@
+{
+  "capability_id": "douyin.hotlist_fetch.newsnow.v1",
+  "version": "1.0.0",
+  "platform": "douyin",
+  "action": "hotlist_fetch",
+  "status": "declared_unverified",
+  "executor": "newsnow",
+  "adapter": "NewsNowHotlistConnector",
+  "source": null,
+  "authentication": {"required": false, "mode": "none"},
+  "input_schema": {
+    "feed_id": {"type": "string", "required": true, "enum": ["douyin"]},
+    "limit": {"type": "integer", "default": 20, "maximum": 30},
+    "force_latest": {"type": "boolean", "default": false}
+  },
+  "output_schema": "hotlist_response.v1",
+  "scope": {"allowed_feed_ids": ["douyin"], "raw_first": true, "keyword_search": false},
+  "fallback_ids": [],
+  "verification_input": {"feed_id": "douyin", "limit": 5, "force_latest": false},
+  "license": "MIT",
+  "warnings": ["Declared from current NewsNow source code; fixed-sample execution is required before planning."]
+}

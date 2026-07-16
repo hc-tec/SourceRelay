@@ -37,6 +37,8 @@ from .models import (
     DraftValidationResponse,
     JobAccepted,
     JobRecord,
+    HotlistRequest,
+    HotlistResponse,
     ResultStatus,
     SearchRequest,
     SearchResponse,
@@ -139,8 +141,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.6.1",
-        description="Explicit-status API for Bilibili, Xiaohongshu, web discovery and article extraction.",
+        version="0.7.0",
+        description="Explicit-status API for Chinese-platform discovery, hotlists and public detail extraction.",
     )
     app.state.settings = active_settings
     app.state.store = store
@@ -170,9 +172,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.6.1",
+            "version": "0.7.0",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
+            "hotlist_providers": [
+                entry["provider"] for entry in registry.hotlist_providers()
+            ],
             "article_extraction": True,
             "capability_runtime": True,
             "capabilities": "/capabilities",
@@ -182,12 +187,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/sources")
     async def sources() -> dict[str, Any]:
-        return {"sources": registry.sources(), "article_collector": registry.article.collector}
+        return {
+            "sources": registry.sources(),
+            "hotlist_providers": registry.hotlist_providers(),
+            "article_collector": registry.article.collector,
+        }
 
     @app.get("/sources/health")
     async def source_health() -> dict[str, Any]:
         health = await registry.health()
-        return {"sources": [item.model_dump(mode="json") for item in health]}
+        hotlist_health = await registry.newsnow.health()
+        return {
+            "sources": [item.model_dump(mode="json") for item in health],
+            "hotlist_providers": [hotlist_health.model_dump(mode="json")],
+        }
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
@@ -240,6 +253,54 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "network_access_verified_on_execute": True,
                 },
                 warnings=list(manifest.warnings),
+            )
+        if manifest.action == CapabilityAction.HOTLIST_FETCH:
+            allowed_feeds = tuple(manifest.scope.get("allowed_feed_ids") or ())
+            known_feeds = registry.newsnow.allowed_feeds(manifest.platform)
+            executor_valid = manifest.executor == "newsnow"
+            scope_valid = (
+                executor_valid
+                and bool(allowed_feeds)
+                and set(allowed_feeds).issubset(known_feeds)
+            )
+            planner_eligible = manifest.status in {
+                CapabilityStatus.VERIFIED,
+                CapabilityStatus.DEGRADED,
+            }
+            health = await registry.newsnow.health()
+            ready = health.ready and scope_valid and planner_eligible
+            return CapabilityCheckResponse(
+                capability_id=manifest.capability_id,
+                ready=ready,
+                status=(
+                    ResultStatus.SUCCESS
+                    if ready
+                    else (
+                        ResultStatus.MISCONFIGURED
+                        if not scope_valid
+                        else ResultStatus.SOURCE_UNAVAILABLE
+                    )
+                ),
+                details={
+                    **health.details,
+                    "executor": manifest.executor,
+                    "executor_valid": executor_valid,
+                    "dependency_ready": health.ready,
+                    "scope_valid": scope_valid,
+                    "allowed_feed_ids": list(allowed_feeds),
+                    "capability_status": manifest.status.value,
+                    "planner_eligible": planner_eligible,
+                    "network_access_verified_on_execute": True,
+                },
+                warnings=[
+                    *manifest.warnings,
+                    *health.warnings,
+                    *(
+                        ["This declared capability must pass fixed-sample verification before planning."]
+                        if not planner_eligible
+                        else []
+                    ),
+                ],
             )
         if manifest.action in {
             CapabilityAction.ARTICLE_EXTRACT,
@@ -684,7 +745,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         manifest: CapabilityManifest,
         task_input: dict[str, Any],
         persistence: str,
-    ) -> SearchResponse | FetchResponse:
+    ) -> SearchResponse | FetchResponse | HotlistResponse:
         if manifest.action == CapabilityAction.KEYWORD_SEARCH:
             if manifest.executor == "browserwing_recipe":
                 if not manifest.recipe:
@@ -805,6 +866,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if persistence == "result_only":
                 return await execute_search(search_request)
             return await registry.search(search_request)
+        if manifest.action == CapabilityAction.HOTLIST_FETCH:
+            if manifest.executor != "newsnow":
+                raise GatewayError(
+                    "Hotlist capability has no supported provider executor.",
+                    status=ResultStatus.MISCONFIGURED,
+                    http_status=503,
+                )
+            hotlist_request = HotlistRequest.model_validate(
+                {
+                    "platform": manifest.platform,
+                    "feed_id": task_input.get("feed_id"),
+                    "limit": task_input.get("limit", 20),
+                    "force_latest": task_input.get("force_latest", False),
+                }
+            )
+            allowed_feed_ids = set(manifest.scope.get("allowed_feed_ids") or ())
+            if hotlist_request.feed_id not in allowed_feed_ids:
+                raise GatewayError(
+                    "Task input validation failed.",
+                    status=ResultStatus.ERROR,
+                    http_status=422,
+                    warnings=[
+                        f"feed_id must be one of: {', '.join(sorted(allowed_feed_ids))}"
+                    ],
+                )
+            response = await registry.hotlist(
+                hotlist_request,
+                capability_id=manifest.capability_id,
+            )
+            if persistence == "result_only":
+                response.warnings.append(
+                    "Hotlist content was not written to the intelligence database; the raw local artifact is the durable result."
+                )
+            return response
         if manifest.action in {
             CapabilityAction.ARTICLE_EXTRACT,
             CapabilityAction.DETAIL_FETCH,
@@ -987,6 +1082,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 http_status=last_error.http_status,
                 warnings=[*plan.warnings, *attempt_warnings],
                 context={
+                    **last_error.context,
                     "attempted_capabilities": attempted,
                     "executed_capability_id": attempted[-1] if attempted else None,
                     "degraded": plan.degraded or len(attempted) > 1,

@@ -2,7 +2,7 @@
 
 > 实测日期：2026-07-15 至 2026-07-16
 > 目录：`poc/intelligence-gateway`
-> 网关版本：`0.6.1`
+> 网关版本：`0.7.0`
 > 结论：第一版统一读取链路已经形成可运行闭环；适合作为个人低频 POC 和后续 Adapter 演进骨架，尚不能按无人值守生产系统承诺 SLA。
 
 ## 1. 本轮实际交付
@@ -248,7 +248,7 @@ SearXNG 的 `settings.yml` 由初始化脚本在被忽略的 `runtime/` 中生�
 docker compose config --quiet
 ```
 
-结果：`73 passed`。覆盖：
+结果：`82 passed`。覆盖：
 
 - URL 去跟踪与 fragment；
 - 规范 URL 去重和 rank 重排；
@@ -487,6 +487,39 @@ web.keyword_search.searxng.v1
 
 完整数据源就绪等级和后续优先级见 `docs/design/data-source-layer.md`。
 
+### 6.10 0.7.0 NewsNow 热榜与 raw-first artifact
+
+`0.7.0` 将热榜建模为独立 `hotlist_fetch`，输入是 `platform + feed_id + limit + force_latest`，不复用 `keyword_search`。NewsNow 使用官方 GHCR 镜像在本机 `127.0.0.1:4444` 自托管，容器健康检查通过；公共实例 `newsnow.busiyi.world` 在当前网络返回 Cloudflare HTTP 403，未被当作默认依赖。
+
+真实固定 feed 结果：
+
+| 平台 | feed_id | 结果 | 预览条数 | 原始 JSON 大小 | 首条 URL 质量 |
+|---|---|---|---:|---:|---|
+| B站 | `bilibili-hot-search` | success | 5 | 8,158 bytes | B站搜索 URL |
+| B站 | `bilibili-hot-video` | success | 5 | 8,356 bytes | 规范 BV URL |
+| B站 | `bilibili-ranking` | success | 5 | 12,526 bytes | 规范 BV URL |
+| 微博 | `weibo` | success | 5 | 13,252 bytes | `s.weibo.com/weibo` |
+| 知乎 | `zhihu` | success | 5 | 11,700 bytes | 规范 question URL |
+| 抖音 | `douyin` | HTTP 500 | 0 | 301 bytes | 上游 fetch failed，不晋升 |
+| 快手 | `kuaishou` | success | 5 | 9,297 bytes | 快手搜索 URL |
+| 贴吧 | `tieba` | success | 5 | 7,843 bytes | 热话 URL；修复 `&amp;` entity 后规范 |
+| 36氪 | `36kr` | success | 5 | 3,877 bytes | 规范 newsflash URL |
+| 澎湃 | `thepaper` | success | 5 | 4,503 bytes | 规范 newsDetail URL |
+
+完整原始响应按次保存到：
+
+```text
+runtime/artifacts/newsnow/YYYY-MM-DD/<run-id>/
+  manifest.json
+  raw.json
+```
+
+`manifest.json` 只包含平台、动作、feed、Capability、请求时间、NewsNow `success/cache`、上游更新时间、HTTP 状态、文件路径、字节数与 SHA-256；标题、图片、摘要、作者和指标不拆入数据库。失败响应也保留 raw artifact，但不保存请求头、Cookie、Token、密码或验证码。
+
+统一 `/tasks/execute` 再次真实执行 `bilibili-hot-video` 返回 HTTP 200、3 条预览和本地 raw file；贴吧预览 URL 为正确的 `&topic_name=`，不再是错误的 `&amp%3Btopic_name=`。即使请求传入 `persistence=result_only`，调用前后 documents、observations 和 search runs 统计仍完全不变。
+
+最终静态状态：B站、微博、知乎、快手、贴吧、36氪和澎湃为 `verified`；抖音仍为 `declared_unverified`，Planner 明确返回不可用，不会因为同一个 NewsNow 仓库的其他 feed 成功就被一起标记为已支持。B站三个 feed 也分别注册为三个 Capability，Planner 按 `feed_id` 精确选择，某一榜单漂移不会污染其他榜单的验证状态。
+
 ## 7. 当前结论
 
 这轮已经证明“万物皆接口”对你的中文个人情报需求有实际用处，但正确实现不是寻找一个万能 CLI，而是建立一个统一控制面，让每类来源使用最合适的获取层：
@@ -498,8 +531,9 @@ BrowserWing Recipe  -> 已验证公开站点的按需搜索
 BrowserWing Detail  -> 已验证主机的公开渲染正文 fallback
 SearXNG             -> 全网和域名限定发现
 Trafilatura         -> 公开文章正文
+NewsNow             -> 多平台独立 feed 热榜 + 本地原始 artifact
         ↓
-统一 Gateway -> 明确状态、统一字段、去重、SQLite jobs
+统一 Gateway -> 明确状态、最小溯源、原始文件、可选 SQLite 索引
 ```
 
 当前版本可以用于低频个人检索、Agent 工具调用和后续来源 POC。它还不是生产级舆情系统，主要缺口是视频描述/问答/帖子等非长文章详情模型、更多站型回归、recipe 版本回滚、公众号全局搜索、更多强登录平台、分页、实体消歧和合规治理。

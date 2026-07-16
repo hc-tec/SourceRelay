@@ -26,6 +26,7 @@ class Settings:
     browserwing_root: Path
     browserwing_xhs_script: Path
     searxng_base_url: str
+    newsnow_base_url: str
     runtime_dir: Path
 
     @classmethod
@@ -47,6 +48,6 @@ class Settings:
                 "BROWSERWING_XHS_SCRIPT", "../browserwing/scripts/run-xiaohongshu-search.ps1"
             ),
             searxng_base_url=os.getenv("SEARXNG_BASE_URL", "http://127.0.0.1:8888").rstrip("/"),
+            newsnow_base_url=os.getenv("NEWSNOW_BASE_URL", "http://127.0.0.1:4444").rstrip("/"),
             runtime_dir=runtime_dir,
         )
-

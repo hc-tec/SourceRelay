@@ -10,14 +10,74 @@ from app.models import (
 def test_catalog_loads_versioned_manifests() -> None:
     catalog = CapabilityCatalog()
     capabilities = catalog.list()
-    assert len(capabilities) == 5
+    assert len(capabilities) == 15
     assert {item.capability_id for item in capabilities} == {
+        "36kr.hotlist_fetch.newsnow.v1",
         "bilibili.keyword_search.maxun.v1",
+        "bilibili.hotlist_fetch.newsnow-hot-search.v1",
+        "bilibili.hotlist_fetch.newsnow-hot-video.v1",
+        "bilibili.hotlist_fetch.newsnow-ranking.v1",
+        "douyin.hotlist_fetch.newsnow.v1",
+        "kuaishou.hotlist_fetch.newsnow.v1",
+        "thepaper.hotlist_fetch.newsnow.v1",
+        "tieba.hotlist_fetch.newsnow.v1",
+        "weibo.hotlist_fetch.newsnow.v1",
         "xiaohongshu.keyword_search.browserwing.v1",
         "web.keyword_search.searxng.v1",
         "web.article_extract.trafilatura.v1",
         "web.detail_fetch.trafilatura.v1",
+        "zhihu.hotlist_fetch.newsnow.v1",
     }
+
+
+def test_declared_failed_hotlist_capability_is_discoverable_but_not_plannable() -> None:
+    catalog = CapabilityCatalog()
+    declared = catalog.get("douyin.hotlist_fetch.newsnow.v1")
+    plan = catalog.plan(
+        TaskPlanRequest(
+            platform="douyin",
+            action=CapabilityAction.HOTLIST_FETCH,
+            input={"feed_id": "douyin"},
+        )
+    )
+
+    assert declared.status == CapabilityStatus.DECLARED_UNVERIFIED
+    assert declared.scope["allowed_feed_ids"] == ["douyin"]
+    assert plan.available is False
+    assert any("fixed-sample verification" in warning for warning in plan.warnings)
+
+
+def test_verified_bilibili_hotlist_plan_preserves_distinct_feed_ids() -> None:
+    catalog = CapabilityCatalog()
+    capability = catalog.get("bilibili.hotlist_fetch.newsnow-ranking.v1")
+    plan = catalog.plan(
+        TaskPlanRequest(
+            platform="bilibili",
+            action=CapabilityAction.HOTLIST_FETCH,
+            input={"feed_id": "bilibili-ranking"},
+        )
+    )
+
+    assert capability.status == CapabilityStatus.VERIFIED
+    assert capability.scope["allowed_feed_ids"] == ["bilibili-ranking"]
+    assert plan.available is True
+    assert plan.selected_capability.capability_id == capability.capability_id
+    assert plan.effective_input["feed_id"] == "bilibili-ranking"
+
+
+def test_hotlist_plan_requires_feed_id_instead_of_guessing_a_platform_default() -> None:
+    plan = CapabilityCatalog().plan(
+        TaskPlanRequest(
+            platform="bilibili",
+            action=CapabilityAction.HOTLIST_FETCH,
+            input={},
+        )
+    )
+
+    assert plan.available is False
+    assert plan.warnings == [
+        "feed_id is required to select an exact hotlist capability."
+    ]
 
 
 def test_direct_platform_plan_includes_safe_fallback() -> None:

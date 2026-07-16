@@ -106,6 +106,8 @@ search_runs = 3
 | 来源 | 当前路径 | 真实结果 | 等级 | 准确结论 |
 |---|---|---|---|---|
 | B站关键词 | Maxun | `DeepSeek` 返回 5 条；3 条含字面查询词，3 条有规范 URL；约 10.5 秒 | L2 | 原生搜索能运行，但推广/弱相关行使它尚未达到稳定 L3 |
+| 多平台热榜 | 自托管 NewsNow | B站三个 feed、微博、知乎、快手、贴吧、36氪、澎湃共 9 个 feed 真实成功；完整 JSON 与最小 manifest 落本地 artifact，数据库不变 | L3 | `hotlist_fetch` 已具备明确 feed、URL、缓存证据与失败语义；不是关键词搜索 |
+| 抖音热榜 | NewsNow `douyin` | 当前上游 `www.douyin.com` fetch failed，NewsNow 返回 HTTP 500；失败 JSON 已保留 | L1 | Capability 保持 `declared_unverified`，Planner 不会选择 |
 | 小红书关键词 | BrowserWing 人工 Profile | 第一次原生失败后降级；再次真实搜索原生返回 5 条小红书结果 | L2 | 当前登录态可用，但 Profile 文件存在不能代表实时可用，需固定探测与故障原因记录 |
 | 全网搜索 | SearXNG | 一次因 Brave/Google 限流、DuckDuckGo/Startpage CAPTCHA 返回 0；稍后 `低空经济` 返回 5/5 相关结果 | L2 | 低成本首选，但上游可用性明显波动，必须有冗余 |
 | 知乎搜索 | SearXNG `site:` | 无站内 Adapter；一次链路为 SearXNG 0 条 -> Bing 认证门禁 -> 搜狗 5 条；后续 SearXNG 可直接返回规范知乎 URL | L2 | 只能称外部发现；搜狗结果还需持续检查是否为搜索跳转 URL |
@@ -212,4 +214,4 @@ degraded / partial / warnings
 
 届时调研重点应是查询规划、迭代检索、引用、上下文压缩、模型可替换性和数据源工具协议，而不是让 DeepResearch 框架替代数据源治理。
 
-当前相关自动化回归纳入完整 Gateway 测试集，共 `73 passed`。
+当前相关自动化回归纳入完整 Gateway 测试集，共 `82 passed`。

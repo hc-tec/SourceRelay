@@ -29,12 +29,18 @@ class AuthenticationRequiredError(GatewayError):
 
 
 class SourceUnavailableError(GatewayError):
-    def __init__(self, message: str, warnings: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        warnings: list[str] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(
             message=message,
             status=ResultStatus.SOURCE_UNAVAILABLE,
             http_status=503,
             warnings=warnings or [],
+            context=context or {},
         )
 
 
