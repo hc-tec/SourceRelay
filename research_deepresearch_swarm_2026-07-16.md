@@ -44,7 +44,7 @@ Intelligence Gateway
 7. PraisonAI、MetaGPT、CAMEL、CrewAI、Google ADK、Microsoft Agent Framework
    都可做角色编排或工作流实验，但必须关掉自带网页搜索并接入 Gateway。
 
-本分支已实现第一版独立适配包：
+本分支已实现第一版独立适配包和 DeepAgents/LangGraph 接入 PoC：
 
 ```text
 poc/deepresearch-gateway/
@@ -53,10 +53,13 @@ poc/deepresearch-gateway/
   GatewayToolResult   保留 status、能力链、降级和 HTTP 状态
   ArtifactReader      受限读取 Gateway raw artifact
   mcp_server.py       可选 MCP bridge
+  examples/deepagents_gateway_research.py  DeepSeek + 受控 subagent swarm
 ```
 
 适配器默认 `persistence=none`，不会使用 Tavily、Serper、Brave、Bing、Jina 或其他
-框架内置搜索服务。当前适配器测试：`8 passed`；Gateway 基线仍为 `114 passed`。
+框架内置搜索服务。基础环境适配器测试为 `10 passed, 1 skipped`；安装
+`.[deepagents]` 后，DeepAgents 构造级测试为 `11 passed`；Gateway 基线仍为
+`114 passed`。
 
 ## 1. 调研方法与证据范围
 
@@ -429,9 +432,9 @@ AgentScope Team/service，重点测试租户隔离、会话状态、取消/超�
 | 历史教学/快速角色 Demo | CAMEL、CrewAI、MetaGPT、PraisonAI（必须禁用默认 Web Search） |
 
 因此当前不把某个框架的默认搜索接口接进来；已经接入的是一个框架无关的
-Gateway-only 工具边界。下一步应做第一阶段小型 DeepAgents/LangGraph 蜂群 PoC，
-用真实 Gateway 样本验证“搜索、失败、artifact、引用、并发”闭环，再决定是否把
-DeerFlow 作为正式工作台。
+Gateway-only 工具边界，并提供了可构造验证的 DeepAgents/LangGraph 蜂群 PoC。
+下一步是用真实 Gateway 样本运行它，验证“搜索、失败、artifact、引用、并发”闭环，
+再决定是否把 DeerFlow 作为正式工作台。
 
 ## 9. 主要来源
 

@@ -62,6 +62,28 @@ async def collect():
     return search, hydrated
 ```
 
+## DeepAgents/LangGraph first PoC
+
+The repository includes a runnable first swarm in
+[examples/deepagents_gateway_research.py](examples/deepagents_gateway_research.py).
+It uses `ChatOpenAI` only as a DeepSeek-compatible model client, while all source
+tools are wrappers around `GatewayToolSet`. A shared semaphore caps Gateway calls
+at three concurrent operations, and the single sub-agent role receives no direct
+browser or search SDK.
+
+Install and run it after starting Intelligence Gateway:
+
+```powershell
+python -m pip install -e ".[deepagents]"
+python examples/deepagents_gateway_research.py "低空经济在中文平台的近期讨论"
+```
+
+The example delegates at most three focused aspects, preserves Gateway statuses,
+and asks the lead agent to audit URL, source, capability ID and artifact references
+before writing a report. It is intentionally a validation PoC rather than a new
+long-running service; the next step is to test it against fixed Web/NewsNow/B站/
+知乎/BrowserWing samples.
+
 `GatewayToolResult.to_dict()` 保留 Gateway 的原始响应字段，并增加一个轻量外层：
 
 ```json

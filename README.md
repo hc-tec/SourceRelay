@@ -89,6 +89,9 @@ DeepResearch/蜂群接入不再直接使用框架自带搜索器：
 5. DeerFlow 可通过可选 MCP bridge 接入，DeepAgents/LangGraph、AgentScope、CrewAI
    可直接包装同一组异步工具。
 
+当前已经提供一个 DeepAgents/LangGraph 第一阶段 PoC：它使用 `.env` 中的 DeepSeek
+配置，最多委派三个聚焦主题，并通过共享并发闸门调用 Gateway-only 工具。
+
 接入契约、蜂群安全边界和候选框架比较见
 [DeepResearch Gateway Adapter ADR](docs/design/deepresearch-gateway-adapter.md)、
 [DeepResearch/蜂群调研报告](research_deepresearch_swarm_2026-07-16.md) 和
