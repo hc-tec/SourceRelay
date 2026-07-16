@@ -7,17 +7,23 @@ semantics and raw artifact persistence.
 """
 
 from .artifacts import ArtifactReader, ArtifactSecurityError
+from .audit import AuditReport, Citation, PlatformAudit, audit_trace, render_markdown
 from .client import GatewayClient, GatewayToolResult
 from .config import AdapterSettings, LLMSettings, load_env_file
 from .tools import GatewayToolSet
 
 __all__ = [
     "AdapterSettings",
+    "AuditReport",
     "ArtifactReader",
     "ArtifactSecurityError",
+    "Citation",
     "GatewayClient",
     "GatewayToolResult",
     "GatewayToolSet",
     "LLMSettings",
+    "PlatformAudit",
+    "audit_trace",
     "load_env_file",
+    "render_markdown",
 ]

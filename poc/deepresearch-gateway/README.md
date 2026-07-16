@@ -89,11 +89,43 @@ python examples/deepagents_gateway_research.py `
 trace 是 UTF-8 JSON，记录每个 `gateway_*` 调用的输入、HTTP 状态、Gateway status、
 能力链、`degraded/partial`、结果数量和警告。最终中文报告不能替代这份机器证据。
 
+新写出的 trace 使用 schema version 2：每个事件都有 event_index，并额外投影
+evidence_items。投影会把搜索发现、search-and-fetch 的详情 hydration、已知详情
+（video/article/answers/posts）和 hotlist 分开记录；每项保留其 URL、stage、
+capability chain、raw_ref 和 artifact 引用。它不复制正文或读取 artifact 内容。
+
+同时写出确定性审计结果时，传入预期平台。重复的 --expected-platform 会把没有被
+实际调用的平台明确写成 not_attempted，而不是让它从表格中静默消失：
+
+~~~powershell
+python examples/deepagents_gateway_research.py "低空经济在中文平台的近期讨论" --trace-file D:\AIProject\inteligence\runtime\validation\gateway-trace.json --audit-file D:\AIProject\inteligence\runtime\validation\gateway-audit.md --expected-platform bilibili --expected-platform zhihu --expected-platform weibo
+~~~
+
+不需要再次运行模型，也可以审计一个已经存在的 UTF-8 trace：
+
+~~~powershell
+intelligence-gateway-citation-audit D:\AIProject\inteligence\runtime\validation\gateway-trace.json --output D:\AIProject\inteligence\runtime\validation\gateway-audit.md --expected-platform bilibili --expected-platform zhihu --expected-platform weibo
+~~~
+
+Citation Auditor 不访问网络、不解析跳转页面、不读取模型最终文本。它只接受成功阶段
+的结果作为候选 citation，并拒绝 promoted、空 URL、平台首页、Sogou/Bing/Baidu
+搜索跳转和站内跳转域。每个平台同时输出两种互不混淆的状态：
+
+| 字段 | 说明 |
+|---|---|
+| coverage_status | native_success、gateway_fallback_success、external_discovery_only、detail_only、失败状态或 not_attempted；它说明实际观测到的收集方式。 |
+| claim_status | citable、uncitable、失败状态或 not_attempted；它只说明是否有可引用的规范 URL。 |
+
+例如 site:zhihu.com 返回真实知乎直链时，URL 可以是 citable，但覆盖仍只能是
+external_discovery_only；这绝不等价于知乎原生关键词搜索已验证。Markdown 表还会
+分别显示覆盖该状态的 degraded/partial 与所有观测事件的 degraded/partial，避免一次
+旧的外部 fallback 把后来的原生 B站搜索写成降级。
+
 The example delegates at most three focused aspects, preserves Gateway statuses,
 and asks the lead agent to audit URL, source, capability ID and artifact references
-before writing a report. It is intentionally a validation PoC rather than a new
-long-running service; the next step is to test it against fixed Web/NewsNow/B站/
-知乎/BrowserWing samples.
+before writing a report. The machine audit is authoritative for source provenance;
+the model report is only a narrative view over it. This remains a validation PoC,
+not a long-running service.
 
 `GatewayToolResult.to_dict()` 保留 Gateway 的原始响应字段，并增加一个轻量外层：
 

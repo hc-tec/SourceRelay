@@ -25,6 +25,7 @@ dev = [
 
 [project.scripts]
 intelligence-gateway-mcp = "deepresearch_gateway.mcp_server:main"
+intelligence-gateway-citation-audit = "deepresearch_gateway.audit_cli:main"
 
 [build-system]
 requires = ["setuptools>=75"]
