@@ -1,8 +1,8 @@
 # 统一个人情报网关 POC 评估
 
-> 实测日期：2026-07-15  
-> 目录：`poc/intelligence-gateway`  
-> 网关版本：`0.5.0`
+> 实测日期：2026-07-15 至 2026-07-16
+> 目录：`poc/intelligence-gateway`
+> 网关版本：`0.6.0`
 > 结论：第一版统一读取链路已经形成可运行闭环；适合作为个人低频 POC 和后续 Adapter 演进骨架，尚不能按无人值守生产系统承诺 SLA。
 
 ## 1. 本轮实际交付
@@ -15,6 +15,7 @@
 | 小红书关键词搜索 | BrowserWing `1.1.1-beta.1` + 人工登录的持久 Chrome Profile | `POST /search`，`source=xiaohongshu` | 首屏发现与元数据；详情正文、分页和无人值守登录恢复未通过 |
 | 通用网页搜索 | 自托管 SearXNG `2026.7.14-58e02a01a` | `POST /search`，`source=web` | 支持 `site` 域名限定；覆盖受上游引擎限流、验证码和网络影响 |
 | 网页正文抽取 | Trafilatura `2.1.0` | `POST /fetch` | 公开 HTML/XHTML/text；不执行页面脚本 |
+| 浏览器渲染详情 | 经过 Draft 验证的 BrowserWing host-scoped recipe | `POST /tasks/execute`、`POST /tasks/search-and-fetch` | 仅公开渲染正文；不登录、不点击、不越过 recipe 主机 |
 | 异步执行 | FastAPI BackgroundTasks + SQLite | `POST /jobs/search`、`GET /jobs/{id}` | 单机持久作业状态；不是分布式队列 |
 
 同时提供：
@@ -247,7 +248,7 @@ SearXNG 的 `settings.yml` 由初始化脚本在被忽略的 `runtime/` 中生�
 docker compose config --quiet
 ```
 
-结果：`53 passed`。覆盖：
+结果：`69 passed`。覆盖：
 
 - URL 去跟踪与 fragment；
 - 规范 URL 去重和 rank 重排；
@@ -268,6 +269,11 @@ docker compose config --quiet
 - 平台 Adapter 失败后的外部发现 fallback；
 - 任务输入错误的结构化 422；
 - HTTP 424、422 等错误不能伪装为空成功。
+- `keyword_search` Draft 必须有样本查询，`detail_fetch` Draft 不需要查询词且可兼容现有 SQLite schema；
+- 详情正文容器、标题、文本长度、认证门禁、最终主机和 recipe 阈值验证；
+- 生成详情执行器的成功、选择器漂移、主机越界与显式失败；
+- direct-first、无 recipe 不启动浏览器、host 不匹配不启动浏览器和逐条 capability evidence；
+- 详情 fallback 前后 `persistence=none` 保持数据库不变。
 
 ## 6. 0.4.0 Draft Capability Factory 真实验证
 
@@ -418,7 +424,41 @@ CSDN 真实组合任务体现部分失败语义：
 
 成功文章抽取到 3,493 字；失败项保留 `source_unavailable` 和源站 HTTP 521，不会导致成功正文丢失。
 
-详情 Manifest 的真实 verify 返回 `200 / success`。服务当前版本 `0.5.0`，本地 Catalog 为 9 个能力：5 个静态能力加 4 个生成搜索能力。所有真实组合调用均使用 `persistence=none`，完成后仍为 8 documents、13 observations、3 search runs。
+详情 Manifest 的真实 verify 返回 `200 / success`。在 `0.5.0` 验证时，本地 Catalog 为 9 个能力：5 个静态能力加 4 个生成搜索能力。所有真实组合调用均使用 `persistence=none`，完成后仍为 8 documents、13 observations、3 search runs。
+
+### 6.8 0.6.0 浏览器渲染详情分层
+
+`0.6.0` 没有把 BrowserWing 变成任意 URL 的通用兜底，而是增加了三层详情策略：
+
+```text
+Tier 1  web.detail_fetch.trafilatura.v1
+        -> no_results / source_unavailable
+Tier 2  platform.detail_fetch.browserwing_recipe.v1
+        -> 仅 verified/degraded + requested platform 相同 + URL 命中 allowed_host
+Tier 3  人工登录的平台专用 Profile Adapter（不由通用 Draft 生成）
+```
+
+每条详情现在返回完整的 `attempted_capabilities`、`executed_capability_id` 和 `degraded`。Planner 与组合接口都遵守 direct-first；精确 `/capabilities/{id}/verify` 则用于维护者单独回归某个生成 recipe。
+
+真实样本一：`gov.cn` 结构化长文。Draft 找到 `#ti` 和 `div.content`，验证得到 22,625 字公开渲染文本，晋升为 `gov-cn.detail_fetch.browserwing_recipe.v1`，精确 verify 返回正常中文标题和 22,625 字正文。随后普通 `detail_fetch` 仍只尝试并执行 Trafilatura，得到 22,364 字，证明已注册 BrowserWing recipe 不会改变 direct-first 顺序。
+
+真实样本二：知乎专栏 Tier 2 fallback。对以下样本，Trafilatura 收到 HTTP 403：
+
+```text
+https://zhuanlan.zhihu.com/p/1910368867760476348
+```
+
+Detail Draft 最初选择 `main[role="main"]`，虽然得到 4,089 字，却把推荐文章也包含进来。容器评分随后增加“多个主标题”和“多篇嵌套 article”聚合惩罚，重新选择 `article.Post-Main.Post-NormalMain`，样本正文收敛为 3,358 字；重新验证和晋升后 manifest 从 `1.0.0` 更新为 `1.0.1`。页面上的“登录/扫码/验证码”导航文字没有被误判成正文认证门禁，因为公开正文实际可读。同一 recipe 又成功读取同主机另一篇非样本文章 1,916 字。
+
+真实 `/tasks/search-and-fetch` 结果：
+
+| 条目 | Tier 1 | Tier 2 | 最终状态 | 正文长度 |
+|---|---|---|---|---:|
+| 知乎专栏样本 | HTTP 403 | `zhihu.detail_fetch.browserwing_recipe.v1` | success / degraded | 3,358 |
+| 第二篇知乎专栏 | HTTP 403 | 同一 recipe | success / degraded | 1,916 |
+| `https://www.zhihu.com/` | no_results | 因不匹配 `zhuanlan.zhihu.com` 而未启动 | no_results | 0 |
+
+整体为 `success / partial=true`。调用前后数据库均为 8 documents、13 observations、3 search runs。CSDN 详情样本在 BrowserWing 中出现 `ERR_SSL_PROTOCOL_ERROR`，系统保留为 `source_unavailable`，没有晋升或伪装成功；这条失败也说明“搜索 recipe 已通过”并不自动代表同站详情 recipe 已通过。
 
 ## 7. 当前结论
 
@@ -428,21 +468,22 @@ CSDN 真实组合任务体现部分失败语义：
 Maxun Robot        -> B站公开搜索
 BrowserWing Profile -> 小红书登录后搜索
 BrowserWing Recipe  -> 已验证公开站点的按需搜索
+BrowserWing Detail  -> 已验证主机的公开渲染正文 fallback
 SearXNG             -> 全网和域名限定发现
 Trafilatura         -> 公开文章正文
         ↓
 统一 Gateway -> 明确状态、统一字段、去重、SQLite jobs
 ```
 
-当前版本可以用于低频个人检索、Agent 工具调用和后续来源 POC。它还不是生产级舆情系统，主要缺口是更多站型的 Draft 回归、recipe 漂移检测、公众号全局搜索、更多强登录平台、分页、实体消歧和合规治理。
+当前版本可以用于低频个人检索、Agent 工具调用和后续来源 POC。它还不是生产级舆情系统，主要缺口是视频描述/问答/帖子等非长文章详情模型、更多站型回归、recipe 版本回滚、公众号全局搜索、更多强登录平台、分页、实体消歧和合规治理。
 
 ## 8. 下一阶段建议
 
 按价值与风险排序：
 
-1. 选择 3 至 5 个结构不同的公开搜索站做 Draft 横向回归，优先验证普通新闻、社区/文档和客户端渲染页面；
-2. 为运行时 recipe 增加定期 `verify`、选择器漂移告警、版本升级和回滚，不允许失效后静默输出无关结果；
-3. 为需要脚本渲染但无需绕过认证的页面增加 `detail_fetch` Draft；公开 HTML 继续优先使用已验证的 Trafilatura 能力；
+1. 为视频描述、问答回答、帖子正文定义独立输出类型和质量门槛，不把所有详情强塞进“200 字长文章”；
+2. 为运行时 recipe 增加定期 `verify`、人工审计记录、选择器漂移告警、版本升级和回滚；
+3. 优先补公众号已知文章、B站视频详情、知乎问答和公开新闻站四类按需详情小样本，再决定是否需要平台专用 Adapter；
 4. 再评估 LLM 辅助探索，让模型提出候选选择器和动作，但确定性验证门禁仍不可跳过；
-5. 强登录平台继续使用专用 Adapter 与用户人工 Profile；知乎、微博等优先做小样本对照，不把外部 `site:` 发现误称为站内完整索引；
+5. 强登录平台继续使用专用 Adapter 与用户人工 Profile；小红书、微博等不进入通用 Draft，也不把外部 `site:` 发现误称为站内完整索引；
 6. 在任何商业化或多人服务之前，单独评估 Maxun 与 SearXNG 的 AGPL 网络服务义务，以及平台条款、个人信息、浏览器 URL 安全和内容存储周期。

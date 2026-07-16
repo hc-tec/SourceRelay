@@ -66,9 +66,14 @@ web.detail_fetch.trafilatura.v1
 
 ```text
 baidu.keyword_search.browserwing_recipe.v1
+bing.keyword_search.browserwing_recipe.v1
+sogou.keyword_search.browserwing_recipe.v1
+csdn.keyword_search.browserwing_recipe.v1
+gov-cn.detail_fetch.browserwing_recipe.v1
+zhihu.detail_fetch.browserwing_recipe.v1
 ```
 
-### 未知公开网站生成按需搜索能力
+### 未知公开网站生成按需搜索或详情能力
 
 `0.4.0` 新增 Draft Capability Factory，用于把一个尚未接入的公开网站逐步变成受控能力：
 
@@ -88,9 +93,9 @@ proposed -> inspected -> validated -> promoted
                          \-> failed
 ```
 
-- `create` 只登记平台、公开起始 URL 和样本查询；私网、回环与带凭据 URL 会被拒绝；
-- `inspect` 只导航并识别可见搜索输入和提交控件，不提交查询；
-- `validate` 才使用样本词做一次真实、只读搜索，并要求至少两条带标题和 HTTP(S) URL 的结果，同时要求结果与样本词相关；
+- `create` 登记平台、动作和公开起始 URL；`keyword_search` 必须提供样本查询，`detail_fetch` 不需要伪造查询词；私网、回环与带凭据 URL 会被拒绝；
+- 搜索 `inspect` 只识别可见输入和提交控件；详情 `inspect` 只对标题、正文容器、段落、链接密度和文本长度提出候选；
+- 搜索 `validate` 使用样本词做一次真实、只读搜索并要求结果相关；详情 `validate` 重放同一公开 URL，要求最终主机仍在边界内、标题非空且正文至少 200 字；
 - `promote` 只接受 `validated` Draft，将确定性 recipe 写入 `runtime/capabilities/*.json`，随后重新加载 Capability Catalog；
 - 生成能力可立即被 `/tasks/plan` 发现并由 `/tasks/execute` 调用，也支持 `persistence=none`；
 - Draft Explorer 与小红书 Adapter 共享同一个 BrowserWing 锁，避免并发控制同一 Profile。
@@ -107,7 +112,7 @@ proposed -> inspected -> validated -> promoted
 }
 ```
 
-第一版边界很明确：只生成公开站点的 `keyword_search`；只读取首个渲染结果页；不自动登录、不处理或绕过验证码；选择器和标题/URL 抽取是启发式的，网站改版后必须重新验证。初始 URL 会做公共地址校验，结果页还会限制在起始主机或其子域；但浏览器导航层并不等同于带逐跳 DNS 校验的安全 HTTP 下载器，因此当前服务仍只绑定本机，不应作为多租户任意 URL 浏览服务暴露。
+搜索 recipe 只读取首个渲染结果页。详情 recipe 只读取验证过的正文容器 `innerText`，不点击、不提交表单、不滚动翻页、不展开全文，也不读取 Cookie 或 localStorage。两类 recipe 都不会自动登录、处理验证码或绕过付费保护；选择器失效、正文过短、最终主机越界和认证门禁都会显式失败。浏览器导航层并不等同于带逐跳 DNS 校验的安全 HTTP 下载器，因此当前服务仍只绑定本机，不应作为多租户任意 URL 浏览服务暴露。完整决策见 [浏览器渲染详情 ADR](../../docs/design/browser-rendered-detail-capability.md)。
 
 ### 生成能力可靠性与漂移隔离
 
@@ -139,6 +144,8 @@ blocked 后精确验证成功 -> verified，恢复 Planner 资格
 
 BrowserWing 会话还有一次受控自愈：如果导航明确返回连接已关闭、控制连接失效等诊断，Draft Explorer 会在共享 Profile 锁内替换默认浏览器实例并重试一次。普通网站错误不会无限触发浏览器重启。
 
+已晋升 Draft 在修复选择器后可以重新 `validate -> promote`。如果 recipe 确实变化，运行时 Manifest 会递增 patch 版本、写入新 recipe，并以这次成功验证清零连续失败和 blocked 状态；重复 promote 且 recipe 未变化时保持幂等。
+
 ### 多站点 Draft 横向回归
 
 除百度外，`0.4.1` 又用三个公开搜索入口做了“样本验证 + 不同查询执行”：
@@ -161,9 +168,9 @@ Bing 还验证了两个通用边界：入口从 `cn.bing.com` 跳到 `www.bing.c
 
 三次不同查询均通过统一 `/tasks/execute`、使用 `persistence=none`，没有触发 fallback，也没有改变 documents、observations 和 search_runs 数量。
 
-### 搜索结果到公开详情
+### 搜索结果到分层详情
 
-`0.5.0` 新增组合接口：
+`0.5.0` 新增组合接口，`0.6.0` 将它升级为 direct-first 的分层详情链：
 
 ```text
 POST /tasks/search-and-fetch
@@ -192,7 +199,10 @@ POST /tasks/search-and-fetch
   -> 规范化并去重结果 URL
   -> 最多选择 5 条
   -> web.detail_fetch.trafilatura.v1
-  -> 每次重定向前重新检查 DNS/IP
+  -> 成功：直接返回
+  -> no_results / source_unavailable
+  -> 仅当 requested platform 已有 verified/degraded 且 host 匹配的 BrowserWing detail recipe
+  -> platform.detail_fetch.browserwing_recipe.v1
   -> 逐条返回正文或显式错误
 ```
 
@@ -207,7 +217,11 @@ POST /tasks/search-and-fetch
 }
 ```
 
-组合任务不会因为一篇文章失败而丢弃其他成功正文。如果至少一篇成功，整体为 `success`；同时存在失败项时 `partial=true`。如果全部没有可读正文，整体为 `no_results`。第一版详情只处理公开 HTML/text，不执行页面脚本，不使用 BrowserWing 登录态；返回的正文不会由该接口写入情报库。
+每条详情都返回 `attempted_capabilities`、`executed_capability_id` 和 `degraded`。Trafilatura 成功时 `degraded=false`；使用已注册的浏览器 recipe 时 `degraded=true`。没有 recipe、recipe 主机不匹配、能力已 blocked/retired 或遇到安全校验错误时，不会临时探索页面或盲目启动浏览器。
+
+真实知乎专栏闭环：Trafilatura 对公开专栏返回 HTTP 403；`zhihu.detail_fetch.browserwing_recipe.v1` 随后读取样本文章 3,358 字，并用同一 recipe 读取另一篇文章 1,916 字。容器评分会惩罚包含多个主标题或多篇嵌套文章的聚合区，避免把推荐文章混入正文；修正后的 manifest 为 `1.0.1`。真实 `/tasks/search-and-fetch` 共处理 3 条：两条知乎专栏通过浏览器 fallback 成功，`https://www.zhihu.com/` 因不匹配 `zhuanlan.zhihu.com` 主机边界而只保留 Tier 1 的 `no_results`。前后数据库仍为 8 documents、13 observations、3 search runs。
+
+组合任务不会因为一篇文章失败而丢弃其他成功正文。如果至少一篇成功，整体为 `success`；同时存在失败项时 `partial=true`。如果全部没有可读正文，整体为 `no_results`。返回正文不会由该接口写入情报库。BrowserWing Tier 2 只处理不需要登录即可看到的公开渲染正文；人工登录内容仍属于平台专用 Profile Adapter，不进入通用 Draft。
 
 只规划、不执行：
 
@@ -378,3 +392,5 @@ Invoke-RestMethod "http://127.0.0.1:8765/clusters?min_documents=2&limit=20"
 .\.venv\Scripts\python.exe -m compileall app
 .\.venv\Scripts\python.exe -m pytest
 ```
+
+当前基线：`69 passed`。

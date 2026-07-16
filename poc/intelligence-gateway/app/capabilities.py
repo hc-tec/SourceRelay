@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from threading import RLock
 from typing import Any
+from urllib.parse import urlsplit
 
 from .config import GATEWAY_ROOT
 from .models import (
@@ -192,6 +193,42 @@ class CapabilityCatalog:
             CapabilityStatus.DECLARED_UNVERIFIED: 3,
         }
         candidates.sort(key=lambda item: status_priority.get(item.status, 99))
+        if request.action == CapabilityAction.DETAIL_FETCH and request.input.get("url"):
+            direct = self.get("web.detail_fetch.trafilatura.v1")
+            requested_host = (
+                urlsplit(str(request.input["url"])).hostname or ""
+            ).casefold().rstrip(".")
+            rendered_fallbacks = []
+            if request.allow_fallback and requested_host:
+                for item in candidates:
+                    if item.executor != "browserwing_detail_recipe" or item.status not in {
+                        CapabilityStatus.VERIFIED,
+                        CapabilityStatus.DEGRADED,
+                    }:
+                        continue
+                    allowed_host = str(
+                        (item.recipe or {}).get("allowed_host") or ""
+                    ).casefold().rstrip(".")
+                    if requested_host == allowed_host or requested_host.endswith(
+                        f".{allowed_host}"
+                    ):
+                        rendered_fallbacks.append(item)
+            return TaskPlanResponse(
+                available=True,
+                requested_platform=request.platform,
+                requested_action=request.action,
+                selected_capability=direct,
+                fallback_capabilities=rendered_fallbacks[:1],
+                effective_input=dict(request.input),
+                degraded=False,
+                warnings=(
+                    [
+                        "A host-scoped rendered-detail recipe is registered as a fallback after public HTML extraction."
+                    ]
+                    if rendered_fallbacks
+                    else []
+                ),
+            )
         if candidates:
             selected = candidates[0]
             fallbacks = (

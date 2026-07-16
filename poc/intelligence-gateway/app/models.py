@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
 
 def utc_now() -> datetime:
@@ -196,15 +196,29 @@ class ProfileStatus(BaseModel):
 
 class DraftCapabilityRequest(BaseModel):
     platform: str = Field(min_length=1, max_length=100)
-    action: Literal[CapabilityAction.KEYWORD_SEARCH] = CapabilityAction.KEYWORD_SEARCH
+    action: Literal[
+        CapabilityAction.KEYWORD_SEARCH,
+        CapabilityAction.DETAIL_FETCH,
+    ] = CapabilityAction.KEYWORD_SEARCH
     start_url: HttpUrl
-    sample_query: str = Field(min_length=1, max_length=100)
+    sample_query: str | None = Field(default=None, min_length=1, max_length=100)
     description: str = Field(default="", max_length=500)
 
-    @field_validator("platform", "sample_query")
+    @field_validator("platform")
     @classmethod
-    def clean_draft_text(cls, value: str) -> str:
+    def clean_draft_platform(cls, value: str) -> str:
         return " ".join(value.split())
+
+    @field_validator("sample_query")
+    @classmethod
+    def clean_draft_query(cls, value: str | None) -> str | None:
+        return " ".join(value.split()) if value is not None else None
+
+    @model_validator(mode="after")
+    def validate_action_sample(self):
+        if self.action == CapabilityAction.KEYWORD_SEARCH and not self.sample_query:
+            raise ValueError("sample_query is required for keyword_search drafts")
+        return self
 
 
 class DraftCapabilityRecord(BaseModel):
@@ -212,7 +226,7 @@ class DraftCapabilityRecord(BaseModel):
     platform: str
     action: CapabilityAction
     start_url: str
-    sample_query: str
+    sample_query: str | None = None
     description: str = ""
     status: DraftStatus
     inspection: dict[str, Any] | None = None
@@ -381,6 +395,9 @@ class DetailFetchItem(BaseModel):
     rank: int = Field(ge=1)
     search_item: SearchItem
     url: str
+    attempted_capabilities: list[str] = Field(default_factory=list)
+    executed_capability_id: str | None = None
+    degraded: bool = False
     ok: bool
     status: ResultStatus
     duration_ms: int = Field(default=0, ge=0)

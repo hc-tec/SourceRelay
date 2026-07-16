@@ -1,4 +1,5 @@
 from app.models import (
+    CapabilityAction,
     DraftCapabilityRequest,
     DraftStatus,
     ResultStatus,
@@ -75,6 +76,24 @@ def test_capability_draft_lifecycle_is_persisted(tmp_path) -> None:
     assert validated.status == DraftStatus.VALIDATED
     assert validated.validation == {"passed": True, "item_count": 3}
     assert store.list_capability_drafts() == [validated]
+
+
+def test_detail_capability_draft_round_trip_does_not_require_a_query(tmp_path) -> None:
+    store = GatewayStore(tmp_path / "gateway.db")
+    store.initialize()
+
+    draft = store.create_capability_draft(
+        DraftCapabilityRequest(
+            platform="csdn",
+            action=CapabilityAction.DETAIL_FETCH,
+            start_url="https://blog.csdn.net/example/article/details/1",
+            description="Public rendered detail",
+        )
+    )
+
+    assert draft.action == CapabilityAction.DETAIL_FETCH
+    assert draft.sample_query is None
+    assert store.get_capability_draft(draft.draft_id).sample_query is None
 
 
 def _response(views: int) -> SearchResponse:

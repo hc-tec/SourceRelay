@@ -631,7 +631,11 @@ class GatewayStore:
             platform=row["platform"],
             action=CapabilityAction(row["action"]),
             start_url=row["start_url"],
-            sample_query=row["sample_query"],
+            sample_query=(
+                row["sample_query"]
+                if row["action"] == CapabilityAction.KEYWORD_SEARCH.value
+                else None
+            ),
             description=row["description"],
             status=DraftStatus(row["status"]),
             inspection=json.loads(row["inspection_json"]) if row["inspection_json"] else None,
@@ -660,7 +664,7 @@ class GatewayStore:
                     request.platform,
                     request.action.value,
                     str(request.start_url),
-                    request.sample_query,
+                    request.sample_query or "",
                     request.description,
                     DraftStatus.PROPOSED.value,
                     timestamp,

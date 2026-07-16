@@ -511,6 +511,20 @@ Gateway `0.5.0` 已把 Trafilatura 公开正文读取注册为 `web.detail_fetch
 
 因此常见网站能力矩阵应继续区分“能发现链接”和“能读取详情”。公开 HTML 可以共享安全正文能力；脚本渲染、登录墙和平台详情接口不能因为搜索成功就自动标记为详情成功。
 
+## 15. 2026-07-16 浏览器渲染详情真实结果
+
+Gateway `0.6.0` 已把“脚本渲染详情”实现为受控的第二层能力，而不是通用浏览器兜底：
+
+```text
+Trafilatura public HTML first
+  -> 失败后，仅查找 requested platform 下已验证且 host 匹配的 BrowserWing detail recipe
+  -> 没有 recipe、主机不匹配、认证门禁或安全错误时停止
+```
+
+知乎专栏提供了真实 Tier 2 证据：Trafilatura 对公开专栏返回 HTTP 403，`zhihu.detail_fetch.browserwing_recipe.v1` 随后读取 3,358 字精确正文；同一 recipe 又读取另一篇非样本文章 1,916 字。候选评分会惩罚包含多个主标题或多篇嵌套文章的聚合区，避免把推荐文章当正文。知乎首页虽然出现在搜索结果中，但因为不属于 recipe 的 `zhuanlan.zhihu.com` 主机边界，没有启动 BrowserWing。中国政府网页面则同时验证了两层能力，但默认任务仍只使用成功的 Trafilatura，没有因为 BrowserWing recipe 存在而增加成本。
+
+这进一步修正常见网站“支持矩阵”的写法：至少要分别记录 `keyword_search`、`detail_fetch/public_html`、`detail_fetch/public_browser` 和 `authenticated_profile`，不能用一个“支持”勾选框覆盖四种完全不同的真实性与风险。CSDN 搜索 recipe 已通过，但详情 BrowserWing 导航出现 `ERR_SSL_PROTOCOL_ERROR`，所以 CSDN 详情仍不能据搜索能力推断为可用。
+
 ## 主要项目资料
 
 - [BrowserWing](https://github.com/browserwing/browserwing)

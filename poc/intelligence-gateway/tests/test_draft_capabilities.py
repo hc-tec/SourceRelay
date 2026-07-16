@@ -7,7 +7,7 @@ import pytest
 from app.capabilities import CapabilityCatalog
 from app.config import Settings
 from app.drafts import BrowserWingDraftExplorer
-from app.errors import SourceUnavailableError
+from app.errors import GatewayError, SourceUnavailableError
 from app.main import create_app
 from app.models import (
     CapabilityAction,
@@ -64,6 +64,42 @@ def _validated_payload():
                 "text": "摘要二",
             },
         ],
+    }
+
+
+def _validated_detail_payload():
+    url = "https://blog.csdn.net/example/article/details/1"
+    return {
+        "inspection": {
+            "url": url,
+            "title_candidates": [{"selector": "h1", "text": "示例文章"}],
+            "content_candidates": [
+                {"selector": "article", "text_length": 600, "score": 900}
+            ],
+            "authentication_markers": [],
+        },
+        "validation": {
+            "passed": True,
+            "issues": [],
+            "final_url": url,
+            "final_title": "示例文章",
+            "text_length": 600,
+            "authentication_gate_suspected": False,
+        },
+        "recipe": {
+            "sample_url": url,
+            "allowed_host": "blog.csdn.net",
+            "title_selector": "h1",
+            "content_selector": "article",
+            "minimum_text_chars": 200,
+            "maximum_text_chars": 200000,
+        },
+        "article": {
+            "url": url,
+            "title": "示例文章",
+            "text": "正文" * 300,
+            "text_length": 600,
+        },
     }
 
 
@@ -128,6 +164,21 @@ async def test_draft_explorer_retries_navigation_after_closed_connection() -> No
         ("replace",),
         ("exec", "navigate", "https://example.com"),
     ]
+
+
+def test_detail_text_repairs_only_high_confidence_utf8_mojibake() -> None:
+    original = "中共中央关于进一步全面深化改革的决定"
+    mojibake = original.encode("utf-8").decode("latin-1")
+
+    repaired, changed = BrowserWingDraftExplorer._repair_utf8_mojibake(mojibake)
+    unchanged, unchanged_flag = BrowserWingDraftExplorer._repair_utf8_mojibake(
+        original
+    )
+
+    assert repaired == original
+    assert changed is True
+    assert unchanged == original
+    assert unchanged_flag is False
 
 
 @pytest.mark.asyncio
@@ -213,6 +264,113 @@ async def test_validation_uses_checked_redirect_host_and_form_fallback(
 
 
 @pytest.mark.asyncio
+async def test_detail_validation_accepts_a_public_readable_container(
+    monkeypatch,
+) -> None:
+    explorer = BrowserWingDraftExplorer(Settings.from_env(), asyncio.Lock())
+
+    async def public_url_ok(_url):
+        return None
+
+    async def ensure_browser():
+        return None
+
+    async def inspect(_url):
+        return _validated_detail_payload()["inspection"]
+
+    async def extract(**_kwargs):
+        return {
+            "url": "https://blog.csdn.net/example/article/details/1",
+            "title": "示例文章",
+            "text": "正文" * 300,
+            "text_length": 600,
+            "content_selector_found": True,
+            "title_selector_found": True,
+            "authentication_markers": [],
+        }
+
+    monkeypatch.setattr("app.drafts.validate_public_url", public_url_ok)
+    explorer._ensure_browser = ensure_browser
+    explorer._inspect_detail_unlocked = inspect
+    explorer._extract_detail_unlocked = extract
+
+    payload = await explorer.validate_detail(
+        "https://blog.csdn.net/example/article/details/1"
+    )
+
+    assert payload["validation"]["passed"] is True
+    assert payload["recipe"]["allowed_host"] == "blog.csdn.net"
+    assert payload["recipe"]["content_selector"] == "article"
+    assert payload["article"]["text_length"] == 600
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("article", "expected_issue"),
+    [
+        (
+            {
+                "url": "https://blog.csdn.net/example/article/details/1",
+                "title": "内容不足",
+                "text": "短正文",
+                "text_length": 3,
+                "content_selector_found": True,
+                "authentication_markers": [],
+            },
+            "shorter than 200",
+        ),
+        (
+            {
+                "url": "https://accounts.example.net/login",
+                "title": "登录",
+                "text": "",
+                "text_length": 0,
+                "content_selector_found": False,
+                "authentication_markers": ["登录"],
+            },
+            "hostname boundary",
+        ),
+    ],
+)
+async def test_detail_validation_rejects_short_text_and_host_escape(
+    monkeypatch, article, expected_issue
+) -> None:
+    explorer = BrowserWingDraftExplorer(Settings.from_env(), asyncio.Lock())
+
+    async def public_url_ok(_url):
+        return None
+
+    async def ensure_browser():
+        return None
+
+    async def inspect(_url):
+        payload = _validated_detail_payload()["inspection"]
+        if article.get("authentication_markers"):
+            payload = {**payload, "authentication_markers": ["登录"]}
+        return payload
+
+    async def extract(**_kwargs):
+        return article
+
+    monkeypatch.setattr("app.drafts.validate_public_url", public_url_ok)
+    explorer._ensure_browser = ensure_browser
+    explorer._inspect_detail_unlocked = inspect
+    explorer._extract_detail_unlocked = extract
+
+    payload = await explorer.validate_detail(
+        "https://blog.csdn.net/example/article/details/1"
+    )
+
+    assert payload["validation"]["passed"] is False
+    assert payload["recipe"] is None
+    assert any(
+        expected_issue in issue for issue in payload["validation"]["issues"]
+    )
+    if article.get("authentication_markers"):
+        assert payload["validation"]["authentication_gate_suspected"] is True
+
+
+@pytest.mark.asyncio
 async def test_draft_validate_promote_plan_and_execute(tmp_path, monkeypatch) -> None:
     async def public_url_ok(_url):
         return None
@@ -285,6 +443,162 @@ async def test_draft_validate_promote_plan_and_execute(tmp_path, monkeypatch) ->
 
 
 @pytest.mark.asyncio
+async def test_keyword_search_draft_requires_sample_query(tmp_path) -> None:
+    app = create_app(_settings(tmp_path))
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/capability-drafts",
+            json={
+                "platform": "example",
+                "action": "keyword_search",
+                "start_url": "https://example.com/search",
+            },
+        )
+
+    assert response.status_code == 422
+    assert "sample_query is required" in str(response.json()["details"])
+
+
+@pytest.mark.asyncio
+async def test_detail_draft_promotes_and_executes_without_sample_query(
+    tmp_path, monkeypatch
+) -> None:
+    async def public_url_ok(_url):
+        return None
+
+    monkeypatch.setattr("app.main.validate_public_url", public_url_ok)
+    app = create_app(_settings(tmp_path))
+    detail_selector = {"value": "article"}
+
+    async def validate_detail(_url):
+        payload = _validated_detail_payload()
+        payload["recipe"]["content_selector"] = detail_selector["value"]
+        return payload
+
+    async def execute_detail_recipe(_recipe, _url):
+        return _validated_detail_payload()
+
+    app.state.draft_explorer.validate_detail = validate_detail
+    app.state.draft_explorer.execute_detail_recipe = execute_detail_recipe
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post(
+            "/capability-drafts",
+            json={
+                "platform": "csdn",
+                "action": "detail_fetch",
+                "start_url": "https://blog.csdn.net/example/article/details/1",
+                "description": "Public rendered detail",
+            },
+        )
+        draft_id = created.json()["draft_id"]
+        validated = await client.post(f"/capability-drafts/{draft_id}/validate")
+        promoted = await client.post(f"/capability-drafts/{draft_id}/promote")
+        executed = await client.post(
+            f"/capabilities/{promoted.json()['capability_id']}/verify"
+        )
+        checked = await client.post(
+            f"/capabilities/{promoted.json()['capability_id']}/check"
+        )
+        detail_selector["value"] = "div.article-body"
+        await client.post(f"/capability-drafts/{draft_id}/validate")
+        repromoted = await client.post(f"/capability-drafts/{draft_id}/promote")
+        idempotent_promote = await client.post(
+            f"/capability-drafts/{draft_id}/promote"
+        )
+
+    assert created.status_code == 201
+    assert created.json()["sample_query"] is None
+    assert validated.json()["passed"] is True
+    assert promoted.status_code == 200
+    assert promoted.json()["action"] == "detail_fetch"
+    assert promoted.json()["executor"] == "browserwing_detail_recipe"
+    assert promoted.json()["output_schema"] == "fetch_response.v1"
+    assert promoted.json()["scope"]["host_scoped"] is True
+    assert "pagination" not in promoted.json()["scope"]
+    assert executed.status_code == 200
+    assert executed.json()["executed_capability_id"] == (
+        "csdn.detail_fetch.browserwing_recipe.v1"
+    )
+    assert executed.json()["result"]["article"]["collector"] == (
+        "browserwing_detail_recipe"
+    )
+    assert checked.json()["details"]["recipe_fields_complete"] is True
+    assert repromoted.json()["version"] == "1.0.1"
+    assert repromoted.json()["recipe"]["content_selector"] == "div.article-body"
+    assert idempotent_promote.json()["version"] == "1.0.1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("authentication_gate", "expected_http", "expected_status", "issue"),
+    [
+        (
+            False,
+            503,
+            "source_unavailable",
+            "The generated detail content selector was not found.",
+        ),
+        (
+            True,
+            424,
+            "authentication_required",
+            "Authentication or verification markers blocked public detail text.",
+        ),
+    ],
+)
+async def test_generated_detail_executor_reports_recipe_failure_semantics(
+    tmp_path,
+    monkeypatch,
+    authentication_gate,
+    expected_http,
+    expected_status,
+    issue,
+) -> None:
+    async def public_url_ok(_url):
+        return None
+
+    monkeypatch.setattr("app.main.validate_public_url", public_url_ok)
+    app = create_app(_settings(tmp_path))
+
+    async def validate_detail(_url):
+        return _validated_detail_payload()
+
+    async def stale_detail_recipe(_recipe, _url):
+        payload = _validated_detail_payload()
+        payload["validation"] = {
+            "passed": False,
+            "issues": [issue],
+            "authentication_gate_suspected": authentication_gate,
+        }
+        return payload
+
+    app.state.draft_explorer.validate_detail = validate_detail
+    app.state.draft_explorer.execute_detail_recipe = stale_detail_recipe
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post(
+            "/capability-drafts",
+            json={
+                "platform": "csdn",
+                "action": "detail_fetch",
+                "start_url": "https://blog.csdn.net/example/article/details/1",
+            },
+        )
+        draft_id = created.json()["draft_id"]
+        await client.post(f"/capability-drafts/{draft_id}/validate")
+        await client.post(f"/capability-drafts/{draft_id}/promote")
+        executed = await client.post(
+            "/capabilities/csdn.detail_fetch.browserwing_recipe.v1/verify"
+        )
+
+    assert executed.status_code == expected_http
+    assert executed.json()["status"] == expected_status
+    assert issue in executed.json()["warnings"]
+
+
+@pytest.mark.asyncio
 async def test_unvalidated_draft_cannot_be_promoted(tmp_path, monkeypatch) -> None:
     async def public_url_ok(_url):
         return None
@@ -308,6 +622,48 @@ async def test_unvalidated_draft_cannot_be_promoted(tmp_path, monkeypatch) -> No
 
 
 @pytest.mark.asyncio
+async def test_detail_draft_with_incomplete_recipe_cannot_be_promoted(
+    tmp_path, monkeypatch
+) -> None:
+    async def public_url_ok(_url):
+        return None
+
+    monkeypatch.setattr("app.main.validate_public_url", public_url_ok)
+    app = create_app(_settings(tmp_path))
+
+    async def validate_detail(_url):
+        payload = _validated_detail_payload()
+        payload["recipe"] = {
+            key: value
+            for key, value in payload["recipe"].items()
+            if key not in {"allowed_host", "content_selector"}
+        }
+        return payload
+
+    app.state.draft_explorer.validate_detail = validate_detail
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post(
+            "/capability-drafts",
+            json={
+                "platform": "csdn",
+                "action": "detail_fetch",
+                "start_url": "https://blog.csdn.net/example/article/details/1",
+            },
+        )
+        draft_id = created.json()["draft_id"]
+        validated = await client.post(f"/capability-drafts/{draft_id}/validate")
+        promoted = await client.post(f"/capability-drafts/{draft_id}/promote")
+
+    assert validated.json()["passed"] is True
+    assert promoted.status_code == 422
+    assert promoted.json()["missing_fields"] == [
+        "allowed_host",
+        "content_selector",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_private_draft_start_url_is_rejected(tmp_path) -> None:
     app = create_app(_settings(tmp_path))
     transport = httpx.ASGITransport(app=app)
@@ -322,6 +678,25 @@ async def test_private_draft_start_url_is_rejected(tmp_path) -> None:
         )
     assert response.status_code == 422
     assert "non-public" in response.json()["error"]
+
+
+@pytest.mark.asyncio
+async def test_detail_recipe_rejects_url_outside_allowed_host(monkeypatch) -> None:
+    explorer = BrowserWingDraftExplorer(Settings.from_env(), asyncio.Lock())
+
+    async def public_url_ok(_url):
+        return None
+
+    monkeypatch.setattr("app.drafts.validate_public_url", public_url_ok)
+    recipe = _validated_detail_payload()["recipe"]
+
+    with pytest.raises(GatewayError) as captured:
+        await explorer.execute_detail_recipe(
+            recipe, "https://example.net/article/2"
+        )
+
+    assert getattr(captured.value, "http_status", None) == 422
+    assert "hostname boundary" in str(captured.value)
 
 
 def test_runtime_manifest_reload(tmp_path) -> None:

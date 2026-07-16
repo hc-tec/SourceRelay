@@ -6,6 +6,7 @@ from importlib.metadata import version
 import re
 import time
 from typing import Any
+from urllib.parse import urlsplit
 import uuid
 
 from fastapi import BackgroundTasks, FastAPI, Query, Request
@@ -19,10 +20,11 @@ from .capabilities import CapabilityCatalog
 from .connectors.article import validate_public_url
 from .connectors.browserwing import BrowserWingXiaohongshuConnector
 from .drafts import BrowserWingDraftExplorer
-from .errors import GatewayError
+from .errors import AuthenticationRequiredError, GatewayError, SourceUnavailableError
 from .models import (
     FetchRequest,
     FetchResponse,
+    ArticleResult,
     ChangeType,
     CapabilityAction,
     CapabilityCheckResponse,
@@ -63,6 +65,62 @@ def _error_body(error: GatewayError) -> dict[str, Any]:
     }
 
 
+SEARCH_RECIPE_FIELDS = {
+    "start_url",
+    "input_selector",
+    "result_item_selector",
+    "expected_host",
+}
+DETAIL_RECIPE_FIELDS = {
+    "sample_url",
+    "allowed_host",
+    "content_selector",
+    "minimum_text_chars",
+    "maximum_text_chars",
+}
+
+
+def _missing_recipe_fields(recipe: dict[str, Any], required: set[str]) -> list[str]:
+    return sorted(
+        field
+        for field in required
+        if field not in recipe or recipe.get(field) is None or recipe.get(field) == ""
+    )
+
+
+def _detail_recipe_issues(recipe: dict[str, Any]) -> list[str]:
+    issues: list[str] = []
+    minimum = recipe.get("minimum_text_chars")
+    maximum = recipe.get("maximum_text_chars")
+    if type(minimum) is not int or type(maximum) is not int:
+        issues.append("Detail text thresholds must be integers.")
+        return issues
+    if minimum < 200:
+        issues.append("minimum_text_chars must be at least 200.")
+    if maximum < minimum or maximum > 200_000:
+        issues.append(
+            "maximum_text_chars must be between minimum_text_chars and 200000."
+        )
+    sample_url = str(recipe.get("sample_url") or "")
+    allowed_host = str(recipe.get("allowed_host") or "").casefold().rstrip(".")
+    sample_parts = urlsplit(sample_url)
+    sample_host = (sample_parts.hostname or "").casefold().rstrip(".")
+    if sample_parts.scheme not in {"http", "https"} or not sample_host:
+        issues.append("sample_url must be an absolute HTTP(S) URL.")
+    elif not (
+        sample_host == allowed_host or sample_host.endswith(f".{allowed_host}")
+    ):
+        issues.append("sample_url must stay within allowed_host.")
+    return issues
+
+
+def _increment_patch_version(value: str) -> str:
+    parts = value.split(".")
+    if len(parts) == 3 and all(part.isdigit() for part in parts):
+        return f"{parts[0]}.{parts[1]}.{int(parts[2]) + 1}"
+    return value
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     active_settings = settings or Settings.from_env()
     store = GatewayStore(active_settings.database_path)
@@ -80,7 +138,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.5.0",
+        version="0.6.0",
         description="Explicit-status API for Bilibili, Xiaohongshu, web discovery and article extraction.",
     )
     app.state.settings = active_settings
@@ -111,7 +169,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.5.0",
+            "version": "0.6.0",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
             "article_extraction": True,
@@ -141,18 +199,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
 
     async def check_manifest(manifest: CapabilityManifest) -> CapabilityCheckResponse:
-        if manifest.executor == "browserwing_recipe":
+        if manifest.executor in {
+            "browserwing_recipe",
+            "browserwing_detail_recipe",
+        }:
             recipe = manifest.recipe or {}
-            required = {
-                "start_url",
-                "input_selector",
-                "result_item_selector",
-                "expected_host",
-            }
-            missing = sorted(required - recipe.keys())
+            is_detail = manifest.executor == "browserwing_detail_recipe"
+            required = DETAIL_RECIPE_FIELDS if is_detail else SEARCH_RECIPE_FIELDS
+            missing = _missing_recipe_fields(recipe, required)
+            recipe_issues = _detail_recipe_issues(recipe) if is_detail and not missing else []
             binary_ready = draft_explorer.binary.is_file()
-            blocked = manifest.status == CapabilityStatus.BLOCKED
-            ready = not missing and binary_ready and not blocked
+            planner_eligible = manifest.status not in {
+                CapabilityStatus.BLOCKED,
+                CapabilityStatus.RETIRED,
+                CapabilityStatus.AUTHENTICATION_REQUIRED,
+            }
+            ready = not missing and not recipe_issues and binary_ready and planner_eligible
             return CapabilityCheckResponse(
                 capability_id=manifest.capability_id,
                 ready=ready,
@@ -161,7 +223,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     if ready
                     else (
                         ResultStatus.SOURCE_UNAVAILABLE
-                        if blocked
+                        if not planner_eligible
                         else ResultStatus.MISCONFIGURED
                     )
                 ),
@@ -169,9 +231,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "executor": manifest.executor,
                     "recipe_fields_complete": not missing,
                     "missing_recipe_fields": missing,
+                    "recipe_issues": recipe_issues,
                     "browserwing_binary_exists": binary_ready,
                     "capability_status": manifest.status.value,
-                    "planner_eligible": not blocked,
+                    "planner_eligible": planner_eligible,
                     "reliability": manifest.reliability.model_dump(mode="json"),
                     "network_access_verified_on_execute": True,
                 },
@@ -300,18 +363,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         draft = get_draft_or_404(draft_id)
         if isinstance(draft, JSONResponse):
             return draft
-        payload = await draft_explorer.inspect(draft.start_url)
+        payload = (
+            await draft_explorer.inspect_detail(draft.start_url)
+            if draft.action == CapabilityAction.DETAIL_FETCH
+            else await draft_explorer.inspect(draft.start_url)
+        )
         inspection = payload.get("inspection") or {}
-        has_input = bool(inspection.get("inputs"))
+        inspected = (
+            bool(inspection.get("content_candidates"))
+            if draft.action == CapabilityAction.DETAIL_FETCH
+            else bool(inspection.get("inputs"))
+        )
         return store.update_capability_draft(
             draft_id,
-            status=DraftStatus.INSPECTED if has_input else DraftStatus.FAILED,
+            status=DraftStatus.INSPECTED if inspected else DraftStatus.FAILED,
             inspection=inspection,
             recipe=payload.get("recipe"),
             validation={
                 "passed": False,
                 "issues": (
-                    [] if has_input else ["No visible search input candidate was found."]
+                    []
+                    if inspected
+                    else [
+                        "No readable detail content container was found."
+                        if draft.action == CapabilityAction.DETAIL_FETCH
+                        else "No visible search input candidate was found."
+                    ]
                 ),
             },
         )
@@ -324,7 +401,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         draft = get_draft_or_404(draft_id)
         if isinstance(draft, JSONResponse):
             return draft
-        payload = await draft_explorer.validate(draft.start_url, draft.sample_query)
+        payload = (
+            await draft_explorer.validate_detail(draft.start_url)
+            if draft.action == CapabilityAction.DETAIL_FETCH
+            else await draft_explorer.validate(
+                draft.start_url, str(draft.sample_query)
+            )
+        )
         validation = payload.get("validation") or {}
         passed = bool(validation.get("passed"))
         status = DraftStatus.VALIDATED if passed else DraftStatus.FAILED
@@ -335,6 +418,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             recipe=payload.get("recipe"),
             validation=validation,
         )
+        detail_article = payload.get("article") or {}
         return DraftValidationResponse(
             draft_id=draft_id,
             passed=passed,
@@ -345,10 +429,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "final_url": validation.get("final_url", ""),
                 "final_title": validation.get("final_title", ""),
                 "submit_method": validation.get("submit_method", ""),
+                "text_length": validation.get("text_length", 0),
+                "encoding_repaired": validation.get("encoding_repaired", False),
                 "authentication_gate_suspected": validation.get(
                     "authentication_gate_suspected", False
                 ),
                 "sample_items": (payload.get("items") or [])[:3],
+                "article": (
+                    {
+                        "url": detail_article.get("url", ""),
+                        "title": detail_article.get("title", ""),
+                        "text_preview": str(detail_article.get("text") or "")[:500],
+                        "text_length": detail_article.get("text_length", 0),
+                    }
+                    if draft.action == CapabilityAction.DETAIL_FETCH
+                    else None
+                ),
             },
             issues=list(validation.get("issues") or []),
         )
@@ -357,7 +453,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         slug = re.sub(r"[^a-z0-9]+", "-", draft.platform.lower()).strip("-")
         if not slug:
             slug = f"site-{hashlib.sha256(draft.platform.encode('utf-8')).hexdigest()[:10]}"
-        return f"{slug}.keyword_search.browserwing_recipe.v1"
+        action = (
+            "detail_fetch"
+            if draft.action == CapabilityAction.DETAIL_FETCH
+            else "keyword_search"
+        )
+        return f"{slug}.{action}.browserwing_recipe.v1"
 
     @app.post(
         "/capability-drafts/{draft_id}/promote",
@@ -367,13 +468,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         draft = get_draft_or_404(draft_id)
         if isinstance(draft, JSONResponse):
             return draft
-        required_recipe_fields = {
-            "start_url",
-            "input_selector",
-            "result_item_selector",
-            "expected_host",
-        }
-        missing = sorted(required_recipe_fields - set(draft.recipe or {}))
+        is_detail = draft.action == CapabilityAction.DETAIL_FETCH
+        required_recipe_fields = (
+            DETAIL_RECIPE_FIELDS if is_detail else SEARCH_RECIPE_FIELDS
+        )
+        recipe = draft.recipe or {}
+        missing = _missing_recipe_fields(recipe, required_recipe_fields)
+        recipe_issues = _detail_recipe_issues(recipe) if is_detail and not missing else []
         if draft.status not in {DraftStatus.VALIDATED, DraftStatus.PROMOTED}:
             return JSONResponse(
                 status_code=409,
@@ -383,7 +484,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "error": "Only a validated capability draft can be promoted.",
                 },
             )
-        if missing:
+        if missing or recipe_issues:
             return JSONResponse(
                 status_code=422,
                 content={
@@ -391,6 +492,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "status": "error",
                     "error": "Validated draft recipe is incomplete.",
                     "missing_fields": missing,
+                    "recipe_issues": recipe_issues,
                 },
             )
         capability_id = draft.promoted_capability_id or generated_capability_id(draft)
@@ -411,6 +513,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     },
                 )
             manifest = existing
+            if draft.status == DraftStatus.VALIDATED and draft.recipe != existing.recipe:
+                promoted_at = datetime.now().astimezone()
+                manifest = existing.model_copy(deep=True)
+                manifest.version = _increment_patch_version(manifest.version)
+                manifest.recipe = draft.recipe
+                manifest.verification_input = (
+                    {"url": draft.start_url}
+                    if is_detail
+                    else {"query": draft.sample_query, "limit": 5}
+                )
+                manifest.fallback_site = (
+                    None
+                    if is_detail
+                    else str((draft.recipe or {})["expected_host"])
+                )
+                manifest.status = CapabilityStatus.VERIFIED
+                manifest.last_verified_at = promoted_at
+                manifest.reliability.last_verification_status = ResultStatus.SUCCESS
+                manifest.reliability.consecutive_failures = 0
+                manifest.reliability.last_attempt_at = promoted_at
+                manifest.reliability.last_success_at = promoted_at
+                manifest.reliability.blocked_at = None
+                manifest.reliability.last_error = None
+                manifest.reliability.last_warnings = []
+                catalog.save_runtime_manifest(manifest)
         else:
             promoted_at = datetime.now().astimezone()
             manifest = CapabilityManifest(
@@ -419,24 +546,65 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 platform=draft.platform,
                 action=draft.action,
                 status=CapabilityStatus.VERIFIED,
-                executor="browserwing_recipe",
-                adapter="GeneratedBrowserWingRecipe",
+                executor=(
+                    "browserwing_detail_recipe"
+                    if is_detail
+                    else "browserwing_recipe"
+                ),
+                adapter=(
+                    "GeneratedBrowserWingDetailRecipe"
+                    if is_detail
+                    else "GeneratedBrowserWingRecipe"
+                ),
                 authentication={"required": False, "mode": "none"},
-                input_schema={
-                    "query": {"type": "string", "required": True, "max_length": 300},
-                    "limit": {"type": "integer", "default": 20, "maximum": 100},
-                },
-                output_schema="search_response.v1",
-                scope={
-                    "generated_from_draft": draft.draft_id,
-                    "public_pages_only": True,
-                    "first_rendered_page_only": True,
-                    "pagination": False,
-                    "heuristic_extraction": True,
-                },
-                fallback_ids=["web.keyword_search.searxng.v1"],
-                fallback_site=str((draft.recipe or {})["expected_host"]),
-                verification_input={"query": draft.sample_query, "limit": 5},
+                input_schema=(
+                    {
+                        "url": {"type": "url", "required": True},
+                    }
+                    if is_detail
+                    else {
+                        "query": {"type": "string", "required": True, "max_length": 300},
+                        "limit": {"type": "integer", "default": 20, "maximum": 100},
+                    }
+                ),
+                output_schema=(
+                    "fetch_response.v1" if is_detail else "search_response.v1"
+                ),
+                scope=(
+                    {
+                        "generated_from_draft": draft.draft_id,
+                        "public_pages_only": True,
+                        "rendered_detail": True,
+                        "heuristic_extraction": True,
+                        "host_scoped": True,
+                        "javascript_rendering": True,
+                        "comments": False,
+                        "login": False,
+                    }
+                    if is_detail
+                    else {
+                        "generated_from_draft": draft.draft_id,
+                        "public_pages_only": True,
+                        "first_rendered_page_only": True,
+                        "pagination": False,
+                        "heuristic_extraction": True,
+                    }
+                ),
+                fallback_ids=(
+                    []
+                    if is_detail
+                    else ["web.keyword_search.searxng.v1"]
+                ),
+                fallback_site=(
+                    None
+                    if is_detail
+                    else str((draft.recipe or {})["expected_host"])
+                ),
+                verification_input=(
+                    {"url": draft.start_url}
+                    if is_detail
+                    else {"query": draft.sample_query, "limit": 5}
+                ),
                 recipe=draft.recipe,
                 last_verified_at=promoted_at,
                 reliability={
@@ -446,9 +614,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 },
                 license="Generated recipe; target-site terms and policies apply.",
                 warnings=[
-                    "Generated BrowserWing adapter; selectors require regression maintenance.",
-                    "Only the first rendered result page is extracted.",
-                    "Titles and URLs are inferred heuristically from repeated containers.",
+                    *(
+                        [
+                            "Generated BrowserWing detail adapter; selectors require regression maintenance.",
+                            "Only public rendered text inside the validated content container is returned.",
+                        ]
+                        if is_detail
+                        else [
+                            "Generated BrowserWing adapter; selectors require regression maintenance.",
+                            "Only the first rendered result page is extracted.",
+                            "Titles and URLs are inferred heuristically from repeated containers.",
+                        ]
+                    ),
                     "The recipe does not automate login or bypass verification challenges.",
                 ],
             )
@@ -619,6 +796,64 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "include_tables": task_input.get("include_tables", True),
                 }
             )
+            if (
+                manifest.action == CapabilityAction.DETAIL_FETCH
+                and manifest.executor == "browserwing_detail_recipe"
+            ):
+                recipe = manifest.recipe or {}
+                missing = _missing_recipe_fields(recipe, DETAIL_RECIPE_FIELDS)
+                recipe_issues = _detail_recipe_issues(recipe) if not missing else []
+                if missing or recipe_issues:
+                    raise GatewayError(
+                        "Generated detail capability has no valid executable recipe.",
+                        status=ResultStatus.MISCONFIGURED,
+                        http_status=503,
+                        warnings=[
+                            *([f"Missing recipe fields: {', '.join(missing)}"] if missing else []),
+                            *recipe_issues,
+                        ],
+                    )
+                started = time.perf_counter()
+                payload = await draft_explorer.execute_detail_recipe(
+                    recipe, str(fetch_request.url)
+                )
+                validation = payload.get("validation") or {}
+                if not validation.get("passed"):
+                    issues = list(validation.get("issues") or [])
+                    if validation.get("authentication_gate_suspected"):
+                        raise AuthenticationRequiredError(
+                            "Generated BrowserWing detail recipe reached an authentication or verification gate.",
+                            warnings=issues,
+                        )
+                    raise SourceUnavailableError(
+                        "Generated BrowserWing detail recipe no longer passed validation.",
+                        warnings=issues,
+                    )
+                article_payload = payload.get("article") or {}
+                text = str(article_payload.get("text") or "").strip()
+                article_warnings = [
+                    "Public rendered text was extracted by a validated BrowserWing detail recipe.",
+                    "No login, verification challenge, click or form submission was automated.",
+                ]
+                if article_payload.get("encoding_repaired"):
+                    article_warnings.append(
+                        "A high-confidence UTF-8 mojibake repair was applied to rendered Chinese text."
+                    )
+                article = ArticleResult(
+                    url=str(fetch_request.url),
+                    final_url=str(article_payload.get("url") or fetch_request.url),
+                    title=str(article_payload.get("title") or "").strip(),
+                    site_name=str(recipe.get("allowed_host") or ""),
+                    text=text,
+                    collector="browserwing_detail_recipe",
+                    warnings=article_warnings,
+                )
+                return FetchResponse(
+                    ok=True,
+                    status=ResultStatus.SUCCESS,
+                    duration_ms=round((time.perf_counter() - started) * 1000),
+                    article=article,
+                )
             return await registry.fetch(fetch_request)
         raise GatewayError(
             f"Unsupported capability action: {manifest.action.value}",
@@ -678,9 +913,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 continue
             except GatewayError as exc:
                 last_error = exc
+                attempt_warnings.extend(exc.warnings)
                 attempt_warnings.append(
                     f"{manifest.capability_id} failed with {exc.status.value}: {exc}"
                 )
+                if (
+                    request.action == CapabilityAction.DETAIL_FETCH
+                    and exc.status != ResultStatus.SOURCE_UNAVAILABLE
+                ):
+                    break
                 continue
 
             has_more = index + 1 < len(candidates)
@@ -786,56 +1027,131 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             fetch_request = FetchRequest(
                 url=search_item.url, include_tables=request.include_tables
             )
-            try:
-                fetched = await execute_manifest(
-                    detail_manifest,
-                    fetch_request.model_dump(mode="json"),
-                    "none",
+            detail_plan = catalog.plan(
+                TaskPlanRequest(
+                    platform=request.platform,
+                    action=CapabilityAction.DETAIL_FETCH,
+                    input=fetch_request.model_dump(mode="json"),
+                    allow_fallback=request.options.allow_fallback,
                 )
-            except GatewayError as exc:
-                details.append(
-                    DetailFetchItem(
+            )
+            candidates = [detail_plan.selected_capability]
+            candidates.extend(detail_plan.fallback_capabilities)
+
+            attempted: list[str] = []
+            attempt_warnings: list[str] = []
+            final_item: DetailFetchItem | None = None
+            for candidate_index, candidate in enumerate(candidates):
+                if candidate is None:
+                    continue
+                attempted.append(candidate.capability_id)
+                try:
+                    fetched = await execute_manifest(
+                        candidate,
+                        fetch_request.model_dump(mode="json"),
+                        "none",
+                    )
+                except GatewayError as exc:
+                    attempt_warnings.extend(exc.warnings)
+                    should_fallback = (
+                        candidate_index == 0
+                        and len(candidates) > 1
+                        and exc.status == ResultStatus.SOURCE_UNAVAILABLE
+                    )
+                    if should_fallback:
+                        attempt_warnings.append(
+                            f"{candidate.capability_id} failed with {exc.status.value}; trying the registered rendered-detail recipe."
+                        )
+                        continue
+                    final_item = DetailFetchItem(
                         rank=search_item.rank,
                         search_item=search_item,
                         url=search_item.url,
+                        attempted_capabilities=attempted,
+                        executed_capability_id=candidate.capability_id,
+                        degraded=candidate_index > 0,
                         ok=False,
                         status=exc.status,
-                        warnings=exc.warnings,
+                        warnings=list(dict.fromkeys(attempt_warnings)),
                         error=str(exc),
                     )
-                )
-                continue
-            except Exception as exc:
-                details.append(
-                    DetailFetchItem(
+                    break
+                except Exception as exc:
+                    final_item = DetailFetchItem(
                         rank=search_item.rank,
                         search_item=search_item,
                         url=search_item.url,
+                        attempted_capabilities=attempted,
+                        executed_capability_id=candidate.capability_id,
+                        degraded=candidate_index > 0,
                         ok=False,
                         status=ResultStatus.ERROR,
+                        warnings=list(dict.fromkeys(attempt_warnings)),
                         error=f"Detail fetch failed with {exc.__class__.__name__}.",
                     )
+                    break
+
+                response_warnings = (
+                    fetched.article.warnings if fetched.article else []
                 )
-                continue
-            details.append(
-                DetailFetchItem(
+                should_fallback = (
+                    candidate_index == 0
+                    and len(candidates) > 1
+                    and fetched.status
+                    in {ResultStatus.NO_RESULTS, ResultStatus.SOURCE_UNAVAILABLE}
+                    and (
+                        fetched.status != ResultStatus.NO_RESULTS
+                        or request.options.fallback_on_no_results
+                    )
+                )
+                if should_fallback:
+                    attempt_warnings.extend(response_warnings)
+                    if fetched.error:
+                        attempt_warnings.append(
+                            f"{candidate.capability_id}: {fetched.error}"
+                        )
+                    attempt_warnings.append(
+                        f"{candidate.capability_id} returned {fetched.status.value}; trying the registered rendered-detail recipe."
+                    )
+                    continue
+                final_item = DetailFetchItem(
                     rank=search_item.rank,
                     search_item=search_item,
                     url=search_item.url,
+                    attempted_capabilities=attempted,
+                    executed_capability_id=candidate.capability_id,
+                    degraded=candidate_index > 0,
                     ok=fetched.ok,
                     status=fetched.status,
                     duration_ms=fetched.duration_ms,
                     article=fetched.article,
-                    warnings=(fetched.article.warnings if fetched.article else []),
+                    warnings=list(
+                        dict.fromkeys([*attempt_warnings, *response_warnings])
+                    ),
                     error=fetched.error,
                 )
-            )
+                break
+            if final_item is None:
+                final_item = DetailFetchItem(
+                    rank=search_item.rank,
+                    search_item=search_item,
+                    url=search_item.url,
+                    attempted_capabilities=attempted,
+                    executed_capability_id=(attempted[-1] if attempted else None),
+                    degraded=len(attempted) > 1,
+                    ok=False,
+                    status=ResultStatus.ERROR,
+                    warnings=list(dict.fromkeys(attempt_warnings)),
+                    error="Detail capability chain ended without a result.",
+                )
+            details.append(final_item)
 
         successful = sum(item.ok for item in details)
         failed = len(details) - successful
         warnings = [
-            "Detail hydration is limited to public HTML/text and at most five selected search results.",
-            "Each redirect is revalidated against public-network URL rules before download.",
+            "Detail hydration is limited to public content and at most five selected search results.",
+            "Trafilatura public HTML/text extraction is always attempted before browser rendering.",
+            "Browser rendering is used only when a host-matched verified/degraded detail recipe is already registered.",
             "Detail articles are returned in the response but are not persisted by this endpoint.",
         ]
         if len(selected_items) < request.detail_limit:

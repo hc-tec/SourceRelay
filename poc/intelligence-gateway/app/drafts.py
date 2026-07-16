@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 from .config import Settings
 from .connectors.article import validate_public_url
-from .errors import MisconfiguredError, SourceUnavailableError
+from .errors import GatewayError, MisconfiguredError, SourceUnavailableError
 
 
 INSPECT_JAVASCRIPT = r"""
@@ -59,6 +59,33 @@ var candidates=Object.keys(selectors).map(function(sel){
 var selected=forced||(candidates[0]&&candidates[0].selector)||'';
 var items=selected?Array.from(document.querySelectorAll(selected)).slice(0,__LIMIT__).map(function(node,i){var a=node.matches('a[href]')?node:node.querySelector('a[href]');var t=node.matches('h1,h2,h3,h4')?node:node.querySelector('h1,h2,h3,h4,[class*="title"],a[href]');return {rank:i+1,title:((t&&t.textContent)||(a&&a.textContent)||'').trim().slice(0,300),url:a?a.href:'',text:(node.innerText||'').trim().slice(0,500)};}):[];
 return {url:location.href,title:document.title,selected_selector:selected,candidates:candidates,items:items};
+"""
+
+
+DETAIL_INSPECT_JAVASCRIPT = r"""
+var visible=function(el){var r=el.getBoundingClientRect();var s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';};
+var esc=function(v){return String(v).replace(/\\/g,'\\\\').replace(/"/g,'\\"');};
+var selector=function(el){
+  if(el.id){var byId='#'+CSS.escape(el.id);if(document.querySelectorAll(byId).length===1)return byId;}
+  var tag=el.tagName.toLowerCase();var role=el.getAttribute('role');if(role){var byRole=tag+'[role="'+esc(role)+'"]';if(document.querySelectorAll(byRole).length===1)return byRole;}
+  var cls=Array.from(el.classList).filter(function(x){return x&&!/[0-9]{5,}/.test(x);}).slice(0,3);if(cls.length){var byClass=tag+'.'+cls.map(CSS.escape).join('.');if(document.querySelectorAll(byClass).length<=5)return byClass;}
+  if((tag==='article'||tag==='main')&&document.querySelectorAll(tag).length===1)return tag;
+  var parts=[];var cur=el;for(var i=0;cur&&cur!==document.body&&i<5;i++,cur=cur.parentElement){var t=cur.tagName.toLowerCase();var siblings=Array.from(cur.parentElement.children).filter(function(x){return x.tagName===cur.tagName;});parts.unshift(t+(siblings.length>1?':nth-of-type('+(siblings.indexOf(cur)+1)+')':''));}return 'body > '+parts.join(' > ');
+};
+var pageLength=Math.max((document.body.innerText||'').trim().length,1);var nodes=Array.from(document.querySelectorAll('article,main,[role="main"],[class*="article"],[class*="content"],[class*="post"],[class*="detail"]')).filter(visible).slice(0,300);var seen={};var candidates=[];
+nodes.forEach(function(el){var sel=selector(el);if(!sel||seen[sel])return;seen[sel]=1;var text=(el.innerText||'').trim();var length=text.length;if(length<80)return;var links=Array.from(el.querySelectorAll('a')).reduce(function(n,a){return n+(a.innerText||'').trim().length;},0);var linkRatio=length?links/length:1;var pageRatio=length/pageLength;var paragraphs=el.querySelectorAll('p').length;var headings=el.querySelectorAll('h1,h2,h3').length;var primaryTitles=el.querySelectorAll('h1,[class*="article-title"],[class*="post-title"],[class*="Post-Title"]').length;var nestedArticles=el.querySelectorAll('article').length;var semantic=el.tagName==='ARTICLE'?1200:(el.tagName==='MAIN'?600:0);var negative=/comment|footer|header|nav|recommend|related|login|sign-in|评论|推荐|登录/i.test([el.id,el.className].join(' '))?1000:0;var aggregationPenalty=Math.max(0,primaryTitles-1)*400+Math.max(0,nestedArticles-1)*800;var ratioScore=(pageRatio>=0.15&&pageRatio<=0.98)?200:0;var score=Math.min(length,30000)+paragraphs*60+headings*30+semantic+ratioScore-Math.min(linkRatio,1)*1500-negative-aggregationPenalty;candidates.push({selector:sel,text_length:length,paragraph_count:paragraphs,heading_count:headings,link_ratio:linkRatio,page_text_ratio:pageRatio,primary_title_count:primaryTitles,nested_article_count:nestedArticles,score:score});});
+candidates.sort(function(a,b){return b.score-a.score;});
+var titleNodes=Array.from(document.querySelectorAll('h1,[class*="article-title"],[class*="post-title"],[class*="detail-title"]')).filter(visible);var titles=titleNodes.slice(0,10).map(function(el){return {selector:selector(el),text:(el.innerText||'').trim().slice(0,500)};}).filter(function(x){return x.text;});
+var body=(document.body.innerText||'').slice(0,30000);var markers=['登录','扫码','验证码','sign in','log in','subscribe to continue','付费后阅读'].filter(function(x){return body.toLowerCase().indexOf(x.toLowerCase())>=0;});
+return {url:location.href,title:document.title,title_candidates:titles,content_candidates:candidates.slice(0,20),authentication_markers:markers,body_text_length:(document.body.innerText||'').length};
+"""
+
+
+DETAIL_EXTRACT_JAVASCRIPT = r"""
+var contentSelector=__CONTENT_SELECTOR__;var titleSelector=__TITLE_SELECTOR__;var maximum=__MAXIMUM_TEXT__;
+var content=document.querySelector(contentSelector);var titleNode=titleSelector?document.querySelector(titleSelector):null;var text=content?(content.innerText||'').trim():'';var title=((titleNode&&titleNode.innerText)||document.title||'').trim();
+var body=(document.body.innerText||'').slice(0,30000);var markers=['登录','扫码','验证码','sign in','log in','subscribe to continue','付费后阅读'].filter(function(x){return body.toLowerCase().indexOf(x.toLowerCase())>=0;});
+return {url:location.href,title:title,text:text.slice(0,maximum),text_length:text.length,content_selector_found:!!content,title_selector_found:!!titleNode,authentication_markers:markers};
 """
 
 
@@ -168,6 +195,63 @@ class BrowserWingDraftExplorer:
         await asyncio.sleep(3)
         result = await self._command("exec", "eval", INSPECT_JAVASCRIPT, timeout=30)
         return result.get("data", {}).get("result") or {}
+
+    async def _inspect_detail_unlocked(self, url: str) -> dict:
+        await self._navigate(url)
+        await asyncio.sleep(3)
+        result = await self._command(
+            "exec", "eval", DETAIL_INSPECT_JAVASCRIPT, timeout=30
+        )
+        return result.get("data", {}).get("result") or {}
+
+    async def _extract_detail_unlocked(
+        self,
+        *,
+        url: str,
+        content_selector: str,
+        title_selector: str,
+        maximum_text_chars: int,
+    ) -> dict:
+        await self._navigate(url)
+        await asyncio.sleep(3)
+        script = (
+            DETAIL_EXTRACT_JAVASCRIPT.replace(
+                "__CONTENT_SELECTOR__",
+                json.dumps(content_selector, ensure_ascii=True),
+            )
+            .replace(
+                "__TITLE_SELECTOR__", json.dumps(title_selector, ensure_ascii=True)
+            )
+            .replace(
+                "__MAXIMUM_TEXT__",
+                str(max(200, min(maximum_text_chars, 200_000))),
+            )
+        )
+        result = await self._command("exec", "eval", script, timeout=30)
+        return result.get("data", {}).get("result") or {}
+
+    @staticmethod
+    def _repair_utf8_mojibake(value: object) -> tuple[str, bool]:
+        text = str(value or "")
+        original_han = sum("\u3400" <= char <= "\u9fff" for char in text)
+        try:
+            repaired = text.encode("latin-1").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            return text, False
+        repaired_han = sum("\u3400" <= char <= "\u9fff" for char in repaired)
+        if repaired_han >= max(5, original_han * 3):
+            return repaired, True
+        return text, False
+
+    @staticmethod
+    def _host_allowed(host: str, allowed_host: str) -> bool:
+        normalized_host = host.casefold().rstrip(".")
+        normalized_allowed = allowed_host.casefold().rstrip(".")
+        if not normalized_host or not normalized_allowed:
+            return False
+        return normalized_host == normalized_allowed or normalized_host.endswith(
+            f".{normalized_allowed}"
+        )
 
     @staticmethod
     def _submit_javascript(input_selector: str, submit_selector: str, query: str) -> str:
@@ -383,5 +467,204 @@ return {{ok:true,method:'enter'}};
                 expected_host=str(recipe["expected_host"]),
                 limit=limit,
             )
+        self._write_artifact(payload)
+        return payload
+
+    async def inspect_detail(self, url: str) -> dict:
+        await validate_public_url(url)
+        async with self.lock:
+            await self._ensure_browser()
+            inspection = await self._inspect_detail_unlocked(url)
+        inspected_url = str(inspection.get("url") or url)
+        await validate_public_url(inspected_url)
+        content_candidates = inspection.get("content_candidates") or []
+        title_candidates = inspection.get("title_candidates") or []
+        payload = {
+            "inspection": inspection,
+            "validation": None,
+            "recipe": {
+                "sample_url": inspected_url,
+                "allowed_host": (urlsplit(inspected_url).hostname or "").lower(),
+                "title_selector": (
+                    title_candidates[0].get("selector", "")
+                    if title_candidates
+                    else ""
+                ),
+                "content_selector": (
+                    content_candidates[0].get("selector", "")
+                    if content_candidates
+                    else ""
+                ),
+                "minimum_text_chars": 200,
+                "maximum_text_chars": 200_000,
+            },
+            "article": None,
+        }
+        self._write_artifact(payload)
+        return payload
+
+    async def validate_detail(self, url: str) -> dict:
+        await validate_public_url(url)
+        async with self.lock:
+            await self._ensure_browser()
+            inspection = await self._inspect_detail_unlocked(url)
+            inspected_url = str(inspection.get("url") or url)
+            content_candidates = inspection.get("content_candidates") or []
+            title_candidates = inspection.get("title_candidates") or []
+            content_selector = (
+                content_candidates[0].get("selector", "")
+                if content_candidates
+                else ""
+            )
+            title_selector = (
+                title_candidates[0].get("selector", "")
+                if title_candidates
+                else ""
+            )
+            await validate_public_url(inspected_url)
+            article = (
+                await self._extract_detail_unlocked(
+                    url=inspected_url,
+                    content_selector=content_selector,
+                    title_selector=title_selector,
+                    maximum_text_chars=200_000,
+                )
+                if content_selector
+                else {}
+            )
+        await validate_public_url(inspected_url)
+        final_url = str(article.get("url") or inspected_url)
+        await validate_public_url(final_url)
+        expected_host = (urlsplit(inspected_url).hostname or "").lower()
+        final_host = (urlsplit(final_url).hostname or "").lower()
+        title, title_encoding_repaired = self._repair_utf8_mojibake(
+            article.get("title")
+        )
+        text, text_encoding_repaired = self._repair_utf8_mojibake(
+            article.get("text")
+        )
+        title = title.strip()
+        text = text.strip()
+        text_length = len(text)
+        encoding_repaired = title_encoding_repaired or text_encoding_repaired
+        issues: list[str] = []
+        if not self._host_allowed(final_host, expected_host):
+            issues.append("Detail navigation left the validated hostname boundary.")
+        if not content_selector:
+            issues.append("No readable detail content container was inferred.")
+        if not article.get("content_selector_found"):
+            issues.append("The inferred detail content selector was not found on replay.")
+        if text_length < 200:
+            issues.append("Rendered detail text was shorter than 200 characters.")
+        if not title:
+            issues.append("No rendered detail title was extracted.")
+        authentication_markers = inspection.get("authentication_markers") or []
+        authentication_gate_suspected = bool(authentication_markers) and text_length < 200
+        if authentication_gate_suspected:
+            issues.append(
+                "Authentication or verification markers were present while readable detail text was unavailable."
+            )
+        passed = not issues
+        recipe = None
+        if passed:
+            recipe = {
+                "sample_url": inspected_url,
+                "allowed_host": expected_host,
+                "title_selector": title_selector,
+                "content_selector": content_selector,
+                "minimum_text_chars": 200,
+                "maximum_text_chars": 200_000,
+            }
+        payload = {
+            "inspection": inspection,
+            "validation": {
+                "passed": passed,
+                "issues": issues,
+                "final_url": final_url,
+                "final_title": title,
+                "text_length": text_length,
+                "encoding_repaired": encoding_repaired,
+                "authentication_markers": authentication_markers,
+                "authentication_gate_suspected": authentication_gate_suspected,
+            },
+            "recipe": recipe,
+            "article": {
+                "url": final_url,
+                "title": title,
+                "text": text,
+                "text_length": text_length,
+                "encoding_repaired": encoding_repaired,
+            },
+        }
+        self._write_artifact(payload)
+        return payload
+
+    async def execute_detail_recipe(self, recipe: dict, url: str) -> dict:
+        await validate_public_url(url)
+        allowed_host = str(recipe["allowed_host"]).strip().casefold().rstrip(".")
+        requested_host = (urlsplit(url).hostname or "").lower()
+        if not self._host_allowed(requested_host, allowed_host):
+            raise GatewayError(
+                "Detail URL is outside the generated recipe hostname boundary.",
+                http_status=422,
+            )
+        async with self.lock:
+            await self._ensure_browser()
+            article = await self._extract_detail_unlocked(
+                url=url,
+                content_selector=str(recipe["content_selector"]),
+                title_selector=str(recipe.get("title_selector") or ""),
+                maximum_text_chars=int(recipe.get("maximum_text_chars") or 200_000),
+            )
+        final_url = str(article.get("url") or url)
+        await validate_public_url(final_url)
+        final_host = (urlsplit(final_url).hostname or "").lower()
+        title, title_encoding_repaired = self._repair_utf8_mojibake(
+            article.get("title")
+        )
+        text, text_encoding_repaired = self._repair_utf8_mojibake(
+            article.get("text")
+        )
+        title = title.strip()
+        text = text.strip()
+        text_length = len(text)
+        encoding_repaired = title_encoding_repaired or text_encoding_repaired
+        minimum = int(recipe.get("minimum_text_chars") or 200)
+        authentication_markers = article.get("authentication_markers") or []
+        authentication_gate_suspected = bool(authentication_markers) and text_length < minimum
+        issues: list[str] = []
+        if not self._host_allowed(final_host, allowed_host):
+            issues.append("Detail navigation left the generated recipe hostname boundary.")
+        if not article.get("content_selector_found"):
+            issues.append("The generated detail content selector was not found.")
+        if text_length < minimum:
+            issues.append(
+                f"Rendered detail text was shorter than the {minimum}-character recipe threshold."
+            )
+        if not title:
+            issues.append("No rendered detail title was extracted.")
+        if authentication_gate_suspected:
+            issues.append(
+                "Authentication or verification markers were present while readable detail text was unavailable."
+            )
+        payload = {
+            "validation": {
+                "passed": not issues,
+                "issues": issues,
+                "final_url": final_url,
+                "final_title": title,
+                "text_length": text_length,
+                "encoding_repaired": encoding_repaired,
+                "authentication_markers": authentication_markers,
+                "authentication_gate_suspected": authentication_gate_suspected,
+            },
+            "article": {
+                "url": final_url,
+                "title": title,
+                "text": text,
+                "text_length": text_length,
+                "encoding_repaired": encoding_repaired,
+            },
+        }
         self._write_artifact(payload)
         return payload

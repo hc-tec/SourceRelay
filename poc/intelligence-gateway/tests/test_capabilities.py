@@ -1,5 +1,10 @@
 from app.capabilities import CapabilityCatalog
-from app.models import CapabilityAction, TaskPlanRequest
+from app.models import (
+    CapabilityAction,
+    CapabilityManifest,
+    CapabilityStatus,
+    TaskPlanRequest,
+)
 
 
 def test_catalog_loads_versioned_manifests() -> None:
@@ -71,5 +76,55 @@ def test_detail_fetch_has_a_generic_public_page_plan() -> None:
         )
     )
     assert plan.available is True
-    assert plan.degraded is True
+    assert plan.degraded is False
     assert plan.selected_capability.capability_id == "web.detail_fetch.trafilatura.v1"
+
+
+def test_detail_plan_keeps_direct_first_and_host_scopes_rendered_fallback(
+    tmp_path,
+) -> None:
+    catalog = CapabilityCatalog(runtime_directory=tmp_path / "capabilities")
+    base = catalog.get("web.detail_fetch.trafilatura.v1")
+    rendered = CapabilityManifest.model_validate(
+        {
+            **base.model_dump(mode="json"),
+            "capability_id": "csdn.detail_fetch.browserwing_recipe.v1",
+            "platform": "csdn",
+            "status": CapabilityStatus.VERIFIED,
+            "executor": "browserwing_detail_recipe",
+            "adapter": "GeneratedBrowserWingDetailRecipe",
+            "fallback_ids": [],
+            "recipe": {
+                "sample_url": "https://blog.csdn.net/example/article/details/1",
+                "allowed_host": "blog.csdn.net",
+                "title_selector": "h1",
+                "content_selector": "article",
+                "minimum_text_chars": 200,
+                "maximum_text_chars": 200000,
+            },
+        }
+    )
+    catalog.save_runtime_manifest(rendered)
+
+    matched = catalog.plan(
+        TaskPlanRequest(
+            platform="csdn",
+            action=CapabilityAction.DETAIL_FETCH,
+            input={"url": "https://x.blog.csdn.net/article/details/2"},
+        )
+    )
+    external = catalog.plan(
+        TaskPlanRequest(
+            platform="csdn",
+            action=CapabilityAction.DETAIL_FETCH,
+            input={"url": "https://example.net/article/2"},
+        )
+    )
+
+    assert matched.selected_capability.capability_id == (
+        "web.detail_fetch.trafilatura.v1"
+    )
+    assert [item.capability_id for item in matched.fallback_capabilities] == [
+        rendered.capability_id
+    ]
+    assert external.fallback_capabilities == []
