@@ -167,6 +167,32 @@ def test_external_site_discovery_can_be_citable_without_claiming_native_coverage
     assert "EXTERNAL_DISCOVERY_ONLY" in render_markdown(report)
 
 
+def test_structured_gateway_scope_marks_internal_site_fallback_as_external_discovery() -> None:
+    event = _search_event(
+        platform="zhihu",
+        capability_id="bing.keyword_search.browserwing_recipe.v1",
+        degraded=True,
+        items=[
+            _item(
+                title="知乎公开问答",
+                url="https://www.zhihu.com/question/123456/answer/7890",
+                raw_ref="browserwing-run:zhihu-discovery",
+            )
+        ],
+    )
+    event["scope"] = {
+        "collection_scope": "external_discovery",
+        "site_constraint": "zhihu.com",
+    }
+
+    audit = _platform(audit_trace([event]), "zhihu")
+
+    assert audit.claim_status == "citable"
+    assert audit.coverage_status == "external_discovery_only"
+    assert audit.collection_modes == ("external_discovery",)
+    assert "NATIVE_KEYWORD_SEARCH_NOT_OBSERVED" in audit.gaps
+
+
 def test_redirects_homepages_promotions_and_missing_urls_never_become_canonical() -> None:
     report = audit_trace(
         [

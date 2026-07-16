@@ -152,13 +152,37 @@ item_count=3
    discovery_url、sogou_html_location 和 target_fetched=false，未抓取知乎目标正文。
    该结果仍是 external discovery，而不是知乎原生关键词搜索。
 5. 当前自动化回归：Intelligence Gateway 全量 124 passed；安装可选 deepagents
-   运行时后，适配器测试 26 passed（包含不发起模型调用的 DeepAgents 构图检查）。
+   运行时后，适配器测试 27 passed（包含不发起模型调用的 DeepAgents 构图检查）。
    新 trace v2 投影和离线审计 CLI 都由离线测试覆盖。
 
 直接 Gateway 的 Sogou URL 归一化复核已经完成；仍待补的是一次完整 DeepAgents v2
 trace 与 audit 重跑。那次运行应验证蜂群调用链和新 evidence projection，不应改变以下
 边界：知乎、微博在没有 Draft -> inspect -> validate -> promote 的原生关键词能力前，
 仍只能表述为外部发现。
+
+## 2026-07-17 DeepAgents v2 受控重跑
+
+已在重启后的 Gateway 上完成一次受控 DeepAgents 运行；所有内容调用仍只通过
+gateway tools，运行只写本地被忽略的 trace 和 audit，不写情报数据库。v2 trace 有
+schema version、event_index 和 evidence_items，并生成了独立的 UTF-8 audit。
+
+机器审计结果：
+
+| 平台 | 覆盖状态 | 可引用状态 | 规范引用 | 事实边界 |
+|---|---|---|---:|---|
+| B站 | native_success | citable | 4 条视频 URL | Maxun 原生关键词结果；另有 1 条 promoted 行被排除。 |
+| 知乎 | external_discovery_only | citable | 1 条知乎 URL | 实际是 Bing 的 site 外部发现 fallback；另有百度百科、新闻和政务页被审计器排除，不能称知乎原生搜索。 |
+| 微博 | external_discovery_only | citable | 4 条微博 URL | 实际是 Sogou 的 site 外部发现 fallback；4 个包装链接经受限静态解析为微博规范 URL，目标正文未抓取。 |
+
+Gateway 现在会把实际生效的 site fallback 写入结构化 collection_scope；Citation
+Auditor 也兼容旧 trace 的受控 planner warning。于是 Bing/Sogou 的站外发现被明确标为
+external_discovery_only，而不是 native_success；报告不得将它改写为知乎或微博站内
+关键词搜索已打通。
+
+本次运行结束时，trace 与 audit 已先成功写入；随后模型最终中文回答包含一个 Unicode
+勾选符，Windows PowerShell 的 GBK stdout 在最后 print 时抛出编码异常。该异常没有
+影响数据调用或证据文件。示例现已在启动时显式将 stdout 重配为 UTF-8，并用中文加
+Unicode 字符的本地输出探针验证；没有为修复输出问题重复发起模型调用。
 
 ## 后续工作
 

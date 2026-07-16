@@ -1579,6 +1579,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             degraded = plan.degraded or index > 0
             warnings = [*plan.warnings, *attempt_warnings, *result.model_dump().get("warnings", [])]
+            response_scope = dict(manifest.scope)
+            if request.action == CapabilityAction.KEYWORD_SEARCH:
+                effective_site = str(effective_input.get("site") or "").strip().lower()
+                if effective_site:
+                    response_scope.update(
+                        {
+                            "collection_scope": "external_discovery",
+                            "site_constraint": effective_site,
+                        }
+                    )
+                elif manifest.platform == request.platform:
+                    response_scope.setdefault("collection_scope", "native")
+                elif request.platform != "web":
+                    response_scope.setdefault("collection_scope", "gateway_fallback")
+                else:
+                    response_scope.setdefault("collection_scope", "web")
             return TaskExecutionResponse(
                 task_id=task_id,
                 ok=result.ok,
@@ -1589,7 +1605,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 executor=manifest.executor,
                 degraded=degraded,
                 attempted_capabilities=attempted,
-                scope=manifest.scope,
+                scope=response_scope,
                 result=result.model_dump(mode="json"),
                 warnings=list(dict.fromkeys(warnings)),
                 error=result.error,

@@ -20,6 +20,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import sys
 import time
 from typing import Any
 
@@ -165,6 +166,7 @@ def _trace_search_metadata(search_payload: Mapping[str, Any]) -> dict[str, Any] 
         "degraded": search_payload.get("degraded", False),
         "partial": search_payload.get("partial", False),
         "warnings": search_payload.get("warnings", []),
+        "scope": search_payload.get("scope", {}),
         "artifact": _artifact_reference(search_result.get("artifact")),
         "error": search_payload.get("error"),
     }
@@ -322,6 +324,7 @@ def _tool_wrappers(
                 "degraded": result.get("degraded", False),
                 "partial": result.get("partial", False),
                 "warnings": result.get("warnings", []),
+                "scope": result.get("scope", {}),
                 "transport_error": result.get("transport_error"),
                 "error": result.get("error"),
             }
@@ -508,7 +511,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _configure_utf8_stdout() -> None:
+    """Keep Chinese model output printable from Windows PowerShell."""
+
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+    except (AttributeError, OSError, ValueError):
+        # Some embedded hosts expose a non-reconfigurable stream. Trace and
+        # audit files are independently written with an explicit UTF-8 codec.
+        pass
+
+
 def main() -> None:
+    _configure_utf8_stdout()
     parser = build_parser()
     args = parser.parse_args()
     if args.expected_platforms and not args.audit_file:

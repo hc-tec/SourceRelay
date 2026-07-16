@@ -559,6 +559,25 @@ def _collection_mode(
         operation and operation != "keyword_search"
     ):
         return "detail"
+    provenance = _stage_provenance(event, stage)
+    declared_scope = str(
+        _as_mapping(provenance.get("scope")).get("collection_scope") or ""
+    ).strip()
+    if declared_scope in {
+        "external_discovery",
+        "native",
+        "gateway_fallback",
+        "web",
+    }:
+        return declared_scope
+    # Trace v1/v2 records made before Gateway emitted a structured
+    # collection_scope still retain this planner warning. It is a bounded
+    # compatibility rule, not a model-text inference.
+    if any(
+        warning.startswith("Planning external discovery with site:")
+        for warning in _strings(provenance.get("warnings"))
+    ):
+        return "external_discovery"
     if requested == "web" and site_platform == target and target != "web":
         return "external_discovery"
     if requested == target and target != "web":

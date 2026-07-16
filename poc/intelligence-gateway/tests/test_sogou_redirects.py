@@ -282,6 +282,8 @@ async def test_sogou_recipe_returns_only_safe_canonical_site_urls(tmp_path) -> N
     body = response.json()
     assert response.status_code == 200
     assert body["executed_capability_id"] == manifest.capability_id
+    assert body["scope"]["collection_scope"] == "external_discovery"
+    assert body["scope"]["site_constraint"] == "zhihu.com"
     assert body["result"]["item_count"] == 1
     item = body["result"]["items"][0]
     assert item["url"] == "https://www.zhihu.com/question/648380958"
