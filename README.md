@@ -11,7 +11,7 @@ poc/intelligence-gateway/  统一 Capability Runtime 与 Draft Capability Factor
 research_*.md              开源项目、中文站点覆盖和架构调研
 ```
 
-核心 Gateway 当前为 `0.10.0`，已经真实验证：
+核心 Gateway 当前为 `0.11.0`，已经真实验证：
 
 - B站关键词搜索：Maxun；
 - 小红书人工登录后的低频搜索：BrowserWing；
@@ -27,6 +27,7 @@ research_*.md              开源项目、中文站点覆盖和架构调研
 - B站已知公开视频详情：yt-dlp metadata-only 对两个不同 BV URL 真实通过，完整 JSON 落本地 artifact，不下载视频、不使用 Cookie；lux 对同 URL 成功对照。
 - 贴吧指定吧主题与已知帖子详情：aiotieba 4.7.1 匿名只读真实通过；只开放 `get_threads/get_posts`，完整返回落本地 artifact，不把内容拆入数据库。
 - 已知公众号公开文章：严格限定 `mp.weixin.qq.com/s/...`，两个不同公开文章真实成功，完整 HTML 落本地 artifact；删除文章正确返回 `no_results`，不需要账号、Cookie 或闭源中转。
+- 微博已知公开账号第一页：BrowserWing 匿名读取数字 UID 的首个渲染页，人民日报与央视新闻各返回 10 条；只保存公开字段白名单 JSON，不导出 Cookie、Profile、`user_token` 或签名媒体 URL。
 
 详细运行方式、API 和安全边界见 [Intelligence Gateway README](poc/intelligence-gateway/README.md)。真实运行证据见 [Gateway evaluation](poc/intelligence-gateway/evaluation.md)。
 
@@ -63,15 +64,15 @@ cd D:\AIProject\inteligence\poc\intelligence-gateway
 docker compose config --quiet
 ```
 
-当前基线：`99 passed`。
+当前基线：`104 passed`。
 
 ## 下一阶段
 
-`0.10.0` 已经完成 NewsNow `hotlist_fetch`、B站 yt-dlp `video_detail`、贴吧 aiotieba `forum_threads/post_detail`，以及公众号公开文章 `article_detail` 的 raw-first artifact 闭环。当前阶段继续稳定数据源层，不在 Gateway 内加入长报告、多智能体研究或结论生成：
+`0.11.0` 已经完成 NewsNow `hotlist_fetch`、B站 yt-dlp `video_detail`、贴吧 aiotieba `forum_threads/post_detail`、公众号公开文章 `article_detail`，以及微博已知账号 `account_posts` 的 raw-first artifact 闭环。当前阶段继续稳定数据源层，不在 Gateway 内加入长报告、多智能体研究或结论生成：
 
 1. 修 B站相关性/规范 URL、小红书实时认证状态、搜狗跳转 URL 和公众号壳页等现有质量问题；
 2. 公众号账号历史保持缺口：WeRSS 当前扫码流程失效，WeWe RSS 闭源中转和 Token 稳定性不达标；等待可审计替代方案，不扩写成全公众号搜索；
-3. 继续为微博、抖音、快手补已知账号或已知公开 URL 的低风险能力；
+3. 微博已知账号第一页已经完成；继续为抖音、快手补已知账号或已知公开 URL 的低风险能力；
 4. DailyHotApi 保留为 NewsNow 对照候选，本地真实样本和失败契约未通过前不进入自动 fallback；
 5. 数据层达到稳定验收条件后，再调研 DeerFlow、天工系 DeepResearch 等仓库作为上层分析消费者。
 

@@ -580,7 +580,20 @@ lux JSON 主要是 `url/site/title/type/streams/caption/err`，比 yt-dlp 更小
 | 中国移动公开文章 | success，标题/账号/时间/正文可识别 | 3,139,751 bytes |
 | 已被发布者删除文章 | `no_results`，没有误判成正文 | 32,095 bytes |
 
-同两篇有效文章走通用 Trafilatura 均为 `no_results`，证明微信页面需要专用结构解析。完整 HTML 保存于 `runtime/artifacts/wechat-public-html/.../raw.html`，API 只返回标题、账号、发布时间与最多 4,000 字预览；`persistence=result_only` 时数据库统计不变。完整 Gateway 回归为 `99 passed`。
+同两篇有效文章走通用 Trafilatura 均为 `no_results`，证明微信页面需要专用结构解析。完整 HTML 保存于 `runtime/artifacts/wechat-public-html/.../raw.html`，API 只返回标题、账号、发布时间与最多 4,000 字预览；`persistence=result_only` 时数据库统计不变。
+
+### 6.13 0.11.0 微博已知账号第一页
+
+微博仓库继续采用 Issue-first 审计。`dataabc/weibo-crawler` 近期仍有 432、JSON 解码、评论失效和防封禁漏爬问题且无标准 License；`dataabc/weiboSpider` 在 2026-07-15 仍有账号封禁报告，也无标准 License；`nghuyong/WeiboSpider` 的 403/Cookie 403 与过时报告尚未形成可靠路径；`SpiderClub/weibospider` 长期不维护。因此这些仓库只作为行为和字段风险参考，没有复制源码，也没有成为需要账号 Cookie 的正式 Provider。
+
+匿名移动 API `m.weibo.cn/api/container/getIndex` 对人民日报和央视新闻两个 UID 均返回 HTTP 432 空响应，不能作为匿名 HTTP Connector。相同账号的公开移动页面却能由 BrowserWing 匿名正常渲染 10 个 `.card.card9`，每个 Vue `item` 中有公开 `mblog`，同时完整用户对象又包含不应保存的 `user_token`。最终实现采用页面内白名单投影，而不是完整对象落盘后再清洗。
+
+| 固定 UID | 账号 | 公开帖子 | 脚本 JSON | 登录 |
+|---|---|---:|---:|---|
+| `2803301701` | 人民日报 | 10 | 31,127 bytes | 不需要 |
+| `2656274875` | 央视新闻 | 10 | 32,300 bytes | 不需要 |
+
+正式 `weibo.account_posts.browserwing.v1` 限制为数字 UID、第一页和最多 10 条，只返回轻量预览；白名单 raw JSON 保存到 `runtime/artifacts/browserwing-weibo/...`，不写 SQLite。一次人民日报 Gateway 闭环得到 10 条、20,649 bytes，并生成 SHA-256；raw 与 manifest 联合检查未发现 Cookie、Profile 路径、`user_token`、`stream_url`、localStorage 或 sessionStorage。微博与小红书共用同一个 BrowserWing 锁，避免共享 Profile 并发操作。完整 Gateway 回归为 `104 passed`。
 
 ## 7. 当前结论
 
@@ -597,6 +610,7 @@ NewsNow             -> 多平台独立 feed 热榜 + 本地原始 artifact
 yt-dlp              -> B站已知公开视频元数据 + 本地原始 artifact
 aiotieba             -> 贴吧指定吧主题与已知帖子 + 本地原始 artifact
 WeChat public HTML   -> 已知公众号公开文章 + 本地原始 HTML artifact
+BrowserWing Weibo    -> 已知微博 UID 的首个公开渲染页 + 白名单原始 JSON artifact
         ↓
 统一 Gateway -> 明确状态、最小溯源、原始文件、可选 SQLite 索引
 ```
@@ -609,7 +623,7 @@ WeChat public HTML   -> 已知公众号公开文章 + 本地原始 HTML artifact
 
 1. 为视频描述、问答回答、帖子正文定义独立输出类型和质量门槛，不把所有详情强塞进“200 字长文章”；
 2. 为运行时 recipe 增加定期 `verify`、人工审计记录、选择器漂移告警、版本升级和回滚；
-3. 公众号已知公开文章、B站视频详情已经完成；下一步补知乎问答和微博/抖音/快手已知公开 URL，同时等待可审计的公众号账号历史方案；
+3. 公众号已知公开文章、B站视频详情和微博已知账号第一页已经完成；下一步补知乎问答与抖音/快手已知公开 URL，同时等待可审计的公众号账号历史方案；
 4. 再评估 LLM 辅助探索，让模型提出候选选择器和动作，但确定性验证门禁仍不可跳过；
 5. 强登录平台继续使用专用 Adapter 与用户人工 Profile；小红书、微博等不进入通用 Draft，也不把外部 `site:` 发现误称为站内完整索引；
 6. 在任何商业化或多人服务之前，单独评估 Maxun 与 SearXNG 的 AGPL 网络服务义务，以及平台条款、个人信息、浏览器 URL 安全和内容存储周期。

@@ -1,0 +1,39 @@
+{
+  "capability_id": "weibo.account_posts.browserwing.v1",
+  "version": "1.0.0",
+  "platform": "weibo",
+  "action": "account_posts",
+  "status": "verified",
+  "executor": "browserwing-weibo",
+  "adapter": "BrowserWingWeiboAccountConnector",
+  "source": null,
+  "authentication": {"required": false, "mode": "none"},
+  "input_schema": {
+    "account_id": {
+      "type": "string",
+      "required": true,
+      "pattern": "^[0-9]{5,20}$"
+    },
+    "limit": {"type": "integer", "minimum": 1, "maximum": 10, "default": 10}
+  },
+  "output_schema": "weibo_account_posts_response.v1",
+  "scope": {
+    "known_account_id_only": true,
+    "first_rendered_page_only": true,
+    "anonymous_public_page": true,
+    "read_only": true,
+    "raw_first": true,
+    "database_persistence": false,
+    "cookies_exported": false,
+    "maximum_items": 10
+  },
+  "fallback_ids": [],
+  "verification_input": {"account_id": "2803301701", "limit": 10},
+  "last_verified_at": "2026-07-16T19:16:00+08:00",
+  "license": "Gateway-owned adapter; public rendered page access only",
+  "warnings": [
+    "This capability reads the first rendered page for one known public UID; it is not global Weibo search or account-history crawling.",
+    "The browser-side adapter emits an explicit public-field allowlist and never exports cookies, storage, per-user credentials or signed media URLs.",
+    "Verified anonymously against two fixed public accounts (人民日报 2803301701 and 央视新闻 2656274875), each returning 10 public posts."
+  ]
+}

@@ -12,6 +12,7 @@ from .connectors.newsnow import NewsNowHotlistConnector
 from .connectors.searxng import SearXNGConnector
 from .connectors.ytdlp import YtDlpBilibiliVideoConnector
 from .connectors.wechat_article import WechatPublicArticleConnector
+from .connectors.weibo_account import BrowserWingWeiboAccountConnector
 from .models import (
     FetchRequest,
     FetchResponse,
@@ -29,6 +30,8 @@ from .models import (
     VideoDetailResponse,
     WechatArticleDetailRequest,
     WechatArticleDetailResponse,
+    WeiboAccountPostsRequest,
+    WeiboAccountPostsResponse,
 )
 from .storage import GatewayStore
 
@@ -45,6 +48,9 @@ class ConnectorRegistry:
         self.ytdlp = YtDlpBilibiliVideoConnector(settings)
         self.aiotieba = AiotiebaReadConnector(settings)
         self.wechat_article = WechatPublicArticleConnector(settings)
+        self.weibo_account = BrowserWingWeiboAccountConnector(
+            settings, lock=self.connectors[SourceName.XIAOHONGSHU].lock
+        )
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         return await self.connectors[request.source].search(request)
@@ -82,6 +88,11 @@ class ConnectorRegistry:
         self, request: WechatArticleDetailRequest, *, capability_id: str
     ) -> WechatArticleDetailResponse:
         return await self.wechat_article.fetch(request, capability_id=capability_id)
+
+    async def weibo_account_posts(
+        self, request: WeiboAccountPostsRequest, *, capability_id: str
+    ) -> WeiboAccountPostsResponse:
+        return await self.weibo_account.fetch(request, capability_id=capability_id)
 
     async def health(self) -> list[SourceHealth]:
         return list(await asyncio.gather(*(connector.health() for connector in self.connectors.values())))
@@ -124,5 +135,13 @@ class ConnectorRegistry:
             {
                 "provider": self.wechat_article.provider,
                 "collector": self.wechat_article.collector,
+            }
+        ]
+
+    def account_post_providers(self) -> list[dict[str, str]]:
+        return [
+            {
+                "provider": self.weibo_account.provider,
+                "collector": self.weibo_account.collector,
             }
         ]

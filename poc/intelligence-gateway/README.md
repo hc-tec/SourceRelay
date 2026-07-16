@@ -10,6 +10,7 @@
 - `hotlist_fetch`：由自托管 NewsNow 按 `platform + feed_id` 获取热榜，完整原始 JSON 保存为本地 artifact；
 - `forum_threads/post_detail`：由 aiotieba 匿名读取指定公开贴吧和已知主题，完整返回保存为本地 artifact；
 - `article_detail`：匿名读取一个已知的公开公众号文章 URL，完整原始 HTML 保存为本地 artifact；
+- `account_posts`：通过 BrowserWing 匿名读取一个已知微博 UID 的首个公开渲染页，白名单原始 JSON 保存为本地 artifact；
 - `/fetch`：Trafilatura 抽取公开 HTML/text 页面的正文和元数据；
 - `/jobs/search`：把耗时搜索放入 SQLite 持久化作业。
 - 情报库：搜索结果自动写入 `documents`、`observations` 和 `search_runs`，区分新增、变化和重复出现。
@@ -57,7 +58,7 @@ API 文档：`http://127.0.0.1:8765/docs`
 Invoke-RestMethod http://127.0.0.1:8765/capabilities
 ```
 
-当前 19 个静态能力：18 个已验证，1 个保持声明未验证。已验证：
+当前 20 个静态能力：19 个已验证，1 个保持声明未验证。已验证：
 
 ```text
 bilibili.keyword_search.maxun.v1
@@ -69,6 +70,7 @@ bilibili.hotlist_fetch.newsnow-hot-search.v1
 bilibili.hotlist_fetch.newsnow-hot-video.v1
 bilibili.hotlist_fetch.newsnow-ranking.v1
 weibo.hotlist_fetch.newsnow.v1
+weibo.account_posts.browserwing.v1
 zhihu.hotlist_fetch.newsnow.v1
 kuaishou.hotlist_fetch.newsnow.v1
 tieba.hotlist_fetch.newsnow.v1
@@ -321,6 +323,33 @@ runtime/artifacts/wechat-public-html/YYYY-MM-DD/<run-id>/raw.html
 2026-07-16 固定样本中，两篇不同公众号公开文章成功，原始 HTML 为 3,840,273 / 3,139,751 bytes；一个删除样本正确返回 `no_results`。同两篇有效文章使用通用 Trafilatura 均返回 `no_results`，因此保留微信专用 Adapter，而不是降低通用正文质量门槛。
 
 WeRSS 与 WeWe RSS 经 Issue 审计后均未进入 Gateway：前者当前新登录二维码流程失效，后者依赖闭源中转且长期存在 Token 失效与部分公众号无文章问题。Gateway 不会为了账号历史覆盖而索取或接收用户 Cookie/Token。
+
+### 微博已知账号首个公开页面：BrowserWing 匿名只读
+
+`0.11.0` 新增独立动作 `account_posts`。输入是 5—20 位数字微博 UID，`limit` 最大为 10；它只读取 `https://m.weibo.cn/u/<uid>` 已经公开渲染的第一页，不滚动、不分页、不点击、不点赞、不评论、不关注。
+
+```powershell
+$body = @{
+  platform = "weibo"
+  action = "account_posts"
+  input = @{ account_id = "2803301701"; limit = 10 }
+  options = @{ persistence = "result_only" }
+} | ConvertTo-Json -Depth 6
+
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/tasks/execute `
+  -ContentType application/json -Body $body
+```
+
+页面 Vue 对象虽然含有完整 `mblog`，但也可能含 `user_token` 和带时效签名的媒体地址。因此 Adapter 不序列化完整对象，而是在浏览器页面内直接构造公开字段白名单：微博 ID、时间、正文 HTML、来源、互动计数、图片 ID、有限的 `page_info` 与公开用户信息。Cookie、local/session storage、Profile 路径、`user_token`、`stream_url` 和签名媒体 URL 不会进入脚本输出、Gateway 响应或 artifact。
+
+轻量 API 响应只返回 `post_id/text_preview/url/published_text`；白名单 JSON 保存在：
+
+```text
+runtime/artifacts/browserwing-weibo/YYYY-MM-DD/<run-id>/manifest.json
+runtime/artifacts/browserwing-weibo/YYYY-MM-DD/<run-id>/raw.json
+```
+
+2026-07-16 匿名固定样本中，人民日报 UID `2803301701` 与央视新闻 UID `2656274875` 均返回 10 条公开微博，脚本 JSON 分别为 31,127 / 32,300 bytes；Gateway 正式 raw artifact 使用紧凑 JSON，人民日报样本为 20,649 bytes。两份脚本样本和正式 artifact 均检查过，不含上述敏感或时效字段。该能力是“已知账号第一页”，不是微博全局搜索、完整账号历史或持续监控。
 
 ### 人工登录与持久 Profile
 
@@ -685,4 +714,4 @@ Invoke-RestMethod "http://127.0.0.1:8765/clusters?min_documents=2&limit=20"
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-当前基线：`99 passed`。
+当前基线：`104 passed`。

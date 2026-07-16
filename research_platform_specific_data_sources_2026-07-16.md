@@ -358,7 +358,7 @@ Gateway 可以当次临时提取 `rank/title/url/external_id` 便于显示和引
 | 小红书 | BrowserWing 人工 Profile | 暂不优先 | xhs 只读 POC | BrowserWing vs xhs | 先做详情对照，不开放写操作 |
 | 公众号 | SearXNG/Bing/搜狗外部发现 | 无可信全局热榜 | WeRSS 或 WeWe RSS 二选一 | Trafilatura/Browser detail | 先测已知文章和已知公众号，不宣称全局搜索 |
 | 知乎 | 外部 `site:` 发现 | NewsNow | 暂无推荐独立仓库 | Browser detail；以后 `qa_detail` | 保持当前组合 |
-| 微博 | BrowserWing 待实测 | NewsNow | 自有只读 Adapter；dataabc 参考 | 通用/专用详情 | 先热榜，后账号清单 |
+| 微博 | BrowserWing 已验证已知 UID 首个公开渲染页；不等于全局搜索 | NewsNow | 自有只读 Adapter；dataabc 参考 | 通用/专用详情 | 热搜与已知账号首页已分成独立 Capability，账号历史仍待审计 |
 | 抖音 | 暂无正式能力 | NewsNow | 后续人工 Profile | Evil0ctal/lux 隔离 POC | 先热榜和已知 URL |
 | 快手 | 暂无正式能力 | NewsNow | 后续人工 Profile | lux 对照 | 先热榜 |
 | 贴吧 | aiotieba `forum_threads` 已验证 | NewsNow | aiotieba 指定吧 | aiotieba `post_detail` 已验证 | 匿名、只读、raw-first；不开放整包 API |

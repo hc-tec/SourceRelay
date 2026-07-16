@@ -25,6 +25,7 @@ class Settings:
     maxun_api_key_file: Path
     browserwing_root: Path
     browserwing_xhs_script: Path
+    browserwing_weibo_script: Path
     searxng_base_url: str
     newsnow_base_url: str
     ytdlp_proxy: str
@@ -49,6 +50,9 @@ class Settings:
             browserwing_root=_path_from_env("BROWSERWING_ROOT", "../browserwing"),
             browserwing_xhs_script=_path_from_env(
                 "BROWSERWING_XHS_SCRIPT", "../browserwing/scripts/run-xiaohongshu-search.ps1"
+            ),
+            browserwing_weibo_script=_path_from_env(
+                "BROWSERWING_WEIBO_SCRIPT", "../browserwing/scripts/run-weibo-account-posts.ps1"
             ),
             searxng_base_url=os.getenv("SEARXNG_BASE_URL", "http://127.0.0.1:8888").rstrip("/"),
             newsnow_base_url=os.getenv("NEWSNOW_BASE_URL", "http://127.0.0.1:4444").rstrip("/"),

@@ -125,7 +125,8 @@ search_runs = 3
 | 公众号账号历史 | WeRSS / WeWe RSS 候选 | Issue 审计发现 WeRSS 2026-07 新登录流程失效；WeWe RSS 依赖闭源中转且 Token/空文章问题长期未解 | L0 | 两者均不进入 Gateway；Issue、维护响应和凭证链路属于正式选型门槛 |
 | B站视频详情 | yt-dlp metadata-only | 两个不同公开 BV URL 真实成功，原始 JSON 约 30 KB；统一 API 返回规范 URL 与 artifact，数据库不变 | L3 | 独立 `video_detail` 已实现；不下载媒体、不读 Cookie，lux `-j` 对同 URL 2/2 成功 |
 | 贴吧指定吧与已知主题 | aiotieba 4.7.1 匿名只读薄 Adapter | `python吧` 主题列表及两个公开 tid 真实成功；完整 dataclass 结果转 JSON artifact，数据库不变 | L3 | `forum_threads/post_detail` 已实现；只开放 `get_threads/get_posts`，不请求楼中楼，不暴露写操作 |
-| 微博、抖音、快手 | 无正式平台内检索/详情 Capability | 未进入本轮运行目录 | L0 | 不能写成当前支持；候选项目声明不等于数据源已接入 |
+| 微博 | 已知账号首个公开渲染页 | BrowserWing 匿名固定 UID 样本 2/2，各 10 条；白名单 raw JSON，不写 SQLite | L3 | `weibo.account_posts.browserwing.v1` 只覆盖已知 UID 首页，不是全局搜索或账号历史 |
+| 抖音、快手 | 无正式平台内检索/详情 Capability | 未进入本轮运行目录 | L0 | 不能写成当前支持；候选项目声明不等于数据源已接入 |
 
 ## 4. 本轮公共搜索冗余决策
 
@@ -192,7 +193,7 @@ error = SearXNG returned only generic WeChat platform shell results.
 
 ### P2：再增加新平台
 
-贴吧匿名只读薄 Adapter 已完成；微博、抖音、快手仍按“固定公开样本 -> 认证边界 -> 输出质量 -> 许可证”逐个进入 Draft。没有真实样本和验收证据前，不因 GitHub 项目 README 宣称覆盖就注册为正式 Capability。
+贴吧匿名只读薄 Adapter 已完成；微博已知账号首个公开页面已按“固定公开样本 -> 认证边界 -> 输出质量 -> 许可证”完成专用 Adapter；抖音、快手仍按同一顺序逐个进入 Draft。没有真实样本和验收证据前，不因 GitHub 项目 README 宣称覆盖就注册为正式 Capability。
 
 ## 7. 给未来 DeepResearch 的稳定接口
 
@@ -223,4 +224,4 @@ degraded / partial / warnings
 
 届时调研重点应是查询规划、迭代检索、引用、上下文压缩、模型可替换性和数据源工具协议，而不是让 DeepResearch 框架替代数据源治理。
 
-当前相关自动化回归纳入完整 Gateway 测试集，共 `99 passed`。
+当前相关自动化回归纳入完整 Gateway 测试集，共 `104 passed`。

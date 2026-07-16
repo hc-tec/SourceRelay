@@ -297,7 +297,7 @@ B站应继续采用公开页面、Maxun 或 BrowserWing 的低频流程，不建
 | 小红书 | BrowserWing 已验证；XHS-Downloader/MediaCrawler 可评估 | BrowserWing 声明 | XHS-Downloader、xhs、MediaCrawler | 继续人工登录低频 Adapter；详情单独 POC |
 | 抖音 | MediaCrawler/TikTokDownloader 可评估 | BrowserWing、NewsNow、DailyHotApi | TikTokDownloader、Douyin API | 先接热榜；关键词搜索必须隔离实测 |
 | 快手 | MediaCrawler 可评估 | NewsNow、DailyHotApi | MediaCrawler、Douyin API 声明 | 先热榜，深搜后置 |
-| 微博 | BrowserWing 登录搜索待测；MediaCrawler 可评估 | BrowserWing 已验证；两类 MIT 聚合源 | weiboSpider 指定用户；MediaCrawler 评论 | 热搜先接，账号清单其次，关键词搜索单测 |
+| 微博 | BrowserWing 已验证匿名已知 UID 首页；关键词搜索仍待固定样本 | BrowserWing 已验证；两类 MIT 聚合源 | weiboSpider 指定用户；MediaCrawler 评论 | 热搜与账号首页已接，关键词搜索单测 |
 | 知乎 | SearXNG 外部已验证；BrowserWing/MediaCrawler 可评估 | DailyHotApi/NewsNow；BrowserWing 匿名受登录影响 | MediaCrawler | 先外部发现，后做登录站内搜索对比 |
 | 贴吧 | MediaCrawler 可评估 | BrowserWing 已验证；两个聚合源 | MediaCrawler | 热榜先接，搜索按需求补 |
 | 公众号 | SearXNG 外部部分通过 | 无可信全局热榜 | 已知 URL 正文不稳定 | 单独小样本，不宣称全局搜索 |

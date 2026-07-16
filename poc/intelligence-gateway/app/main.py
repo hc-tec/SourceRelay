@@ -60,6 +60,8 @@ from .models import (
     VideoDetailResponse,
     WechatArticleDetailRequest,
     WechatArticleDetailResponse,
+    WeiboAccountPostsRequest,
+    WeiboAccountPostsResponse,
 )
 from .normalization import canonicalize_url, deduplicate_items
 from .registry import ConnectorRegistry
@@ -149,7 +151,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.10.0",
+        version="0.11.0",
         description="Explicit-status API for Chinese-platform discovery, hotlists and public detail extraction.",
     )
     app.state.settings = active_settings
@@ -180,7 +182,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.10.0",
+            "version": "0.11.0",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
             "hotlist_providers": [
@@ -194,6 +196,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ],
             "public_article_providers": [
                 entry["provider"] for entry in registry.public_article_providers()
+            ],
+            "account_post_providers": [
+                entry["provider"] for entry in registry.account_post_providers()
             ],
             "article_extraction": True,
             "capability_runtime": True,
@@ -210,6 +215,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "video_detail_providers": registry.video_detail_providers(),
             "forum_read_providers": registry.forum_read_providers(),
             "public_article_providers": registry.public_article_providers(),
+            "account_post_providers": registry.account_post_providers(),
             "article_collector": registry.article.collector,
         }
 
@@ -450,6 +456,50 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "planner_eligible": planner_eligible,
                 },
                 warnings=[*manifest.warnings, *provider_health.warnings],
+            )
+        if manifest.action == CapabilityAction.ACCOUNT_POSTS:
+            executor_valid = manifest.executor == "browserwing-weibo"
+            scope_valid = (
+                manifest.platform == "weibo"
+                and manifest.scope.get("read_only") is True
+                and manifest.scope.get("raw_first") is True
+                and manifest.scope.get("cookies_exported") is False
+            )
+            planner_eligible = manifest.status in {
+                CapabilityStatus.VERIFIED,
+                CapabilityStatus.DEGRADED,
+            }
+            provider_health = await registry.weibo_account.health()
+            ready = provider_health.ready and executor_valid and scope_valid and planner_eligible
+            return CapabilityCheckResponse(
+                capability_id=manifest.capability_id,
+                ready=ready,
+                status=(
+                    ResultStatus.SUCCESS
+                    if ready
+                    else (
+                        ResultStatus.MISCONFIGURED
+                        if not executor_valid or not scope_valid
+                        else ResultStatus.SOURCE_UNAVAILABLE
+                    )
+                ),
+                details={
+                    **provider_health.details,
+                    "executor": manifest.executor,
+                    "executor_valid": executor_valid,
+                    "scope_valid": scope_valid,
+                    "capability_status": manifest.status.value,
+                    "planner_eligible": planner_eligible,
+                },
+                warnings=[
+                    *manifest.warnings,
+                    *provider_health.warnings,
+                    *(
+                        ["This declared capability must pass fixed-sample verification before planning."]
+                        if not planner_eligible
+                        else []
+                    ),
+                ],
             )
         if manifest.action in {
             CapabilityAction.ARTICLE_EXTRACT,
@@ -1136,6 +1186,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if persistence == "result_only":
                 response.warnings.append(
                     "Article content was not written to the intelligence database; the raw local HTML artifact is the durable result."
+                )
+            return response
+        if manifest.action == CapabilityAction.ACCOUNT_POSTS:
+            if manifest.executor != "browserwing-weibo":
+                raise GatewayError(
+                    "Account posts capability has no supported provider executor.",
+                    status=ResultStatus.MISCONFIGURED,
+                    http_status=503,
+                )
+            account_request = WeiboAccountPostsRequest.model_validate(
+                {
+                    "account_id": task_input.get("account_id"),
+                    "limit": task_input.get("limit", 10),
+                }
+            )
+            response = await registry.weibo_account_posts(
+                account_request, capability_id=manifest.capability_id
+            )
+            if persistence == "result_only":
+                response.warnings.append(
+                    "Weibo posts were not written to the intelligence database; the allowlisted raw local artifact is the durable result."
                 )
             return response
         if manifest.action in {

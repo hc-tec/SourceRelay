@@ -10,7 +10,7 @@ from app.models import (
 def test_catalog_loads_versioned_manifests() -> None:
     catalog = CapabilityCatalog()
     capabilities = catalog.list()
-    assert len(capabilities) == 19
+    assert len(capabilities) == 20
     assert {item.capability_id for item in capabilities} == {
         "36kr.hotlist_fetch.newsnow.v1",
         "bilibili.keyword_search.maxun.v1",
@@ -25,6 +25,7 @@ def test_catalog_loads_versioned_manifests() -> None:
         "tieba.forum_threads.aiotieba.v1",
         "tieba.post_detail.aiotieba.v1",
         "weibo.hotlist_fetch.newsnow.v1",
+        "weibo.account_posts.browserwing.v1",
         "xiaohongshu.keyword_search.browserwing.v1",
         "web.keyword_search.searxng.v1",
         "web.article_extract.trafilatura.v1",

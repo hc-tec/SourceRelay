@@ -49,6 +49,7 @@ class CapabilityAction(StrEnum):
     FORUM_THREADS = "forum_threads"
     POST_DETAIL = "post_detail"
     ARTICLE_DETAIL = "article_detail"
+    ACCOUNT_POSTS = "account_posts"
 
 
 class CapabilityStatus(StrEnum):
@@ -498,6 +499,34 @@ class WechatArticleDetailResponse(BaseModel):
     fetched_at: datetime = Field(default_factory=utc_now)
     duration_ms: int = Field(ge=0)
     article: WechatArticlePreview | None = None
+    artifact: ArtifactReference
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class WeiboAccountPostsRequest(BaseModel):
+    account_id: str = Field(min_length=5, max_length=20, pattern=r"^[0-9]+$")
+    limit: int = Field(default=10, ge=1, le=10)
+
+
+class WeiboPostPreview(BaseModel):
+    post_id: str
+    text_preview: str = ""
+    url: str
+    published_text: str = ""
+
+
+class WeiboAccountPostsResponse(BaseModel):
+    ok: bool
+    status: ResultStatus
+    platform: str = "weibo"
+    provider: str
+    account_id: str
+    account_name: str = ""
+    fetched_at: datetime = Field(default_factory=utc_now)
+    duration_ms: int = Field(ge=0)
+    item_count: int = Field(ge=0)
+    posts: list[WeiboPostPreview] = Field(default_factory=list)
     artifact: ArtifactReference
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None
