@@ -352,6 +352,33 @@ runtime/artifacts/browserwing-weibo/YYYY-MM-DD/<run-id>/raw.json
 
 2026-07-16 匿名固定样本中，人民日报 UID `2803301701` 与央视新闻 UID `2656274875` 均返回 10 条公开微博，脚本 JSON 分别为 31,127 / 32,300 bytes；Gateway 正式 raw artifact 使用紧凑 JSON，人民日报样本为 20,649 bytes。两份脚本样本和正式 artifact 均检查过，不含上述敏感或时效字段。该能力是“已知账号第一页”，不是微博全局搜索、完整账号历史或持续监控。
 
+### 知乎已知问答详情：BrowserWing 匿名只读
+
+`0.12.0` 新增独立动作 `qa_detail`。输入是 1—20 位数字知乎问题 ID，`limit` 最大为 5；它只读取 `https://www.zhihu.com/question/<id>` 首个已经渲染的公开回答卡片，不展开“阅读全文”、不抓评论、不分页、不点赞、不关注。
+
+```powershell
+$body = @{
+  platform = "zhihu"
+  action = "qa_detail"
+  input = @{ question_id = "623780358"; limit = 5 }
+  options = @{ persistence = "result_only" }
+} | ConvertTo-Json -Depth 6
+
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/tasks/execute `
+  -ContentType application/json -Body $body
+```
+
+轻量 API 将问题标题、问题描述预览和回答预览分开返回。回答预览包含回答 ID、规范回答 URL、公开作者名称/主页、作者简介、可读文本预览、时间和是否仍为折叠文本；原始 artifact 使用同一公开字段白名单保存可读回答文本，不序列化页面 React 状态或任意链接查询参数。页面 DOM 中即使挂有隐藏登录对话框，只要公开回答卡片可读，就不会误判为需要登录；只有没有回答卡片且可见登录门禁时才返回 `authentication_required`。
+
+原始 artifact 保存到：
+
+```text
+runtime/artifacts/browserwing-zhihu/YYYY-MM-DD/<run-id>/manifest.json
+runtime/artifacts/browserwing-zhihu/YYYY-MM-DD/<run-id>/raw.json
+```
+
+2026-07-16 固定样本中，问题 `623780358`（“AI人工智能是什么？”）和 `517621628`（“什么是人工智能?”）均匿名成功读取 3 条可读回答；Gateway 正式 artifact 分别为 5,330 / 5,478 bytes。原始 JSON 未发现浏览器凭证、存储字段或实体链接签名参数；数据库统计保持不变。这是“已知问题的首屏回答”，不是知乎全局搜索、完整回答历史或持续监控。
+
 ### 人工登录与持久 Profile
 
 当公开路径确实不足、且平台允许用户本人在浏览器中访问时，Gateway 可以使用 BrowserWing 的隔离持久 Profile。当前配置将 Chrome `user_data_dir` 固定在被 Git 忽略的 POC `runtime/chrome-user-data`，BrowserWing 停止和重启后仍复用这个目录。小红书已验证过 Profile 重启复用。
