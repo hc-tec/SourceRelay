@@ -1,6 +1,6 @@
 # DeepAgents + Intelligence Gateway 真实验证记录
 
-日期：2026-07-16  
+日期：2026-07-16
 分支：`research/deepresearch-swarm`
 
 ## 验证目标
