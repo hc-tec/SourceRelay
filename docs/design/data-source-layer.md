@@ -33,6 +33,38 @@ Intelligence Gateway
 
 DeepResearch 框架以后只能作为 Gateway 的消费者，不直接持有平台 Cookie，不绕过 Capability Planner，也不把搜索引擎、浏览器或平台私有接口直接耦合进研究工作流。
 
+### 1.1 原始文件优先，而不是全字段入库
+
+数据源层不追求把每个平台的所有字段预先归一化、拆列并写入关系数据库。当前采用：
+
+```text
+按需执行 Capability
+  -> 将原始 JSON / HTML / Markdown / 媒体元数据保存为本地文件
+  -> 写一份最小 manifest
+  -> 可选生成便于当次展示的轻量结果
+  -> 未来由 AI 在读取时理解平台特有字段
+```
+
+只固定文件级溯源信息，不固定内容级全字段：
+
+```text
+run_id
+platform / action / feed_id
+capability_id
+source_url
+fetched_at
+status / degraded / cache evidence
+media_type
+raw_file
+sha256
+```
+
+标题、作者、简介、热度、评论结构和其他平台特有字段可以保持原样，不必现在全部建模。这是 `raw-first + schema-on-read`，而不是不要结构：结构只用在“能找回原文件、能证明来源、能判断新旧和执行状态”上。
+
+数据库降为可选索引，不是原始数据的唯一真相源。`persistence=none` 仍表示不写入情报库；执行过程中的本地原始 artifact 应与情报库分开管理，后续可增加显式 `artifact_only` 模式和保留期。
+
+安全边界不变：artifact 不保存请求头、Cookie、Token、密码或验证码；人工 Profile 与原始内容目录仍保持隔离。
+
 ## 2. “数据源可用”的定义
 
 健康检查通过不等于数据源可用。一个来源至少要分开报告以下维度：

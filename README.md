@@ -35,6 +35,7 @@ research_*.md              开源项目、中文站点覆盖和架构调研
 6. `persistence=none` 是正式执行模式，临时查询不必写入情报库；
 7. fallback 必须显式标记能力降级，外部 `site:` 发现不能冒充平台完整索引。
 8. 浏览器不是任意 URL 的通用兜底；只有经过 Draft 验证并限定主机的只读 recipe 才能被 Planner 选择。
+9. 原始数据优先作为本地 JSON/HTML/Markdown artifact 保存，只用最小 manifest 记录来源、时间、动作、执行能力和文件校验值；不预先要求将所有平台字段归一化入库。
 
 ## 本地状态不进入 Git
 
@@ -64,8 +65,9 @@ docker compose config --quiet
 `0.6.0` 已经完成公开 HTML 与浏览器渲染详情的分层闭环。当前阶段先稳定数据源层，不在 Gateway 内加入长报告、多智能体研究或结论生成：
 
 1. 修 B站相关性/规范 URL、小红书实时认证状态、搜狗跳转 URL 和公众号壳页等现有质量问题；
-2. 将 `detail_fetch` 扩展到视频、问答和帖子，但每类输出保持独立质量门槛；
-3. 按公众号、知乎、B站、小红书、新闻站逐个平台补搜索或 Profile Adapter，不用“浏览器能打开”冒充正式支持；
-4. 数据层达到稳定验收条件后，再调研 DeerFlow、天工系 DeepResearch 等仓库作为上层分析消费者。
+2. 增加 `hotlist_fetch`，先验证 NewsNow 的 `platform + feed_id` 多榜单契约，DailyHotApi 作为源码已核验的对照候选；
+3. 将 `detail_fetch` 扩展到视频、问答和帖子，但每类输出保持独立质量门槛；
+4. 按公众号、知乎、B站、小红书、新闻站逐个平台补搜索或 Profile Adapter，不用“浏览器能打开”冒充正式支持；
+5. 数据层达到稳定验收条件后，再调研 DeerFlow、天工系 DeepResearch 等仓库作为上层分析消费者。
 
-数据源分层、就绪等级和 2026-07-16 真实探测矩阵见 [数据源层 ADR](docs/design/data-source-layer.md)。
+数据源分层、就绪等级和原始文件优先的保存边界见 [数据源层 ADR](docs/design/data-source-layer.md)。不同平台、不同动作的 GitHub 仓库选型与 NewsNow/DailyHotApi 接口级核验见 [平台专用数据源调研](research_platform_specific_data_sources_2026-07-16.md)。
