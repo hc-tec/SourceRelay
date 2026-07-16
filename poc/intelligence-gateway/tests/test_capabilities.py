@@ -128,3 +128,58 @@ def test_detail_plan_keeps_direct_first_and_host_scopes_rendered_fallback(
         rendered.capability_id
     ]
     assert external.fallback_capabilities == []
+
+
+def test_searxng_plan_adds_verified_public_browser_search_fallbacks(
+    tmp_path,
+) -> None:
+    catalog = CapabilityCatalog(runtime_directory=tmp_path / "capabilities")
+    base = catalog.get("web.keyword_search.searxng.v1")
+    bing = CapabilityManifest.model_validate(
+        {
+            **base.model_dump(mode="json"),
+            "capability_id": "bing.keyword_search.browserwing_recipe.v1",
+            "platform": "bing",
+            "status": CapabilityStatus.VERIFIED,
+            "executor": "browserwing_recipe",
+            "adapter": "GeneratedBrowserWingRecipe",
+            "source": None,
+            "authentication": {"required": False, "mode": "none"},
+            "fallback_ids": ["web.keyword_search.searxng.v1"],
+            "fallback_site": None,
+            "recipe": {
+                "start_url": "https://www.bing.com/",
+                "input_selector": "#sb_form_q",
+                "submit_selector": "",
+                "result_item_selector": "h2",
+                "expected_host": "www.bing.com",
+            },
+        }
+    )
+    catalog.save_runtime_manifest(bing)
+
+    web_plan = catalog.plan(
+        TaskPlanRequest(
+            platform="web",
+            action=CapabilityAction.KEYWORD_SEARCH,
+            input={"query": "低空经济"},
+        )
+    )
+    zhihu_plan = catalog.plan(
+        TaskPlanRequest(
+            platform="zhihu",
+            action=CapabilityAction.KEYWORD_SEARCH,
+            input={"query": "个人知识库"},
+        )
+    )
+
+    assert web_plan.selected_capability.capability_id == (
+        "web.keyword_search.searxng.v1"
+    )
+    assert [item.capability_id for item in web_plan.fallback_capabilities] == [
+        bing.capability_id
+    ]
+    assert zhihu_plan.effective_input["site"] == "zhihu.com"
+    assert [item.capability_id for item in zhihu_plan.fallback_capabilities] == [
+        bing.capability_id
+    ]

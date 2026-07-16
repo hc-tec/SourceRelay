@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from .models import ResultStatus
 
@@ -11,6 +12,7 @@ class GatewayError(Exception):
     status: ResultStatus = ResultStatus.ERROR
     http_status: int = 500
     warnings: list[str] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
 
     def __str__(self) -> str:
         return self.message
@@ -44,4 +46,3 @@ class MisconfiguredError(GatewayError):
             http_status=503,
             warnings=warnings or [],
         )
-

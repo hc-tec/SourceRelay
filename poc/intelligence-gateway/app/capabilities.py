@@ -179,6 +179,50 @@ class CapabilityCatalog:
             return PLATFORM_SITES[normalized]
         return normalized if "." in normalized and "/" not in normalized else None
 
+    def public_search_fallbacks(self) -> list[CapabilityManifest]:
+        platform_priority = {"bing": 0, "sogou": 1}
+        fallbacks = [
+            item
+            for item in self.list(action=CapabilityAction.KEYWORD_SEARCH)
+            if item.executor == "browserwing_recipe"
+            and item.platform in platform_priority
+            and item.status in {
+                CapabilityStatus.VERIFIED,
+                CapabilityStatus.DEGRADED,
+            }
+            and not item.authentication.required
+            and item.recipe
+        ]
+        fallbacks.sort(
+            key=lambda item: (
+                item.status != CapabilityStatus.VERIFIED,
+                platform_priority[item.platform],
+                item.capability_id,
+            )
+        )
+        return fallbacks
+
+    def _extend_public_search_fallbacks(
+        self,
+        fallbacks: list[CapabilityManifest],
+        *,
+        allow_fallback: bool,
+    ) -> list[CapabilityManifest]:
+        if not allow_fallback or not any(
+            item.capability_id == "web.keyword_search.searxng.v1"
+            for item in fallbacks
+        ):
+            return fallbacks
+        existing = {item.capability_id for item in fallbacks}
+        return [
+            *fallbacks,
+            *[
+                item
+                for item in self.public_search_fallbacks()
+                if item.capability_id not in existing
+            ],
+        ]
+
     def plan(self, request: TaskPlanRequest) -> TaskPlanResponse:
         matching = self.list(platform=request.platform, action=request.action)
         candidates = [
@@ -236,6 +280,13 @@ class CapabilityCatalog:
                 if request.allow_fallback
                 else []
             )
+            fallbacks = self._extend_public_search_fallbacks(
+                [selected, *fallbacks],
+                allow_fallback=request.allow_fallback,
+            )[1:]
+            has_public_search_fallback = any(
+                item.executor == "browserwing_recipe" for item in fallbacks
+            )
             return TaskPlanResponse(
                 available=True,
                 requested_platform=request.platform,
@@ -244,7 +295,16 @@ class CapabilityCatalog:
                 fallback_capabilities=fallbacks,
                 effective_input=dict(request.input),
                 degraded=selected.status != CapabilityStatus.VERIFIED,
-                warnings=list(selected.warnings),
+                warnings=[
+                    *selected.warnings,
+                    *(
+                        [
+                            "Verified Bing/Sogou browser recipes are registered as low-frequency discovery fallbacks."
+                        ]
+                        if has_public_search_fallback
+                        else []
+                    ),
+                ],
             )
 
         blocked = [
@@ -267,6 +327,12 @@ class CapabilityCatalog:
                         requested_platform=request.platform,
                         requested_action=request.action,
                         selected_capability=fallback,
+                        fallback_capabilities=(
+                            self.public_search_fallbacks()
+                            if fallback.capability_id
+                            == "web.keyword_search.searxng.v1"
+                            else []
+                        ),
                         effective_input=effective_input,
                         degraded=True,
                         warnings=[
@@ -280,16 +346,27 @@ class CapabilityCatalog:
             if site:
                 generic = self.get("web.keyword_search.searxng.v1")
                 effective_input = {**request.input, "site": site}
+                browser_fallbacks = (
+                    self.public_search_fallbacks() if request.allow_fallback else []
+                )
                 return TaskPlanResponse(
                     available=True,
                     requested_platform=request.platform,
                     requested_action=request.action,
                     selected_capability=generic,
+                    fallback_capabilities=browser_fallbacks,
                     effective_input=effective_input,
                     degraded=True,
                     warnings=[
                         f"No verified internal {request.platform} search Adapter is registered.",
                         f"Planning external discovery with site:{site}; this is not a complete platform index.",
+                        *(
+                            [
+                                "Verified Bing/Sogou browser recipes are registered as low-frequency discovery fallbacks."
+                            ]
+                            if browser_fallbacks
+                            else []
+                        ),
                     ],
                 )
 

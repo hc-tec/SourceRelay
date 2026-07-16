@@ -866,7 +866,7 @@ async def test_verify_endpoint_can_recover_a_blocked_generated_recipe(
     assert fallback_plan.json()["selected_capability"]["capability_id"] == (
         "web.keyword_search.searxng.v1"
     )
-    assert fallback_plan.json()["effective_input"]["site"] == "www.baidu.com"
+    assert "site" not in fallback_plan.json()["effective_input"]
     assert recovered.status_code == 200
     assert recovered.json()["degraded"] is False
     assert direct_plan.json()["selected_capability"]["capability_id"] == capability_id

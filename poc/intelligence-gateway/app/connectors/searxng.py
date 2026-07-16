@@ -56,7 +56,30 @@ class SearXNGConnector(SearchConnector):
                     raw_ref="",
                 )
             )
-        return deduplicate_items(items)[: request.limit]
+        return deduplicate_items(items)
+
+    @staticmethod
+    def _filter_low_quality_site_results(
+        request: SearchRequest,
+        items: list[SearchItem],
+    ) -> tuple[list[SearchItem], int]:
+        if request.site != "mp.weixin.qq.com":
+            return items, 0
+        query_terms = [
+            term for term in request.query.casefold().split() if len(term) >= 2
+        ] or [request.query.casefold()]
+        filtered: list[SearchItem] = []
+        rejected = 0
+        for item in items:
+            title = " ".join(item.title.split()).casefold()
+            searchable = f"{item.title} {item.snippet}".casefold()
+            generic_shell = title in {"微信公众平台", "wechat official accounts platform"}
+            has_query_evidence = any(term in searchable for term in query_terms)
+            if generic_shell or not has_query_evidence:
+                rejected += 1
+                continue
+            filtered.append(item)
+        return filtered, rejected
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         started = time.perf_counter()
@@ -84,7 +107,11 @@ class SearXNGConnector(SearchConnector):
                 "SearXNG did not return JSON. Ensure json is enabled in search.formats."
             ) from exc
 
-        items = self._normalize(request, payload)
+        normalized_items = self._normalize(request, payload)
+        items, low_quality_count = self._filter_low_quality_site_results(
+            request, normalized_items
+        )
+        items = items[: request.limit]
         duration_ms = round((time.perf_counter() - started) * 1000)
         warnings = [
             "SearXNG provides external discovery; result coverage depends on enabled upstream engines.",
@@ -102,6 +129,17 @@ class SearXNGConnector(SearchConnector):
                 unavailable.append(f"{engine}: {reason}")
         if unavailable:
             warnings.append("Unresponsive upstream engines: " + "; ".join(unavailable[:5]))
+        if low_quality_count:
+            warnings.append(
+                f"Filtered {low_quality_count} generic WeChat platform shell result(s) without query evidence."
+            )
+        error = None
+        if not items:
+            error = (
+                "SearXNG returned only generic WeChat platform shell results."
+                if low_quality_count and low_quality_count == len(normalized_items)
+                else "SearXNG returned no results."
+            )
         return SearchResponse(
             ok=bool(items),
             status=ResultStatus.SUCCESS if items else ResultStatus.NO_RESULTS,
@@ -112,7 +150,7 @@ class SearXNGConnector(SearchConnector):
             item_count=len(items),
             items=items,
             warnings=warnings,
-            error=None if items else "SearXNG returned no results.",
+            error=error,
         )
 
     async def health(self) -> SourceHealth:

@@ -168,6 +168,22 @@ Bing 还验证了两个通用边界：入口从 `cn.bing.com` 跳到 `www.bing.c
 
 三次不同查询均通过统一 `/tasks/execute`、使用 `persistence=none`，没有触发 fallback，也没有改变 documents、observations 和 search_runs 数量。
 
+### 公共搜索冗余与来源质量
+
+SearXNG 是全网和 `site:` 外部发现的低成本首选，但 `/health` 只能确认本地 JSON endpoint，不能保证 Brave、DuckDuckGo、Google、Startpage 等上游当前未被限流或 CAPTCHA。运行目录中存在已验证、无需登录的 Bing/搜狗 BrowserWing recipe 时，Planner 会形成低频冗余链：
+
+```text
+web.keyword_search.searxng.v1
+  -> bing.keyword_search.browserwing_recipe.v1
+  -> sogou.keyword_search.browserwing_recipe.v1
+```
+
+浏览器 fallback 只在 SearXNG `no_results/source_unavailable` 后执行。知乎、公众号、政务站等外部发现会把受验证的 hostname 作为内部 `site:` 查询约束，但响应仍保留用户原始 query。三层全部失败时，错误响应也返回 `attempted_capabilities`、最后执行能力和 `degraded`，不把能力链藏在日志里。
+
+公众号外部发现另有高精度门槛：`mp.weixin.qq.com` 结果若标题只是“微信公众平台”等通用壳，或标题与摘要没有查询词证据，就会被过滤。全部过滤后明确返回 `no_results`，不会把平台入口、开发文档或无关小程序页面冒充公众号文章。
+
+完整就绪等级、真实探测矩阵和 DeepResearch 分层边界见 [数据源层 ADR](../../docs/design/data-source-layer.md)。
+
 ### 搜索结果到分层详情
 
 `0.5.0` 新增组合接口，`0.6.0` 将它升级为 direct-first 的分层详情链：
@@ -393,4 +409,4 @@ Invoke-RestMethod "http://127.0.0.1:8765/clusters?min_documents=2&limit=20"
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-当前基线：`69 passed`。
+当前基线：`73 passed`。

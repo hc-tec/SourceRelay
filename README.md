@@ -11,7 +11,7 @@ poc/intelligence-gateway/  统一 Capability Runtime 与 Draft Capability Factor
 research_*.md              开源项目、中文站点覆盖和架构调研
 ```
 
-核心 Gateway 当前为 `0.6.0`，已经真实验证：
+核心 Gateway 当前为 `0.6.1`，已经真实验证：
 
 - B站关键词搜索：Maxun；
 - 小红书人工登录后的低频搜索：BrowserWing；
@@ -57,13 +57,15 @@ cd D:\AIProject\inteligence\poc\intelligence-gateway
 docker compose config --quiet
 ```
 
-当前基线：`69 passed`。
+当前基线：`73 passed`。
 
 ## 下一阶段
 
-`0.6.0` 已经完成公开 HTML 与浏览器渲染详情的分层闭环。下一条主线仍是扩展“需要时可调用”的能力面，而不是增加持续采集量：
+`0.6.0` 已经完成公开 HTML 与浏览器渲染详情的分层闭环。当前阶段先稳定数据源层，不在 Gateway 内加入长报告、多智能体研究或结论生成：
 
-1. 将 `detail_fetch` 从长文容器扩展到视频描述、问答回答和帖子正文，但每类输出保持独立质量门槛；
-2. 给可靠性状态增加人工审计记录、recipe 版本回滚和定期精确验证；
-3. 继续按公众号、知乎、B站、小红书、新闻站的真实需求逐个平台补搜索或 Profile Adapter，不用“浏览器能打开”冒充正式支持；
-4. LLM 只负责提出探索候选，不能跳过确定性样本验证、主机边界和认证门禁。
+1. 修 B站相关性/规范 URL、小红书实时认证状态、搜狗跳转 URL 和公众号壳页等现有质量问题；
+2. 将 `detail_fetch` 扩展到视频、问答和帖子，但每类输出保持独立质量门槛；
+3. 按公众号、知乎、B站、小红书、新闻站逐个平台补搜索或 Profile Adapter，不用“浏览器能打开”冒充正式支持；
+4. 数据层达到稳定验收条件后，再调研 DeerFlow、天工系 DeepResearch 等仓库作为上层分析消费者。
+
+数据源分层、就绪等级和 2026-07-16 真实探测矩阵见 [数据源层 ADR](docs/design/data-source-layer.md)。

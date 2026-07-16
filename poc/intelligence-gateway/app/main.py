@@ -62,6 +62,7 @@ def _error_body(error: GatewayError) -> dict[str, Any]:
         "status": error.status.value,
         "error": str(error),
         "warnings": error.warnings,
+        **error.context,
     }
 
 
@@ -138,7 +139,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.6.0",
+        version="0.6.1",
         description="Explicit-status API for Bilibili, Xiaohongshu, web discovery and article extraction.",
     )
     app.state.settings = active_settings
@@ -169,7 +170,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.6.0",
+            "version": "0.6.1",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
             "article_extraction": True,
@@ -526,6 +527,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 manifest.fallback_site = (
                     None
                     if is_detail
+                    or draft.platform.casefold() in {"bing", "sogou", "baidu"}
                     else str((draft.recipe or {})["expected_host"])
                 )
                 manifest.status = CapabilityStatus.VERIFIED
@@ -565,6 +567,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     else {
                         "query": {"type": "string", "required": True, "max_length": 300},
                         "limit": {"type": "integer", "default": 20, "maximum": 100},
+                        "site": {"type": "hostname", "required": False},
                     }
                 ),
                 output_schema=(
@@ -597,7 +600,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 ),
                 fallback_site=(
                     None
-                    if is_detail
+                    if is_detail or draft.platform.casefold() in {"bing", "sogou", "baidu"}
                     else str((draft.recipe or {})["expected_host"])
                 ),
                 verification_input=(
@@ -706,9 +709,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         http_status=422,
                         warnings=["limit must be between 1 and 100"],
                     )
+                validated_search_input = SearchRequest(
+                    source=SourceName.WEB,
+                    query=query,
+                    limit=limit,
+                    site=task_input.get("site"),
+                )
+                query = validated_search_input.query
+                site = validated_search_input.site or ""
+                execution_query = f"site:{site} {query}" if site else query
                 started = time.perf_counter()
                 payload = await draft_explorer.execute_recipe(
-                    manifest.recipe, query, limit=limit
+                    manifest.recipe, execution_query, limit=limit
                 )
                 validation = payload.get("validation") or {}
                 if not validation.get("passed"):
@@ -756,6 +768,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     warnings=[
                         "Generated BrowserWing adapter executed a deterministic validated recipe.",
                         "Only the first rendered result page was inspected.",
+                        *(
+                            [
+                                f"The browser query was constrained with site:{site} for external platform discovery."
+                            ]
+                            if site
+                            else []
+                        ),
                     ],
                 )
                 if persistence == "result_only":
@@ -889,7 +908,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         for index, manifest in enumerate(candidates):
             attempted.append(manifest.capability_id)
             effective_input = dict(plan.effective_input)
-            if index > 0 and manifest.platform == "web" and request.platform != "web":
+            if (
+                index > 0
+                and request.action == CapabilityAction.KEYWORD_SEARCH
+                and (
+                    manifest.platform == "web"
+                    or manifest.executor == "browserwing_recipe"
+                )
+                and request.platform != "web"
+            ):
                 fallback_site = (
                     plan.selected_capability.fallback_site
                     or catalog.platform_site(request.platform, request.input)
@@ -959,12 +986,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status=last_error.status,
                 http_status=last_error.http_status,
                 warnings=[*plan.warnings, *attempt_warnings],
+                context={
+                    "attempted_capabilities": attempted,
+                    "executed_capability_id": attempted[-1] if attempted else None,
+                    "degraded": plan.degraded or len(attempted) > 1,
+                },
             )
         raise GatewayError(
             "Task produced no executable capability result.",
             status=ResultStatus.ERROR,
             http_status=500,
             warnings=attempt_warnings,
+            context={
+                "attempted_capabilities": attempted,
+                "executed_capability_id": attempted[-1] if attempted else None,
+                "degraded": plan.degraded or len(attempted) > 1,
+            },
         )
 
     @app.post("/tasks/execute", response_model=TaskExecutionResponse)

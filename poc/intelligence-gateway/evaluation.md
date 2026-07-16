@@ -2,7 +2,7 @@
 
 > 实测日期：2026-07-15 至 2026-07-16
 > 目录：`poc/intelligence-gateway`
-> 网关版本：`0.6.0`
+> 网关版本：`0.6.1`
 > 结论：第一版统一读取链路已经形成可运行闭环；适合作为个人低频 POC 和后续 Adapter 演进骨架，尚不能按无人值守生产系统承诺 SLA。
 
 ## 1. 本轮实际交付
@@ -248,7 +248,7 @@ SearXNG 的 `settings.yml` 由初始化脚本在被忽略的 `runtime/` 中生�
 docker compose config --quiet
 ```
 
-结果：`69 passed`。覆盖：
+结果：`73 passed`。覆盖：
 
 - URL 去跟踪与 fragment；
 - 规范 URL 去重和 rank 重排；
@@ -461,6 +461,31 @@ Detail Draft 最初选择 `main[role="main"]`，虽然得到 4,089 字，却把�
 整体为 `success / partial=true`。调用前后数据库均为 8 documents、13 observations、3 search runs。CSDN 详情样本在 BrowserWing 中出现 `ERR_SSL_PROTOCOL_ERROR`，系统保留为 `source_unavailable`，没有晋升或伪装成功；这条失败也说明“搜索 recipe 已通过”并不自动代表同站详情 recipe 已通过。
 
 另一个公开 B站视频样本在 Trafilatura 中为 `no_results`；Browser Detail Draft 能识别视频标题，但没有找到满足当前长文质量门槛的正文容器，因此状态为 failed、没有晋升。这不是选择器 bug，而是输出契约边界：视频标题、简介、UP 主和指标应进入独立 `video_detail` 模型，不能为了制造“支持 B站详情”的结论而降低文章正文门槛。
+
+### 6.9 数据源优先与公共搜索冗余
+
+在暂缓 DeepResearch 分析层后，对当前高价值来源做了新的 `persistence=none` 实时探测。结果证明 `/health` 全绿不能代表数据质量全绿：
+
+| 来源 | 实时结果 | 主要问题 |
+|---|---|---|
+| B站 Maxun | `DeepSeek` 5 条，3 条含字面查询词，3 条有规范 URL | 可运行，但相关性和规范 URL 比例仍需收紧 |
+| 小红书 BrowserWing | 一次原生失败后外部降级；再次原生返回 5 条 | Profile 目录存在不等于实时登录搜索可用 |
+| SearXNG 全网 | 一次因多个引擎限流/CAPTCHA 为 0；稍后 `低空经济` 返回 5/5 相关 | 本地 endpoint 健康，上游可用性仍波动 |
+| 政务 `site:` | `人工智能` 5/5 有查询词证据 | 当前外部发现质量较好 |
+| 知乎 `site:` | 一次 SearXNG 0 -> Bing 认证门禁 -> 搜狗 5；后续 SearXNG 恢复 | 没有站内 Adapter；搜狗跳转 URL 仍需治理 |
+| 公众号 `site:` | 返回过 5 条“微信公众平台”壳页、0 条查询证据 | 原结果不应算成功，公众号仍是明显缺口 |
+
+因此 Planner 增加动态公共搜索 fallback：只有运行目录中 verified/degraded、无需登录的 Bing/搜狗 recipe 才能排在 SearXNG 后面；`site:` hostname 会进入浏览器实际查询，但对外 query 保持原值。真实知乎探测曾完整执行：
+
+```text
+web.keyword_search.searxng.v1
+-> bing.keyword_search.browserwing_recipe.v1（authentication_required）
+-> sogou.keyword_search.browserwing_recipe.v1（success，5 条）
+```
+
+公众号来源增加高精度过滤：通用“微信公众平台”标题，或标题加摘要没有查询词证据的 `mp.weixin.qq.com` 结果都会被拒绝。修复后真实 `低空经济` 探测不再返回假成功；SearXNG、Bing、搜狗依次失败后整体为显式 `503/source_unavailable`，完整 attempted chain 保留在错误响应中。调用前后仍为 8 documents、13 observations、3 search runs。
+
+完整数据源就绪等级和后续优先级见 `docs/design/data-source-layer.md`。
 
 ## 7. 当前结论
 
