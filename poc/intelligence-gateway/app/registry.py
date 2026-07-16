@@ -11,6 +11,7 @@ from .connectors.maxun import MaxunBilibiliConnector
 from .connectors.newsnow import NewsNowHotlistConnector
 from .connectors.searxng import SearXNGConnector
 from .connectors.ytdlp import YtDlpBilibiliVideoConnector
+from .connectors.wechat_article import WechatPublicArticleConnector
 from .models import (
     FetchRequest,
     FetchResponse,
@@ -26,6 +27,8 @@ from .models import (
     SourceName,
     VideoDetailRequest,
     VideoDetailResponse,
+    WechatArticleDetailRequest,
+    WechatArticleDetailResponse,
 )
 from .storage import GatewayStore
 
@@ -41,6 +44,7 @@ class ConnectorRegistry:
         self.newsnow = NewsNowHotlistConnector(settings)
         self.ytdlp = YtDlpBilibiliVideoConnector(settings)
         self.aiotieba = AiotiebaReadConnector(settings)
+        self.wechat_article = WechatPublicArticleConnector(settings)
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         return await self.connectors[request.source].search(request)
@@ -73,6 +77,11 @@ class ConnectorRegistry:
         self, request: PostDetailRequest, *, capability_id: str
     ) -> PostDetailResponse:
         return await self.aiotieba.post_detail(request, capability_id=capability_id)
+
+    async def wechat_article_detail(
+        self, request: WechatArticleDetailRequest, *, capability_id: str
+    ) -> WechatArticleDetailResponse:
+        return await self.wechat_article.fetch(request, capability_id=capability_id)
 
     async def health(self) -> list[SourceHealth]:
         return list(await asyncio.gather(*(connector.health() for connector in self.connectors.values())))
@@ -107,5 +116,13 @@ class ConnectorRegistry:
             {
                 "provider": self.aiotieba.provider,
                 "collector": self.aiotieba.collector,
+            }
+        ]
+
+    def public_article_providers(self) -> list[dict[str, str]]:
+        return [
+            {
+                "provider": self.wechat_article.provider,
+                "collector": self.wechat_article.collector,
             }
         ]

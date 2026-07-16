@@ -10,7 +10,7 @@ from app.models import (
 def test_catalog_loads_versioned_manifests() -> None:
     catalog = CapabilityCatalog()
     capabilities = catalog.list()
-    assert len(capabilities) == 18
+    assert len(capabilities) == 19
     assert {item.capability_id for item in capabilities} == {
         "36kr.hotlist_fetch.newsnow.v1",
         "bilibili.keyword_search.maxun.v1",
@@ -30,6 +30,7 @@ def test_catalog_loads_versioned_manifests() -> None:
         "web.article_extract.trafilatura.v1",
         "web.detail_fetch.trafilatura.v1",
         "zhihu.hotlist_fetch.newsnow.v1",
+        "wechat_official.article_detail.public-html.v1",
     }
 
 

@@ -48,6 +48,7 @@ class CapabilityAction(StrEnum):
     DETAIL_FETCH = "detail_fetch"
     FORUM_THREADS = "forum_threads"
     POST_DETAIL = "post_detail"
+    ARTICLE_DETAIL = "article_detail"
 
 
 class CapabilityStatus(StrEnum):
@@ -471,6 +472,32 @@ class PostDetailResponse(BaseModel):
     item_count: int = Field(ge=0)
     has_more: bool = False
     posts: list[PostPreview] = Field(default_factory=list)
+    artifact: ArtifactReference
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class WechatArticleDetailRequest(BaseModel):
+    url: HttpUrl
+
+
+class WechatArticlePreview(BaseModel):
+    external_id: str
+    title: str
+    url: str
+    account_name: str = ""
+    published_at: datetime | None = None
+    text_preview: str = ""
+
+
+class WechatArticleDetailResponse(BaseModel):
+    ok: bool
+    status: ResultStatus
+    platform: str = "wechat_official"
+    provider: str
+    fetched_at: datetime = Field(default_factory=utc_now)
+    duration_ms: int = Field(ge=0)
+    article: WechatArticlePreview | None = None
     artifact: ArtifactReference
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None

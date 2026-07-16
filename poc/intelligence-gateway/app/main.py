@@ -58,6 +58,8 @@ from .models import (
     TaskPlanResponse,
     VideoDetailRequest,
     VideoDetailResponse,
+    WechatArticleDetailRequest,
+    WechatArticleDetailResponse,
 )
 from .normalization import canonicalize_url, deduplicate_items
 from .registry import ConnectorRegistry
@@ -147,7 +149,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.9.0",
+        version="0.10.0",
         description="Explicit-status API for Chinese-platform discovery, hotlists and public detail extraction.",
     )
     app.state.settings = active_settings
@@ -178,7 +180,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.9.0",
+            "version": "0.10.0",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
             "hotlist_providers": [
@@ -189,6 +191,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ],
             "forum_read_providers": [
                 entry["provider"] for entry in registry.forum_read_providers()
+            ],
+            "public_article_providers": [
+                entry["provider"] for entry in registry.public_article_providers()
             ],
             "article_extraction": True,
             "capability_runtime": True,
@@ -204,6 +209,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "hotlist_providers": registry.hotlist_providers(),
             "video_detail_providers": registry.video_detail_providers(),
             "forum_read_providers": registry.forum_read_providers(),
+            "public_article_providers": registry.public_article_providers(),
             "article_collector": registry.article.collector,
         }
 
@@ -213,11 +219,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         hotlist_health = await registry.newsnow.health()
         video_health = await registry.ytdlp.health()
         forum_read_health = await registry.aiotieba.health()
+        public_article_health = await registry.wechat_article.health()
         return {
             "sources": [item.model_dump(mode="json") for item in health],
             "hotlist_providers": [hotlist_health.model_dump(mode="json")],
             "video_detail_providers": [video_health.model_dump(mode="json")],
             "forum_read_providers": [forum_read_health.model_dump(mode="json")],
+            "public_article_providers": [public_article_health.model_dump(mode="json")],
         }
 
     @app.get("/health")
@@ -407,6 +415,41 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         else []
                     ),
                 ],
+            )
+        if manifest.action == CapabilityAction.ARTICLE_DETAIL:
+            executor_valid = manifest.executor == "wechat-public-html"
+            scope_valid = (
+                manifest.platform == "wechat_official"
+                and manifest.scope.get("known_public_url_only") is True
+                and manifest.scope.get("authentication") is False
+            )
+            planner_eligible = manifest.status in {
+                CapabilityStatus.VERIFIED,
+                CapabilityStatus.DEGRADED,
+            }
+            provider_health = await registry.wechat_article.health()
+            ready = provider_health.ready and executor_valid and scope_valid and planner_eligible
+            return CapabilityCheckResponse(
+                capability_id=manifest.capability_id,
+                ready=ready,
+                status=(
+                    ResultStatus.SUCCESS
+                    if ready
+                    else (
+                        ResultStatus.MISCONFIGURED
+                        if not executor_valid or not scope_valid
+                        else ResultStatus.SOURCE_UNAVAILABLE
+                    )
+                ),
+                details={
+                    **provider_health.details,
+                    "executor": manifest.executor,
+                    "executor_valid": executor_valid,
+                    "scope_valid": scope_valid,
+                    "capability_status": manifest.status.value,
+                    "planner_eligible": planner_eligible,
+                },
+                warnings=[*manifest.warnings, *provider_health.warnings],
             )
         if manifest.action in {
             CapabilityAction.ARTICLE_EXTRACT,
@@ -858,6 +901,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         | VideoDetailResponse
         | ForumThreadsResponse
         | PostDetailResponse
+        | WechatArticleDetailResponse
     ):
         if manifest.action == CapabilityAction.KEYWORD_SEARCH:
             if manifest.executor == "browserwing_recipe":
@@ -1074,6 +1118,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if persistence == "result_only":
                 response.warnings.append(
                     "Post content was not written to the intelligence database; the raw local artifact is the durable result."
+                )
+            return response
+        if manifest.action == CapabilityAction.ARTICLE_DETAIL:
+            if manifest.executor != "wechat-public-html":
+                raise GatewayError(
+                    "Article detail capability has no supported provider executor.",
+                    status=ResultStatus.MISCONFIGURED,
+                    http_status=503,
+                )
+            article_request = WechatArticleDetailRequest.model_validate(
+                {"url": task_input.get("url")}
+            )
+            response = await registry.wechat_article_detail(
+                article_request, capability_id=manifest.capability_id
+            )
+            if persistence == "result_only":
+                response.warnings.append(
+                    "Article content was not written to the intelligence database; the raw local HTML artifact is the durable result."
                 )
             return response
         if manifest.action in {

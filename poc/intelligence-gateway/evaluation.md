@@ -560,6 +560,28 @@ lux 使用官方 Windows x86_64 Release `0.24.1` 做隔离对照：
 
 lux JSON 主要是 `url/site/title/type/streams/caption/err`，比 yt-dlp 更小，但不适合取代当前需要的完整原始元数据。因此 yt-dlp 是正式 provider，lux 保留为已验证的手工故障对照，不进入默认 fallback。
 
+### 6.12 公众号 Issue 审计与 0.10.0 公开文章详情
+
+公众号账号历史候选没有因“容器可启动”而直接接入。2026-07-16 对 WeRSS、WeWe RSS、wechat-article-exporter、wechat-article-claw 和 wechatDownload 做了 Issue、License、源码凭证流与现场调用联合审计：
+
+- WeRSS 最新 #425 显示微信登录页变化后二维码地址无法提取，且最新代码早于 Issue；#419 指出本地登录状态不等于微信服务端会话有效；
+- WeWe RSS 2.6.1 本地容器、SQLite、空 JSON Feed 和二维码 URL 当天可用，但默认登录与文章请求依赖闭源 `weread.111965.xyz`；#427、#455、#463 长期反映 Token 快速失效、订阅后无文章和整体失效，未见维护者修复；
+- wechat-article-exporter 要求用户拥有自己的公众号，公共代理有额度；当前源码仍输出登录 token，且 2026-06 的文章 URL 反查公众号 API 失效尚未合入修复；
+- wechat-article-claw 未发现 License，并要求向 Agent 粘贴完整 Cookie/Token、落盘 `credentials.json`；
+- wechatDownload 无核心源码和标准开源 License，适合手工桌面下载，不适合作为可审计 Gateway 依赖。
+
+因此账号历史保持 L0 缺口；测试用 WeWe RSS 容器在未扫码、空账号状态下停止。
+
+同时实现了不需要账号的 `wechat_official.article_detail.public-html.v1`。它严格限制为规范 `https://mp.weixin.qq.com/s/<id>`，不跟随重定向、不带 Cookie、不使用微信读书或公众号后台。三个固定样本：
+
+| 样本 | 结果 | 原始 HTML |
+|---|---|---:|
+| 轩辕的编程宇宙公开文章 | success，标题/账号/时间/正文可识别 | 3,840,273 bytes |
+| 中国移动公开文章 | success，标题/账号/时间/正文可识别 | 3,139,751 bytes |
+| 已被发布者删除文章 | `no_results`，没有误判成正文 | 32,095 bytes |
+
+同两篇有效文章走通用 Trafilatura 均为 `no_results`，证明微信页面需要专用结构解析。完整 HTML 保存于 `runtime/artifacts/wechat-public-html/.../raw.html`，API 只返回标题、账号、发布时间与最多 4,000 字预览；`persistence=result_only` 时数据库统计不变。完整 Gateway 回归为 `99 passed`。
+
 ## 7. 当前结论
 
 这轮已经证明“万物皆接口”对你的中文个人情报需求有实际用处，但正确实现不是寻找一个万能 CLI，而是建立一个统一控制面，让每类来源使用最合适的获取层：
@@ -573,6 +595,8 @@ SearXNG             -> 全网和域名限定发现
 Trafilatura         -> 公开文章正文
 NewsNow             -> 多平台独立 feed 热榜 + 本地原始 artifact
 yt-dlp              -> B站已知公开视频元数据 + 本地原始 artifact
+aiotieba             -> 贴吧指定吧主题与已知帖子 + 本地原始 artifact
+WeChat public HTML   -> 已知公众号公开文章 + 本地原始 HTML artifact
         ↓
 统一 Gateway -> 明确状态、最小溯源、原始文件、可选 SQLite 索引
 ```
@@ -585,7 +609,7 @@ yt-dlp              -> B站已知公开视频元数据 + 本地原始 artifact
 
 1. 为视频描述、问答回答、帖子正文定义独立输出类型和质量门槛，不把所有详情强塞进“200 字长文章”；
 2. 为运行时 recipe 增加定期 `verify`、人工审计记录、选择器漂移告警、版本升级和回滚；
-3. 优先补公众号已知文章、B站视频详情、知乎问答和公开新闻站四类按需详情小样本，再决定是否需要平台专用 Adapter；
+3. 公众号已知公开文章、B站视频详情已经完成；下一步补知乎问答和微博/抖音/快手已知公开 URL，同时等待可审计的公众号账号历史方案；
 4. 再评估 LLM 辅助探索，让模型提出候选选择器和动作，但确定性验证门禁仍不可跳过；
 5. 强登录平台继续使用专用 Adapter 与用户人工 Profile；小红书、微博等不进入通用 Draft，也不把外部 `site:` 发现误称为站内完整索引；
 6. 在任何商业化或多人服务之前，单独评估 Maxun 与 SearXNG 的 AGPL 网络服务义务，以及平台条款、个人信息、浏览器 URL 安全和内容存储周期。

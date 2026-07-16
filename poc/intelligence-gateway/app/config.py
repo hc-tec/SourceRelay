@@ -29,6 +29,7 @@ class Settings:
     newsnow_base_url: str
     ytdlp_proxy: str
     aiotieba_proxy: bool
+    wechat_article_proxy: str
     runtime_dir: Path
 
     @classmethod
@@ -54,5 +55,6 @@ class Settings:
             ytdlp_proxy=os.getenv("YTDLP_PROXY", "").strip(),
             aiotieba_proxy=os.getenv("AIOTIEBA_PROXY", "").strip().lower()
             in {"1", "true", "yes", "on"},
+            wechat_article_proxy=os.getenv("WECHAT_ARTICLE_PROXY", "").strip(),
             runtime_dir=runtime_dir,
         )

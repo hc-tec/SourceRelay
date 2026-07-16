@@ -9,6 +9,7 @@
 - `web`：由本机 SearXNG 聚合公开搜索结果，也支持 `site` 限定知乎、新闻站等域名；
 - `hotlist_fetch`：由自托管 NewsNow 按 `platform + feed_id` 获取热榜，完整原始 JSON 保存为本地 artifact；
 - `forum_threads/post_detail`：由 aiotieba 匿名读取指定公开贴吧和已知主题，完整返回保存为本地 artifact；
+- `article_detail`：匿名读取一个已知的公开公众号文章 URL，完整原始 HTML 保存为本地 artifact；
 - `/fetch`：Trafilatura 抽取公开 HTML/text 页面的正文和元数据；
 - `/jobs/search`：把耗时搜索放入 SQLite 持久化作业。
 - 情报库：搜索结果自动写入 `documents`、`observations` 和 `search_runs`，区分新增、变化和重复出现。
@@ -56,7 +57,7 @@ API 文档：`http://127.0.0.1:8765/docs`
 Invoke-RestMethod http://127.0.0.1:8765/capabilities
 ```
 
-当前 18 个静态能力：17 个已验证，1 个保持声明未验证。已验证：
+当前 19 个静态能力：18 个已验证，1 个保持声明未验证。已验证：
 
 ```text
 bilibili.keyword_search.maxun.v1
@@ -76,6 +77,7 @@ thepaper.hotlist_fetch.newsnow.v1
 bilibili.video_detail.yt-dlp.v1
 tieba.forum_threads.aiotieba.v1
 tieba.post_detail.aiotieba.v1
+wechat_official.article_detail.public-html.v1
 ```
 
 保持 `declared_unverified`、不会被 Planner 选择：
@@ -277,6 +279,48 @@ runtime/artifacts/aiotieba/YYYY-MM-DD/<run-id>/raw.json
 - `AIOTIEBA_PROXY=true` 时从标准 `HTTP_PROXY/HTTPS_PROXY` 环境读取代理，manifest 只记录 `proxy_used` 布尔值，不记录代理 URL。
 
 2026-07-16 固定样本中，aiotieba 4.7.1 匿名读取 `python吧` 得到 10 个主题；再对两个不同公开 tid 读取帖子，分别得到 6 条与 2 条，raw JSON 约 23 KB、9.8 KB 与 3.5 KB。两项 Capability 已提升为 `verified`。
+
+### 公众号已知公开文章：匿名 public HTML
+
+`0.10.0` 新增独立动作 `article_detail`。它只接受规范的公开短链接：
+
+```text
+https://mp.weixin.qq.com/s/<public-article-id>
+```
+
+调用示例：
+
+```powershell
+$body = @{
+  platform = "wechat_official"
+  action = "article_detail"
+  input = @{ url = "https://mp.weixin.qq.com/s/eFsIOWDXfs9DbcNmr2vtjQ" }
+  options = @{ persistence = "result_only" }
+} | ConvertTo-Json -Depth 6
+
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/tasks/execute `
+  -ContentType application/json -Body $body
+```
+
+响应只返回文章 ID、标题、公众号名、发布时间和最多 4,000 字预览；完整微信 HTML 保存到：
+
+```text
+runtime/artifacts/wechat-public-html/YYYY-MM-DD/<run-id>/raw.html
+```
+
+边界：
+
+- 不使用公众号后台、微信读书、Cookie、Token、扫码登录或闭源中转；
+- 不跟随重定向，不接受查询参数、其他微信主机、带凭据 URL 或非 `/s/<id>` 路径；
+- 最大读取 5 MB，只接受 HTML；
+- 必须同时识别 `js_content`、有效标题和至少 50 字正文；壳页、安全验证页和结构漂移返回 `source_unavailable`；
+- 页面明确写明“已被发布者删除”或“因违规无法查看”时返回 `no_results`，原始页面仍落 artifact；
+- `WECHAT_ARTICLE_PROXY` 可指定本地 HTTP 代理，但 manifest 只记录 `proxy_used`，不记录代理 URL；
+- 这是“已知文章详情”，不是公众号历史列表、订阅或全局搜索。
+
+2026-07-16 固定样本中，两篇不同公众号公开文章成功，原始 HTML 为 3,840,273 / 3,139,751 bytes；一个删除样本正确返回 `no_results`。同两篇有效文章使用通用 Trafilatura 均返回 `no_results`，因此保留微信专用 Adapter，而不是降低通用正文质量门槛。
+
+WeRSS 与 WeWe RSS 经 Issue 审计后均未进入 Gateway：前者当前新登录二维码流程失效，后者依赖闭源中转且长期存在 Token 失效与部分公众号无文章问题。Gateway 不会为了账号历史覆盖而索取或接收用户 Cookie/Token。
 
 ### 人工登录与持久 Profile
 
@@ -641,4 +685,4 @@ Invoke-RestMethod "http://127.0.0.1:8765/clusters?min_documents=2&limit=20"
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-当前基线：`89 passed`。
+当前基线：`99 passed`。

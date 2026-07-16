@@ -108,8 +108,11 @@ media_download -> 非当前目标
 | 仓库/实现 | 最近提交 | License | 实际范围 | 判断 |
 |---|---|---|---|---|
 | Gateway + SearXNG | 当前运行 | AGPL 服务 | `site:mp.weixin.qq.com` 外部发现；已加入壳页和查询证据过滤 | 只能作为不完整的外部发现；当前真实样本三层全部失败时显式返回 503 |
-| [rachelos/we-mp-rss](https://github.com/rachelos/we-mp-rss)（WeRSS） | 2026-06-14 | MIT | 扫码授权、添加公众号订阅、定时更新、文章抓取/清洗、RSS/API | 已知公众号清单和文章历史候选；不是全公众号搜索 |
-| [cooderl/wewe-rss](https://github.com/cooderl/wewe-rss) | 2026-03-20 | MIT | 通过微信读书账号添加公众号、获取历史文章、生成 RSS/JSON | 已知公众号历史候选；存在账号失效和“今日小黑屋”状态 |
+| [rachelos/we-mp-rss](https://github.com/rachelos/we-mp-rss)（WeRSS） | 2026-06-14 | MIT | 扫码授权、添加公众号订阅、文章 API | 2026-07 Issue 显示微信登录页变化后无法生成二维码；等待修复，不接入 |
+| [cooderl/wewe-rss](https://github.com/cooderl/wewe-rss) | 2026-03-20 | MIT | 微信读书账号、公众号历史、JSON Feed | 二维码现场可生成，但强依赖闭源 `weread.111965.xyz`，Token 失效和空文章 Issue 长期未解；淘汰 |
+| [wechat-article/wechat-article-exporter](https://github.com/wechat-article/wechat-article-exporter) | 2026-07-15 | MIT | 用自己的公众号后台搜索并导出其他公众号文章 | 活跃但要求用户拥有公众号；公共代理有额度，最新源码仍记录 token，反查公众号 API 新近失效；不接入 |
+| [lukelei2025/wechat-article-claw](https://github.com/lukelei2025/wechat-article-claw) | 2026-03-26 | 未发现 License | Playwright 登录公众号后台，保存 Cookie/Token 后抓历史 | README/SKILL 要求向 Agent 粘贴完整凭证并写 `credentials.json`；直接淘汰 |
+| [qiye45/wechatDownload](https://github.com/qiye45/wechatDownload) | 2026-06-21 | 未发现标准开源 License | Windows/macOS 桌面成品、本地 MCP、已知文章与批量下载 | GitHub 无核心源码且限制仅学习交流、24 小时删除；可作手工工具，不作 Gateway 依赖 |
 | [CharlesPikachu/DecryptLogin](https://github.com/CharlesPikachu/DecryptLogin) | 2022-08-29 | Apache-2.0 | 旧式多平台登录模块 | 只参考认证抽象；不依赖旧登录协议 |
 | 若干新 `wechat-official-account-crawler` | 2026 年仍有新仓库 | 多个未发现 License | 多数包装 WeWe RSS 或需要已知文章链接 | 不因名字新就当全局搜索；无许可证不集成 |
 
@@ -117,12 +120,14 @@ media_download -> 非当前目标
 
 ```text
 外部关键词发现  -> SearXNG / Bing / 搜狗，严格相关性门禁
-已知文章正文    -> Trafilatura direct first；必要时 host-scoped Browser recipe
-已知公众号历史  -> WeRSS 与 WeWe RSS 做小样本对照，只选一个
+已知文章正文    -> Gateway 专用 public HTML Adapter；完整 HTML raw-first
+已知公众号历史  -> 当前无通过凭证、安全和 Issue 门槛的 Provider，保持缺口
 全公众号搜索    -> 当前无可信开源默认方案，保持缺口
 ```
 
-虽然 WeRSS/WeWe RSS 名称带 RSS，它们在这里的候选价值是“已知公众号与历史文章数据源”，不是把 RSSHub 重新引入方案。是否接入要看其 API 能否被按需调用，而不是启用默认持续订阅。
+Issue 审计（2026-07-16）改变了原先的二选一计划：WeRSS [#425](https://github.com/rachelos/we-mp-rss/issues/425) 显示微信登录页面变化导致二维码提取失败，[#419](https://github.com/rachelos/we-mp-rss/issues/419) 指出本地登录状态不能证明服务端会话有效；WeWe RSS [#463](https://github.com/cooderl/wewe-rss/issues/463)、[#427](https://github.com/cooderl/wewe-rss/issues/427)、[#455](https://github.com/cooderl/wewe-rss/issues/455) 分别反映整体失效、Token 快速失效和订阅后无文章，[#385](https://github.com/cooderl/wewe-rss/issues/385) 暴露闭源中转的凭证信任争议。容器能启动或二维码能生成不能覆盖这些风险。
+
+后续所有平台仓库选型都把 Issue 纳入正式证据链：至少检查近 30/90/180 天的登录、空数据、风控、镜像版本、维护响应、关联 PR/Release 和闭源外部依赖；“零 Issue”也要结合用户量、License 和源码凭证流判断。
 
 ### 3.4 B站
 
@@ -388,10 +393,10 @@ Gateway 可以当次临时提取 `rank/title/url/external_id` 便于显示和引
    - xsec token 只作为短期执行输入，不进入文档库；
    - 只选公开笔记，不测试评论写入或账号交互。
 
-5. **公众号已知账号/文章 POC**
-   - WeRSS 与 WeWe RSS 二选一，不同时引入；
-   - 比较授权方式、历史文章完整性、API、账号失效恢复和公开正文质量；
-   - 不把订阅能力扩写成全公众号搜索。
+5. **公众号已知公开文章与账号历史分离**
+   - 公开 `mp.weixin.qq.com/s/...` 文章已由 Gateway 专用 Adapter 匿名读取并 raw-first 保存；
+   - WeRSS 与 WeWe RSS 经 Issue 和凭证链审计均未通过，账号历史保持缺口；
+   - 不把单篇公开文章能力扩写成订阅、账号历史或全公众号搜索。
 
 ### 批次 C：高风控平台
 

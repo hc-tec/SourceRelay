@@ -121,6 +121,8 @@ search_runs = 3
 | 政务/新闻搜索 | SearXNG `site:gov.cn` | `人工智能` 返回 5 条，5 条均有查询词证据，覆盖 gov.cn、网信办、教育部、发改委 | L3 | 公开政务发现和长文读取当前质量较好 |
 | 中国政府网详情 | Trafilatura | 22,364 字；即使 Browser recipe 已注册也不抢占 Tier 1 | L3 | 公开 HTML 长文能力稳定 |
 | 公众号外部发现 | SearXNG `site:mp.weixin.qq.com` | 曾返回 5 条标题均为“微信公众平台”、0 条有查询证据 | L1 | 原结果是平台壳页，不是有效文章发现；现已加入壳页质量过滤，仍不能称公众号全局搜索 |
+| 公众号已知公开文章 | 专用 public HTML Adapter | 两个不同 `mp.weixin.qq.com/s/...` URL 成功，原始 HTML 约 3.8 / 3.1 MB；一个删除样本正确返回 `no_results` | L3 | 独立 `article_detail`；不登录、不读 Cookie，不等于账号历史或全局搜索 |
+| 公众号账号历史 | WeRSS / WeWe RSS 候选 | Issue 审计发现 WeRSS 2026-07 新登录流程失效；WeWe RSS 依赖闭源中转且 Token/空文章问题长期未解 | L0 | 两者均不进入 Gateway；Issue、维护响应和凭证链路属于正式选型门槛 |
 | B站视频详情 | yt-dlp metadata-only | 两个不同公开 BV URL 真实成功，原始 JSON 约 30 KB；统一 API 返回规范 URL 与 artifact，数据库不变 | L3 | 独立 `video_detail` 已实现；不下载媒体、不读 Cookie，lux `-j` 对同 URL 2/2 成功 |
 | 贴吧指定吧与已知主题 | aiotieba 4.7.1 匿名只读薄 Adapter | `python吧` 主题列表及两个公开 tid 真实成功；完整 dataclass 结果转 JSON artifact，数据库不变 | L3 | `forum_threads/post_detail` 已实现；只开放 `get_threads/get_posts`，不请求楼中楼，不暴露写操作 |
 | 微博、抖音、快手 | 无正式平台内检索/详情 Capability | 未进入本轮运行目录 | L0 | 不能写成当前支持；候选项目声明不等于数据源已接入 |
@@ -221,4 +223,4 @@ degraded / partial / warnings
 
 届时调研重点应是查询规划、迭代检索、引用、上下文压缩、模型可替换性和数据源工具协议，而不是让 DeepResearch 框架替代数据源治理。
 
-当前相关自动化回归纳入完整 Gateway 测试集，共 `89 passed`。
+当前相关自动化回归纳入完整 Gateway 测试集，共 `99 passed`。
