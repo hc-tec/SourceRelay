@@ -293,3 +293,61 @@ async def test_sogou_recipe_returns_only_safe_canonical_site_urls(tmp_path) -> N
     assert all("sogou.com" not in row["url"] for row in body["result"]["items"])
     assert any("2 Sogou candidates were excluded" in warning for warning in body["result"]["warnings"])
     assert any("outside the requested site:zhihu.com" in warning for warning in body["result"]["warnings"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("requested_limit", "expected_extraction_limit"),
+    [(1, 2), (2, 2), (5, 5)],
+)
+async def test_browser_recipe_keeps_two_result_validation_floor_but_honors_api_limit(
+    tmp_path,
+    requested_limit: int,
+    expected_extraction_limit: int,
+) -> None:
+    settings = replace(
+        Settings.from_env(),
+        database_path=tmp_path / "gateway.db",
+        runtime_dir=tmp_path / "runtime",
+    )
+    app = create_app(settings)
+    _install_sogou_recipe(app)
+    observed_limits: list[int] = []
+
+    async def recipe(_recipe, query: str, limit: int = 20):
+        observed_limits.append(limit)
+        assert query == "site:zhihu.com 低空经济"
+        return {
+            "validation": {"passed": True, "issues": []},
+            "items": [
+                {
+                    "title": f"知乎公开结果 {index}",
+                    "url": f"https://www.zhihu.com/question/{1000 + index}",
+                    "text": "低空经济",
+                }
+                for index in range(1, 6)
+            ][:limit],
+        }
+
+    app.state.draft_explorer.execute_recipe = recipe
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/tasks/execute",
+            json={
+                "platform": "sogou",
+                "action": "keyword_search",
+                "input": {
+                    "query": "低空经济",
+                    "site": "zhihu.com",
+                    "limit": requested_limit,
+                },
+                "options": {"allow_fallback": False, "persistence": "none"},
+            },
+        )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert observed_limits == [expected_extraction_limit]
+    assert body["result"]["item_count"] == requested_limit
+    assert len(body["result"]["items"]) == requested_limit

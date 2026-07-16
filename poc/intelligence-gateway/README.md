@@ -549,6 +549,15 @@ web.keyword_search.searxng.v1
 
 公众号外部发现另有高精度门槛：`mp.weixin.qq.com` 结果若标题只是“微信公众平台”等通用壳，或标题与摘要没有查询词证据，就会被过滤。全部过滤后明确返回 `no_results`，不会把平台入口、开发文档或无关小程序页面冒充公众号文章。
 
+搜狗 fallback 产生的 www.sogou.com/link 包装地址不会再被直接当作内容 URL。Gateway
+只会对精确的公开 HTTPS 包装页进行一次无 Cookie、无 Referer、无浏览器 Profile 的
+受限读取：最大 15 秒、64 KiB，且每次搜索最多 10 条。它只识别静态
+location.replace/location.assign、meta refresh 或 HTTP Location，不执行页面脚本，
+不访问解析出的目标内容。目标还必须通过公网 URL 检查和请求的 site hostname 边界。
+成功时结果 URL 才会替换成规范目标，并在 metrics 中保留 discovery_url、
+url_resolution_method 与 target_fetched=false；失败、站外或搜狗内部导航条目直接排除。
+这改善的是外部发现的 URL 质量，不会把 site 搜索提升为目标平台的原生关键词搜索。
+
 完整就绪等级、真实探测矩阵和 DeepResearch 分层边界见 [数据源层 ADR](../../docs/design/data-source-layer.md)。
 
 ### 搜索结果到分层详情

@@ -116,7 +116,7 @@ search_runs = 3
 | 抖音热榜 | NewsNow `douyin` | 当前上游 `www.douyin.com` fetch failed，NewsNow 返回 HTTP 500；失败 JSON 已保留 | L1 | Capability 保持 `declared_unverified`，Planner 不会选择 |
 | 小红书关键词 | BrowserWing 人工 Profile | 第一次原生失败后降级；再次真实搜索原生返回 5 条小红书结果 | L2 | 当前登录态可用，但 Profile 文件存在不能代表实时可用，需固定探测与故障原因记录 |
 | 全网搜索 | SearXNG | 一次因 Brave/Google 限流、DuckDuckGo/Startpage CAPTCHA 返回 0；稍后 `低空经济` 返回 5/5 相关结果 | L2 | 低成本首选，但上游可用性明显波动，必须有冗余 |
-| 知乎搜索 | SearXNG `site:` | 无站内 Adapter；一次链路为 SearXNG 0 条 -> Bing 认证门禁 -> 搜狗 5 条；后续 SearXNG 可直接返回规范知乎 URL | L2 | 只能称外部发现；搜狗结果还需持续检查是否为搜索跳转 URL |
+| 知乎搜索 | SearXNG `site:` | 无站内 Adapter；一次链路为 SearXNG 0 条 -> Bing 认证门禁 -> 搜狗 5 条；后续 SearXNG 可直接返回规范知乎 URL | L2 | 只能称外部发现；搜狗包装页现会受限解析为经公网与 site 边界校验的规范 URL，仍不等于知乎原生关键词搜索 |
 | 知乎专栏详情 | Trafilatura -> Browser detail recipe | HTTP 403 后 BrowserWing 成功读取两篇不同文章 3,358 / 1,916 字 | L3 | 已验证公开长文详情 fallback；不等于知乎站内完整搜索 |
 | 政务/新闻搜索 | SearXNG `site:gov.cn` | `人工智能` 返回 5 条，5 条均有查询词证据，覆盖 gov.cn、网信办、教育部、发改委 | L3 | 公开政务发现和长文读取当前质量较好 |
 | 中国政府网详情 | Trafilatura | 22,364 字；即使 Browser recipe 已注册也不抢占 Tier 1 | L3 | 公开 HTML 长文能力稳定 |
@@ -152,6 +152,20 @@ sogou.keyword_search.browserwing_recipe.v1
 - BrowserWing fallback 是低频、串行、成本更高的降级路径；
 - 没有这些已验证 recipe 时，系统保持原来的显式 `no_results`，不临时探索未知搜索页。
 
+### 搜狗包装链接的受限规范化
+
+搜狗的正常结果常返回 HTTP 200 的静态跳转页，而不是 HTTP 3xx。因此 Gateway 对
+精确的 https://www.sogou.com/link 包装地址最多读取一次公开 HTML：不发送 Cookie 或
+Referer、禁用环境代理与自动重定向、最多 15 秒和 64 KiB、每次搜索最多 10 项。它只
+提取静态 location.replace/location.assign、meta refresh 或 HTTP Location，不执行
+JavaScript，也不让共享 BrowserWing Profile 点击跳转。
+
+解析出的目标先经过 URL 规范化、既有公网 SSRF 防护和请求 site 的 hostname 点边界
+校验；不会请求目标内容页。成功项保留 discovery_url、url_resolution_method 和
+target_fetched=false 作为发现链证据。解析失败、站外、私网或搜狗内部导航项被排除，
+绝不能作为目标内容 URL 返回。该能力只提高 external discovery 的 URL 质量，不能
+把知乎、微博等平台的站外发现升格为原生关键词搜索。
+
 ## 5. 公众号质量门槛
 
 `mp.weixin.qq.com` 外部发现采用高精度门槛。以下任一情况不再算成功：
@@ -182,7 +196,7 @@ error = SearXNG returned only generic WeChat platform shell results.
 
 1. B站搜索：对查询相关性、推广项、规范 BV URL 比例增加验收门槛；
 2. 小红书搜索：把“Profile 存在”和“当前登录搜索成功”拆成不同状态，并保留原生失败原因；
-3. 搜狗 fallback：识别并尽可能解析搜索跳转 URL，不能把 `www.sogou.com` 跳转链接写成目标内容 URL；
+3. 搜狗 fallback（已完成）：受限解析静态跳转页并校验规范目标 URL；后续只监测格式漂移和低频真实样本，不把失败包装链接降级成可引用 URL；
 4. 公众号：用小规模公开文章样本验证外部发现和正文，持续拒绝平台壳页。
 
 ### P1：补资源类型

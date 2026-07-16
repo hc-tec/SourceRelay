@@ -1094,8 +1094,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 site = validated_search_input.site or ""
                 execution_query = f"site:{site} {query}" if site else query
                 started = time.perf_counter()
+                # Generated browser recipes keep a two-result validation
+                # threshold so a selector cannot pass on one accidental card.
+                # The public API still permits limit=1, therefore extract at
+                # least two candidates for validation and truncate only after
+                # normalization/deduplication below.
+                validation_extraction_limit = max(2, limit)
                 payload = await draft_explorer.execute_recipe(
-                    manifest.recipe, execution_query, limit=limit
+                    manifest.recipe,
+                    execution_query,
+                    limit=validation_extraction_limit,
                 )
                 validation = payload.get("validation") or {}
                 if not validation.get("passed"):

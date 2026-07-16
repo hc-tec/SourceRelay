@@ -127,12 +127,44 @@ item_count=3
 - 仅依靠模型最终表格仍会混合搜索和详情阶段，甚至主动尝试非法参数；
 - 因此最终产品必须把 trace、Gateway 响应和 Citation Auditor 放在模型报告之上。
 
+## 2026-07-16 后续修复和复核
+
+本节是在上面的历史真实 trace 基础上补做的代码与受限网络复核；没有再次调用模型，
+也没有把新结果伪装成一次完整 DeepAgents 重跑。
+
+1. 已完成确定性 Citation Auditor。它只读取 UTF-8 Gateway tool trace，生成
+   coverage_status、claim_status、机器可读 gaps、逐条 event/stage/capability/raw_ref
+   provenance，并拒绝 Sogou/Bing/Baidu 跳转、平台首页、推广行、空 URL 和不匹配平台
+   的 URL。expected platform 未被调用时明确显示 not_attempted。
+2. 历史 trace 已离线复核。B站为 native_success + citable，存在 2 条规范视频 URL；
+   知乎和微博均为 external_discovery_only + uncitable，历史 Sogou 包装 URL 仍被拒绝，
+   没有被事后错误地改写为平台原生搜索成功。B站较早的站外 Sogou 事件不会把原生
+   Maxun 覆盖状态改成降级：审计单独展示覆盖事件的 flags 与所有观测事件的 flags。
+3. 已完成 Sogou 跳转 URL 的安全归一化。只读取精确公开包装页的静态 redirect，不带
+   Cookie/Referer、不使用 BrowserWing Profile、不执行 JavaScript、不抓取目标内容；
+   目标必须通过公网与 site hostname 边界校验。真实复核了历史的一条知乎包装链接，
+   得到 www.zhihu.com 目标，解析方法为 sogou_html_location；该检查没有访问目标内容页。
+4. 真实 Gateway 重启后，首次 limit=1 的 Sogou 请求正确暴露了一个假阴性：页面正常
+   填入查询、form 提交、得到 1 条相关包装结果且没有登录/验证码标记，但 BrowserWing
+   运行时把 limit=1 直接注入抽取脚本后，又用至少两条结果的 recipe 回归门槛拒绝。
+   修复为内部至少抽取两条用于验证，归一化和去重后仍按 API limit 截断。重启服务后的
+   同一受控请求已成功返回 1 条 https://www.zhihu.com/question/648380958；它保留
+   discovery_url、sogou_html_location 和 target_fetched=false，未抓取知乎目标正文。
+   该结果仍是 external discovery，而不是知乎原生关键词搜索。
+5. 当前自动化回归：Intelligence Gateway 全量 124 passed；安装可选 deepagents
+   运行时后，适配器测试 26 passed（包含不发起模型调用的 DeepAgents 构图检查）。
+   新 trace v2 投影和离线审计 CLI 都由离线测试覆盖。
+
+直接 Gateway 的 Sogou URL 归一化复核已经完成；仍待补的是一次完整 DeepAgents v2
+trace 与 audit 重跑。那次运行应验证蜂群调用链和新 evidence projection，不应改变以下
+边界：知乎、微博在没有 Draft -> inspect -> validate -> promote 的原生关键词能力前，
+仍只能表述为外部发现。
+
 ## 后续工作
 
-1. 增加一个机器化 Citation Auditor：从 trace 生成平台级结果表，不允许模型自行填充
-   `executed_capability_id`；
-2. 修复/替换 Sogou recipe 的跳转 URL 归一化，避免把 `sogou.com/link` 当作知乎、微博
-   原始规范 URL；
+1. 已完成机器化 Citation Auditor：模型不能自行填充能力 ID、状态、结果数量或 URL；
+2. 已完成 Sogou recipe 的跳转 URL 归一化：失败包装链接不会作为知乎、微博原始规范
+   URL 返回；
 3. 分别研究知乎关键词搜索和微博关键词搜索的原生 BrowserWing/公开页面路径，先做
    Draft → inspect → validate，再决定是否注册 capability；
 4. 对 B站推广结果做显式过滤或在研究 Agent 提示中区分自然结果和 promoted 行；
