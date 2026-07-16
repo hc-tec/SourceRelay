@@ -88,7 +88,7 @@ async def test_capabilities_and_task_plan_are_discoverable(tmp_path) -> None:
         )
 
     assert capabilities.status_code == 200
-    assert capabilities.json()["count"] == 20
+    assert capabilities.json()["count"] == 21
     assert plan.json()["degraded"] is True
     assert plan.json()["effective_input"]["site"] == "zhihu.com"
     assert article_check.json()["ready"] is True

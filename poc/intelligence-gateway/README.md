@@ -58,7 +58,7 @@ API 文档：`http://127.0.0.1:8765/docs`
 Invoke-RestMethod http://127.0.0.1:8765/capabilities
 ```
 
-当前 20 个静态能力：19 个已验证，1 个保持声明未验证。已验证：
+当前 21 个静态能力：20 个已验证，1 个保持声明未验证。已验证：
 
 ```text
 bilibili.keyword_search.maxun.v1
@@ -80,6 +80,7 @@ bilibili.video_detail.yt-dlp.v1
 tieba.forum_threads.aiotieba.v1
 tieba.post_detail.aiotieba.v1
 wechat_official.article_detail.public-html.v1
+zhihu.qa_detail.browserwing.v1
 ```
 
 保持 `declared_unverified`、不会被 Planner 选择：
@@ -714,4 +715,4 @@ Invoke-RestMethod "http://127.0.0.1:8765/clusters?min_documents=2&limit=20"
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-当前基线：`104 passed`。
+当前基线：`109 passed`。

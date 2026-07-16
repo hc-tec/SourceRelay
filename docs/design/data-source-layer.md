@@ -187,7 +187,7 @@ error = SearXNG returned only generic WeChat platform shell results.
 ### P1：补资源类型
 
 1. `video_detail`：B站 yt-dlp raw-first 已完成；抖音/快手仍要分别通过已知公开 URL 小样本才能注册；
-2. `qa_detail`：知乎问题与回答分开，不抓整个聚合页面；
+2. `qa_detail`：知乎问题与回答分开，不抓整个聚合页面；已用两个公开问题验证首屏回答卡片，raw-first artifact 不写 SQLite；
 3. `post_detail`：小红书/微博/贴吧帖子使用平台专用契约；
 4. `article_detail`：公众号已知公开文章、新闻和专栏继续复用 direct-first 长文链。
 
@@ -224,4 +224,4 @@ degraded / partial / warnings
 
 届时调研重点应是查询规划、迭代检索、引用、上下文压缩、模型可替换性和数据源工具协议，而不是让 DeepResearch 框架替代数据源治理。
 
-当前相关自动化回归纳入完整 Gateway 测试集，共 `104 passed`。
+当前相关自动化回归纳入完整 Gateway 测试集，共 `109 passed`。

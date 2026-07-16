@@ -62,6 +62,8 @@ from .models import (
     WechatArticleDetailResponse,
     WeiboAccountPostsRequest,
     WeiboAccountPostsResponse,
+    ZhihuQaDetailRequest,
+    ZhihuQaDetailResponse,
 )
 from .normalization import canonicalize_url, deduplicate_items
 from .registry import ConnectorRegistry
@@ -151,7 +153,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.11.0",
+        version="0.12.0",
         description="Explicit-status API for Chinese-platform discovery, hotlists and public detail extraction.",
     )
     app.state.settings = active_settings
@@ -182,7 +184,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.11.0",
+            "version": "0.12.0",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
             "hotlist_providers": [
@@ -200,6 +202,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "account_post_providers": [
                 entry["provider"] for entry in registry.account_post_providers()
             ],
+            "qa_detail_providers": [
+                entry["provider"] for entry in registry.qa_detail_providers()
+            ],
             "article_extraction": True,
             "capability_runtime": True,
             "capabilities": "/capabilities",
@@ -216,6 +221,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "forum_read_providers": registry.forum_read_providers(),
             "public_article_providers": registry.public_article_providers(),
             "account_post_providers": registry.account_post_providers(),
+            "qa_detail_providers": registry.qa_detail_providers(),
             "article_collector": registry.article.collector,
         }
 
@@ -470,6 +476,51 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 CapabilityStatus.DEGRADED,
             }
             provider_health = await registry.weibo_account.health()
+            ready = provider_health.ready and executor_valid and scope_valid and planner_eligible
+            return CapabilityCheckResponse(
+                capability_id=manifest.capability_id,
+                ready=ready,
+                status=(
+                    ResultStatus.SUCCESS
+                    if ready
+                    else (
+                        ResultStatus.MISCONFIGURED
+                        if not executor_valid or not scope_valid
+                        else ResultStatus.SOURCE_UNAVAILABLE
+                    )
+                ),
+                details={
+                    **provider_health.details,
+                    "executor": manifest.executor,
+                    "executor_valid": executor_valid,
+                    "scope_valid": scope_valid,
+                    "capability_status": manifest.status.value,
+                    "planner_eligible": planner_eligible,
+                },
+                warnings=[
+                    *manifest.warnings,
+                    *provider_health.warnings,
+                    *(
+                        ["This declared capability must pass fixed-sample verification before planning."]
+                        if not planner_eligible
+                        else []
+                    ),
+                ],
+            )
+        if manifest.action == CapabilityAction.QA_DETAIL:
+            executor_valid = manifest.executor == "browserwing-zhihu"
+            scope_valid = (
+                manifest.platform == "zhihu"
+                and manifest.scope.get("known_question_id_only") is True
+                and manifest.scope.get("read_only") is True
+                and manifest.scope.get("raw_first") is True
+                and manifest.scope.get("cookies_exported") is False
+            )
+            planner_eligible = manifest.status in {
+                CapabilityStatus.VERIFIED,
+                CapabilityStatus.DEGRADED,
+            }
+            provider_health = await registry.zhihu_qa.health()
             ready = provider_health.ready and executor_valid and scope_valid and planner_eligible
             return CapabilityCheckResponse(
                 capability_id=manifest.capability_id,
@@ -1207,6 +1258,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if persistence == "result_only":
                 response.warnings.append(
                     "Weibo posts were not written to the intelligence database; the allowlisted raw local artifact is the durable result."
+                )
+            return response
+        if manifest.action == CapabilityAction.QA_DETAIL:
+            if manifest.executor != "browserwing-zhihu":
+                raise GatewayError(
+                    "Zhihu QA detail capability has no supported provider executor.",
+                    status=ResultStatus.MISCONFIGURED,
+                    http_status=503,
+                )
+            qa_request = ZhihuQaDetailRequest.model_validate(
+                {
+                    "question_id": task_input.get("question_id"),
+                    "limit": task_input.get("limit", 5),
+                }
+            )
+            response = await registry.zhihu_qa_detail(
+                qa_request, capability_id=manifest.capability_id
+            )
+            if persistence == "result_only":
+                response.warnings.append(
+                    "Zhihu QA content was not written to the intelligence database; the allowlisted raw local artifact is the durable result."
                 )
             return response
         if manifest.action in {

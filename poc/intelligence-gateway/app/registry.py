@@ -13,6 +13,7 @@ from .connectors.searxng import SearXNGConnector
 from .connectors.ytdlp import YtDlpBilibiliVideoConnector
 from .connectors.wechat_article import WechatPublicArticleConnector
 from .connectors.weibo_account import BrowserWingWeiboAccountConnector
+from .connectors.zhihu_qa import BrowserWingZhihuQaConnector
 from .models import (
     FetchRequest,
     FetchResponse,
@@ -32,6 +33,8 @@ from .models import (
     WechatArticleDetailResponse,
     WeiboAccountPostsRequest,
     WeiboAccountPostsResponse,
+    ZhihuQaDetailRequest,
+    ZhihuQaDetailResponse,
 )
 from .storage import GatewayStore
 
@@ -49,6 +52,9 @@ class ConnectorRegistry:
         self.aiotieba = AiotiebaReadConnector(settings)
         self.wechat_article = WechatPublicArticleConnector(settings)
         self.weibo_account = BrowserWingWeiboAccountConnector(
+            settings, lock=self.connectors[SourceName.XIAOHONGSHU].lock
+        )
+        self.zhihu_qa = BrowserWingZhihuQaConnector(
             settings, lock=self.connectors[SourceName.XIAOHONGSHU].lock
         )
 
@@ -93,6 +99,11 @@ class ConnectorRegistry:
         self, request: WeiboAccountPostsRequest, *, capability_id: str
     ) -> WeiboAccountPostsResponse:
         return await self.weibo_account.fetch(request, capability_id=capability_id)
+
+    async def zhihu_qa_detail(
+        self, request: ZhihuQaDetailRequest, *, capability_id: str
+    ) -> ZhihuQaDetailResponse:
+        return await self.zhihu_qa.fetch(request, capability_id=capability_id)
 
     async def health(self) -> list[SourceHealth]:
         return list(await asyncio.gather(*(connector.health() for connector in self.connectors.values())))
@@ -143,5 +154,13 @@ class ConnectorRegistry:
             {
                 "provider": self.weibo_account.provider,
                 "collector": self.weibo_account.collector,
+            }
+        ]
+
+    def qa_detail_providers(self) -> list[dict[str, str]]:
+        return [
+            {
+                "provider": self.zhihu_qa.provider,
+                "collector": self.zhihu_qa.collector,
             }
         ]

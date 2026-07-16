@@ -1,0 +1,41 @@
+{
+  "capability_id": "zhihu.qa_detail.browserwing.v1",
+  "version": "1.0.0",
+  "platform": "zhihu",
+  "action": "qa_detail",
+  "status": "verified",
+  "executor": "browserwing-zhihu",
+  "adapter": "BrowserWingZhihuQaConnector",
+  "source": null,
+  "authentication": {"required": false, "mode": "none"},
+  "input_schema": {
+    "question_id": {
+      "type": "string",
+      "required": true,
+      "pattern": "^[0-9]{1,20}$"
+    },
+    "limit": {"type": "integer", "minimum": 1, "maximum": 5, "default": 5}
+  },
+  "output_schema": "zhihu_qa_detail_response.v1",
+  "scope": {
+    "known_question_id_only": true,
+    "first_rendered_answers_only": true,
+    "anonymous_public_page": true,
+    "read_only": true,
+    "raw_first": true,
+    "database_persistence": false,
+    "cookies_exported": false,
+    "maximum_answers": 5,
+    "comments": false,
+    "answer_expansion": false
+  },
+  "fallback_ids": [],
+  "verification_input": {"question_id": "623780358", "limit": 5},
+  "last_verified_at": "2026-07-16T19:35:00+08:00",
+  "license": "Gateway-owned adapter; public rendered page access only",
+  "warnings": [
+    "This capability reads a known public question and the first rendered answer cards; it is not global Zhihu search or complete answer history.",
+    "Collapsed answers are not expanded, comments are not collected, and hidden login dialogs do not count as an authentication gate when public answer cards are readable.",
+    "Verified anonymously against two fixed public questions (623780358 and 517621628), each returning three readable answers."
+  ]
+}

@@ -593,7 +593,20 @@ lux JSON 主要是 `url/site/title/type/streams/caption/err`，比 yt-dlp 更小
 | `2803301701` | 人民日报 | 10 | 31,127 bytes | 不需要 |
 | `2656274875` | 央视新闻 | 10 | 32,300 bytes | 不需要 |
 
-正式 `weibo.account_posts.browserwing.v1` 限制为数字 UID、第一页和最多 10 条，只返回轻量预览；白名单 raw JSON 保存到 `runtime/artifacts/browserwing-weibo/...`，不写 SQLite。一次人民日报 Gateway 闭环得到 10 条、20,649 bytes，并生成 SHA-256；raw 与 manifest 联合检查未发现 Cookie、Profile 路径、`user_token`、`stream_url`、localStorage 或 sessionStorage。微博与小红书共用同一个 BrowserWing 锁，避免共享 Profile 并发操作。完整 Gateway 回归为 `104 passed`。
+正式 `weibo.account_posts.browserwing.v1` 限制为数字 UID、第一页和最多 10 条，只返回轻量预览；白名单 raw JSON 保存到 `runtime/artifacts/browserwing-weibo/...`，不写 SQLite。一次人民日报 Gateway 闭环得到 10 条、20,649 bytes，并生成 SHA-256；raw 与 manifest 联合检查未发现 Cookie、Profile 路径、`user_token`、`stream_url`、localStorage 或 sessionStorage。微博与小红书共用同一个 BrowserWing 锁，避免共享 Profile 并发操作。该阶段回归为 `104 passed`，加入知乎问答后完整回归为 `109 passed`。
+
+### 6.14 0.12.0 知乎已知问答详情
+
+知乎专栏文章已经有 `detail_fetch` 的通用正文与 BrowserWing recipe fallback，但问答页不能按一篇长文章处理：题目、回答卡片、作者和回答折叠状态是不同语义。新增 `zhihu.qa_detail.browserwing.v1`，只接受数字问题 ID，并在页面内读取 `QuestionHeader-title`、`QuestionRichText`、`QuestionTopic` 和可见 `ContentItem AnswerItem` 的公开字段。
+
+两个固定公开问题真实结果如下：
+
+| 问题 ID | 标题 | 可读回答 | 正式 raw JSON | 登录 |
+|---|---|---:|---:|---|
+| `623780358` | AI人工智能是什么？ | 3 | 5,330 bytes | 不需要 |
+| `517621628` | 什么是人工智能? | 3 | 5,478 bytes | 不需要 |
+
+两个页面的 DOM 中都存在登录/注册相关元素，但公开回答卡片仍然可见。若按 body 是否包含“登录”判断，会把正常公开页面误判成认证门禁；Adapter 改为只在回答卡片为零且可见登录门禁存在时返回 `authentication_required`。脚本和 Connector 均不点击“阅读全文”、不展开折叠回答、不抓评论，不保存实体搜索链接中的查询参数；正式 artifact 只保存白名单字段和可读文本。两个 Gateway 闭环均返回 `success`，`persistence=result_only` 前后数据库统计不变。完整 Gateway 回归为 `109 passed`。
 
 ## 7. 当前结论
 
@@ -611,6 +624,7 @@ yt-dlp              -> B站已知公开视频元数据 + 本地原始 artifact
 aiotieba             -> 贴吧指定吧主题与已知帖子 + 本地原始 artifact
 WeChat public HTML   -> 已知公众号公开文章 + 本地原始 HTML artifact
 BrowserWing Weibo    -> 已知微博 UID 的首个公开渲染页 + 白名单原始 JSON artifact
+BrowserWing Zhihu    -> 已知知乎问题首个公开回答卡片 + 白名单原始 JSON artifact
         ↓
 统一 Gateway -> 明确状态、最小溯源、原始文件、可选 SQLite 索引
 ```
@@ -623,7 +637,7 @@ BrowserWing Weibo    -> 已知微博 UID 的首个公开渲染页 + 白名单原
 
 1. 为视频描述、问答回答、帖子正文定义独立输出类型和质量门槛，不把所有详情强塞进“200 字长文章”；
 2. 为运行时 recipe 增加定期 `verify`、人工审计记录、选择器漂移告警、版本升级和回滚；
-3. 公众号已知公开文章、B站视频详情和微博已知账号第一页已经完成；下一步补知乎问答与抖音/快手已知公开 URL，同时等待可审计的公众号账号历史方案；
+3. 公众号已知公开文章、B站视频详情、微博已知账号第一页和知乎已知问答详情已经完成；下一步补抖音/快手已知公开 URL，同时等待可审计的公众号账号历史方案；
 4. 再评估 LLM 辅助探索，让模型提出候选选择器和动作，但确定性验证门禁仍不可跳过；
 5. 强登录平台继续使用专用 Adapter 与用户人工 Profile；小红书、微博等不进入通用 Draft，也不把外部 `site:` 发现误称为站内完整索引；
 6. 在任何商业化或多人服务之前，单独评估 Maxun 与 SearXNG 的 AGPL 网络服务义务，以及平台条款、个人信息、浏览器 URL 安全和内容存储周期。

@@ -50,6 +50,7 @@ class CapabilityAction(StrEnum):
     POST_DETAIL = "post_detail"
     ARTICLE_DETAIL = "article_detail"
     ACCOUNT_POSTS = "account_posts"
+    QA_DETAIL = "qa_detail"
 
 
 class CapabilityStatus(StrEnum):
@@ -527,6 +528,39 @@ class WeiboAccountPostsResponse(BaseModel):
     duration_ms: int = Field(ge=0)
     item_count: int = Field(ge=0)
     posts: list[WeiboPostPreview] = Field(default_factory=list)
+    artifact: ArtifactReference
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class ZhihuQaDetailRequest(BaseModel):
+    question_id: str = Field(min_length=1, max_length=20, pattern=r"^[0-9]+$")
+    limit: int = Field(default=5, ge=1, le=5)
+
+
+class ZhihuAnswerPreview(BaseModel):
+    answer_id: str
+    answer_url: str
+    author_name: str = ""
+    author_url: str = ""
+    author_headline: str = ""
+    text_preview: str = ""
+    published_text: str = ""
+    text_truncated: bool = False
+
+
+class ZhihuQaDetailResponse(BaseModel):
+    ok: bool
+    status: ResultStatus
+    platform: str = "zhihu"
+    provider: str
+    question_id: str
+    question_title: str = ""
+    question_text_preview: str = ""
+    fetched_at: datetime = Field(default_factory=utc_now)
+    duration_ms: int = Field(ge=0)
+    item_count: int = Field(ge=0)
+    answers: list[ZhihuAnswerPreview] = Field(default_factory=list)
     artifact: ArtifactReference
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None

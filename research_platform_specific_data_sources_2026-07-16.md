@@ -161,7 +161,7 @@ video_detail   -> yt-dlp metadata-only，lux 对照
 | NewsNow / DailyHotApi | 均有知乎热榜/知乎日报来源 | `hotlist_fetch` |
 | MediaCrawler | 声明搜索、帖子、作者、评论，但非商业学习许可 | 字段与流程参考 |
 
-结论：当前不为了“专用仓库”而接入一个低维护个人项目。知乎先保持外部发现 + 公开详情 recipe；以后对问题/回答设计独立 `qa_detail`。
+结论：当前不为了“专用仓库”而接入一个低维护个人项目。知乎保留外部发现 + 专栏公开详情 recipe，并已通过 BrowserWing 对两个已知公开问题实现独立 `qa_detail`；该能力只覆盖首屏回答卡片，不等于完整问题历史。
 
 ### 3.6 微博
 
@@ -357,7 +357,7 @@ Gateway 可以当次临时提取 `rank/title/url/external_id` 便于显示和引
 | B站 | Maxun | NewsNow | 后续公开页面/专用 Adapter | yt-dlp 主、lux 对照 | 先做 `video_detail` |
 | 小红书 | BrowserWing 人工 Profile | 暂不优先 | xhs 只读 POC | BrowserWing vs xhs | 先做详情对照，不开放写操作 |
 | 公众号 | SearXNG/Bing/搜狗外部发现 | 无可信全局热榜 | WeRSS 或 WeWe RSS 二选一 | Trafilatura/Browser detail | 先测已知文章和已知公众号，不宣称全局搜索 |
-| 知乎 | 外部 `site:` 发现 | NewsNow | 暂无推荐独立仓库 | Browser detail；以后 `qa_detail` | 保持当前组合 |
+| 知乎 | 外部 `site:` 发现 | NewsNow | 暂无推荐独立仓库 | Browser detail；`qa_detail` 已验证已知问题首屏回答 | 保持当前组合，问答不冒充全文 |
 | 微博 | BrowserWing 已验证已知 UID 首个公开渲染页；不等于全局搜索 | NewsNow | 自有只读 Adapter；dataabc 参考 | 通用/专用详情 | 热搜与已知账号首页已分成独立 Capability，账号历史仍待审计 |
 | 抖音 | 暂无正式能力 | NewsNow | 后续人工 Profile | Evil0ctal/lux 隔离 POC | 先热榜和已知 URL |
 | 快手 | 暂无正式能力 | NewsNow | 后续人工 Profile | lux 对照 | 先热榜 |
