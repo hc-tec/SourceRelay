@@ -57,8 +57,8 @@ poc/deepresearch-gateway/
 ```
 
 适配器默认 `persistence=none`，不会使用 Tavily、Serper、Brave、Bing、Jina 或其他
-框架内置搜索服务。基础环境适配器测试为 `10 passed, 1 skipped`；安装
-`.[deepagents]` 后，DeepAgents 构造级测试为 `11 passed`；Gateway 基线仍为
+框架内置搜索服务。基础环境适配器测试为 `12 passed, 1 skipped`；安装
+`.[deepagents]` 后，DeepAgents 构造级测试为 `13 passed`；Gateway 基线仍为
 `114 passed`。
 
 ## 1. 调研方法与证据范围
