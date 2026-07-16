@@ -8,6 +8,7 @@
 poc/browserwing/           BrowserWing 中文公开站点与登录 Profile 实验
 poc/maxun/                 Maxun B站搜索录制、运行和映射实验
 poc/intelligence-gateway/  统一 Capability Runtime 与 Draft Capability Factory
+poc/deepresearch-gateway/  DeepResearch/蜂群运行时的 Gateway-only 工具适配层
 research_*.md              开源项目、中文站点覆盖和架构调研
 ```
 
@@ -71,12 +72,26 @@ docker compose config --quiet
 
 ## 下一阶段
 
-`0.13.0` 已经完成 NewsNow `hotlist_fetch`、B站 yt-dlp `video_detail`、贴吧 aiotieba `forum_threads/post_detail`、公众号公开文章 `article_detail`、微博已知账号 `account_posts`、知乎已知问答 `qa_detail` 和快手已知视频 `video_detail` 的 raw-first artifact 闭环。当前阶段继续稳定数据源层，不在 Gateway 内加入长报告、多智能体研究或结论生成：
+`0.13.0` 已经完成 NewsNow `hotlist_fetch`、B站 yt-dlp `video_detail`、贴吧 aiotieba `forum_threads/post_detail`、公众号公开文章 `article_detail`、微博已知账号 `account_posts`、知乎已知问答 `qa_detail` 和快手已知视频 `video_detail` 的 raw-first artifact 闭环。当前阶段继续稳定数据源层，同时固定上层 DeepResearch 接入边界，不在 Gateway 内加入长报告、多智能体研究或结论生成：
 
 1. 修 B站相关性/规范 URL、小红书实时认证状态、搜狗跳转 URL 和公众号壳页等现有质量问题；
 2. 公众号账号历史保持缺口：WeRSS 当前扫码流程失效，WeWe RSS 闭源中转和 Token 稳定性不达标；等待可审计替代方案，不扩写成全公众号搜索；
 3. 快手已知视频详情已经完成；抖音由于匿名路径需要 Cookie，继续保持未验证，后续只评估公开浏览器页面或用户人工 Profile 边界；
 4. DailyHotApi 保留为 NewsNow 对照候选，本地真实样本和失败契约未通过前不进入自动 fallback；
-5. 数据层达到稳定验收条件后，再调研 DeerFlow、天工系 DeepResearch 等仓库作为上层分析消费者。
+5. 数据层达到稳定验收条件后，再将 DeerFlow、天工系 DeepResearch 等仓库作为上层分析消费者。
+
+DeepResearch/蜂群接入不再直接使用框架自带搜索器：
+
+1. `.env` 中的 `DEEPSEEK_API_KEY` 只交给模型客户端；
+2. 研究 Agent 只注册 `poc/deepresearch-gateway/` 的 `gateway_*` 工具；
+3. 关键词、热榜、平台详情和公开正文统一调用 Intelligence Gateway；
+4. 默认 `persistence=none`，响应保留 `status`、能力链、降级标记和 raw artifact 引用；
+5. DeerFlow 可通过可选 MCP bridge 接入，DeepAgents/LangGraph、AgentScope、CrewAI
+   可直接包装同一组异步工具。
+
+接入契约、蜂群安全边界和候选框架比较见
+[DeepResearch Gateway Adapter ADR](docs/design/deepresearch-gateway-adapter.md)、
+[DeepResearch/蜂群调研报告](research_deepresearch_swarm_2026-07-16.md) 和
+[适配器 README](poc/deepresearch-gateway/README.md)。
 
 数据源分层、就绪等级和原始文件优先的保存边界见 [数据源层 ADR](docs/design/data-source-layer.md)。不同平台、不同动作的 GitHub 仓库选型与 NewsNow/DailyHotApi 接口级核验见 [平台专用数据源调研](research_platform_specific_data_sources_2026-07-16.md)。

@@ -1,0 +1,36 @@
+[project]
+name = "deepresearch-gateway-adapter"
+version = "0.1.0"
+description = "Framework-neutral DeepResearch tools backed exclusively by the Intelligence Gateway."
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.28,<1",
+]
+
+[project.optional-dependencies]
+mcp = [
+  "mcp>=1,<2",
+]
+langchain = [
+  "langchain-core>=0.3,<1",
+]
+dev = [
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+]
+
+[project.scripts]
+intelligence-gateway-mcp = "deepresearch_gateway.mcp_server:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["deepresearch_gateway*"]
+namespaces = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
