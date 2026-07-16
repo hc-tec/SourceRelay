@@ -67,6 +67,10 @@ from .models import (
 )
 from .normalization import canonicalize_url, deduplicate_items
 from .registry import ConnectorRegistry
+from .sogou_redirects import (
+    MAX_REDIRECT_RESOLUTIONS_PER_SEARCH,
+    SogouRedirectResolver,
+)
 from .storage import GatewayStore
 
 
@@ -150,6 +154,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     draft_explorer = BrowserWingDraftExplorer(
         active_settings, browserwing_connector.lock
     )
+    sogou_redirect_resolver = SogouRedirectResolver(
+        timeout_seconds=min(active_settings.request_timeout, 15.0)
+    )
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
@@ -161,6 +168,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.registry = registry
     app.state.capabilities = catalog
     app.state.draft_explorer = draft_explorer
+    app.state.sogou_redirect_resolver = sogou_redirect_resolver
 
     @app.exception_handler(GatewayError)
     async def gateway_error_handler(_request: Request, exc: GatewayError) -> JSONResponse:
@@ -1106,23 +1114,77 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         ),
                         warnings=issues,
                     )
-                items = deduplicate_items(
-                    [
+                recipe_items: list[SearchItem] = []
+                resolution_warnings: list[str] = []
+                sogou_resolution_attempts = 0
+                sogou_excluded_count = 0
+                redirect_resolver = app.state.sogou_redirect_resolver
+                for index, item in enumerate(payload.get("items") or [], start=1):
+                    discovery_url = canonicalize_url(str(item.get("url") or ""))
+                    result_url = discovery_url
+                    metrics = (
+                        dict(item.get("metrics") or {})
+                        if isinstance(item.get("metrics"), dict)
+                        else {}
+                    )
+                    item_warnings = ["Title and URL were extracted heuristically."]
+                    if manifest.platform.casefold() == "sogou":
+                        if redirect_resolver.is_sogou_redirect_url(discovery_url):
+                            if sogou_resolution_attempts >= MAX_REDIRECT_RESOLUTIONS_PER_SEARCH:
+                                sogou_excluded_count += 1
+                                resolution_warnings.append(
+                                    "Additional Sogou redirect candidates were excluded after the "
+                                    f"{MAX_REDIRECT_RESOLUTIONS_PER_SEARCH}-item safety limit."
+                                )
+                                continue
+                            sogou_resolution_attempts += 1
+                            resolution = await redirect_resolver.resolve(
+                                discovery_url,
+                                expected_site=site or None,
+                            )
+                            if resolution is None or not resolution.target_url:
+                                sogou_excluded_count += 1
+                                if resolution and resolution.warning:
+                                    resolution_warnings.append(resolution.warning)
+                                else:
+                                    resolution_warnings.append(
+                                        "Sogou redirect candidate was excluded because no safe canonical URL was available."
+                                    )
+                                continue
+                            result_url = resolution.target_url
+                            metrics.update(
+                                {
+                                    "discovery_url": resolution.discovery_url,
+                                    "url_resolution_method": resolution.method,
+                                    "target_fetched": False,
+                                }
+                            )
+                            item_warnings.append(
+                                "Canonical URL was resolved from the Sogou redirect page; target content was not fetched."
+                            )
+                        elif redirect_resolver.is_sogou_owned_url(discovery_url):
+                            sogou_excluded_count += 1
+                            resolution_warnings.append(
+                                "Sogou internal navigation link was excluded because it is not a canonical result target."
+                            )
+                            continue
+                    recipe_items.append(
                         SearchItem(
                             source=SourceName.WEB,
                             query=query,
                             rank=index,
                             title=str(item.get("title") or "").strip(),
-                            url=canonicalize_url(str(item.get("url") or "")),
+                            url=result_url,
                             snippet=str(item.get("text") or "").strip(),
+                            metrics=metrics,
                             content_type="search_result",
                             collector="browserwing_recipe",
                             partial=True,
-                            warnings=["Title and URL were extracted heuristically."],
+                            warnings=item_warnings,
                         )
-                        for index, item in enumerate(payload.get("items") or [], start=1)
-                    ]
-                )[:limit]
+                    )
+                items = deduplicate_items(recipe_items)[:limit]
+                unique_resolution_warnings = list(dict.fromkeys(resolution_warnings))
                 response = SearchResponse(
                     ok=bool(items),
                     status=(ResultStatus.SUCCESS if items else ResultStatus.NO_RESULTS),
@@ -1135,6 +1197,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     warnings=[
                         "Generated BrowserWing adapter executed a deterministic validated recipe.",
                         "Only the first rendered result page was inspected.",
+                        *(
+                            [
+                                f"{sogou_excluded_count} Sogou candidates were excluded because no safe canonical URL was available."
+                            ]
+                            if sogou_excluded_count
+                            else []
+                        ),
+                        *unique_resolution_warnings,
                         *(
                             [
                                 f"The browser query was constrained with site:{site} for external platform discovery."
