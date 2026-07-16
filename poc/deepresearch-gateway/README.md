@@ -78,6 +78,17 @@ python -m pip install -e ".[deepagents]"
 python examples/deepagents_gateway_research.py "低空经济在中文平台的近期讨论"
 ```
 
+需要做验收或调试时，加上 `--trace-file`：
+
+```powershell
+python examples/deepagents_gateway_research.py `
+  --trace-file D:\AIProject\inteligence\runtime\validation\gateway-trace.json `
+  "低空经济在中文平台的近期讨论"
+```
+
+trace 是 UTF-8 JSON，记录每个 `gateway_*` 调用的输入、HTTP 状态、Gateway status、
+能力链、`degraded/partial`、结果数量和警告。最终中文报告不能替代这份机器证据。
+
 The example delegates at most three focused aspects, preserves Gateway statuses,
 and asks the lead agent to audit URL, source, capability ID and artifact references
 before writing a report. It is intentionally a validation PoC rather than a new

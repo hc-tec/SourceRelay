@@ -6,6 +6,13 @@ import pytest
 from deepresearch_gateway.client import GatewayClient
 
 
+def test_local_gateway_bypasses_system_proxy_but_remote_gateway_can_use_it() -> None:
+    assert GatewayClient("http://127.0.0.1:8765").trust_env is False
+    assert GatewayClient("http://localhost:8765").trust_env is False
+    assert GatewayClient("https://gateway.example.test").trust_env is True
+    assert GatewayClient("http://gateway.example.test", trust_env=False).trust_env is False
+
+
 @pytest.mark.asyncio
 async def test_search_always_uses_gateway_and_none_persistence() -> None:
     requests: list[httpx.Request] = []
@@ -42,6 +49,21 @@ async def test_search_always_uses_gateway_and_none_persistence() -> None:
     assert '"site":"zhihu.com"' in body
     assert "tavily" not in body.casefold()
     assert result.to_dict()["executed_capability_id"] == "zhihu.keyword_search.browserwing.v1"
+
+
+@pytest.mark.asyncio
+async def test_search_and_fetch_and_hotlist_reject_invalid_limits_before_network() -> None:
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(500, json={"ok": False, "status": "error"})
+    )
+    async with httpx.AsyncClient(transport=transport, base_url="http://gateway.test") as http_client:
+        client = GatewayClient("http://gateway.test", client=http_client)
+        with pytest.raises(ValueError, match="detail_limit"):
+            await client.search_and_fetch(query="测试", detail_limit=0)
+        with pytest.raises(ValueError, match="limit"):
+            await client.search(query="测试", limit=0)
+        with pytest.raises(ValueError, match="limit"):
+            await client.hotlist(platform="bilibili", feed_id="bilibili-hot-video", limit=31)
 
 
 @pytest.mark.asyncio

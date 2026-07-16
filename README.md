@@ -95,6 +95,7 @@ DeepResearch/蜂群接入不再直接使用框架自带搜索器：
 接入契约、蜂群安全边界和候选框架比较见
 [DeepResearch Gateway Adapter ADR](docs/design/deepresearch-gateway-adapter.md)、
 [DeepResearch/蜂群调研报告](research_deepresearch_swarm_2026-07-16.md) 和
-[适配器 README](poc/deepresearch-gateway/README.md)。
+[适配器 README](poc/deepresearch-gateway/README.md)。固定主题的首次真实验证记录见
+[DeepAgents + Gateway 验证记录](validation_deepagents_gateway_2026-07-16.md)。
 
 数据源分层、就绪等级和原始文件优先的保存边界见 [数据源层 ADR](docs/design/data-source-layer.md)。不同平台、不同动作的 GitHub 仓库选型与 NewsNow/DailyHotApi 接口级核验见 [平台专用数据源调研](research_platform_specific_data_sources_2026-07-16.md)。

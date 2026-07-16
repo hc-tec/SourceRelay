@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -62,12 +63,23 @@ class GatewayClient:
         *,
         timeout: float = 180,
         client: httpx.AsyncClient | None = None,
+        trust_env: bool | None = None,
     ) -> None:
         normalized = base_url.rstrip("/")
         if not normalized.startswith(("http://", "https://")):
             raise ValueError("Gateway base_url must be an HTTP(S) URL")
         self.base_url = normalized
         self.timeout = timeout
+        hostname = (urlsplit(normalized).hostname or "").casefold().rstrip(".")
+        # On Windows httpx can inherit a system proxy from Internet Options
+        # even when HTTP_PROXY is absent from the process environment.  A
+        # local Gateway must bypass that proxy; a remote Gateway may still use
+        # the caller's configured proxy unless explicitly overridden.
+        self.trust_env = trust_env if trust_env is not None else hostname not in {
+            "127.0.0.1",
+            "localhost",
+            "::1",
+        }
         self._client = client
         self._owns_client = client is None
 
@@ -80,7 +92,11 @@ class GatewayClient:
 
     async def start(self) -> None:
         if self._client is None:
-            self._client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=self.timeout,
+                trust_env=self.trust_env,
+            )
 
     async def close(self) -> None:
         if self._client is not None and self._owns_client:
@@ -220,6 +236,8 @@ class GatewayClient:
     ) -> GatewayToolResult:
         if not query.strip():
             raise ValueError("query must not be empty")
+        if not 1 <= limit <= 50:
+            raise ValueError("limit must be between 1 and 50")
         search_input: dict[str, Any] = {"query": query, "limit": limit}
         if site:
             search_input["site"] = site
@@ -243,6 +261,10 @@ class GatewayClient:
     ) -> GatewayToolResult:
         if not query.strip():
             raise ValueError("query must not be empty")
+        if not 1 <= search_limit <= 50:
+            raise ValueError("search_limit must be between 1 and 50")
+        if not 1 <= detail_limit <= 5:
+            raise ValueError("detail_limit must be between 1 and 5")
         return await self._request(
             "POST",
             "/tasks/search-and-fetch",
@@ -268,6 +290,8 @@ class GatewayClient:
         limit: int = 10,
         force_latest: bool = False,
     ) -> GatewayToolResult:
+        if not 1 <= limit <= 30:
+            raise ValueError("limit must be between 1 and 30")
         return await self.execute(
             platform=platform,
             action="hotlist_fetch",
