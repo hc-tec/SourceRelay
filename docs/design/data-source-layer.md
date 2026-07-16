@@ -126,7 +126,8 @@ search_runs = 3
 | B站视频详情 | yt-dlp metadata-only | 两个不同公开 BV URL 真实成功，原始 JSON 约 30 KB；统一 API 返回规范 URL 与 artifact，数据库不变 | L3 | 独立 `video_detail` 已实现；不下载媒体、不读 Cookie，lux `-j` 对同 URL 2/2 成功 |
 | 贴吧指定吧与已知主题 | aiotieba 4.7.1 匿名只读薄 Adapter | `python吧` 主题列表及两个公开 tid 真实成功；完整 dataclass 结果转 JSON artifact，数据库不变 | L3 | `forum_threads/post_detail` 已实现；只开放 `get_threads/get_posts`，不请求楼中楼，不暴露写操作 |
 | 微博 | 已知账号首个公开渲染页 | BrowserWing 匿名固定 UID 样本 2/2，各 10 条；白名单 raw JSON，不写 SQLite | L3 | `weibo.account_posts.browserwing.v1` 只覆盖已知 UID 首页，不是全局搜索或账号历史 |
-| 抖音、快手 | 无正式平台内检索/详情 Capability | 未进入本轮运行目录 | L0 | 不能写成当前支持；候选项目声明不等于数据源已接入 |
+| 快手 | 已知公开短视频元数据 | BrowserWing 匿名固定 URL 样本 2/2；白名单 raw JSON，不读取视频地址、不写 SQLite | L3 | `kuaishou.video_detail.browserwing.v1` 只覆盖已知 URL 页面元数据 |
+| 抖音 | 无正式平台内检索/详情 Capability | yt-dlp 明确需要新鲜 Cookie；未绕过认证 | L0 | 继续保持未验证，不索取或重放 Cookie |
 
 ## 4. 本轮公共搜索冗余决策
 
@@ -224,4 +225,4 @@ degraded / partial / warnings
 
 届时调研重点应是查询规划、迭代检索、引用、上下文压缩、模型可替换性和数据源工具协议，而不是让 DeepResearch 框架替代数据源治理。
 
-当前相关自动化回归纳入完整 Gateway 测试集，共 `109 passed`。
+当前相关自动化回归纳入完整 Gateway 测试集，共 `114 passed`。

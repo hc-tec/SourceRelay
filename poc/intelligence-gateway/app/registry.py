@@ -14,6 +14,7 @@ from .connectors.ytdlp import YtDlpBilibiliVideoConnector
 from .connectors.wechat_article import WechatPublicArticleConnector
 from .connectors.weibo_account import BrowserWingWeiboAccountConnector
 from .connectors.zhihu_qa import BrowserWingZhihuQaConnector
+from .connectors.kuaishou_video import BrowserWingKuaishouVideoConnector
 from .models import (
     FetchRequest,
     FetchResponse,
@@ -57,6 +58,9 @@ class ConnectorRegistry:
         self.zhihu_qa = BrowserWingZhihuQaConnector(
             settings, lock=self.connectors[SourceName.XIAOHONGSHU].lock
         )
+        self.kuaishou_video = BrowserWingKuaishouVideoConnector(
+            settings, lock=self.connectors[SourceName.XIAOHONGSHU].lock
+        )
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         return await self.connectors[request.source].search(request)
@@ -79,6 +83,11 @@ class ConnectorRegistry:
         capability_id: str,
     ) -> VideoDetailResponse:
         return await self.ytdlp.fetch(request, capability_id=capability_id)
+
+    async def kuaishou_video_detail(
+        self, request: VideoDetailRequest, *, capability_id: str
+    ) -> VideoDetailResponse:
+        return await self.kuaishou_video.fetch(request, capability_id=capability_id)
 
     async def forum_threads(
         self, request: ForumThreadsRequest, *, capability_id: str
@@ -162,5 +171,13 @@ class ConnectorRegistry:
             {
                 "provider": self.zhihu_qa.provider,
                 "collector": self.zhihu_qa.collector,
+            }
+        ]
+
+    def short_video_detail_providers(self) -> list[dict[str, str]]:
+        return [
+            {
+                "provider": self.kuaishou_video.provider,
+                "collector": self.kuaishou_video.collector,
             }
         ]

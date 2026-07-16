@@ -153,7 +153,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Personal Intelligence Gateway",
-        version="0.12.0",
+        version="0.13.0",
         description="Explicit-status API for Chinese-platform discovery, hotlists and public detail extraction.",
     )
     app.state.settings = active_settings
@@ -184,7 +184,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, Any]:
         return {
             "name": "personal-intelligence-gateway",
-            "version": "0.12.0",
+            "version": "0.13.0",
             "docs": "/docs",
             "sources": [entry["source"] for entry in registry.sources()],
             "hotlist_providers": [
@@ -205,6 +205,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "qa_detail_providers": [
                 entry["provider"] for entry in registry.qa_detail_providers()
             ],
+            "short_video_detail_providers": [
+                entry["provider"] for entry in registry.short_video_detail_providers()
+            ],
             "article_extraction": True,
             "capability_runtime": True,
             "capabilities": "/capabilities",
@@ -222,6 +225,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "public_article_providers": registry.public_article_providers(),
             "account_post_providers": registry.account_post_providers(),
             "qa_detail_providers": registry.qa_detail_providers(),
+            "short_video_detail_providers": registry.short_video_detail_providers(),
             "article_collector": registry.article.collector,
         }
 
@@ -333,6 +337,50 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 warnings=[
                     *manifest.warnings,
                     *health.warnings,
+                    *(
+                        ["This declared capability must pass fixed-sample verification before planning."]
+                        if not planner_eligible
+                        else []
+                    ),
+                ],
+            )
+        if manifest.action == CapabilityAction.VIDEO_DETAIL and manifest.executor == "browserwing-kuaishou":
+            executor_valid = True
+            scope_valid = (
+                manifest.platform == "kuaishou"
+                and manifest.scope.get("known_public_url_only") is True
+                and manifest.scope.get("media_download") is False
+                and manifest.scope.get("read_only") is True
+            )
+            planner_eligible = manifest.status in {
+                CapabilityStatus.VERIFIED,
+                CapabilityStatus.DEGRADED,
+            }
+            provider_health = await registry.kuaishou_video.health()
+            ready = provider_health.ready and scope_valid and planner_eligible
+            return CapabilityCheckResponse(
+                capability_id=manifest.capability_id,
+                ready=ready,
+                status=(
+                    ResultStatus.SUCCESS
+                    if ready
+                    else (
+                        ResultStatus.MISCONFIGURED
+                        if not scope_valid
+                        else ResultStatus.SOURCE_UNAVAILABLE
+                    )
+                ),
+                details={
+                    **provider_health.details,
+                    "executor": manifest.executor,
+                    "executor_valid": executor_valid,
+                    "scope_valid": scope_valid,
+                    "capability_status": manifest.status.value,
+                    "planner_eligible": planner_eligible,
+                },
+                warnings=[
+                    *manifest.warnings,
+                    *provider_health.warnings,
                     *(
                         ["This declared capability must pass fixed-sample verification before planning."]
                         if not planner_eligible
@@ -1156,6 +1204,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if persistence == "result_only":
                 response.warnings.append(
                     "Hotlist content was not written to the intelligence database; the raw local artifact is the durable result."
+                )
+            return response
+        if manifest.action == CapabilityAction.VIDEO_DETAIL and manifest.executor == "browserwing-kuaishou":
+            video_request = VideoDetailRequest.model_validate(
+                {"url": task_input.get("url")}
+            )
+            response = await registry.kuaishou_video_detail(
+                video_request,
+                capability_id=manifest.capability_id,
+            )
+            if persistence == "result_only":
+                response.warnings.append(
+                    "Kuaishou video metadata was not written to the intelligence database; the allowlisted raw local artifact is the durable result."
                 )
             return response
         if manifest.action == CapabilityAction.VIDEO_DETAIL:

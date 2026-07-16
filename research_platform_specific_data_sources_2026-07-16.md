@@ -64,7 +64,7 @@ fixed public sample
 | `hotlist_fetch` | 微博热搜、知乎热榜 | NewsNow、DailyHotApi | 任意关键词搜索 |
 | `account_feed` | 某公众号、UP 主、微博用户的新内容 | WeRSS、weibo-crawler、平台客户端 | 全平台索引 |
 | `article_detail` | 公众号文章、新闻、知乎专栏 | Trafilatura、Browser detail recipe | 视频详情、问答聚合 |
-| `video_detail` | B站/抖音已知视频 URL | yt-dlp、lux、专用解析器 | 关键词搜索 |
+| `video_detail` | B站/抖音/快手已知视频 URL | yt-dlp、lux、BrowserWing 专用解析器 | 关键词搜索 |
 | `post_detail` | 小红书笔记、微博、贴吧帖子 | xhs、aiotieba、专用 Profile Adapter | 通用网页长文 |
 | `qa_detail` | 知乎问题与回答 | 页面/专用只读 Adapter | 把整个页面聚合成一篇文章 |
 
@@ -359,8 +359,8 @@ Gateway 可以当次临时提取 `rank/title/url/external_id` 便于显示和引
 | 公众号 | SearXNG/Bing/搜狗外部发现 | 无可信全局热榜 | WeRSS 或 WeWe RSS 二选一 | Trafilatura/Browser detail | 先测已知文章和已知公众号，不宣称全局搜索 |
 | 知乎 | 外部 `site:` 发现 | NewsNow | 暂无推荐独立仓库 | Browser detail；`qa_detail` 已验证已知问题首屏回答 | 保持当前组合，问答不冒充全文 |
 | 微博 | BrowserWing 已验证已知 UID 首个公开渲染页；不等于全局搜索 | NewsNow | 自有只读 Adapter；dataabc 参考 | 通用/专用详情 | 热搜与已知账号首页已分成独立 Capability，账号历史仍待审计 |
-| 抖音 | 暂无正式能力 | NewsNow | 后续人工 Profile | Evil0ctal/lux 隔离 POC | 先热榜和已知 URL |
-| 快手 | 暂无正式能力 | NewsNow | 后续人工 Profile | lux 对照 | 先热榜 |
+| 抖音 | 暂无正式能力 | NewsNow | yt-dlp 需要新鲜 Cookie，未绕过 | Evil0ctal/lux 隔离 POC | 保持未验证，先记录认证边界 |
+| 快手 | 暂无关键词搜索 | NewsNow | BrowserWing 已验证已知短视频元数据 | lux 对照 | 已知 URL `video_detail` 已接入 |
 | 贴吧 | aiotieba `forum_threads` 已验证 | NewsNow | aiotieba 指定吧 | aiotieba `post_detail` 已验证 | 匿名、只读、raw-first；不开放整包 API |
 | 新闻/政务 | SearXNG + Bing/搜狗 | NewsNow | 站点清单 | Trafilatura direct first | 当前最成熟 |
 

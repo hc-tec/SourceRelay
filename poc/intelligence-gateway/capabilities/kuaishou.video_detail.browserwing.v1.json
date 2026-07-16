@@ -1,0 +1,42 @@
+{
+  "capability_id": "kuaishou.video_detail.browserwing.v1",
+  "version": "1.0.0",
+  "platform": "kuaishou",
+  "action": "video_detail",
+  "status": "verified",
+  "executor": "browserwing-kuaishou",
+  "adapter": "BrowserWingKuaishouVideoConnector",
+  "source": null,
+  "authentication": {"required": false, "mode": "none"},
+  "input_schema": {
+    "url": {
+      "type": "string",
+      "required": true,
+      "format": "uri",
+      "pattern": "^https://www\\.kuaishou\\.com/short-video/[A-Za-z0-9_-]{6,80}$"
+    }
+  },
+  "output_schema": "video_detail_response.v1",
+  "scope": {
+    "known_public_url_only": true,
+    "metadata_only": true,
+    "media_download": false,
+    "media_url_exported": false,
+    "cookies_exported": false,
+    "read_only": true,
+    "raw_first": true,
+    "first_rendered_page_only": true,
+    "database_persistence": false
+  },
+  "fallback_ids": [],
+  "verification_input": {
+    "url": "https://www.kuaishou.com/short-video/3xqekv4y58mn686"
+  },
+  "last_verified_at": "2026-07-16T20:01:00+08:00",
+  "license": "Gateway-owned adapter; public rendered page access only",
+  "warnings": [
+    "The capability reads only public rendered metadata from a known Kuaishou short-video URL; it does not download media.",
+    "The video element delivery URL is deliberately not exported and browser credentials are never requested.",
+    "Verified anonymously against two fixed public Kuaishou videos (3xqekv4y58mn686 and 3xsngzff6jk643w), with metadata-only extraction and no media download."
+  ]
+}

@@ -27,6 +27,7 @@ class Settings:
     browserwing_xhs_script: Path
     browserwing_weibo_script: Path
     browserwing_zhihu_script: Path
+    browserwing_kuaishou_script: Path
     searxng_base_url: str
     newsnow_base_url: str
     ytdlp_proxy: str
@@ -57,6 +58,9 @@ class Settings:
             ),
             browserwing_zhihu_script=_path_from_env(
                 "BROWSERWING_ZHIHU_SCRIPT", "../browserwing/scripts/run-zhihu-qa-detail.ps1"
+            ),
+            browserwing_kuaishou_script=_path_from_env(
+                "BROWSERWING_KUAISHOU_SCRIPT", "../browserwing/scripts/run-kuaishou-video-detail.ps1"
             ),
             searxng_base_url=os.getenv("SEARXNG_BASE_URL", "http://127.0.0.1:8888").rstrip("/"),
             newsnow_base_url=os.getenv("NEWSNOW_BASE_URL", "http://127.0.0.1:4444").rstrip("/"),

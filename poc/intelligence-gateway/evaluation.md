@@ -608,6 +608,21 @@ lux JSON 主要是 `url/site/title/type/streams/caption/err`，比 yt-dlp 更小
 
 两个页面的 DOM 中都存在登录/注册相关元素，但公开回答卡片仍然可见。若按 body 是否包含“登录”判断，会把正常公开页面误判成认证门禁；Adapter 改为只在回答卡片为零且可见登录门禁存在时返回 `authentication_required`。脚本和 Connector 均不点击“阅读全文”、不展开折叠回答、不抓评论，不保存实体搜索链接中的查询参数；正式 artifact 只保存白名单字段和可读文本。两个 Gateway 闭环均返回 `success`，`persistence=result_only` 前后数据库统计不变。完整 Gateway 回归为 `109 passed`。
 
+### 6.15 0.13.0 快手已知视频详情与抖音失败边界
+
+快手公开短视频页面可以由匿名 BrowserWing 正常渲染。新增 `kuaishou.video_detail.browserwing.v1`，只接受 `https://www.kuaishou.com/short-video/<id>`，读取可见标题、描述、作者、发布时间和点赞文本；页面 `<video>` 的 `src` 不读取，媒体不下载，原始 artifact 只保存白名单 JSON。
+
+| URL | 结果 | 作者 | 发布时间 | raw artifact |
+|---|---|---|---|---:|
+| `3xqekv4y58mn686` | success | 仓樱拍子 | 9月前 | 483 bytes |
+| `3xsngzff6jk643w` | success | 大象品牌观察 | 3年前 | 836 bytes |
+
+两次正式 Gateway 调用均返回 `success`，`persistence=result_only` 前后数据库统计不变，artifact 中没有视频地址、Cookie、Token 或浏览器存储字段。快手能力与小红书、微博、知乎共用 BrowserWing Profile 锁，操作串行。
+
+同一轮用 yt-dlp 对两个抖音公开视频 URL 做 metadata-only 直连，均失败；其中一个明确返回“需要新鲜 Cookie”。Gateway 不索取或重放 Cookie，也不将抖音注册为已验证 `video_detail`。抖音热榜原有 NewsNow 能力也继续保持 `declared_unverified`，两种失败不会互相污染。
+
+完整 Gateway 回归为 `114 passed`。
+
 ## 7. 当前结论
 
 这轮已经证明“万物皆接口”对你的中文个人情报需求有实际用处，但正确实现不是寻找一个万能 CLI，而是建立一个统一控制面，让每类来源使用最合适的获取层：
@@ -625,6 +640,7 @@ aiotieba             -> 贴吧指定吧主题与已知帖子 + 本地原始 arti
 WeChat public HTML   -> 已知公众号公开文章 + 本地原始 HTML artifact
 BrowserWing Weibo    -> 已知微博 UID 的首个公开渲染页 + 白名单原始 JSON artifact
 BrowserWing Zhihu    -> 已知知乎问题首个公开回答卡片 + 白名单原始 JSON artifact
+BrowserWing Kuaishou -> 已知快手短视频页面元数据 + 白名单原始 JSON artifact
         ↓
 统一 Gateway -> 明确状态、最小溯源、原始文件、可选 SQLite 索引
 ```
@@ -637,7 +653,7 @@ BrowserWing Zhihu    -> 已知知乎问题首个公开回答卡片 + 白名单�
 
 1. 为视频描述、问答回答、帖子正文定义独立输出类型和质量门槛，不把所有详情强塞进“200 字长文章”；
 2. 为运行时 recipe 增加定期 `verify`、人工审计记录、选择器漂移告警、版本升级和回滚；
-3. 公众号已知公开文章、B站视频详情、微博已知账号第一页和知乎已知问答详情已经完成；下一步补抖音/快手已知公开 URL，同时等待可审计的公众号账号历史方案；
+3. 公众号已知公开文章、B站视频详情、微博已知账号第一页、知乎已知问答详情和快手已知视频详情已经完成；抖音匿名路径需要 Cookie，暂不晋升，同时等待可审计的公众号账号历史方案；
 4. 再评估 LLM 辅助探索，让模型提出候选选择器和动作，但确定性验证门禁仍不可跳过；
 5. 强登录平台继续使用专用 Adapter 与用户人工 Profile；小红书、微博等不进入通用 Draft，也不把外部 `site:` 发现误称为站内完整索引；
 6. 在任何商业化或多人服务之前，单独评估 Maxun 与 SearXNG 的 AGPL 网络服务义务，以及平台条款、个人信息、浏览器 URL 安全和内容存储周期。

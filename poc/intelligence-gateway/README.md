@@ -58,7 +58,7 @@ API 文档：`http://127.0.0.1:8765/docs`
 Invoke-RestMethod http://127.0.0.1:8765/capabilities
 ```
 
-当前 21 个静态能力：20 个已验证，1 个保持声明未验证。已验证：
+当前 22 个静态能力：21 个已验证，1 个保持声明未验证。已验证：
 
 ```text
 bilibili.keyword_search.maxun.v1
@@ -81,6 +81,7 @@ tieba.forum_threads.aiotieba.v1
 tieba.post_detail.aiotieba.v1
 wechat_official.article_detail.public-html.v1
 zhihu.qa_detail.browserwing.v1
+kuaishou.video_detail.browserwing.v1
 ```
 
 保持 `declared_unverified`、不会被 Planner 选择：
@@ -241,6 +242,41 @@ manifest 只记录 `proxy_used=true/false`，不记录代理 URL，避免未来�
 | lux | 0.24.1 | 2/2 成功 | 7,201 / 7,332 bytes | 主要为 `streams/caption`，JSON 更小 | 隔离对照，不进入默认链 |
 
 lux 对照使用 `-j`，两次运行均没有在工作目录生成媒体文件。
+
+### 快手已知视频详情：BrowserWing metadata-only
+
+`0.13.0` 新增 `kuaishou.video_detail.browserwing.v1`。它只接受规范的公开短视频 URL：
+
+```text
+https://www.kuaishou.com/short-video/<id>
+```
+
+调用示例：
+
+```powershell
+$body = @{
+  platform = "kuaishou"
+  action = "video_detail"
+  input = @{ url = "https://www.kuaishou.com/short-video/3xqekv4y58mn686" }
+  options = @{ persistence = "result_only" }
+} | ConvertTo-Json -Depth 6
+
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/tasks/execute `
+  -ContentType application/json -Body $body
+```
+
+BrowserWing 只读取可见标题、描述、作者、发布时间和点赞文本。页面中的 `<video>` 元素可能有时效媒体地址，但脚本不会读取 `src`，不下载视频，也不导出 Cookie、Profile 或浏览器存储。
+
+原始 artifact 保存到：
+
+```text
+runtime/artifacts/browserwing-kuaishou/YYYY-MM-DD/<run-id>/manifest.json
+runtime/artifacts/browserwing-kuaishou/YYYY-MM-DD/<run-id>/raw.json
+```
+
+2026-07-16 两个固定公开 URL `3xqekv4y58mn686` 与 `3xsngzff6jk643w` 均匿名成功，正式 raw artifact 分别为 483 / 836 bytes；前后数据库统计不变。该能力是“已知短视频页面元数据”，不是快手关键词搜索、账号历史或媒体下载。
+
+抖音对同类已知 URL 的 yt-dlp metadata-only 真实返回“需要新鲜 Cookie”。Gateway 不提供 Cookie，也不把该结果误判成来源为空；抖音视频详情继续保持未验证。
 
 ### 贴吧指定吧与已知主题：aiotieba 匿名只读
 
@@ -742,4 +778,4 @@ Invoke-RestMethod "http://127.0.0.1:8765/clusters?min_documents=2&limit=20"
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-当前基线：`109 passed`。
+当前基线：`114 passed`。
