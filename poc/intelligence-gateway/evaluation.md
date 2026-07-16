@@ -460,6 +460,8 @@ Detail Draft 最初选择 `main[role="main"]`，虽然得到 4,089 字，却把�
 
 整体为 `success / partial=true`。调用前后数据库均为 8 documents、13 observations、3 search runs。CSDN 详情样本在 BrowserWing 中出现 `ERR_SSL_PROTOCOL_ERROR`，系统保留为 `source_unavailable`，没有晋升或伪装成功；这条失败也说明“搜索 recipe 已通过”并不自动代表同站详情 recipe 已通过。
 
+另一个公开 B站视频样本在 Trafilatura 中为 `no_results`；Browser Detail Draft 能识别视频标题，但没有找到满足当前长文质量门槛的正文容器，因此状态为 failed、没有晋升。这不是选择器 bug，而是输出契约边界：视频标题、简介、UP 主和指标应进入独立 `video_detail` 模型，不能为了制造“支持 B站详情”的结论而降低文章正文门槛。
+
 ## 7. 当前结论
 
 这轮已经证明“万物皆接口”对你的中文个人情报需求有实际用处，但正确实现不是寻找一个万能 CLI，而是建立一个统一控制面，让每类来源使用最合适的获取层：

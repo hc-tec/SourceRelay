@@ -234,10 +234,13 @@ exact verify success -> restored verified
 | 知乎专栏公开文章 | HTTP 403 | `zhihu.detail_fetch.browserwing_recipe.v1` | fallback 成功，3,358 字 |
 | 同主机第二篇知乎专栏 | HTTP 403 | 同一 recipe | fallback 成功，1,916 字 |
 | 知乎首页 | no_results | recipe 仅允许 `zhuanlan.zhihu.com` | 未启动 BrowserWing |
+| 一个公开 B站视频样本 | no_results | 能识别标题但无合格长文容器 | Draft failed，不晋升 |
 
 真实 `/tasks/search-and-fetch` 同时处理后三条，得到 `2 success + 1 no_results`、整体 `success / partial=true`。每条响应均包含完整 attempted/executed/degraded evidence，数据库前后保持 8 documents、13 observations、3 search runs。
 
 CSDN 公开详情样本在当前 BrowserWing 会话中导航得到 `ERR_SSL_PROTOCOL_ERROR`，因此保留为 `source_unavailable`，没有晋升。该失败被视为能力级证据：同平台搜索 recipe 通过，不等于详情 recipe 自动可用。
+
+B站负面样本说明本 ADR 的 `detail_fetch` 第一版实际是长文详情契约。视频简介、UP 主、时长、播放指标等字段需要独立 `video_detail` 输出与质量门槛，不通过放宽 200 字文章阈值塞入本能力。
 
 知乎首次候选选择了包含推荐内容的 `main[role="main"]`。加入多主标题和嵌套文章聚合惩罚后，候选收敛到单篇 `article.Post-Main.Post-NormalMain`；Draft 重新验证后再次 promote 会更新 recipe、清零旧失败状态并递增 manifest patch 版本，本次从 `1.0.0` 更新到 `1.0.1`。
 
