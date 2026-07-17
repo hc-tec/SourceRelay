@@ -28,6 +28,7 @@
 | 66–70 | 目标类型、外部发现、已知 URL、公开网站工厂、搜索凭据 | 已采纳推荐方案 |
 | 71–75 | 分批封存、蜂群并发、补采协议、框架适配、搜索工具 | 已采纳推荐方案 |
 | 76–80 | 任务启动、任务窗口、站点权限、Gateway 配对、重启恢复 | 已采纳推荐方案 |
+| 81–85 | 任务创建、能力预检、人工通知、覆盖进度、证据浏览 | 已采纳推荐方案 |
 
 ## 批次 1–5：产品北极星与总体架构
 
@@ -393,6 +394,28 @@ Collector Core 安装时保持最小权限。用户首次启用平台或站点�
 
 Collection Browser Profile 正常保留浏览器登录状态；Gateway / artifact writer 持久保存计划、item ledger、覆盖账本、已封存批次和安全检查点。重启后旧 tab、document 和 stage lease 全部失效；系统展示可恢复任务，用户确认后创建新 Collection Window 和新 lease，重新核验平台、账号、页面角色和登录状态，再从稳定 ledger 恢复。禁止无提示后台续跑、删除全部成果或尝试恢复旧 document lease。
 
+## 批次 81–85：用户任务与证据复核体验
+
+### 81. 自然语言任务加研究档案和高级设置
+
+任务创建采用“自然语言研究问题 + 决策语境 + 平台范围 + 目标对象 + 研究档案 + 可展开高级设置”。用户从 `scout`、`evidence`、`deep_dive`、`discussion`、`account_archive` 选择主要档案；Planner 生成可审阅计划，展示查询扩展、策略、动作、预算、登录要求、站点权限、保存范围和缺口。高级设置可修改筛选、页数、详情、评论、时间、账号和媒体，不要求普通任务从 JSON / YAML 开始，也不允许隐藏计划直接执行。
+
+### 82. 执行前 capability preflight
+
+执行前必须生成平台 × 目标的 capability preflight，逐项展示 strategy ID / 版本、maturity、`last_verified_at`、匿名 / 登录 / 用户确认要求、采集机制、精确站点权限、预算与预计动作、已知缺口、正式 / 实验 / 不支持状态以及 `external_discovery_only` 标记。用户批准后才执行；不支持目标不得静默替换，实验验证必须单独启动。
+
+### 83. 只在可操作阻塞和权限变化时通知
+
+用户通知限于 `authentication_required` / `session_expired`、`verification_required`、`option_unavailable`、新站点权限、详情 / 评论 / 媒体 / 预算升级、`task_context_changed` 和带关键缺口的完成状态。通知展示 task、platform、account、阻塞原因、所需操作和继续范围，可出现在 Research Console 与本地桌面通知，但不泄露页面敏感内容。普通翻页、滚动、详情打开和成功采集不逐项打断。
+
+### 84. 多维覆盖账本替代单一进度百分比
+
+进度按平台与证据维度展示 planned、executed、captured、deduplicated、inventory enumerated、details materialized、discussions sampled、skipped by policy、unavailable、blocked 和 unknown。只有存在可靠分母时才显示该维度百分比，同时展示停止原因、时间范围、页数、唯一内容数和完整性等级。任务级使用 `completed`、`completed_with_gaps`、`partial`、`needs_user_action`、`blocked`、`cancelled` 等真实状态，不用一个“100%”掩盖详情或评论缺口。
+
+### 85. 本地 Evidence Explorer
+
+提供以来源与任务为中心的 Evidence Explorer：按平台、账号、查询、时间、内容类型、策略和状态筛选；查看可读快照、安全投影、规范 URL、采集时间、策略版本与覆盖条件；查看排名、重复映射及详情 / 评论关系；比较账号快照变化；从报告跳转 evidence item，再打开当前公开来源；查看 changed、removed、no_longer_visible 与历史版本；显式导出或删除。Explorer 读取本地加密档案，不依赖云端数据库或浏览器缓存。
+
 ## 进行中的问询
 
-当前正在征求第 81–85 题的选择，主题为用户体验：任务创建界面、执行前 capability preflight、需要人工操作的通知、进度与覆盖展示，以及证据包的浏览和引用体验。它们在收到明确采纳前均不是既定决策。
+当前正在征求第 86–90 题的选择，主题为一期产品范围与平台路线：先做按需采集还是监控、B站样板后的平台顺序、能力如何逐项发布、旧证据何时复用，以及定时增量任务放在哪一阶段。它们在收到明确采纳前均不是既定决策。
