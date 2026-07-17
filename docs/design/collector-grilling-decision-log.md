@@ -31,6 +31,7 @@
 | 81–85 | 任务创建、能力预检、人工通知、覆盖进度、证据浏览 | 已采纳推荐方案 |
 | 86–90 | 一期范围、平台顺序、能力矩阵、证据复用、定时增量 | 已采纳推荐方案 |
 | 91–95 | Vault 位置、容量清理、密钥恢复、schema 演进、完整性 | 已采纳推荐方案 |
+| 96–100 | 第三方采集仓库、发布门槛、紧急停用、诊断、一期完成 | 96 采纳自定义方案；97–100 采纳 A |
 
 ## 批次 1–5：产品北极星与总体架构
 
@@ -462,6 +463,34 @@ Task、manifest、evidence envelope、coverage ledger 和索引均带 `schemaVer
 
 每个封存批次生成包含相对路径、大小、哈希、schemaVersion 和封存时间的完整性 manifest，并在封存、Explorer 打开、DeepResearch handoff、导出、恢复和迁移时验证。损坏文件标记 `corrupted` / `integrity_failed`、隔离、更新覆盖账本并禁止交给分析；允许重新采集来源或重建派生索引。不得静默忽略、让模型猜缺失内容或删除整个 vault。
 
-## 进行中的问询
+## 批次 96–100：依赖边界、发布治理与一期完成
 
-当前正在征求第 96–100 题，作为核心产品决策的最后一批，主题为第三方代码许可、策略发布门槛、安全停用、诊断数据和一期完成定义。答复后将先执行一次跨决策冲突审计，再判断是否仍有必须追问的实质缺口。
+### 96. 第三方平台采集仓库仅作参考，不接入产品
+
+MediaCrawler、XHS-Downloader、`xhs`、my-collection-skills 及各种微博 / 知乎传统采集仓库只用于调研平台页面、已知场景、Issue 中的失效模式和产品需求，不能复制代码、集成依赖、运行其爬虫、复用其 Cookie / 签名 / 私有 API 链路，也不能成为正式策略的运行时后端。
+
+正式平台采集路线完全转为 **Collector 浏览器扩展运行在用户授权的真实 Collection Browser Profile 中**：读取页面正常呈现的数据，执行有界只读交互，并在必要时观察经过批准的页面响应投影。不再把寻找私有 API、复刻签名、构造请求、伪装浏览器或维护传统爬虫对抗链路作为产品方向。
+
+这里“不接入第三方仓库”特指第三方平台采集 / 爬虫实现。第 74 题已经批准的 DeepResearch 框架适配、许可证兼容的通用构建依赖和浏览器标准 API 不受此条误伤，但仍需依赖与许可证记录。此路线减少传统爬虫与正常浏览器环境的差异，不代表授权绕过验证码、访问控制、付费限制、限流或平台安全措施；第 27、60、65 题的停止边界继续有效。
+
+### 97. 正式平台策略发布门槛
+
+策略正式发布必须完成构建门禁、精确 host permission 审查、只读动作与预算审查、页面角色和失败状态定义、用户控制环境中的真实平台验证、匿名 / 登录类别、长期档案边界检查、capability validation record、strategy ID / version / maturity / `last_verified_at`、暂停与回滚方案及用户可读限制说明。只有满足门槛才能标为 `live_anonymous_verified` 或 `live_authenticated_verified`；一次成功、README 声明和旧接口样例均不构成发布证明。
+
+### 98. 本地 capability kill switch
+
+严重问题发生时，按具体 strategy ID / version 标为 `suspended`，停止新 stage、使相关 lease 失效、保留已封存证据和停止原因、阻止 Planner 继续选择、在能力矩阵显示时间与原因，并可提示撤销 optional host permission。修复必须以新策略版本重新真实验证。Kill switch 只改变本地能力状态，不远程下载或执行 JavaScript，也不删除 Collection Profile 或证据 Vault。
+
+### 99. 默认仅本地去敏诊断
+
+默认仅在本地保存 task / run / strategy ID、扩展与策略版本、页面角色、语义动作与耗时、状态转换、预算、安全错误码、capability / 构建版本及不含敏感内容的异常摘要。默认不上传查询词、完整 URL、正文、截图、账号信息、公开联系方式、Profile 路径或登录状态。用户可显式导出去敏诊断包，导出前展示字段并再次扫描；页面脚本不得向开发者服务器发送诊断。
+
+### 100. 一期完成定义
+
+一期必须形成产品、数据源、证据、真实验证和研究五个闭环，而不是可加载的扩展壳：本地 Console / Gateway 可创建、预检、批准并自动启动单一 MV3 Collector；专用可见窗口和持久 Collection Profile 支持登录暂停 / 恢复；B站完成真实验证的 discovery → detail → bounded discussion；小红书完成登录态 account identity → visible inventory → resumable archive → selected detail；至少一类公开新闻 / 文章 known URL 可读；`.env` 搜索接口通过本地 Search Adapter 提供外部发现；能力矩阵如实显示缺口。
+
+同时，本地加密 Vault、manifest、coverage ledger、哈希、schemaVersion、Evidence Explorer、取消 / 重启 / 登录失效 / 缺少选项 / suspended 终态均可用；构建门禁与用户控制环境中的只读真实验证通过，不以离线平台 fixture 冒充实站能力；DeepResearch 只读封存 EvidencePackage、禁用框架自带搜索、引用可回到 evidence item，补采走 CollectionGapRequest 与用户批准。一期不要求持续监控、自动预警、所有中文平台全部能力、全量媒体下载或无人值守验证码处理。
+
+## Grill 状态
+
+第 1–100 题核心产品问询已经完成。下一步先执行跨决策冲突、覆盖缺口和术语一致性审计；审计完成前不开始实现，也不把旧代码现状误写成已经满足这些决策。
