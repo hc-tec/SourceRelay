@@ -32,6 +32,8 @@ docs/design/              1–100 题决策账本、产品规格、审计和实�
 - 不向普通用户页面常驻注册平台脚本，只允许有效 stage lease 的专用任务 tab 动态注入固定文件；
 - Gateway ECDSA P-256 固定身份、一次性配对 Session、八位配对码、扩展 challenge、签名与 pairing authorization；
 - 配对后的 HMAC 请求认证、nonce 防重放、Gateway 签名 work item、EvidencePlan preflight 和 Console 计划展示；
+- Gateway 管理的持久 Collection / Validation Profile、可见 Playwright Chromium 启动器、生产扩展自动加载、运行状态与逻辑账号绑定；
+- Research Task 按平台绑定同平台 Collection Profile；Validation Profile、任意磁盘路径和匿名 Profile 不能混入正式采集任务；
 - `build_ready` 能力不能批准为正式任务；当前不会因为创建任务而访问任何平台。
 
 实现与风险矩阵见 [Collector 实现状态](docs/design/collector-implementation-status.md)。
@@ -80,6 +82,7 @@ Gateway：
 ```powershell
 Set-Location D:\AIProject\inteligence\poc\collector-gateway
 npm install
+npm run setup:browser
 npm run verify:build
 ```
 
@@ -101,13 +104,12 @@ Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git
 
 ## 下一阶段
 
-1. 建立持久 Collection Profile 与独立 Validation Profile 生命周期；
-2. 在不触碰日常 Profile 的前提下，对 B站 `discovery` 做第一项匿名真实验证；
-3. 写入 capability validation record，只有验证通过的精确策略版本才允许计划批准；
-4. 再推进 B站 `detail -> bounded discussion`；
-5. 随后推进小红书登录态 `account identity -> visible inventory -> resumable archive -> selected detail`；
-6. 建设加密 Vault、不可变批次、coverage ledger、hash manifest 和 Evidence Explorer；
-7. 最后通过 EvidencePackage 接入 DeepResearch / 蜂群分析。
+1. 在独立、可见、匿名 Validation Profile 中对 B站 `breadth_search + visible_dom` 做第一项低频真实验证；
+2. 写入 capability validation record，只有验证通过的精确策略版本才允许计划批准；
+3. 再推进 B站 `detail -> bounded discussion`；
+4. 随后推进小红书登录态 `account identity -> visible inventory -> resumable archive -> selected detail`；
+5. 建设加密 Vault、不可变批次、coverage ledger、hash manifest 和 Evidence Explorer；
+6. 最后通过 EvidencePackage 接入 DeepResearch / 蜂群分析。
 
 权威产品文档：
 

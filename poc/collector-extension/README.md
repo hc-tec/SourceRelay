@@ -124,7 +124,9 @@ Manifest 不再静态声明任何平台 `content_scripts`，授予站点权限�
 
 点击扩展图标只打开 Collector 状态控制页，用于显式配对 / 撤销固定 Gateway、查看平台 maturity / permission 和活动 lease；它不直接采集当前 tab，也没有旧的快捷键采集入口。配对会核验一次性 Session、8 位配对码摘要、扩展 challenge、Gateway 公钥指纹、ECDSA P-256 签名和 pairing authorization 摘要；控制页、快照和日志不显示授权密钥。
 
-下一个检查点是建立 Collection / Validation Profile 生命周期。当前四个平台 preflight 都是 `live_validation_required / experimental`，因此 Console 不能批准，扩展不会访问平台。之后才进入 B站 discovery → detail → bounded discussion 的真实纵向样板。
+Gateway 已建立 Collection / Validation Profile 生命周期：它从内部逻辑 ID 推导隔离目录，启动可见 Playwright Chromium，自动加载生产扩展，并让 Research Task 按平台绑定同平台 Collection Profile。扩展仍会在签名 task 入口复核绑定形状，拒绝 Validation、匿名、跨平台或伪造 Profile 绑定。
+
+当前四个平台 preflight 仍是 `live_validation_required / experimental`，因此 Console 不能批准，扩展不会访问平台。下一个检查点是在独立匿名 Validation Profile 中完成 B站 `breadth_search + visible_dom` 的低频真实验证；之后才进入 B站 detail → bounded discussion 的真实纵向样板。
 
 完整产品决策见：
 

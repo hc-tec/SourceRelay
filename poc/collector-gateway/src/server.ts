@@ -1,8 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { CollectionBrowserManager } from './browser-manager';
 import { loadGatewayConfig } from './config';
 import { consoleHtml, consoleScript, consoleStyles } from './console-assets';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker, type PairingClaimInput } from './pairing';
+import { BrowserProfileRegistry, createBrowserProfileInput } from './profiles';
 import { GatewayTaskQueue, scoutTaskInput } from './tasks';
 import type {
   GatewayPreflightSubmission,
@@ -48,6 +50,12 @@ function allowExtensionCors(request: IncomingMessage, response: ServerResponse):
 function header(request: IncomingMessage, name: string): string | undefined {
   const value = request.headers[name];
   return Array.isArray(value) ? value[0] : value;
+}
+
+function requireConsoleOrigin(request: IncomingMessage, response: ServerResponse, origin: string): boolean {
+  if (request.headers.origin === origin) return true;
+  sendJson(response, 403, { error: 'console_origin_required' });
+  return false;
 }
 
 async function readTextBody(request: IncomingMessage): Promise<string> {
@@ -116,6 +124,8 @@ function pairingClaim(value: unknown): PairingClaimInput {
 const config = loadGatewayConfig();
 const identity = await loadGatewayIdentity(config);
 const pairingBroker = await PairingBroker.create(identity, config.stateDirectory);
+const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
+const browserManager = new CollectionBrowserManager(config, profileRegistry);
 const taskQueue = new GatewayTaskQueue(identity);
 const expectedHost = `${config.host}:${config.port}`;
 
@@ -144,10 +154,44 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (request.method === 'GET' && url.pathname === '/v1/status') {
+      const profiles = await browserManager.list();
       sendJson(response, 200, {
         schemaVersion: 1,
         identity: identity.publicIdentity,
-        pairedExtensionCount: pairingBroker.pairedExtensionCount
+        pairedExtensionCount: pairingBroker.pairedExtensionCount,
+        browserProfileCount: profiles.length,
+        runningBrowserProfileCount: profiles.filter((profile) => profile.running).length
+      });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/profiles') {
+      sendJson(response, 200, { schemaVersion: 1, profiles: await browserManager.list() });
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/v1/profiles') {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const profile = await profileRegistry.createProfile(createBrowserProfileInput(await readJsonBody(request)));
+      sendJson(response, 201, {
+        schemaVersion: 1,
+        profile: (await browserManager.list()).find((summary) => summary.profile.profileId === profile.profileId)
+      });
+      return;
+    }
+    const profileLaunchMatch = url.pathname.match(/^\/v1\/profiles\/([0-9a-f-]{36})\/launch$/i);
+    if (request.method === 'POST' && profileLaunchMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      sendJson(response, 200, { schemaVersion: 1, profile: await browserManager.launch(profileLaunchMatch[1]) });
+      return;
+    }
+    const profileCloseMatch = url.pathname.match(/^\/v1\/profiles\/([0-9a-f-]{36})\/close$/i);
+    if (request.method === 'POST' && profileCloseMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      await browserManager.close(profileCloseMatch[1]);
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        profile: (await browserManager.list()).find(
+          (summary) => summary.profile.profileId === profileCloseMatch[1]
+        )
       });
       return;
     }
@@ -156,27 +200,20 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (request.method === 'POST' && url.pathname === '/v1/tasks') {
-      if (request.headers.origin !== identity.publicIdentity.loopbackOrigin) {
-        sendJson(response, 403, { error: 'console_origin_required' });
-        return;
-      }
-      sendJson(response, 201, taskQueue.createScoutTask(scoutTaskInput(await readJsonBody(request))));
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const input = scoutTaskInput(await readJsonBody(request));
+      const bindings = profileRegistry.collectionBindings(input.platforms, input.profileIds);
+      sendJson(response, 201, taskQueue.createScoutTask(input, bindings));
       return;
     }
     const approvalMatch = url.pathname.match(/^\/v1\/tasks\/([0-9a-f-]{36})\/approve$/i);
     if (request.method === 'POST' && approvalMatch) {
-      if (request.headers.origin !== identity.publicIdentity.loopbackOrigin) {
-        sendJson(response, 403, { error: 'console_origin_required' });
-        return;
-      }
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
       sendJson(response, 200, await taskQueue.approve(approvalMatch[1]));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/v1/pairing/sessions') {
-      if (request.headers.origin !== identity.publicIdentity.loopbackOrigin) {
-        sendJson(response, 403, { error: 'console_origin_required' });
-        return;
-      }
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
       sendJson(response, 201, pairingBroker.createSession());
       return;
     }
@@ -290,6 +327,7 @@ const server = createServer(async (request, response) => {
       code.startsWith('pairing_') ||
       code.startsWith('request_') ||
       code.startsWith('task_') ||
+      code.startsWith('profile_') ||
       code.startsWith('preflight_') ||
       code.endsWith('_invalid') ||
       code === 'one_or_more_capabilities_are_not_ready';
@@ -307,9 +345,16 @@ server.listen(config.port, config.host, () => {
   process.stdout.write(`Gateway identity ${identity.publicIdentity.identityFingerprint}\n`);
 });
 
-function shutdown(): void {
-  server.close(() => process.exit(0));
+let shuttingDown = false;
+
+async function shutdown(): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  await Promise.all([
+    new Promise<void>((resolveClose) => server.close(() => resolveClose())),
+    browserManager.closeAll()
+  ]);
 }
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', () => void shutdown().catch(() => { process.exitCode = 1; }));
+process.on('SIGTERM', () => void shutdown().catch(() => { process.exitCode = 1; }));

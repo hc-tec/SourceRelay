@@ -2,6 +2,7 @@ import type {
   CapabilityPreflight,
   CollectionBudgetLimits,
   CollectionTaskTarget,
+  BrowserProfileBinding,
   ConsentAction,
   EvidenceObjective,
   ResearchTaskContract,
@@ -186,6 +187,20 @@ export interface GatewayRuntimeStatus {
   lastErrorCode: string | null;
 }
 
+export interface BrowserProfileRecord extends BrowserProfileBinding {
+  schemaVersion: 1;
+  browser: 'playwright_chromium';
+  createdAt: string;
+  lastLaunchedAt: string | null;
+}
+
+export interface BrowserProfileRuntimeSummary {
+  profile: BrowserProfileRecord;
+  running: boolean;
+  extensionLoaded: boolean;
+  extensionPaired: boolean;
+}
+
 export type StageLeaseStatus =
   | 'active'
   | 'completed'
@@ -267,15 +282,17 @@ function preflightStatus(input: {
   missingConsent: readonly ConsentAction[];
   missingHostPermissions: readonly string[];
   objectiveApproved: boolean;
+  profileBinding: BrowserProfileBinding | null;
 }): CapabilityPreflight['status'] {
   if (!input.budgetValid) return 'budget_invalid';
   if (!input.strategy) return 'capability_unavailable';
   if (input.strategy.maturity === 'suspended') return 'strategy_suspended';
+  if (!input.objectiveApproved || input.missingConsent.length > 0) return 'consent_required';
+  if (!input.profileBinding) return 'user_action_required';
+  if (input.missingHostPermissions.length > 0) return 'permission_required';
   if (input.strategy.maturity === 'draft' || input.strategy.maturity === 'build_ready') {
     return 'live_validation_required';
   }
-  if (!input.objectiveApproved || input.missingConsent.length > 0) return 'consent_required';
-  if (input.missingHostPermissions.length > 0) return 'permission_required';
   if (input.strategy.preconditions.authentication === 'required') return 'authentication_required';
   return 'ready';
 }
@@ -309,16 +326,19 @@ export async function buildEvidencePlan(
         );
         const objectiveApproved = task.consent.approvedObjectives.includes(evidenceObjective);
         const strategyRecord = strategy ? strategyProvenance(strategy) : null;
+        const profileBinding = task.profileBindings[platform] ?? null;
         const status = preflightStatus({
           strategy,
           budgetValid,
           missingConsent,
           missingHostPermissions,
-          objectiveApproved
+          objectiveApproved,
+          profileBinding
         });
         const requiredUserActions: CapabilityPreflight['requiredUserActions'][number][] = [];
         if (!objectiveApproved || missingConsent.length > 0) requiredUserActions.push('approve_task_plan');
         if (missingHostPermissions.length > 0) requiredUserActions.push('grant_host_permission');
+        if (!profileBinding) requiredUserActions.push('select_collection_profile');
         if (strategy?.preconditions.authentication === 'required') {
           requiredUserActions.push('authenticate_in_collection_window');
         }
@@ -331,7 +351,8 @@ export async function buildEvidencePlan(
               ...(strategy.output.partialByDefault ? ['The declared output is partial by default.'] : []),
               ...(strategy.approvedResponseRouteIds.length === 0
                 ? ['No production response-observation route is approved.']
-                : [])
+                : []),
+              ...(!profileBinding ? ['No Collection Browser Profile is bound for this platform.'] : [])
             ]
           : ['No static strategy is registered for this platform and evidence objective.'];
 
@@ -343,6 +364,7 @@ export async function buildEvidencePlan(
           releaseTrack: strategyReleaseTrack(strategy),
           strategy: strategyRecord,
           lastVerifiedAt: strategy?.validation.liveRecord?.verifiedAt ?? null,
+          profileBinding,
           requiredHostPermissions,
           missingHostPermissions,
           requiredConsent,

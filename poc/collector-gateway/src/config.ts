@@ -5,6 +5,9 @@ export interface GatewayConfig {
   port: number;
   displayName: string;
   stateDirectory: string;
+  profileDirectory: string;
+  extensionDirectory: string;
+  proxyServer?: string;
 }
 
 function gatewayPort(value: string | undefined): number {
@@ -19,10 +22,28 @@ function gatewayPort(value: string | undefined): number {
 export function loadGatewayConfig(): GatewayConfig {
   const displayName = (process.env.COLLECTOR_GATEWAY_NAME ?? 'Local Collector Gateway').trim();
   if (!displayName || displayName.length > 80) throw new Error('COLLECTOR_GATEWAY_NAME must contain 1 to 80 characters.');
+  const stateDirectory = resolve(process.env.COLLECTOR_GATEWAY_STATE_DIR ?? 'runtime');
+  const proxyServer = normaliseProxyServer(process.env.COLLECTOR_BROWSER_PROXY_SERVER);
   return {
     host: '127.0.0.1',
     port: gatewayPort(process.env.COLLECTOR_GATEWAY_PORT),
     displayName,
-    stateDirectory: resolve(process.env.COLLECTOR_GATEWAY_STATE_DIR ?? 'runtime')
+    stateDirectory,
+    profileDirectory: resolve(stateDirectory, 'profiles'),
+    extensionDirectory: resolve(process.env.COLLECTOR_EXTENSION_DIRECTORY ?? '../collector-extension/dist'),
+    ...(proxyServer ? { proxyServer } : {})
   };
+}
+
+function normaliseProxyServer(value: string | undefined): string | undefined {
+  if (value === undefined || value.trim() === '') return undefined;
+  const url = new URL(value.trim());
+  if (!['http:', 'https:', 'socks5:'].includes(url.protocol)) {
+    throw new Error('COLLECTOR_BROWSER_PROXY_SERVER must use http, https, or socks5.');
+  }
+  if (url.username || url.password || url.search || url.hash || (url.pathname !== '/' && url.pathname !== '')) {
+    throw new Error('COLLECTOR_BROWSER_PROXY_SERVER must not contain credentials, path, query, or fragment.');
+  }
+  if (!url.hostname || !url.port) throw new Error('COLLECTOR_BROWSER_PROXY_SERVER must include host and port.');
+  return `${url.protocol}//${url.host}`;
 }

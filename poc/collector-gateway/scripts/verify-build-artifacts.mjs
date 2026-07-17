@@ -11,6 +11,10 @@ const source = await readFile(artifact, 'utf8');
 assert.match(source, /127\.0\.0\.1/, 'Gateway artifact must bind an IPv4 loopback address');
 assert.doesNotMatch(source, /0\.0\.0\.0/, 'Gateway artifact must not contain an all-interface bind address');
 assert.doesNotMatch(source, /express|fastify|koa/i, 'Gateway build must remain on the reviewed Node HTTP surface');
+assert.match(source, /from\s+["']playwright["']/, 'Gateway artifact must keep Playwright as an installed runtime dependency');
+assert.match(source, /launchPersistentContext/, 'Gateway artifact must launch a persistent browser context');
+assert.match(source, /headless:\s*false/, 'Gateway artifact must launch a visible browser');
+assert.match(source, /--load-extension=/, 'Gateway artifact must automatically load the production extension');
 
 console.log(JSON.stringify({
   ok: true,

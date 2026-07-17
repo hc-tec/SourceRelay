@@ -35,6 +35,19 @@ export type CollectionTaskTarget =
       url: string;
     };
 
+export type BrowserProfileKind = 'collection' | 'validation';
+
+export interface BrowserProfileBinding {
+  profileId: string;
+  kind: BrowserProfileKind;
+  platform: SupportedPlatform;
+  account: {
+    category: 'anonymous' | 'user_managed';
+    label: string;
+    expectedVisibleIdentity?: string;
+  };
+}
+
 export const RESEARCH_PROFILES = [
   'scout',
   'evidence',
@@ -180,6 +193,7 @@ export interface CapabilityPreflight {
   releaseTrack: 'formal' | 'experimental' | 'unsupported';
   strategy: StrategyProvenance | null;
   lastVerifiedAt: string | null;
+  profileBinding: BrowserProfileBinding | null;
   requiredHostPermissions: readonly string[];
   missingHostPermissions: readonly string[];
   requiredConsent: readonly ConsentAction[];
@@ -189,6 +203,7 @@ export interface CapabilityPreflight {
   requiredUserActions: readonly (
     | 'approve_task_plan'
     | 'grant_host_permission'
+    | 'select_collection_profile'
     | 'authenticate_in_collection_window'
     | 'confirm_plan_change'
   )[];
@@ -206,6 +221,7 @@ export interface ResearchTaskContract {
   profile: ResearchProfile;
   targets: readonly CollectionTaskTarget[];
   platforms: readonly SupportedPlatform[];
+  profileBindings: Partial<Record<SupportedPlatform, BrowserProfileBinding>>;
   evidenceObjectives: readonly EvidenceObjective[];
   budget: CollectionBudget;
   consent: TaskConsent;

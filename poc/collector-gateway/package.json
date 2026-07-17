@@ -12,7 +12,11 @@
     "typecheck": "tsc --noEmit",
     "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
     "verify:build": "npm run typecheck && npm run build && npm run verify:artifacts",
+    "setup:browser": "playwright install chromium",
     "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "playwright": "^1.61.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

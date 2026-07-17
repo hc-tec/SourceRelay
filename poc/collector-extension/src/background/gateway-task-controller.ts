@@ -10,7 +10,12 @@ import {
   evidencePlanDigestPayload,
   unsignedGatewayEnvelope
 } from '../shared/control-plane';
-import type { ResearchTaskContract } from '../shared/collection-contracts';
+import {
+  isSupportedPlatform,
+  type BrowserProfileBinding,
+  type ResearchTaskContract,
+  type SupportedPlatform
+} from '../shared/collection-contracts';
 import {
   canonicalJson,
   sha256Hex,
@@ -28,6 +33,38 @@ const MAX_ACCEPTED_NONCES = 128;
 
 let activePoll: Promise<void> | null = null;
 
+function isCollectionProfileBinding(value: unknown, platform: SupportedPlatform): value is BrowserProfileBinding {
+  if (!value || typeof value !== 'object') return false;
+  const binding = value as Partial<BrowserProfileBinding>;
+  return (
+    typeof binding.profileId === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(binding.profileId) &&
+    binding.kind === 'collection' &&
+    binding.platform === platform &&
+    binding.account?.category === 'user_managed' &&
+    typeof binding.account.label === 'string' &&
+    binding.account.label.length > 0 &&
+    binding.account.label.length <= 80 &&
+    (binding.account.expectedVisibleIdentity === undefined ||
+      (typeof binding.account.expectedVisibleIdentity === 'string' &&
+        binding.account.expectedVisibleIdentity.length <= 160))
+  );
+}
+
+function hasValidProfileBindings(task: Partial<ResearchTaskContract>): boolean {
+  if (!task.profileBindings || typeof task.profileBindings !== 'object' || Array.isArray(task.profileBindings)) {
+    return false;
+  }
+  const platforms = Array.isArray(task.platforms)
+    ? task.platforms.filter(isSupportedPlatform)
+    : [];
+  return Object.entries(task.profileBindings).every(([platform, binding]) =>
+    isSupportedPlatform(platform) &&
+    platforms.includes(platform) &&
+    isCollectionProfileBinding(binding, platform)
+  );
+}
+
 function isResearchTask(value: unknown): value is ResearchTaskContract {
   if (!value || typeof value !== 'object') return false;
   const task = value as Partial<ResearchTaskContract>;
@@ -41,6 +78,8 @@ function isResearchTask(value: unknown): value is ResearchTaskContract {
     task.decisionContext.length <= 1_000 &&
     Array.isArray(task.targets) && task.targets.length > 0 && task.targets.length <= 20 &&
     Array.isArray(task.platforms) && task.platforms.length > 0 && task.platforms.length <= 4 &&
+    task.platforms.every(isSupportedPlatform) &&
+    hasValidProfileBindings(task) &&
     Array.isArray(task.evidenceObjectives) && task.evidenceObjectives.length > 0 && task.evidenceObjectives.length <= 6 &&
     Boolean(task.budget) &&
     Boolean(task.consent)

@@ -14,6 +14,7 @@ import {
 } from '../../collector-extension/src/shared/control-plane';
 import {
   isSupportedPlatform,
+  type BrowserProfileBinding,
   type CollectionBudgetLimits,
   type ResearchTaskContract,
   type SupportedPlatform
@@ -49,6 +50,7 @@ export interface ScoutTaskInput {
   decisionContext: string;
   query: string;
   platforms: SupportedPlatform[];
+  profileIds: Partial<Record<SupportedPlatform, string>>;
 }
 
 export interface ConsoleTaskSummary {
@@ -57,6 +59,7 @@ export interface ConsoleTaskSummary {
   platforms: readonly SupportedPlatform[];
   state: TaskState;
   createdAt: string;
+  profileBindings: Partial<Record<SupportedPlatform, BrowserProfileBinding>>;
   plan?: EvidencePlan;
   statusMessage?: string;
 }
@@ -90,11 +93,22 @@ export function scoutTaskInput(value: unknown): ScoutTaskInput {
   if (platforms.length === 0 || platforms.length !== candidate.platforms.length) {
     throw new Error('task_platforms_invalid');
   }
+  if (!candidate.profileIds || typeof candidate.profileIds !== 'object' || Array.isArray(candidate.profileIds)) {
+    throw new Error('task_profile_bindings_invalid');
+  }
+  const profileIds: Partial<Record<SupportedPlatform, string>> = {};
+  for (const [platform, profileId] of Object.entries(candidate.profileIds)) {
+    if (!isSupportedPlatform(platform) || !platforms.includes(platform) || typeof profileId !== 'string') {
+      throw new Error('task_profile_bindings_invalid');
+    }
+    profileIds[platform] = profileId;
+  }
   return {
     researchQuestion: boundedText(candidate.researchQuestion, 'research_question', 500),
     decisionContext: boundedText(candidate.decisionContext, 'decision_context', 1_000),
     query: boundedText(candidate.query, 'query', 200),
-    platforms
+    platforms,
+    profileIds
   };
 }
 
@@ -106,7 +120,11 @@ export class GatewayTaskQueue {
     this.#identity = identity;
   }
 
-  createScoutTask(input: ScoutTaskInput, now = new Date()): ConsoleTaskSummary {
+  createScoutTask(
+    input: ScoutTaskInput,
+    profileBindings: Partial<Record<SupportedPlatform, BrowserProfileBinding>>,
+    now = new Date()
+  ): ConsoleTaskSummary {
     const taskId = randomUUID();
     const perPlatform = Object.fromEntries(
       input.platforms.map((platform) => [platform, budgetLimits()])
@@ -119,6 +137,7 @@ export class GatewayTaskQueue {
       profile: 'scout',
       targets: [{ type: 'keyword_query', query: input.query }],
       platforms: input.platforms,
+      profileBindings,
       evidenceObjectives: ['breadth_search'],
       budget: {
         total: budgetLimits({
@@ -293,6 +312,7 @@ export class GatewayTaskQueue {
       platforms: record.task.platforms,
       state: record.state,
       createdAt: record.createdAt,
+      profileBindings: structuredClone(record.task.profileBindings),
       ...(record.plan ? { plan: record.plan } : {}),
       ...(record.statusMessage ? { statusMessage: record.statusMessage } : {})
     };
