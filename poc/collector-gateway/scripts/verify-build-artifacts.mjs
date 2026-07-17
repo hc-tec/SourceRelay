@@ -18,6 +18,9 @@ assert.match(source, /--load-extension=/, 'Gateway artifact must automatically l
 assert.match(source, /chrome:\/\/extensions\//, 'Gateway artifact must recover stale unpacked service workers');
 assert.match(source, /collector\.startCapabilityValidation/, 'Gateway artifact must include the validation-run control path');
 assert.match(source, /admittedToStrategyRegistry/, 'Gateway artifact must preserve explicit validation admission state');
+assert.match(source, /\/v1\/extension\/evidence/, 'Gateway artifact must authenticate formal evidence submissions');
+assert.match(source, /responseObservation:\s*["']disabled["']/, 'Evidence batches must keep response observation disabled');
+assert.match(source, /collector\.pollGatewayTasks/, 'Gateway artifact must expose explicit managed-profile polling');
 
 console.log(JSON.stringify({
   ok: true,

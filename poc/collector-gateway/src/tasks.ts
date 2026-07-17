@@ -3,6 +3,8 @@ import type {
   ApprovedEvidencePlan,
   EvidencePlan,
   GatewayApprovedDispatchWorkItem,
+  GatewayEvidenceBatchSummary,
+  GatewayEvidenceSubmission,
   GatewayPreflightRequestEnvelope,
   GatewayPreflightSubmission,
   GatewayStageReceipt,
@@ -16,10 +18,14 @@ import {
   isSupportedPlatform,
   type BrowserProfileBinding,
   type CollectionBudgetLimits,
+  type CollectionTaskTarget,
   type ResearchTaskContract,
   type SupportedPlatform
 } from '../../collector-extension/src/shared/collection-contracts';
 import { canonicalJson, sha256Hex } from '../../collector-extension/src/shared/cryptography';
+import { buildNativeSearchUrl } from '../../collector-extension/src/shared/native-search';
+import { COLLECTOR_CORE_VERSION } from '../../collector-extension/src/shared/protocol';
+import type { GatewayEvidenceRegistry } from './evidence';
 import type { LoadedGatewayIdentity } from './identity';
 
 const WORK_ITEM_TTL_MS = 2 * 60 * 1000;
@@ -32,6 +38,8 @@ type TaskState =
   | 'approved'
   | 'stage_dispatched'
   | 'stage_active'
+  | 'evidence_received'
+  | 'completed'
   | 'blocked';
 
 interface TaskRecord {
@@ -42,6 +50,11 @@ interface TaskRecord {
   plan?: EvidencePlan;
   approvedPlan?: ApprovedEvidencePlan;
   assignedExtensionInstanceId?: string;
+  activeStage?: {
+    stageId: string;
+    leaseId: string;
+  };
+  evidence?: GatewayEvidenceBatchSummary;
   statusMessage?: string;
 }
 
@@ -60,7 +73,8 @@ export interface ConsoleTaskSummary {
   state: TaskState;
   createdAt: string;
   profileBindings: Partial<Record<SupportedPlatform, BrowserProfileBinding>>;
-  plan?: EvidencePlan;
+  plan?: EvidencePlan | ApprovedEvidencePlan;
+  evidence?: GatewayEvidenceBatchSummary;
   statusMessage?: string;
 }
 
@@ -114,10 +128,12 @@ export function scoutTaskInput(value: unknown): ScoutTaskInput {
 
 export class GatewayTaskQueue {
   readonly #identity: LoadedGatewayIdentity;
+  readonly #evidenceRegistry: GatewayEvidenceRegistry;
   readonly #tasks = new Map<string, TaskRecord>();
 
-  constructor(identity: LoadedGatewayIdentity) {
+  constructor(identity: LoadedGatewayIdentity, evidenceRegistry: GatewayEvidenceRegistry) {
     this.#identity = identity;
+    this.#evidenceRegistry = evidenceRegistry;
   }
 
   createScoutTask(
@@ -247,6 +263,11 @@ export class GatewayTaskQueue {
     const record = this.#tasks.get(submission.taskId);
     if (!record || submission.plan.taskId !== submission.taskId) throw new Error('task_not_found');
     if (record.assignedExtensionInstanceId !== extensionInstanceId) throw new Error('task_extension_mismatch');
+    if (record.state === 'awaiting_plan_approval' && record.plan) {
+      if (canonicalJson(record.plan) === canonicalJson(submission.plan)) return this.#summary(record);
+      throw new Error('task_preflight_already_recorded');
+    }
+    if (record.state !== 'preflight_dispatched') throw new Error('task_preflight_state_invalid');
     if (submission.plan.approval.status !== 'pending') throw new Error('preflight_plan_must_be_pending');
     if (submission.plan.stages.length === 0 || submission.plan.stages.length > 100) {
       throw new Error('preflight_stage_count_invalid');
@@ -266,8 +287,24 @@ export class GatewayTaskQueue {
     if (!record.approvedPlan.stages.some((stage) => stage.stageId === receipt.stageId)) {
       throw new Error('task_stage_mismatch');
     }
+    if (record.state === 'completed') {
+      if (
+        receipt.status === 'accepted' &&
+        record.activeStage?.stageId === receipt.stageId &&
+        record.activeStage.leaseId === receipt.leaseId
+      ) return this.#summary(record);
+      throw new Error('task_already_completed');
+    }
+    if (record.state !== 'stage_dispatched' && record.state !== 'stage_active') {
+      throw new Error('task_stage_receipt_state_invalid');
+    }
     if (receipt.status === 'accepted') {
       if (!receipt.leaseId || !/^[0-9a-f-]{36}$/i.test(receipt.leaseId)) throw new Error('task_lease_invalid');
+      if (
+        record.activeStage &&
+        (record.activeStage.stageId !== receipt.stageId || record.activeStage.leaseId !== receipt.leaseId)
+      ) throw new Error('task_lease_mismatch');
+      record.activeStage = { stageId: receipt.stageId, leaseId: receipt.leaseId };
       record.state = 'stage_active';
       record.statusMessage = `stage_accepted:${receipt.stageId}`;
     } else {
@@ -280,9 +317,63 @@ export class GatewayTaskQueue {
     return this.#summary(record);
   }
 
+  async submitEvidence(
+    submission: GatewayEvidenceSubmission,
+    extensionInstanceId: string,
+    now = new Date()
+  ): Promise<ConsoleTaskSummary> {
+    const record = this.#tasks.get(submission.taskId);
+    if (!record?.approvedPlan || !record.activeStage) throw new Error('task_not_found');
+    if (record.assignedExtensionInstanceId !== extensionInstanceId) throw new Error('task_extension_mismatch');
+    if (record.state !== 'stage_active' && record.state !== 'completed') {
+      throw new Error('task_stage_not_active');
+    }
+    if (
+      record.activeStage.stageId !== submission.stageId ||
+      record.activeStage.leaseId !== submission.leaseId
+    ) throw new Error('task_lease_mismatch');
+    if (submission.collectorVersion !== COLLECTOR_CORE_VERSION) throw new Error('task_collector_version_mismatch');
+
+    const stage = record.approvedPlan.stages.find((candidate) => candidate.stageId === submission.stageId);
+    if (!stage?.strategy || !stage.budget) throw new Error('task_stage_mismatch');
+    if (
+      stage.platform !== submission.platform ||
+      canonicalJson(stage.strategy) !== canonicalJson(submission.strategy) ||
+      submission.result.platform !== submission.platform ||
+      canonicalJson(submission.result.strategy) !== canonicalJson(stage.strategy)
+    ) throw new Error('task_strategy_mismatch');
+    if (
+      submission.result.itemCount > stage.budget.maxRecords ||
+      submission.result.items.length !== submission.result.itemCount
+    ) throw new Error('task_evidence_budget_exceeded');
+    const capturedAt = Date.parse(submission.capturedAt);
+    if (
+      !Number.isFinite(capturedAt) ||
+      capturedAt > now.getTime() + 30_000 ||
+      capturedAt < Date.parse(record.createdAt) - 30_000
+    ) throw new Error('task_evidence_timestamp_invalid');
+    this.#validateStageResult(stage.target, submission);
+
+    const submittedDigest = await sha256Hex(canonicalJson(submission.result));
+    if (record.state === 'completed' && record.evidence?.digest !== submittedDigest) {
+      throw new Error('task_evidence_already_completed');
+    }
+
+    const evidence = await this.#evidenceRegistry.record(submission, extensionInstanceId, now);
+    if (evidence.digest !== submittedDigest) throw new Error('task_evidence_digest_mismatch');
+    record.evidence = evidence;
+    record.state = 'evidence_received';
+    record.statusMessage = `evidence_received:${evidence.batchId}`;
+    record.state = 'completed';
+    record.statusMessage = `completed:${submission.stageId}`;
+    return this.#summary(record);
+  }
+
   async approve(taskId: string, now = new Date()): Promise<ConsoleTaskSummary> {
     const record = this.#tasks.get(taskId);
     if (!record?.plan) throw new Error('task_plan_not_available');
+    if (record.approvedPlan) return this.#summary(record);
+    if (record.state !== 'awaiting_plan_approval') throw new Error('task_plan_approval_state_invalid');
     if (!record.plan.stages.every(
       (stage) => stage.preflight.status === 'ready' && stage.preflight.releaseTrack === 'formal'
     )) {
@@ -313,8 +404,34 @@ export class GatewayTaskQueue {
       state: record.state,
       createdAt: record.createdAt,
       profileBindings: structuredClone(record.task.profileBindings),
-      ...(record.plan ? { plan: record.plan } : {}),
+      ...(record.approvedPlan
+        ? { plan: structuredClone(record.approvedPlan) }
+        : record.plan
+          ? { plan: structuredClone(record.plan) }
+          : {}),
+      ...(record.evidence ? { evidence: structuredClone(record.evidence) } : {}),
       ...(record.statusMessage ? { statusMessage: record.statusMessage } : {})
     };
+  }
+
+  #validateStageResult(target: CollectionTaskTarget, submission: GatewayEvidenceSubmission): void {
+    if (target.type !== 'keyword_query' || submission.result.operation !== 'breadth_search') {
+      throw new Error('task_evidence_operation_mismatch');
+    }
+    const expectedSource = buildNativeSearchUrl(submission.platform, target.query);
+    expectedSource.search = '';
+    expectedSource.hash = '';
+    if (submission.result.sourceUrl !== expectedSource.href) throw new Error('task_evidence_source_mismatch');
+
+    // Bilibili breadth search is the only formal live-admitted collection
+    // strategy today. Its result URLs are rebuilt into the reviewed canonical
+    // BV form; accepting other domains here would silently expand admission.
+    if (submission.platform !== 'bilibili') throw new Error('task_evidence_platform_not_admitted');
+    for (const item of submission.result.items) {
+      if (
+        item.contentType !== 'video' ||
+        !/^https:\/\/www\.bilibili\.com\/video\/BV[0-9A-Za-z]{10}$/.test(item.url)
+      ) throw new Error('task_evidence_item_invalid');
+    }
   }
 }

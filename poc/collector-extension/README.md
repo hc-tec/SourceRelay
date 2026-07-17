@@ -2,7 +2,7 @@
 
 这是个人情报产品的浏览器内采集底座。一个 Manifest V3 Collector Core 运行在用户自己的 Collection Browser Profile 中，根据已批准的研究计划进入平台页面、读取公开可见内容，并在后续阶段把证据交给本地 Gateway / Evidence Vault。
 
-当前实现已完成 **P0：决策契约与构建门禁** 和 P1 控制面的主要骨架。精确 optional host permission、EvidencePlan / lease、状态控制页、任务 tab 动态注入、loopback Gateway 固定身份与显式配对、认证轮询、Gateway 签名 preflight / dispatch、formal-only 批准门槛、stage receipt、重投去重和阻塞回报已经落码；真实平台验证、加密 Vault 与 DeepResearch 尚未接入。
+当前实现已完成 P0 / P1 控制面、受管 Profile、B站匿名 breadth 策略 admission，以及一次正式 B站 Research Task 的 dispatch → visible DOM → 认证 Evidence 回传 → 本地 batch → completed 闭环。加密 Vault、DeepResearch 和 B站详情 / 评论等独立深度策略尚未接入。
 
 ## 产品边界
 
@@ -38,7 +38,7 @@ Local Research Console / Gateway
 
 证据目标与采集机制是两个正交维度。用户提出“归档某博主当前可见的所有笔记”并不自动授予无限滚动、评论、response observation 或原始媒体下载能力；这些动作仍受策略、预算和同意范围约束。
 
-[control-plane.ts](src/shared/control-plane.ts) 进一步定义了 `EvidencePlan`、待批准与已批准计划、loopback Gateway 固定身份、一次性配对 challenge、带 nonce / 过期时间 / 计划摘要 / 签名的任务 envelope，以及浏览器重启后失效的 session stage lease。当前 `build_ready` 策略在 preflight 中返回 `live_validation_required`，不能作为正式任务直接启动。
+[control-plane.ts](src/shared/control-plane.ts) 进一步定义了 `EvidencePlan`、待批准与已批准计划、loopback Gateway 固定身份、一次性配对 challenge、带 nonce / 过期时间 / 计划摘要 / 签名的任务 envelope、浏览器重启后失效的 session stage lease，以及绑定 task / stage / lease / strategy 的正式 Evidence submission。当前 `build_ready` 策略在 preflight 中返回 `live_validation_required`，不能作为正式任务直接启动。
 
 ## 策略成熟度
 
@@ -126,7 +126,9 @@ Manifest 不再静态声明任何平台 `content_scripts`，授予站点权限�
 
 Gateway 已建立 Collection / Validation Profile 生命周期：它从内部逻辑 ID 推导隔离目录，启动可见 Playwright Chromium，自动加载生产扩展，并让 Research Task 按平台绑定同平台 Collection Profile。扩展仍会在签名 task 入口复核绑定形状，拒绝 Validation、匿名、跨平台或伪造 Profile 绑定。
 
-B站 `breadth_search + visible_dom` 的精确 `v1.1.0` 现在可以在 Profile、同意和精确 host permission 都满足时进入 `ready / formal`；其他三平台仍是 `live_validation_required / experimental`。该 admission 只覆盖匿名首屏搜索卡标题与 BV URL，不覆盖登录、翻页、详情或评论。下一检查点是先验证一次正式 Gateway 调度闭环，再进入 B站 detail → bounded discussion。
+B站 `breadth_search + visible_dom` 的精确 `v1.1.0` 现在可以在 Profile、同意和精确 host permission 都满足时进入 `ready / formal`；其他三平台仍是 `live_validation_required / experimental`。正式结果先进入 `chrome.storage.local` 的待提交队列，只有通过配对 HMAC 提交、Gateway 校验租约 / 策略 / 来源 / 预算并确认本地 batch 后，lease 才标记 completed；相同 task / stage / result digest 重投不会生成第二个 batch。
+
+该 admission 仍只覆盖匿名首屏搜索卡标题与 BV URL，不覆盖登录、翻页、详情或评论。下一检查点是为 B站 detail 和 bounded discussion 分别建立新策略、预算、页面动作与真实 admission，而不是扩大 breadth 策略的解释范围。
 
 完整产品决策见：
 

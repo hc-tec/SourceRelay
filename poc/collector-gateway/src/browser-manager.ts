@@ -6,6 +6,8 @@ import { chromium, type BrowserContext, type Page } from 'playwright';
 import type { BrowserProfileRuntimeSummary } from '../../collector-extension/src/shared/control-plane';
 import {
   COLLECTOR_CORE_VERSION,
+  GET_CONTROL_SNAPSHOT,
+  POLL_GATEWAY_TASKS,
   type CapabilityValidationRunSnapshot
 } from '../../collector-extension/src/shared/protocol';
 import { resolveNativeSearchStrategy } from '../../collector-extension/src/shared/strategy-registry';
@@ -16,6 +18,13 @@ interface RunningProfile {
   context: BrowserContext;
   extensionId: string;
   extensionVersion: string;
+}
+
+export interface ManagedProfilePairingInput {
+  loopbackOrigin: string;
+  gatewayInstanceId: string;
+  pairingSessionId: string;
+  pairingCode: string;
 }
 
 async function waitForExtensionWorker(context: BrowserContext) {
@@ -121,6 +130,7 @@ export class CollectionBrowserManager {
     for (const profile of this.#registry.list()) {
       const running = this.#running.get(profile.profileId);
       let extensionPaired = false;
+      let strategyPermission: BrowserProfileRuntimeSummary['strategyPermission'] = 'unknown';
       if (running) {
         const extensionPage = running.context.pages().find((page) => {
           try {
@@ -131,7 +141,7 @@ export class CollectionBrowserManager {
         });
         const extensionRuntime = extensionPage ?? running.context.serviceWorkers()[0];
         if (extensionRuntime) {
-          extensionPaired = await extensionRuntime.evaluate(async () => {
+          const runtimeState = await extensionRuntime.evaluate(async (requiredOrigins) => {
             const extensionGlobal = globalThis as typeof globalThis & {
               chrome: {
                 storage: {
@@ -139,18 +149,27 @@ export class CollectionBrowserManager {
                     get(key: string): Promise<Record<string, unknown>>;
                   };
                 };
+                permissions: {
+                  contains(permission: { origins: string[] }): Promise<boolean>;
+                };
               };
             };
             const key = 'collector.gateway-pairing.v1';
-            return Boolean((await extensionGlobal.chrome.storage.local.get(key))[key]);
-          }).catch(() => false);
+            return {
+              paired: Boolean((await extensionGlobal.chrome.storage.local.get(key))[key]),
+              permission: await extensionGlobal.chrome.permissions.contains({ origins: requiredOrigins })
+            };
+          }, [...resolveNativeSearchStrategy(profile.platform).browser.optionalHostPermissions]).catch(() => null);
+          extensionPaired = runtimeState?.paired ?? false;
+          strategyPermission = runtimeState?.permission ? 'granted' : 'missing';
         }
       }
       summaries.push({
         profile,
         running: Boolean(running),
         extensionLoaded: Boolean(running),
-        extensionPaired
+        extensionPaired,
+        strategyPermission
       });
     }
     return summaries;
@@ -259,6 +278,88 @@ export class CollectionBrowserManager {
     throw new Error('validation_gateway_wait_timed_out');
   }
 
+  async pairProfileWithGateway(
+    profileId: string,
+    input: ManagedProfilePairingInput
+  ): Promise<BrowserProfileRuntimeSummary> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('profile_collection_kind_required');
+    await this.launch(profileId);
+    const running = this.#running.get(profileId);
+    if (!running) throw new Error('profile_browser_not_running');
+    const controlPage = await this.#ensureExtensionVersion(
+      running,
+      await this.#extensionControlPage(running)
+    );
+    const current = await this.#controlSnapshot(controlPage);
+    if (current.pairing?.gatewayInstanceId === input.gatewayInstanceId) {
+      return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
+    }
+    if (current.pairing) throw new Error('profile_gateway_pairing_conflict');
+
+    await controlPage.bringToFront();
+    await controlPage.locator('input[name="gateway-origin"]').fill(input.loopbackOrigin);
+    await controlPage.locator('input[name="pairing-session-id"]').fill(input.pairingSessionId);
+    await controlPage.locator('input[name="pairing-code"]').fill(input.pairingCode);
+    await controlPage.getByRole('button', { name: '核验并配对' }).click({ timeout: 15_000 });
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await delay(500);
+      const snapshot = await this.#controlSnapshot(controlPage).catch(() => null);
+      if (snapshot?.pairing?.gatewayInstanceId === input.gatewayInstanceId) {
+        return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
+      }
+      const error = await controlPage.locator('#control-error:not([hidden])').textContent().catch(() => null);
+      if (error) throw new Error('profile_gateway_pairing_user_action_required');
+    }
+    throw new Error('profile_gateway_pairing_user_action_required');
+  }
+
+  async requestStrategyPermission(profileId: string): Promise<BrowserProfileRuntimeSummary> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('profile_collection_kind_required');
+    await this.launch(profileId);
+    const running = this.#running.get(profileId);
+    if (!running) throw new Error('profile_browser_not_running');
+    const controlPage = await this.#ensureExtensionVersion(
+      running,
+      await this.#extensionControlPage(running)
+    );
+    const strategy = resolveNativeSearchStrategy(profile.platform);
+    if (await extensionHasOrigins(controlPage, strategy.browser.optionalHostPermissions)) {
+      return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
+    }
+
+    await controlPage.bringToFront();
+    const card = controlPage.locator(`[data-platform="${profile.platform}"]`);
+    await card.getByRole('button', { name: '授予站点权限' }).click({ timeout: 15_000 });
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      if (await extensionHasOrigins(controlPage, strategy.browser.optionalHostPermissions)) {
+        return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
+      }
+      const error = await controlPage.locator('#control-error:not([hidden])').textContent().catch(() => null);
+      if (error) throw new Error('profile_strategy_permission_user_action_required');
+      await delay(500);
+    }
+    throw new Error('profile_strategy_permission_user_action_required');
+  }
+
+  async pollGatewayTasks(profileId: string): Promise<BrowserProfileRuntimeSummary> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('profile_collection_kind_required');
+    const running = this.#running.get(profileId);
+    if (!running) throw new Error('profile_browser_not_running');
+    const controlPage = await this.#ensureExtensionVersion(
+      running,
+      await this.#extensionControlPage(running)
+    );
+    const response = await extensionMessage(controlPage, { type: POLL_GATEWAY_TASKS });
+    if (!response || typeof response !== 'object' || (response as { ok?: unknown }).ok !== true) {
+      throw new Error('profile_gateway_poll_failed');
+    }
+    return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
+  }
+
   async #launchProfile(profileId: string): Promise<BrowserProfileRuntimeSummary> {
     const profile = this.#registry.get(profileId);
 
@@ -322,11 +423,28 @@ export class CollectionBrowserManager {
     return page;
   }
 
+  async #controlSnapshot(page: Page): Promise<{
+    pairing: { gatewayInstanceId: string } | null;
+  }> {
+    const response = await extensionMessage(page, { type: GET_CONTROL_SNAPSHOT });
+    if (!response || typeof response !== 'object') throw new Error('profile_control_snapshot_missing');
+    const candidate = response as {
+      ok?: unknown;
+      snapshot?: { pairing?: { gatewayInstanceId?: unknown } | null };
+    };
+    if (candidate.ok !== true || !candidate.snapshot) throw new Error('profile_control_snapshot_missing');
+    const pairing = candidate.snapshot.pairing;
+    if (pairing === null || pairing === undefined) return { pairing: null };
+    if (typeof pairing.gatewayInstanceId !== 'string') throw new Error('profile_control_snapshot_invalid');
+    return { pairing: { gatewayInstanceId: pairing.gatewayInstanceId } };
+  }
+
   async #ensureExtensionVersion(running: RunningProfile, initialPage: Page): Promise<Page> {
     let page = initialPage;
+    let unpackedReloadFailed = false;
     for (let attempt = 0; attempt < 31; attempt += 1) {
       try {
-        const response = await extensionMessage(page, { type: 'collector.getControlSnapshot' });
+        const response = await extensionMessage(page, { type: GET_CONTROL_SNAPSHOT });
         if (response && typeof response === 'object') {
           const probe = response as { ok?: unknown; snapshot?: { collectorVersion?: unknown } };
           if (probe.ok === true && probe.snapshot?.collectorVersion === running.extensionVersion) return page;
@@ -336,7 +454,16 @@ export class CollectionBrowserManager {
         // replaces the extension service worker.
       }
       if (attempt === 0) await reloadExtension(page);
-      if (attempt === 10) await this.#reloadUnpackedExtensionFromChromeUi(running);
+      if (attempt === 10) {
+        try {
+          await this.#reloadUnpackedExtensionFromChromeUi(running);
+        } catch {
+          // chrome.runtime.reload may already be replacing the old worker
+          // while chrome://extensions is rebuilding its custom element tree.
+          // Keep probing the runtime before declaring the UI fallback failed.
+          unpackedReloadFailed = true;
+        }
+      }
       await delay(500);
       try {
         page = await this.#extensionControlPage(running);
@@ -345,7 +472,11 @@ export class CollectionBrowserManager {
         // replaces the unpacked extension service worker and pages.
       }
     }
-    throw new Error('validation_control_version_mismatch');
+    throw new Error(
+      unpackedReloadFailed
+        ? 'validation_extension_ui_reload_failed'
+        : 'validation_control_version_mismatch'
+    );
   }
 
   async #reloadUnpackedExtensionFromChromeUi(running: RunningProfile): Promise<void> {

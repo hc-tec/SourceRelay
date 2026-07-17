@@ -181,7 +181,9 @@ export class PairingBroker {
       (candidate) => candidate.extensionInstanceId === input.extensionInstanceId
     );
     if (!pairing || input.extensionId !== pairing.extensionId) throw new Error('pairing_authorization_rejected');
-    if (input.origin !== `chrome-extension://${pairing.extensionId}`) throw new Error('pairing_origin_rejected');
+    if (input.origin !== undefined && input.origin !== `chrome-extension://${pairing.extensionId}`) {
+      throw new Error('pairing_origin_rejected');
+    }
     if (!input.timestamp || !/^\d{13}$/.test(input.timestamp)) throw new Error('pairing_timestamp_invalid');
     const requestTime = Number(input.timestamp);
     if (Math.abs(now - requestTime) > REQUEST_CLOCK_SKEW_MS) throw new Error('pairing_timestamp_expired');

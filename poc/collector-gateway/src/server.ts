@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { CollectionBrowserManager } from './browser-manager';
 import { loadGatewayConfig } from './config';
 import { consoleHtml, consoleScript, consoleStyles } from './console-assets';
+import { GatewayEvidenceRegistry, gatewayEvidenceSubmission } from './evidence';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker, type PairingClaimInput } from './pairing';
 import { BrowserProfileRegistry, createBrowserProfileInput } from './profiles';
@@ -17,6 +18,7 @@ import type {
 } from '../../collector-extension/src/shared/control-plane';
 
 const MAX_REQUEST_BODY_BYTES = 16 * 1024;
+const MAX_EVIDENCE_BODY_BYTES = 256 * 1024;
 const extensionOriginPattern = /^chrome-extension:\/\/[a-p]{32}$/;
 
 function securityHeaders(response: ServerResponse): void {
@@ -52,6 +54,18 @@ function allowExtensionCors(request: IncomingMessage, response: ServerResponse):
   return true;
 }
 
+// Chromium may omit Origin on an extension service worker's same-scheme GET
+// even though its custom authentication headers still trigger a protected
+// CORS preflight for web pages. Pairing claims and OPTIONS remain
+// origin-required; an already-paired request may omit Origin, but if one is
+// present it must still be the exact chrome-extension origin.
+function allowAuthenticatedExtensionRequest(
+  request: IncomingMessage,
+  response: ServerResponse
+): boolean {
+  return request.headers.origin === undefined || allowExtensionCors(request, response);
+}
+
 function header(request: IncomingMessage, name: string): string | undefined {
   const value = request.headers[name];
   return Array.isArray(value) ? value[0] : value;
@@ -63,13 +77,16 @@ function requireConsoleOrigin(request: IncomingMessage, response: ServerResponse
   return false;
 }
 
-async function readTextBody(request: IncomingMessage): Promise<string> {
+async function readTextBody(
+  request: IncomingMessage,
+  maximumBytes = MAX_REQUEST_BODY_BYTES
+): Promise<string> {
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of request) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     total += bytes.byteLength;
-    if (total > MAX_REQUEST_BODY_BYTES) throw new Error('request_body_too_large');
+    if (total > maximumBytes) throw new Error('request_body_too_large');
     chunks.push(bytes);
   }
   return Buffer.concat(chunks).toString('utf8');
@@ -132,7 +149,8 @@ const pairingBroker = await PairingBroker.create(identity, config.stateDirectory
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
 const validationRegistry = await CapabilityValidationRegistry.create(config.stateDirectory);
-const taskQueue = new GatewayTaskQueue(identity);
+const evidenceRegistry = await GatewayEvidenceRegistry.create(config.stateDirectory);
+const taskQueue = new GatewayTaskQueue(identity, evidenceRegistry);
 const expectedHost = `${config.host}:${config.port}`;
 
 const server = createServer(async (request, response) => {
@@ -217,6 +235,41 @@ const server = createServer(async (request, response) => {
       });
       return;
     }
+    const profilePairMatch = url.pathname.match(/^\/v1\/profiles\/([0-9a-f-]{36})\/pair$/i);
+    if (request.method === 'POST' && profilePairMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const session = pairingBroker.createSession();
+      const profile = await browserManager.pairProfileWithGateway(profilePairMatch[1], {
+        loopbackOrigin: identity.publicIdentity.loopbackOrigin,
+        gatewayInstanceId: identity.publicIdentity.gatewayInstanceId,
+        pairingSessionId: session.pairingSessionId,
+        pairingCode: session.pairingCode
+      });
+      // The one-time pairing code and Session ID remain process-local. This
+      // profile-level product route returns only the resulting runtime state.
+      sendJson(response, 200, { schemaVersion: 1, profile });
+      return;
+    }
+    const profilePermissionMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/strategy-permission$/i
+    );
+    if (request.method === 'POST' && profilePermissionMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        profile: await browserManager.requestStrategyPermission(profilePermissionMatch[1])
+      });
+      return;
+    }
+    const profilePollMatch = url.pathname.match(/^\/v1\/profiles\/([0-9a-f-]{36})\/poll$/i);
+    if (request.method === 'POST' && profilePollMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        profile: await browserManager.pollGatewayTasks(profilePollMatch[1])
+      });
+      return;
+    }
     const bilibiliValidationMatch = url.pathname.match(
       /^\/v1\/profiles\/([0-9a-f-]{36})\/validations\/bilibili$/i
     );
@@ -233,6 +286,12 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'GET' && url.pathname === '/v1/tasks') {
       sendJson(response, 200, { schemaVersion: 1, tasks: taskQueue.list() });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/evidence') {
+      const taskId = url.searchParams.get('taskId') ?? undefined;
+      if (taskId && !/^[0-9a-f-]{36}$/i.test(taskId)) throw new Error('evidence_task_id_invalid');
+      sendJson(response, 200, { schemaVersion: 1, batches: evidenceRegistry.list(taskId) });
       return;
     }
     if (request.method === 'POST' && url.pathname === '/v1/tasks') {
@@ -280,7 +339,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (url.pathname === '/v1/extension/work' && request.method === 'GET') {
-      if (!allowExtensionCors(request, response)) {
+      if (!allowAuthenticatedExtensionRequest(request, response)) {
         sendJson(response, 403, { error: 'extension_origin_required' });
         return;
       }
@@ -307,7 +366,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (url.pathname === '/v1/extension/preflight' && request.method === 'POST') {
-      if (!allowExtensionCors(request, response)) {
+      if (!allowAuthenticatedExtensionRequest(request, response)) {
         sendJson(response, 403, { error: 'extension_origin_required' });
         return;
       }
@@ -332,7 +391,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (url.pathname === '/v1/extension/stage-receipt' && request.method === 'POST') {
-      if (!allowExtensionCors(request, response)) {
+      if (!allowAuthenticatedExtensionRequest(request, response)) {
         sendJson(response, 403, { error: 'extension_origin_required' });
         return;
       }
@@ -356,6 +415,34 @@ const server = createServer(async (request, response) => {
       );
       return;
     }
+    if (url.pathname === '/v1/extension/evidence' && request.method === 'POST') {
+      if (!allowAuthenticatedExtensionRequest(request, response)) {
+        sendJson(response, 403, { error: 'extension_origin_required' });
+        return;
+      }
+      const body = await readTextBody(request, MAX_EVIDENCE_BODY_BYTES);
+      const extension = await pairingBroker.authoriseRequest({
+        origin: request.headers.origin,
+        extensionId: header(request, 'x-collector-extension-id'),
+        extensionInstanceId: header(request, 'x-collector-extension-instance'),
+        timestamp: header(request, 'x-collector-timestamp'),
+        nonce: header(request, 'x-collector-nonce'),
+        bodySha256: header(request, 'x-collector-body-sha256'),
+        authorization: header(request, 'x-collector-authorization'),
+        method: request.method,
+        pathname: url.pathname,
+        body
+      });
+      sendJson(
+        response,
+        200,
+        await taskQueue.submitEvidence(
+          gatewayEvidenceSubmission(JSON.parse(body) as unknown),
+          extension.extensionInstanceId
+        )
+      );
+      return;
+    }
     sendJson(response, 404, { error: 'route_not_found' });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'gateway_request_failed';
@@ -365,6 +452,7 @@ const server = createServer(async (request, response) => {
       code.startsWith('task_') ||
       code.startsWith('profile_') ||
       code.startsWith('validation_') ||
+      code.startsWith('evidence_') ||
       code.startsWith('preflight_') ||
       code.endsWith('_invalid') ||
       code === 'one_or_more_capabilities_are_not_ready';

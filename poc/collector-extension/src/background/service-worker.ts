@@ -7,6 +7,7 @@ import {
   NETWORK_CAPTURE_BRIDGE_READY_MESSAGE,
   NETWORK_CAPTURE_OBSERVED,
   PAIR_GATEWAY,
+  POLL_GATEWAY_TASKS,
   REVOKE_GATEWAY_PAIRING,
   START_CAPABILITY_VALIDATION,
   isGetCapabilityValidationMessage,
@@ -17,6 +18,7 @@ import {
   isGetControlSnapshotMessage,
   isNetworkCaptureBridgeReadyMessage,
   isNetworkCaptureObservedMessage,
+  isPollGatewayTasksMessage,
   isSyncStrategyPermissionsMessage,
   type VisibleCollectionResult
 } from '../shared/protocol';
@@ -28,7 +30,8 @@ import {
   type NetworkCaptureObservation
 } from '../shared/network-capture';
 import { isSupportedPlatform, type SupportedPlatform } from '../shared/collection-contracts';
-import type { CollectorControlSnapshot, StageLease } from '../shared/control-plane';
+import type { CollectorControlSnapshot } from '../shared/control-plane';
+import { flushPendingEvidenceSubmissions, submitStageEvidence } from './evidence-submission';
 import { pairGateway } from './gateway-pairing';
 import {
   GATEWAY_POLL_ALARM,
@@ -61,10 +64,6 @@ import {
   markCapabilityValidationTabClosed,
   markCapabilityValidationWindowClosed
 } from './validation-runs';
-
-function resultStorageKey(lease: StageLease): string {
-  return `collector.visible-result.${lease.taskId}.${lease.stageId}`;
-}
 
 function networkCaptureStorageKey(tabId: number): string {
   return `collector.network-captures.${tabId}`;
@@ -204,7 +203,9 @@ async function controlSnapshot(): Promise<CollectorControlSnapshot> {
     pairing: await gatewayPairingSummary(),
     gatewayRuntime: await gatewayRuntimeStatus(),
     strategies: await strategyPermissionSnapshots(),
-    activeLeases: leases.filter((lease) => lease.status === 'active'),
+    activeLeases: leases.filter(
+      (lease) => lease.status === 'active' || lease.status === 'awaiting_evidence'
+    ),
     capturedAt: new Date().toISOString()
   };
 }
@@ -289,9 +290,13 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     void activeStageLeaseForSender(tabId, sender.url, sender.documentId).then(
       async (lease) => {
         if (lease) {
-          await chrome.storage.session.set({ [resultStorageKey(lease)]: message.result });
-          await updateStageLeaseStatus(tabId, 'completed');
-          return { ok: true, taskId: lease.taskId, stageId: lease.stageId };
+          const evidence = await submitStageEvidence(lease, message.result);
+          return {
+            ok: true,
+            taskId: lease.taskId,
+            stageId: lease.stageId,
+            evidenceBatchId: evidence.batchId
+          };
         }
         const validation = await activeCapabilityValidationRunForSender(tabId, sender.url, sender.documentId);
         if (!validation) return { ok: false, error: 'collection_result_without_active_lease' };
@@ -313,6 +318,18 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     void controlSnapshot().then(
       (snapshot) => sendResponse({ ok: true, snapshot }),
       () => sendResponse({ ok: false, error: 'control_snapshot_failed' })
+    );
+    return true;
+  }
+
+  if (isPollGatewayTasksMessage(message)) {
+    if (!isExtensionControlSender(sender)) {
+      sendResponse({ ok: false, error: 'control_sender_rejected' });
+      return false;
+    }
+    void pollGatewayTasks().then(
+      () => sendResponse({ ok: true }),
+      () => sendResponse({ ok: false, error: 'gateway_poll_failed' })
     );
     return true;
   }
@@ -451,6 +468,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 // Keep the public protocol surface explicit in the bundled worker.
 void COLLECT_VISIBLE_RESULTS;
 void GET_CONTROL_SNAPSHOT;
+void POLL_GATEWAY_TASKS;
 void PAIR_GATEWAY;
 void REVOKE_GATEWAY_PAIRING;
 void START_CAPABILITY_VALIDATION;
@@ -519,6 +537,7 @@ chrome.runtime.onStartup.addListener(() => {
 
 void synchroniseStrategyContentScripts();
 void synchroniseGatewayPolling();
+void flushPendingEvidenceSubmissions().catch(() => undefined);
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === GATEWAY_POLL_ALARM) void pollGatewayTasks();

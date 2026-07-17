@@ -25,6 +25,10 @@
 - 持久 Profile 启动时核对 Collector Core 运行时版本，必要时通过 `chrome.runtime.reload()` 和 `chrome://extensions` 的 unpacked Reload 恢复最新 MV3 service worker；
 - 只有所有 stage 同时为 `ready + formal` 时才允许用户批准；未 admission 的 `build_ready` 策略会被明确阻断；
 - dispatch 未收到 receipt 时会重投；扩展按 task / stage 查找现有 lease，避免重复窗口，并回传 `accepted` 或固定 `blocked` error code；
+- Collection Profile 可直接发起自动配对、当前平台精确权限申请和显式任务轮询；Chrome 原生权限对话框仍必须由用户确认，配对码不从 Profile API 返回；
+- 正式页面结果通过 HMAC `POST /v1/extension/evidence` 回传；Gateway 只重建白名单字段，并核对 extension instance、task / stage / lease、approved strategy、来源 URL 和记录预算；
+- 原始 JSON 保存到内部推导的 `runtime/evidence/<task-id>/`，每个 batch 带 canonical result SHA-256、安全元数据和 task manifest；相同 task / stage / result digest 幂等；
+- Gateway 重启时扫描并重新核验 batch JSON 和 digest，只恢复不含实际磁盘路径的 evidence summary；Research Task 队列本身仍不持久化；
 - 不读取仓库 `.env`，不接触搜索 API Key、Cookie、Token、密码、二维码或浏览器 Profile。
 
 安装和构建：
@@ -60,6 +64,6 @@ http://127.0.0.1:43127
 
 浏览器扩展的 loopback host permission 是 optional，首次配对时由用户显式授予。Chrome match pattern 无法把 host permission 限定到单一端口，因此扩展另外固定并验证 `GatewayPairingRecord.loopbackOrigin`、Gateway 公钥指纹和签名；网页没有 `externally_connectable` 通道，不能绕过扩展控制面下发任务。
 
-任务控制面已经具备认证 preflight 队列和 formal-only 批准门槛，但当前任务队列只保存在内存中；在加密 Vault 与恢复 schema 建立前，不把研究问题和计划写入普通明文长期文件。Gateway 重启会清空待处理任务，配对身份、pairing authorization 和浏览器 Profile 注册表仍保留。浏览器 Profile 只承担浏览器原生状态，不代替未来的 Evidence Vault。
+任务控制面已经具备认证 preflight 队列、formal-only 批准门槛和单阶段正式 Evidence 完成语义，但当前任务队列只保存在内存中；在加密 Vault 与恢复 schema 建立前，不把研究问题和计划写入普通明文长期文件。Gateway 重启会清空待处理任务，配对身份、pairing authorization、浏览器 Profile 注册表和已完成的原始 Evidence batch 仍保留。当前原子 JSON batch 是本地 raw-first 证据层，不等于未来具备密钥管理、不可变审计、coverage 和删除边界的 Evidence Vault。
 
 即使未来某项策略进入正式能力，dispatch 仍必须携带短时 nonce、过期时间、已批准 EvidencePlan digest 和 Gateway 签名，扩展会在创建 Collection Window 前重新运行 capability preflight。配对成功本身不授予任何平台权限或采集能力。

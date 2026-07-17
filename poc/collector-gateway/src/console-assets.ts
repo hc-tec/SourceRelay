@@ -37,7 +37,7 @@ textarea { min-height: 76px; resize: vertical; }
 .validation-items { display: grid; gap: 5px; margin: 10px 0 0; padding-left: 20px; color: #4c5967; font-size: 12px; }
 .profile h3, .task h3 { margin: 0 0 5px; font-size: 14px; }
 .profile-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
-.profile-actions { display: flex; align-items: center; gap: 8px; }
+.profile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .platforms { display: grid; gap: 8px; }
 .platform-row { display: grid !important; grid-template-columns: 150px minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px; border: 1px solid #dce3ea; border-radius: 10px; background: #f8fafc; }
 .platform-toggle { display: flex; align-items: center; gap: 7px; }
@@ -181,6 +181,44 @@ function profileElement(summary) {
     }
   });
   actions.append(action);
+  if (summary.profile.kind === 'collection') {
+    const managedActions = [];
+    if (!summary.extensionPaired) {
+      managedActions.push({ label: '配对 Gateway', path: '/pair', tone: '' });
+    }
+    if (summary.strategyPermission !== 'granted') {
+      managedActions.push({
+        label: '授予' + platformLabels[summary.profile.platform] + '权限',
+        path: '/strategy-permission',
+        tone: ''
+      });
+    }
+    if (summary.running && summary.extensionPaired && summary.strategyPermission === 'granted') {
+      managedActions.push({ label: '立即轮询任务', path: '/poll', tone: 'secondary' });
+    }
+    for (const managedAction of managedActions) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = managedAction.tone;
+      button.textContent = managedAction.label;
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        clearError();
+        try {
+          await json(
+            '/v1/profiles/' + encodeURIComponent(summary.profile.profileId) + managedAction.path,
+            { method: 'POST' }
+          );
+          await refreshWorkspace();
+        } catch (reason) {
+          showError(reason);
+        } finally {
+          button.disabled = false;
+        }
+      });
+      actions.append(button);
+    }
+  }
   top.append(description, actions);
 
   const metaRow = document.createElement('div');
@@ -188,7 +226,15 @@ function profileElement(summary) {
   metaRow.append(
     runtimePill(summary.running ? 'Browser running' : 'Browser stopped', summary.running ? 'good' : ''),
     runtimePill(summary.extensionLoaded ? 'Extension loaded' : 'Extension not loaded', summary.extensionLoaded ? 'good' : ''),
-    runtimePill(summary.extensionPaired ? 'Gateway paired' : 'Pairing required', summary.extensionPaired ? 'good' : 'warn')
+    runtimePill(summary.extensionPaired ? 'Gateway paired' : 'Pairing required', summary.extensionPaired ? 'good' : 'warn'),
+    runtimePill(
+      summary.strategyPermission === 'granted'
+        ? 'Platform permission granted'
+        : summary.strategyPermission === 'missing'
+          ? 'Platform permission required'
+          : 'Platform permission unknown',
+      summary.strategyPermission === 'granted' ? 'good' : 'warn'
+    )
   );
   if (summary.profile.account.expectedVisibleIdentity) {
     metaRow.append(runtimePill('Expected: ' + summary.profile.account.expectedVisibleIdentity));
@@ -333,27 +379,36 @@ function taskElement(task) {
     const ready = task.plan.stages.length > 0 && task.plan.stages.every((stage) =>
       stage.preflight.status === 'ready' && stage.preflight.releaseTrack === 'formal'
     );
-    const approve = document.createElement('button');
-    approve.type = 'button';
-    approve.textContent = ready ? '批准并进入调度队列' : '当前能力不能批准';
-    approve.disabled = !ready;
-    approve.addEventListener('click', async () => {
-      approve.disabled = true;
-      clearError();
-      try {
-        await json('/v1/tasks/' + encodeURIComponent(task.taskId) + '/approve', { method: 'POST' });
-        await refreshTasks();
-      } catch (reason) {
-        showError(reason);
-      }
-    });
-    card.append(approve);
+    if (task.state === 'awaiting_plan_approval') {
+      const approve = document.createElement('button');
+      approve.type = 'button';
+      approve.textContent = ready ? '批准并进入调度队列' : '当前能力不能批准';
+      approve.disabled = !ready;
+      approve.addEventListener('click', async () => {
+        approve.disabled = true;
+        clearError();
+        try {
+          await json('/v1/tasks/' + encodeURIComponent(task.taskId) + '/approve', { method: 'POST' });
+          await refreshTasks();
+        } catch (reason) {
+          showError(reason);
+        }
+      });
+      card.append(approve);
+    }
   }
   if (task.statusMessage) {
     const status = document.createElement('p');
     status.className = 'notice blocked';
     status.textContent = task.statusMessage;
     card.append(status);
+  }
+  if (task.evidence) {
+    const evidence = document.createElement('div');
+    evidence.className = 'task-stage';
+    evidence.textContent = 'Evidence ' + task.evidence.batchId + ' · ' + task.evidence.itemCount +
+      ' items · SHA-256 ' + task.evidence.digest;
+    card.append(evidence);
   }
   return card;
 }

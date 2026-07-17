@@ -8,7 +8,7 @@
 
 ## 1. 当前结论
 
-Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面，但尚未获得任何真实平台能力发布资格。
+Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面。B站匿名首屏关键词搜索是目前唯一获得真实平台 admission、并完成正式 Research Task 调度与本地 Evidence batch 闭环的能力；其他平台和深度能力仍未发布。
 
 ```text
 已完成：P0 决策契约与构建门禁
@@ -17,6 +17,7 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 已完成：P1c stage receipt、dispatch 重投去重与阻塞回报
 已完成：P2a 受管 Collection / Validation Profile 生命周期与任务绑定
 已完成：P2b B站匿名 breadth_search / visible_dom 真实验证与显式 admission
+已完成：P2c 正式 B站 dispatch、认证 Evidence 回传、本地原始批次与 completed 闭环
 未开始：P3 加密 Evidence Vault
 未开始：P4 EvidencePackage / DeepResearch 正式接入
 ```
@@ -31,6 +32,7 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 | `e4a1816` | HMAC 轮询、签名 work item、Console task、preflight、formal-only 批准、stage receipt 与重投去重 | 当前策略会被阻断为 `live_validation_required` |
 | `6334d17` | Gateway 受管持久 Profile、可见 Chromium、扩展自动加载、Profile API / Console 与任务绑定 | 只证明本地浏览器生命周期和绑定控制面，不证明平台可用 |
 | P2b（本提交） | 独立 Validation Run、扩展版本恢复、B站 DOM v1.1、记录 review 与源码 admission | 只发布匿名 B站首屏关键词搜索标题与 BV URL |
+| P2c（本提交） | Profile 级自动配对 / 精确权限 / 轮询、正式结果 HMAC 回传、原子 JSON batch / manifest、摘要幂等与任务 completed | 已以真实 B站页面验证单阶段正式闭环；仍不是加密 Vault |
 
 ## 3. 控制面边界
 
@@ -59,6 +61,11 @@ Console 创建 ResearchTask
   -> 专用可见 Collection Window
   -> session-only stage lease
   -> 精确任务 tab 动态注入固定 content.js
+  -> 扩展按 task / stage / lease 暂存待提交结果
+  -> HMAC POST /v1/extension/evidence
+  -> Gateway 重建白名单结果并校验策略 / 来源 / 预算
+  -> runtime/evidence 原子 JSON batch + manifest
+  -> lease completed + task completed
 ```
 
 B站 `bilibili.search.breadth.dom.v1 @ 1.1.0` 具有已审查的匿名 live-validation reference，因此在 Profile、任务同意和精确 host permission 均满足时可返回 `ready / formal`。知乎、微博和小红书仍为 `build_ready / liveValidation = null`，其 preflight 继续返回 `live_validation_required / experimental`，不能批准。
@@ -74,6 +81,7 @@ Research Task 必须按平台绑定由 Gateway 注册的 Collection Profile。Ga
 - 不启动 Chrome / Edge 日常 Profile，不复用 BrowserWing / Maxun 或旧 POC Profile；
 - 同一平台默认只运行一个 Profile，关闭进程后目录保留；
 - UI 只暴露逻辑账号标签、expected visible identity 和运行 / 扩展 / 配对布尔状态；
+- Collection Profile 提供“配对 Gateway”“授予当前平台精确权限”“立即轮询任务”入口；一次性配对码只在 Gateway 进程和受管扩展页面之间传递，Profile API 不返回；
 - 可选固定代理只接收无凭据、带 host 和 port 的 `http`、`https` 或 `socks5` server URL，不接受代理用户名或密码。
 
 ### 3.4 重启和页面漂移
@@ -85,6 +93,7 @@ Research Task 必须按平台绑定由 Gateway 注册的 Collection Profile。Ga
 - 撤销平台权限时活动 lease 标记 `permission_revoked`；
 - 撤销 Gateway 配对时停止轮询并取消活动 lease；
 - 当前 Gateway Research Task 队列只在内存中保存，重启恢复必须等加密任务/Vault 状态设计完成，不能把临时明文队列误写成正式持久化；
+- 已完成的原始 Evidence batch 与 task manifest 保存到忽略的 `runtime/evidence/<task-id>/`，Gateway 启动时重新核验 JSON 形状与 result digest 后恢复 batch 摘要；任务问题和待处理计划仍不持久化；
 - dispatch 在 receipt 丢失时按同一 task / stage 重投新签名 envelope；扩展先查找现有 lease，已有 active / completed lease 时只补发 receipt，不重复创建窗口；
 - dispatch 前权限或策略状态变化会回传固定 `blocked` error code，Gateway 停止重投。
 
@@ -110,6 +119,7 @@ Gateway 门禁：
 - 只包含 `127.0.0.1` bind；
 - 不包含 `0.0.0.0` all-interface bind；
 - 不引入未审查的 Express / Fastify / Koa HTTP 表面。
+- 正式 Evidence 路由、`responseObservation = disabled` 安全元数据和 Profile 显式轮询必须保留在 bundle 中。
 
 这些都是构建门禁，不是平台测试，也不证明配对或任务控制已经完成真实环境验证。
 
@@ -143,16 +153,30 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 
 该 admission 不证明登录、翻页、排序穷尽、详情、评论、账号归档、response observation 或其他平台能力。
 
+### 4.3 P2c 正式 B站 Research Task 全链路
+
+2026-07-17 使用受管、可见、持久 Collection Profile 完成一次正式任务；不需要登录，也没有读取浏览器凭据或页面响应：
+
+- Collection Profile `ee439ada-a7d7-436f-a898-e959004316ee` 通过 Profile API 发起配对；Windows UI Automation 只识别并 Invoke Chromium 原生“允许”按钮，分别批准 loopback 与 B站两个精确站点范围，没有修改 `Preferences`；
+- Chromium service worker 对无正文 `GET /v1/extension/work` 会省略 `Origin`。实测首次被 `extension_origin_required` 阻断后，Gateway 将规则收紧为：pairing claim 与 CORS preflight 始终要求精确扩展 Origin；已配对实际请求若携带 Origin 则必须匹配，省略时仍必须通过 extension ID / instance、timestamp、nonce、body digest 与 HMAC 全部认证；
+- Collector Core `0.3.0` 的正式任务 `5f00540a-9a8d-4422-a7a3-46e657ba5664` 唯一 stage 返回 `ready / formal`，策略为 `bilibili.search.breadth.dom.v1 @ 1.1.0`，live-validation record 为 `bb91e996-7758-4447-ba94-486bc99b7872`；
+- 显式批准后，扩展验证 Gateway P-256 签名和 plan digest，创建专用 Collection Window 与短时 lease，读取首个渲染页面的 20 条可见标题和规范 BV URL；
+- Evidence batch `14216fae-5306-4e43-8171-4c5309a03707` 已落入本地 runtime；result canonical SHA-256 为 `eca7221cf28caa174cc963e74d7f140e58a6a9c97f50db8de4ab6de2c9d043f2`，独立重算一致；
+- batch 的 `sourceUrl` 为去查询参数的 `https://search.bilibili.com/all`，`responseObservation = disabled`，`browserCredentialData = not_collected`，没有 Cookie、Token、header、request 或 response 字段；
+- Gateway task 最终为 `completed`，item count 为 20。该 runtime 记录被 `.gitignore` 排除，不把真实查询结果提交到仓库。
+
+这个闭环只证明已经 admission 的 B站匿名 breadth stage 可用于正式本地采集；它不扩大策略的页面、动作、登录或数据类型范围。
+
 ## 5. 已知未完成项
 
 | 领域 | 当前状态 | 下一门槛 |
 |---|---|---|
-| Gateway 配对 | build-ready，未做功能性离线测试 | 在产品允许的本地控制环境中验证，不冒充平台能力 |
-| Task dispatch | preflight、formal-only 批准、stage receipt、at-least-once 重投去重和阻塞回报已落码；Profile 绑定已做本地功能验证 | 与显式配对和真实 Validation Profile 一起验证剩余控制状态，不冒充平台能力 |
+| Gateway 配对 | Profile 级显式配对已通过真实 Chromium loopback 权限与 HMAC 轮询 | 后续补撤销、身份变化与失败恢复的产品验收 |
+| Task dispatch | B站单阶段 preflight → approval → signed dispatch → lease → evidence → completed 已实测 | 增加多阶段推进、取消和重启恢复状态机 |
 | Profile | 受管持久生命周期、可见 Chromium、生产扩展自动加载、关闭/重启、并发门禁与任务绑定已做本地功能验证 | 平台登录状态仍只由用户在该 Profile 中管理；后续逐平台核对可见身份 |
-| B站 discovery | `v1.1.0 live_anonymous_verified`，只覆盖首屏可见标题与规范 BV URL | 验证一次正式 Gateway 调度闭环，然后再扩展 detail |
+| B站 discovery | `v1.1.0 live_anonymous_verified`，正式闭环已验证；只覆盖首屏可见标题与规范 BV URL | 再扩展独立的 detail 策略，不复用 breadth admission |
 | response observation | 生产 route 为空 | 先完成 wrapper 到期撤销、route projector 和 document race 验证 |
-| Evidence | `storage.session` 临时结果 | 加密 Vault、不可变批次、coverage、hash manifest |
+| Evidence | 认证回传、待提交重试、原子原始 JSON batch、task manifest、result SHA-256 与重启摘要恢复 | 加密 Vault、不可变审计、coverage 与删除/导出边界 |
 | Gateway task persistence | 仅内存 | 与 Vault 密钥和 schema 一起设计加密恢复，不写普通明文队列 |
 | DeepResearch | 未接入当前 Collector | 只读 EvidencePackage / Citation / Coverage / CollectionGapRequest |
 
@@ -161,8 +185,8 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 ```text
 P2a  Collection / Validation Profile launcher（完成）
   -> P2b B站匿名 discovery 真实验证与 admission（完成）
-  -> 正式 Gateway dispatch 闭环验证
-  -> B站 detail / bounded discussion
+  -> P2c 正式 Gateway dispatch / Evidence 闭环（完成）
+  -> B站 detail / bounded discussion（独立策略与独立 admission）
   -> P3 encrypted Evidence Vault
   -> P4 DeepResearch EvidencePackage adapter
 ```

@@ -107,6 +107,9 @@ assert.equal(
 const digest = createHash('sha256').update(await readFile(manifestPath)).digest('hex');
 const backgroundSource = await readFile(resolve(outputDirectory, manifest.background.service_worker), 'utf8');
 assert.match(backgroundSource, /collector\.startCapabilityValidation/, 'validation-run protocol is missing');
+assert.match(backgroundSource, /collector\.pollGatewayTasks/, 'explicit Gateway polling control is missing');
+assert.match(backgroundSource, /\/v1\/extension\/evidence/, 'authenticated evidence submission route is missing');
+assert.match(backgroundSource, /collector\.pending-evidence\.v1\./, 'pending evidence retry storage is missing');
 assert.match(
   backgroundSource,
   /bb91e996-7758-4447-ba94-486bc99b7872/,

@@ -23,6 +23,7 @@ import {
 } from '../shared/cryptography';
 import { buildEvidencePlan } from '../shared/control-plane';
 import { authenticatedGatewayRequest } from './gateway-client';
+import { flushPendingEvidenceSubmissions } from './evidence-submission';
 import { getGatewayPairing } from './pairing-store';
 import { createCollectionWindowLease, listStageLeases } from './stage-leases';
 
@@ -271,6 +272,10 @@ async function processDispatch(
     body: receipt
   });
   if (receipt.status === 'blocked') throw new Error(receipt.errorCode ?? 'gateway_stage_rejected');
+  // Navigation can render quickly enough for the content script to queue its
+  // result before the accepted lease receipt reaches the Gateway. Retrying
+  // here closes that race without weakening the Gateway's stage-active check.
+  await flushPendingEvidenceSubmissions();
 }
 
 async function performPoll(): Promise<void> {

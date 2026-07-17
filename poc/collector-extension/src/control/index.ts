@@ -238,7 +238,9 @@ function render(snapshot: CollectorControlSnapshot): void {
 
   strategyList.replaceChildren(...snapshot.strategies.map(renderStrategy));
 
-  const activeLeases = snapshot.activeLeases.filter((lease) => lease.status === 'active');
+  const activeLeases = snapshot.activeLeases.filter(
+    (lease) => lease.status === 'active' || lease.status === 'awaiting_evidence'
+  );
   leaseState.textContent = activeLeases.length === 0
     ? '当前没有活动阶段。'
     : `${activeLeases.length} 个活动阶段；任务页面均受短时 lease 约束。`;

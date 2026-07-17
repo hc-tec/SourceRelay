@@ -9,11 +9,12 @@ import type { CollectionTerminalStatus, SupportedPlatform } from './collection-c
 export type { SupportedPlatform } from './collection-contracts';
 
 export const COLLECT_VISIBLE_RESULTS = 'collector.collectVisibleResults' as const;
-export const COLLECTOR_CORE_VERSION = '0.2.1' as const;
+export const COLLECTOR_CORE_VERSION = '0.3.0' as const;
 export const COLLECTION_RESULT = 'collector.collectionResult' as const;
 export const CONTENT_READY = 'collector.contentReady' as const;
 export const NETWORK_CAPTURE_BRIDGE_READY_MESSAGE = 'collector.networkCaptureBridgeReady' as const;
 export const GET_CONTROL_SNAPSHOT = 'collector.getControlSnapshot' as const;
+export const POLL_GATEWAY_TASKS = 'collector.pollGatewayTasks' as const;
 export const SYNC_STRATEGY_PERMISSIONS = 'collector.syncStrategyPermissions' as const;
 export const PAIR_GATEWAY = 'collector.pairGateway' as const;
 export const REVOKE_GATEWAY_PAIRING = 'collector.revokeGatewayPairing' as const;
@@ -107,6 +108,10 @@ export interface GetControlSnapshotMessage {
   type: typeof GET_CONTROL_SNAPSHOT;
 }
 
+export interface PollGatewayTasksMessage {
+  type: typeof POLL_GATEWAY_TASKS;
+}
+
 export interface SyncStrategyPermissionsMessage {
   type: typeof SYNC_STRATEGY_PERMISSIONS;
 }
@@ -151,6 +156,14 @@ export function isGetControlSnapshotMessage(value: unknown): value is GetControl
     value &&
       typeof value === 'object' &&
       (value as { type?: unknown }).type === GET_CONTROL_SNAPSHOT
+  );
+}
+
+export function isPollGatewayTasksMessage(value: unknown): value is PollGatewayTasksMessage {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as { type?: unknown }).type === POLL_GATEWAY_TASKS
   );
 }
 

@@ -15,6 +15,7 @@ import {
   strategyProvenance,
   type StaticPlatformStrategy
 } from './strategy-registry';
+import type { VisibleCollectionResult } from './protocol';
 
 export const COLLECTOR_CONTROL_PROTOCOL_VERSION = 1 as const;
 export const STAGE_LEASE_SCHEMA_VERSION = 1 as const;
@@ -147,6 +148,32 @@ export interface GatewayStageReceipt {
   recordedAt: string;
 }
 
+// A formal Collection Result is submitted only after an approved dispatch has
+// produced a stage lease. The Gateway authenticates the request separately;
+// these identifiers bind the visible-page result back to the exact approved
+// task, stage, strategy, and browser runtime lease.
+export interface GatewayEvidenceSubmission {
+  schemaVersion: 1;
+  collectorVersion: string;
+  taskId: string;
+  stageId: string;
+  leaseId: string;
+  platform: SupportedPlatform;
+  strategy: StrategyProvenance;
+  capturedAt: string;
+  result: VisibleCollectionResult;
+}
+
+export interface GatewayEvidenceBatchSummary {
+  schemaVersion: 1;
+  batchId: string;
+  taskId: string;
+  stageId: string;
+  digest: string;
+  itemCount: number;
+  receivedAt: string;
+}
+
 export function unsignedGatewayEnvelope<T extends { signature: string }>(envelope: T): Omit<T, 'signature'> {
   const { signature: _signature, ...unsigned } = envelope;
   return unsigned;
@@ -200,10 +227,12 @@ export interface BrowserProfileRuntimeSummary {
   running: boolean;
   extensionLoaded: boolean;
   extensionPaired: boolean;
+  strategyPermission: 'granted' | 'missing' | 'unknown';
 }
 
 export type StageLeaseStatus =
   | 'active'
+  | 'awaiting_evidence'
   | 'completed'
   | 'cancelled'
   | 'expired'
