@@ -7,6 +7,7 @@
 ```text
 poc/browserwing/           BrowserWing 中文公开站点与登录 Profile 实验
 poc/maxun/                 Maxun B站搜索录制、运行和映射实验
+poc/collector-extension/   Manifest V3 浏览器内采集与 Playwright 无人值守扩展测试
 poc/intelligence-gateway/  统一 Capability Runtime 与 Draft Capability Factory
 poc/deepresearch-gateway/  DeepResearch/蜂群运行时的 Gateway-only 工具适配层
 research_*.md              开源项目、中文站点覆盖和架构调研
@@ -34,6 +35,12 @@ research_*.md              开源项目、中文站点覆盖和架构调研
 - 抖音已知视频详情：yt-dlp 真实返回需要新鲜 Cookie，未绕过认证，保持未验证。
 
 详细运行方式、API 和安全边界见 [Intelligence Gateway README](poc/intelligence-gateway/README.md)。真实运行证据见 [Gateway evaluation](poc/intelligence-gateway/evaluation.md)。
+
+## 浏览器扩展执行面
+
+登录态平台的后续执行面改为 [Collector Extension](poc/collector-extension/)，而不是继续向 BrowserWing 的共享 Profile 叠加登录脚本。它使用精确 host permission、页面可见 DOM 和字段白名单，不申请 Cookie、网络抓包或调试权限。
+
+扩展的测试不要求人工到 `chrome://extensions` 加载或点击：Playwright bundled Chromium 自动加载 test build、启动临时 profile、执行 MV3 service worker/content-script 消息链，并以本地 fixture 验证 B站、知乎、微博、小红书的原生搜索 URL 契约。完整设计、框架调研、测试边界和已验证结果见 [浏览器扩展采集架构](docs/research/browser-extension-collection-architecture-2026-07-17.md)。
 
 ## 设计原则
 

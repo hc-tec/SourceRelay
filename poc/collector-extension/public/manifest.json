@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Personal Intelligence Collector",
+  "version": "0.1.0",
+  "description": "Collects explicitly requested, visible platform search cards without exporting browser credentials.",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Collect visible results"
+  },
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://search.bilibili.com/*",
+    "https://www.bilibili.com/*",
+    "https://www.zhihu.com/*",
+    "https://zhuanlan.zhihu.com/*",
+    "https://s.weibo.com/*",
+    "https://weibo.com/*",
+    "https://m.weibo.cn/*",
+    "https://www.xiaohongshu.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://search.bilibili.com/*",
+        "https://www.bilibili.com/*",
+        "https://www.zhihu.com/*",
+        "https://zhuanlan.zhihu.com/*",
+        "https://s.weibo.com/*",
+        "https://weibo.com/*",
+        "https://m.weibo.cn/*",
+        "https://www.xiaohongshu.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "collect-visible-results": {
+      "suggested_key": {
+        "default": "Alt+Shift+Y"
+      },
+      "description": "Collect visible result cards from the active supported page"
+    }
+  }
+}
