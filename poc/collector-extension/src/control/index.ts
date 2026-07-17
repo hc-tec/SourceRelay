@@ -190,11 +190,17 @@ function renderPairing(snapshot: CollectorControlSnapshot): void {
   name.textContent = snapshot.pairing.displayName;
   const origin = document.createElement('p');
   origin.className = 'strategy-meta';
-  origin.textContent = snapshot.pairing.loopbackOrigin;
+  origin.textContent = `${snapshot.pairing.loopbackOrigin} · ${snapshot.gatewayRuntime.state}`;
   const fingerprint = document.createElement('p');
   fingerprint.className = 'origins';
   fingerprint.textContent = `身份指纹 ${snapshot.pairing.identityFingerprint}`;
   details.append(name, origin, fingerprint);
+  if (snapshot.gatewayRuntime.lastErrorCode) {
+    const runtimeError = document.createElement('p');
+    runtimeError.className = 'error';
+    runtimeError.textContent = `Gateway 状态：${snapshot.gatewayRuntime.lastErrorCode}`;
+    details.append(runtimeError);
+  }
 
   const revoke = document.createElement('button');
   revoke.type = 'button';

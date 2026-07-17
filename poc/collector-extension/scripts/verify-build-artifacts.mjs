@@ -10,7 +10,7 @@ const manifestPath = resolve(outputDirectory, 'manifest.json');
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 
 const approved = {
-  permissions: ['storage', 'scripting'],
+  permissions: ['alarms', 'storage', 'scripting'],
   optionalHostPermissions: [
     'http://127.0.0.1/*',
     'https://search.bilibili.com/*',

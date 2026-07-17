@@ -98,6 +98,7 @@ export interface GatewayTaskDispatchEnvelope {
   protocolVersion: typeof COLLECTOR_CONTROL_PROTOCOL_VERSION;
   gatewayInstanceId: string;
   taskId: string;
+  stageId: string;
   nonce: string;
   issuedAt: string;
   expiresAt: string;
@@ -105,6 +106,59 @@ export interface GatewayTaskDispatchEnvelope {
   task: ResearchTaskContract;
   plan: ApprovedEvidencePlan;
   signature: string;
+}
+
+export interface GatewayPreflightRequestEnvelope {
+  schemaVersion: 1;
+  protocolVersion: typeof COLLECTOR_CONTROL_PROTOCOL_VERSION;
+  kind: 'preflight_request';
+  gatewayInstanceId: string;
+  taskId: string;
+  nonce: string;
+  issuedAt: string;
+  expiresAt: string;
+  task: ResearchTaskContract;
+  signature: string;
+}
+
+export interface GatewayApprovedDispatchWorkItem {
+  schemaVersion: 1;
+  protocolVersion: typeof COLLECTOR_CONTROL_PROTOCOL_VERSION;
+  kind: 'approved_dispatch';
+  dispatch: GatewayTaskDispatchEnvelope;
+}
+
+export type GatewayWorkItem = GatewayPreflightRequestEnvelope | GatewayApprovedDispatchWorkItem;
+
+export interface GatewayPreflightSubmission {
+  schemaVersion: 1;
+  taskId: string;
+  plan: EvidencePlan;
+}
+
+export interface GatewayStageReceipt {
+  schemaVersion: 1;
+  taskId: string;
+  stageId: string;
+  status: 'accepted' | 'blocked';
+  leaseId?: string;
+  errorCode?: string;
+  recordedAt: string;
+}
+
+export function unsignedGatewayEnvelope<T extends { signature: string }>(envelope: T): Omit<T, 'signature'> {
+  const { signature: _signature, ...unsigned } = envelope;
+  return unsigned;
+}
+
+export function evidencePlanDigestPayload(plan: EvidencePlan | ApprovedEvidencePlan) {
+  return {
+    schemaVersion: plan.schemaVersion,
+    planId: plan.planId,
+    taskId: plan.taskId,
+    generatedAt: plan.generatedAt,
+    stages: plan.stages
+  };
 }
 
 export interface StrategyPermissionSnapshot {
@@ -120,9 +174,16 @@ export interface CollectorControlSnapshot {
   schemaVersion: 1;
   protocolVersion: typeof COLLECTOR_CONTROL_PROTOCOL_VERSION;
   pairing: GatewayPairingSummary | null;
+  gatewayRuntime: GatewayRuntimeStatus;
   strategies: readonly StrategyPermissionSnapshot[];
   activeLeases: readonly StageLease[];
   capturedAt: string;
+}
+
+export interface GatewayRuntimeStatus {
+  state: 'unpaired' | 'idle' | 'polling' | 'error';
+  lastPollAt: string | null;
+  lastErrorCode: string | null;
 }
 
 export type StageLeaseStatus =

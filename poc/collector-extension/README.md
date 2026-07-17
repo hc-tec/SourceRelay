@@ -2,7 +2,7 @@
 
 这是个人情报产品的浏览器内采集底座。一个 Manifest V3 Collector Core 运行在用户自己的 Collection Browser Profile 中，根据已批准的研究计划进入平台页面、读取公开可见内容，并在后续阶段把证据交给本地 Gateway / Evidence Vault。
 
-当前实现已完成 **P0：决策契约与构建门禁**，正在进入 **P1：扩展控制面**。精确 optional host permission、EvidencePlan / lease 契约、状态控制页、任务 tab 动态注入边界，以及 loopback Gateway 固定身份与显式配对已经落码；已批准任务调度、真实平台验证、加密 Vault 与 DeepResearch 尚未接入。
+当前实现已完成 **P0：决策契约与构建门禁** 和 P1 控制面的主要骨架。精确 optional host permission、EvidencePlan / lease、状态控制页、任务 tab 动态注入、loopback Gateway 固定身份与显式配对、认证轮询、Gateway 签名 preflight / dispatch、formal-only 批准门槛、stage receipt、重投去重和阻塞回报已经落码；真实平台验证、加密 Vault 与 DeepResearch 尚未接入。
 
 ## 产品边界
 
@@ -124,7 +124,7 @@ Manifest 不再静态声明任何平台 `content_scripts`，授予站点权限�
 
 点击扩展图标只打开 Collector 状态控制页，用于显式配对 / 撤销固定 Gateway、查看平台 maturity / permission 和活动 lease；它不直接采集当前 tab，也没有旧的快捷键采集入口。配对会核验一次性 Session、8 位配对码摘要、扩展 challenge、Gateway 公钥指纹、ECDSA P-256 签名和 pairing authorization 摘要；控制页、快照和日志不显示授权密钥。
 
-下一个检查点是实现带短时 nonce、过期时间、EvidencePlan digest、Gateway 签名和 extension pairing authorization 的任务队列，以及 Console 计划批准入口。完成后才进入 B站 discovery → detail → bounded discussion 的真实纵向样板；其他平台能力继续按独立策略和真实验证记录推进。
+下一个检查点是建立 Collection / Validation Profile 生命周期。当前四个平台 preflight 都是 `live_validation_required / experimental`，因此 Console 不能批准，扩展不会访问平台。之后才进入 B站 discovery → detail → bounded discussion 的真实纵向样板。
 
 完整产品决策见：
 

@@ -1,113 +1,117 @@
-# 中文个人情报能力实验室
+# 中文个人情报 Collector
 
-这个仓库研究并实现一种“按需调用能力”的个人情报底座：用户临时提出查询需求时，系统选择合适的平台能力、执行搜索或公开正文抽取、验证结果，并由调用者决定是否保存；它不以持续抓取和提前囤积数据为默认目标。
-
-## 当前组成
+这个仓库正在建设一个“需要时才启动”的本地个人情报系统。当前正式产品路线不是传统爬虫、私有 API 模拟器或提前囤积所有平台数据，而是：
 
 ```text
-poc/browserwing/           BrowserWing 中文公开站点与登录 Profile 实验
-poc/maxun/                 Maxun B站搜索录制、运行和映射实验
-poc/collector-extension/   Manifest V3 浏览器内采集与 Playwright 无人值守扩展测试
-poc/intelligence-gateway/  统一 Capability Runtime 与 Draft Capability Factory
-poc/deepresearch-gateway/  DeepResearch/蜂群运行时的 Gateway-only 工具适配层
-research_*.md              开源项目、中文站点覆盖和架构调研
+Local Research Console / Collector Gateway
+  -> paired MV3 Collector Core
+  -> dedicated visible Collection Window
+  -> persistent Collection Browser Profile
+  -> static, versioned, live-validated platform strategies
+  -> encrypted local Evidence Vault
+  -> sealed EvidencePackage
+  -> DeepResearch / swarm analysis
 ```
 
-核心 Gateway 当前为 `0.13.0`，已经真实验证：
+浏览器 Profile 自然持有用户正常登录状态。系统不设计 Cookie 导入、导出、注入或跨进程分发，不索要密码、Token、二维码、验证码、Profile 路径或代理凭据，也不授权绕过登录、付费限制、限流和平台安全措施。
 
-- B站关键词搜索：Maxun；
-- 小红书人工登录后的低频搜索：BrowserWing；
-- 全网和 `site:` 外部发现：SearXNG；
-- 公开 HTML/text 正文抽取：Trafilatura；
-- 未知公开搜索网站：Draft -> inspect -> validate -> recipe -> promote -> execute；
-- 百度、Bing、搜狗和 CSDN 公开搜索已通过能力生成闭环与不同查询回归。
-- `keyword_search -> detail_fetch` 组合任务可按需读取公开正文，默认不落库。
-- 详情能力采用 direct-first：Trafilatura 先读取公开 HTML，只有同平台、同主机的已验证 BrowserWing detail recipe 才能处理脚本渲染或 HTTP 受限页面；
-- 知乎专栏真实闭环中，Trafilatura 收到 HTTP 403 后，BrowserWing recipe 成功读取两篇不同文章的 3,358 / 1,916 字精确正文。
-- NewsNow 按需热榜：B站三类 feed、微博、知乎、快手、贴吧、36氪和澎湃已通过自托管真实样本；原始 JSON 作为本地 artifact 保留，不写入情报数据库。
-- 抖音 NewsNow feed 当前真实返回 HTTP 500，Capability 保持 `declared_unverified`，不进入 Planner。
-- B站已知公开视频详情：yt-dlp metadata-only 对两个不同 BV URL 真实通过，完整 JSON 落本地 artifact，不下载视频、不使用 Cookie；lux 对同 URL 成功对照。
-- 贴吧指定吧主题与已知帖子详情：aiotieba 4.7.1 匿名只读真实通过；只开放 `get_threads/get_posts`，完整返回落本地 artifact，不把内容拆入数据库。
-- 已知公众号公开文章：严格限定 `mp.weixin.qq.com/s/...`，两个不同公开文章真实成功，完整 HTML 落本地 artifact；删除文章正确返回 `no_results`，不需要账号、Cookie 或闭源中转。
-- 微博已知公开账号第一页：BrowserWing 匿名读取数字 UID 的首个渲染页，人民日报与央视新闻各返回 10 条；只保存公开字段白名单 JSON，不导出 Cookie、Profile、`user_token` 或签名媒体 URL。
-- 知乎已知问答详情：BrowserWing 匿名读取两个公开问题的首个渲染回答卡片；问题、回答、作者和可读正文分开输出，原始白名单 JSON 本地保存，不抓评论、不展开回答、不写数据库。
-- 快手已知视频详情：BrowserWing 匿名读取两个公开 `short-video` 页面的视频元数据；不导出视频地址、不下载媒体、不使用 Cookie。
-- 抖音已知视频详情：yt-dlp 真实返回需要新鲜 Cookie，未绕过认证，保持未验证。
+## 当前产品组件
 
-详细运行方式、API 和安全边界见 [Intelligence Gateway README](poc/intelligence-gateway/README.md)。真实运行证据见 [Gateway evaluation](poc/intelligence-gateway/evaluation.md)。
+```text
+poc/collector-extension/  单一最小权限 MV3 Collector Core
+poc/collector-gateway/    只监听 127.0.0.1 的本地 Console / 控制面
+docs/design/              1–100 题决策账本、产品规格、审计和实现状态
+```
 
-## 浏览器扩展执行面
+当前已经完成：
 
-登录态平台的后续执行面改为 [Collector Extension](poc/collector-extension/)，而不是继续向 BrowserWing 的共享 Profile 叠加登录脚本。它使用精确 host permission、页面可见 DOM 和字段白名单；不申请 Cookie、`webRequest` 或调试权限。扩展内现已具备一个受控的页面响应观察层：仅限 Worker 显式创建、短时授权的站内搜索 tab，严格 route/MIME/大小/数量 gate，且不会导出认证材料。生产平台 response 路由目前保持空白，等待逐站 current-route 验证后再显式加入。
+- P0 产品契约、生产 bundle、MV3 Manifest、权限和自动扩展加载门禁；
+- 移除 fixture、test build、test driver、离线平台样本和 `fixture_verified`；
+- `keyword_query` / `account_target` / `known_url`、研究档案、证据目标、预算、同意、终态和策略 provenance 契约；
+- 安装时零 host permission；站点和 loopback Gateway 只通过精确 `optional_host_permissions` 显式授予；
+- 不向普通用户页面常驻注册平台脚本，只允许有效 stage lease 的专用任务 tab 动态注入固定文件；
+- Gateway ECDSA P-256 固定身份、一次性配对 Session、八位配对码、扩展 challenge、签名与 pairing authorization；
+- 配对后的 HMAC 请求认证、nonce 防重放、Gateway 签名 work item、EvidencePlan preflight 和 Console 计划展示；
+- `build_ready` 能力不能批准为正式任务；当前不会因为创建任务而访问任何平台。
 
-扩展的测试不要求人工到 `chrome://extensions` 加载或点击：Playwright bundled Chromium 自动加载 test build、启动临时 profile、执行 MV3 service worker/content-script 消息链，并在严格 CSP 的本地 fixture 中验证 B站、知乎、微博、小红书的原生搜索 URL、fetch/XHR response 去敏桥接、超限拒绝和无外网回归。完整设计、框架调研、测试边界和已验证结果见 [浏览器扩展采集架构](docs/research/browser-extension-collection-architecture-2026-07-17.md) 与 [网络响应观察验证](docs/research/browser-extension-network-observation-2026-07-17.md)。
+实现与风险矩阵见 [Collector 实现状态](docs/design/collector-implementation-status.md)。
 
-## 设计原则
+## 当前平台能力真相
 
-1. 能力级注册，不使用笼统的 `platform_supported=true`；
-2. 真实样本验证通过后，Draft 才能晋升为正式 Capability；
-3. 登录只能由用户在隔离浏览器中人工完成；
-4. 不绕过登录、验证码、安全机制或付费保护；
-5. 强登录平台低频、串行，并共享受控 Profile 锁；
-6. `persistence=none` 是正式执行模式，临时查询不必写入情报库；
-7. fallback 必须显式标记能力降级，外部 `site:` 发现不能冒充平台完整索引。
-8. 浏览器不是任意 URL 的通用兜底；只有经过 Draft 验证并限定主机的只读 recipe 才能被 Planner 选择。
-9. 原始数据优先作为本地 JSON/HTML/Markdown artifact 保存，只用最小 manifest 记录来源、时间、动作、执行能力和文件校验值；不预先要求将所有平台字段归一化入库。
+注册表里存在 B站、知乎、微博和小红书的 `breadth_search + visible_dom` 策略骨架，但全部只有：
+
+```text
+maturity = build_ready
+liveValidation = null
+production response routes = []
+```
+
+这不代表四个平台已经可用。`build_ready` 只表示代码能编译、打包、满足批准权限清单并自动加载。只有用户控制的本地 Validation Profile 中完成低频真实平台验证后，单项能力才能升级为 `live_anonymous_verified` 或 `live_authenticated_verified`。
+
+生产 response route 当前为空，因此不会 arm 或注入 MAIN-world observer。第三方平台爬虫仓库只能作为页面与产品调研参考，不能复制、集成、执行或成为采集后端。
+
+## 历史 POC 与正式产品隔离
+
+以下目录保存早期数据源研究和可行性证据，不属于当前 Collector 产品运行时：
+
+```text
+poc/browserwing/
+poc/maxun/
+poc/intelligence-gateway/
+```
+
+它们曾用于验证公开页面、搜索、正文和平台限制，但其共享 Profile、传统连接器、私有接口候选或 crawler-style 执行方式不能直接接入当前浏览器扩展路线。旧能力声明和样本只表示当时的研究结果，不构成当前平台能力发布证明。
+
+`poc/deepresearch-gateway/` 也是历史适配 POC。DeerFlow、天工式系统或其他蜂群框架未来只能通过稳定 EvidencePackage / Coverage / Citation / CollectionGapRequest 边界接入；框架自带搜索器默认禁用，`.env` 搜索凭据只归本地 Gateway / Search Adapter，分析 Agent 不拥有浏览器和平台策略。
+
+## 构建门禁
+
+扩展：
+
+```powershell
+Set-Location D:\AIProject\inteligence\poc\collector-extension
+npm install
+npm run setup:build-browser
+npm run verify:build
+```
+
+Gateway：
+
+```powershell
+Set-Location D:\AIProject\inteligence\poc\collector-gateway
+npm install
+npm run verify:build
+```
+
+这些命令是构建门禁，不是平台能力测试。扩展门禁只检查 TypeScript、bundle、MV3、批准权限、引用制品、临时空 Profile 自动加载、零已授予 optional origin、零持久平台注册脚本和内部控制页加载；不会访问真实平台或登录状态。
+
+平台行为不使用离线 fixture、单元测试或 fixture E2E 冒充验证。真实验证只能在本地、可见、用户控制的 Validation Browser 中低频、只读执行，远程 CI 不得访问平台。
 
 ## 本地状态不进入 Git
 
-根级 `.gitignore` 排除了：
+根级和组件级 `.gitignore` 排除：
 
-- `.env`、Cookie、Token、证书和密钥；
-- BrowserWing Chrome Profile、截图和下载；
-- SQLite 数据库、原始抓取结果、日志和 PID；
-- Python 虚拟环境、缓存和 Node.js 依赖；
-- `poc/maxun/upstream/` 第三方源码 checkout。
+- `.env`、Cookie、Token、证书、密钥和凭据；
+- 浏览器 Profile、截图、下载和原始运行材料；
+- Gateway `runtime/` 身份、配对授权和任务运行状态；
+- 数据库、日志、PID、缓存、虚拟环境和 `node_modules/`；
+- 第三方源码 checkout。
 
-Maxun upstream 是运行 POC 时单独获取的第三方源码，不作为本仓库的嵌套 Git 仓库提交。本仓库只保存自己的配置模板、自动化、连接器、测试、公开样本和评估结论。
-
-## Gateway 开发验证
-
-```powershell
-cd D:\AIProject\inteligence\poc\intelligence-gateway
-.\.venv\Scripts\python.exe -m compileall app tests
-.\.venv\Scripts\python.exe -m pytest -q
-docker compose config --quiet
-```
-
-当前基线：`114 passed`。
+Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git。平台公开可见信息未来进入加密 Evidence Vault；页面公开联系方式不会被“去敏”误删，但认证材料、隐藏状态和未呈现 response 字段不得进入长期证据。
 
 ## 下一阶段
 
-`0.13.0` 已经完成 NewsNow `hotlist_fetch`、B站 yt-dlp `video_detail`、贴吧 aiotieba `forum_threads/post_detail`、公众号公开文章 `article_detail`、微博已知账号 `account_posts`、知乎已知问答 `qa_detail` 和快手已知视频 `video_detail` 的 raw-first artifact 闭环。当前阶段继续稳定数据源层，同时固定上层 DeepResearch 接入边界，不在 Gateway 内加入长报告、多智能体研究或结论生成：
+1. 建立持久 Collection Profile 与独立 Validation Profile 生命周期；
+2. 在不触碰日常 Profile 的前提下，对 B站 `discovery` 做第一项匿名真实验证；
+3. 写入 capability validation record，只有验证通过的精确策略版本才允许计划批准；
+4. 再推进 B站 `detail -> bounded discussion`；
+5. 随后推进小红书登录态 `account identity -> visible inventory -> resumable archive -> selected detail`；
+6. 建设加密 Vault、不可变批次、coverage ledger、hash manifest 和 Evidence Explorer；
+7. 最后通过 EvidencePackage 接入 DeepResearch / 蜂群分析。
 
-1. 修 B站相关性/规范 URL、小红书实时认证状态、搜狗跳转 URL 和公众号壳页等现有质量问题；
-2. 公众号账号历史保持缺口：WeRSS 当前扫码流程失效，WeWe RSS 闭源中转和 Token 稳定性不达标；等待可审计替代方案，不扩写成全公众号搜索；
-3. 快手已知视频详情已经完成；抖音由于匿名路径需要 Cookie，继续保持未验证，后续只评估公开浏览器页面或用户人工 Profile 边界；
-4. DailyHotApi 保留为 NewsNow 对照候选，本地真实样本和失败契约未通过前不进入自动 fallback；
-5. 数据层达到稳定验收条件后，再将 DeerFlow、天工系 DeepResearch 等仓库作为上层分析消费者。
+权威产品文档：
 
-DeepResearch/蜂群接入不再直接使用框架自带搜索器：
-
-1. `.env` 中的 `DEEPSEEK_API_KEY` 只交给模型客户端；
-2. 研究 Agent 只注册 `poc/deepresearch-gateway/` 的 `gateway_*` 工具；
-3. 关键词、热榜、平台详情和公开正文统一调用 Intelligence Gateway；
-4. 默认 `persistence=none`，响应保留 `status`、能力链、降级标记和 raw artifact 引用；
-5. DeerFlow 可通过可选 MCP bridge 接入，DeepAgents/LangGraph、AgentScope、CrewAI
-   可直接包装同一组异步工具。
-
-当前已经提供一个 DeepAgents/LangGraph 第一阶段 PoC：它使用 `.env` 中的 DeepSeek
-配置，最多委派三个聚焦主题，并通过共享并发闸门调用 Gateway-only 工具。
-
-接入契约、蜂群安全边界和候选框架比较见
-[DeepResearch Gateway Adapter ADR](docs/design/deepresearch-gateway-adapter.md)、
-[DeepResearch/蜂群调研报告](research_deepresearch_swarm_2026-07-16.md) 和
-[适配器 README](poc/deepresearch-gateway/README.md)。固定主题的首次真实验证记录见
-[DeepAgents + Gateway 验证记录](validation_deepagents_gateway_2026-07-16.md)。
-
-数据源分层、就绪等级和原始文件优先的保存边界见 [数据源层 ADR](docs/design/data-source-layer.md)。不同平台、不同动作的 GitHub 仓库选型与 NewsNow/DailyHotApi 接口级核验见 [平台专用数据源调研](research_platform_specific_data_sources_2026-07-16.md)。
-
-最新专项审计：
-
-- [中文平台原生站内搜索审计](docs/research/platform-native-search-audit-2026-07-17.md)：明确区分 B站/小红书已验证的站内搜索、知乎/微博的登录门禁、36 氪/头条候选、公众号缺口，以及所有外部发现的降级语义；
-- [`my-collection-skills` 可行性与接入边界](docs/research/my-collection-skills-feasibility-2026-07-17.md)：将“用户自己的收藏”与“全平台关键词搜索”分离，说明哪些策略可借鉴，以及为什么不能直接采用 CookieCloud 凭据导出模型。
+- [Collector 决策审计](docs/design/collector-decision-audit.md)
+- [平台采集策略产品规格](docs/design/platform-strategy-product-spec.md)
+- [1–100 题决策账本](docs/design/collector-grilling-decision-log.md)
+- [Collector 实现状态](docs/design/collector-implementation-status.md)

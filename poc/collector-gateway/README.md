@@ -12,6 +12,11 @@
 - Gateway 返回绑定 extension challenge、配对码摘要和 pairing authorization 摘要的 ECDSA P-256 / SHA-256 签名；
 - 扩展验证 loopback origin、身份指纹、签名、过期时间和所有 challenge 后才保存配对授权；
 - Console、日志和控制页都不显示 pairing authorization；
+- 配对扩展使用 extension ID / instance、30 秒 timestamp、nonce、body SHA-256 和 HMAC 对每个 Gateway 请求认证；
+- Gateway 给 preflight / dispatch work item 加入两分钟过期时间、nonce 和 P-256 签名；
+- Console 可以创建 `scout` Research Task，并逐平台显示扩展回传的 capability preflight；
+- 只有所有 stage 同时为 `ready + formal` 时才允许用户批准；当前 `build_ready` 策略会被明确阻断；
+- dispatch 未收到 receipt 时会重投；扩展按 task / stage 查找现有 lease，避免重复窗口，并回传 `accepted` 或固定 `blocked` error code；
 - 不读取仓库 `.env`，不接触搜索 API Key、Cookie、Token、密码、二维码或浏览器 Profile。
 
 安装和构建：
@@ -42,4 +47,6 @@ http://127.0.0.1:43127
 
 浏览器扩展的 loopback host permission 是 optional，首次配对时由用户显式授予。Chrome match pattern 无法把 host permission 限定到单一端口，因此扩展另外固定并验证 `GatewayPairingRecord.loopbackOrigin`、Gateway 公钥指纹和签名；网页没有 `externally_connectable` 通道，不能绕过扩展控制面下发任务。
 
-本阶段只建立配对身份，不开放任意任务执行接口。后续任务必须使用短时 nonce、过期时间、已批准 EvidencePlan digest 和 Gateway 签名，并由扩展重新运行 capability preflight；配对成功本身不授予任何平台权限或采集能力。
+任务控制面已经具备认证 preflight 队列和 formal-only 批准门槛，但当前任务队列只保存在内存中；在加密 Vault 与恢复 schema 建立前，不把研究问题和计划写入普通明文长期文件。Gateway 重启会清空待处理任务，配对身份和 pairing authorization 仍保留。
+
+即使未来某项策略进入正式能力，dispatch 仍必须携带短时 nonce、过期时间、已批准 EvidencePlan digest 和 Gateway 签名，扩展会在创建 Collection Window 前重新运行 capability preflight。配对成功本身不授予任何平台权限或采集能力。

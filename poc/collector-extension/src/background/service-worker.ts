@@ -25,6 +25,12 @@ import {
 import { isSupportedPlatform, type SupportedPlatform } from '../shared/collection-contracts';
 import type { CollectorControlSnapshot, StageLease } from '../shared/control-plane';
 import { pairGateway } from './gateway-pairing';
+import {
+  GATEWAY_POLL_ALARM,
+  gatewayRuntimeStatus,
+  pollGatewayTasks,
+  synchroniseGatewayPolling
+} from './gateway-task-controller';
 import { gatewayPairingSummary, revokeGatewayPairing } from './pairing-store';
 import {
   activeStageLeaseForSender,
@@ -179,6 +185,7 @@ async function controlSnapshot(): Promise<CollectorControlSnapshot> {
     schemaVersion: 1,
     protocolVersion: 1,
     pairing: await gatewayPairingSummary(),
+    gatewayRuntime: await gatewayRuntimeStatus(),
     strategies: await strategyPermissionSnapshots(),
     activeLeases: leases.filter((lease) => lease.status === 'active'),
     capturedAt: new Date().toISOString()
@@ -306,7 +313,10 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       return false;
     }
     void pairGateway(message).then(
-      (pairing) => sendResponse({
+      async (pairing) => {
+        await synchroniseGatewayPolling();
+        void pollGatewayTasks();
+        sendResponse({
         ok: true,
         pairing: {
           gatewayInstanceId: pairing.gatewayInstanceId,
@@ -316,7 +326,8 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
           extensionInstanceId: pairing.extensionInstanceId,
           pairedAt: pairing.pairedAt
         }
-      }),
+        });
+      },
       (error: unknown) => sendResponse({
         ok: false,
         error: error instanceof Error ? error.message : 'gateway_pairing_failed'
@@ -330,14 +341,16 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       sendResponse({ ok: false, error: 'control_sender_rejected' });
       return false;
     }
-    void Promise.all([
-      revokeGatewayPairing(),
-      listStageLeases().then((leases) => Promise.all(
+    void (async () => {
+      await revokeGatewayPairing();
+      await synchroniseGatewayPolling();
+      const leases = await listStageLeases();
+      await Promise.all(
         leases
           .filter((lease) => lease.status === 'active')
           .map((lease) => updateStageLeaseStatus(lease.tabId, 'cancelled'))
-      ))
-    ]).then(
+      );
+    })().then(
       () => sendResponse({ ok: true }),
       () => sendResponse({ ok: false, error: 'gateway_pairing_revoke_failed' })
     );
@@ -408,10 +421,17 @@ chrome.permissions.onRemoved.addListener(() => {
 
 chrome.runtime.onInstalled.addListener(() => {
   void synchroniseStrategyContentScripts();
+  void synchroniseGatewayPolling();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   void synchroniseStrategyContentScripts();
+  void synchroniseGatewayPolling().then(() => pollGatewayTasks());
 });
 
 void synchroniseStrategyContentScripts();
+void synchroniseGatewayPolling();
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === GATEWAY_POLL_ALARM) void pollGatewayTasks();
+});
