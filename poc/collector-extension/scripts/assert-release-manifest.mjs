@@ -28,6 +28,23 @@ assert.equal(
   'release artifact must not contain test-only localhost matches'
 );
 
+const mainWorldEntries = (manifest.content_scripts ?? []).filter((entry) => entry.world === 'MAIN');
+assert.equal(mainWorldEntries.length, 0, 'release artifact must not statically inject a MAIN-world observer');
+assert.deepEqual(manifest.permissions, ['activeTab', 'storage', 'scripting']);
+const bridgeEntries = (manifest.content_scripts ?? []).filter((entry) => entry.js?.includes('network-capture-bridge.js'));
+assert.equal(bridgeEntries.length, 1, 'release artifact must have exactly one isolated network bridge');
+assert.deepEqual(bridgeEntries[0].matches, [
+  'https://search.bilibili.com/all*',
+  'https://www.zhihu.com/search*',
+  'https://s.weibo.com/weibo*',
+  'https://www.xiaohongshu.com/search_result_ai*'
+]);
+assert.equal(bridgeEntries[0].run_at, 'document_start');
+assert.equal(bridgeEntries[0].all_frames, false);
+assert.equal('web_accessible_resources' in manifest, false, 'release artifact must not expose extension scripts to pages');
+
+await access(resolve(outputDirectory, 'main-world-network-observer.js'));
+
 for (const script of [manifest.background?.service_worker, ...(manifest.content_scripts ?? []).flatMap((entry) => entry.js ?? [])]) {
   assert.equal(typeof script, 'string', 'release manifest must reference extension JavaScript');
   await access(resolve(outputDirectory, script));

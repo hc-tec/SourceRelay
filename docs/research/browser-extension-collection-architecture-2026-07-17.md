@@ -34,12 +34,13 @@
 | 层 | 已实现行为 | 明确不做 |
 |---|---|---|
 | Native route | 为 B站、知乎、微博、小红书构造平台原生搜索 URL | Bing/搜狗/SearXNG/site fallback |
-| Content script | 仅从可见锚点投影规范 URL、标题、类型、排名 | Cookie、storage、框架全局状态、网络响应、评论/翻页 |
-| Service worker | 创建平台搜索 tab、接收采集结果、写入 `chrome.storage.session` | 自动登录、验证码处理、持久化用户资料、发布/互动 |
-| Manifest | 只声明精确平台 host、`activeTab`、`storage` | `<all_urls>`、`cookies`、`webRequest`、`debugger`、下载权限 |
+| DOM content script | 从可见锚点投影规范 URL、标题、类型、排名；页面 URL 去 query/hash | Cookie、storage、框架全局状态、评论/翻页 |
+| 受控网络观察 | 已 arm、精确导航摘要匹配的原生搜索 tab 中，Worker 动态注入 MAIN world observer 观察 allowlist JSON `fetch`/XHR 响应；双重去敏后暂存 | OS/代理抓包、`webRequest`/`debugger`、请求头/体、原始 response/HAR、私有请求重放 |
+| Service worker | 创建平台搜索 tab、创建短时 tab/platform/navigation-digest arm、定向注入 observer、接收并复核去敏结果、写入 `chrome.storage.session` | 自动登录、验证码处理、持久化用户资料、发布/互动 |
+| Manifest | 只声明精确平台 host、`activeTab`、`storage` 与定向静态文件注入所需的 `scripting` | `<all_urls>`、`cookies`、`webRequest`、`debugger`、下载权限 |
 | Test build | 可使用 loopback fixture 与 extension 内 test driver | 将 test driver 或 localhost permission 打入 production build |
 
-生产版和测试版是不同构建产物：只有测试产物有 `127.0.0.1` 匹配规则和 `test-driver.html`。release-artifact gate 会拒绝 production `dist/manifest.json` 中的 localhost、`<all_urls>` 或敏感权限。
+生产版和测试版是不同构建产物：只有测试产物有 `127.0.0.1` 匹配规则和 `test-driver.html`。release-artifact gate 会拒绝 production `dist/manifest.json` 中的 localhost、`<all_urls>` 或敏感权限，并拒绝任何静态 MAIN world observer；observer 只能在 Worker 已复核的 task tab/document 中通过固定文件动态注入。当前生产 response route allowlist 刻意为空，直到低频、用户授权的实站验证确认一个当前路径。
 
 ## 无需人工加载/点击的完整测试链
 
@@ -63,11 +64,12 @@ Playwright bundled Chromium（headless）
   -> 自动发现 MV3 service worker，并从 worker URL 获得动态 extension ID
   -> 打开 test-driver.html（不是点击工具栏）
   -> 请求 Worker 发起平台原生搜索任务
-  -> Worker 构造真实 B站/知乎/微博/小红书 native URL
+  -> Worker 构造真实 B站/知乎/微博/小红书 native URL，并为新 tab 写入短时 navigation-digest arm
   -> test build 将导航严格映射到 loopback fixture
-  -> content script 自动注入、解析卡片、发送 runtime message
-  -> Worker 写 chrome.storage.session
-  -> Playwright 自动断言 URL、结果、Worker 状态与无外网请求
+  -> document_start bridge 请求 Worker；Worker 动态注入 MAIN observer，content script 自动解析卡片
+  -> fixture 触发 fetch、XHR、超限 JSON 和错误路径
+  -> Worker 复核 tab/platform/route、写 chrome.storage.session
+  -> Playwright 自动断言 URL、DOM 结果、去敏网络投影、超限拒绝与无外网请求
   -> 关闭 context 并删除临时 profile
 ```
 
@@ -92,7 +94,7 @@ https://www.xiaohongshu.com/search_result_ai?keyword=DeepSeek&source=web_explore
 }
 ```
 
-这证明了“构建 → 自动加载 → Worker → content script → 原生 URL 任务 → 结果回传 → 清理”的运行时闭环；它不宣称已经验证了真实平台登录后的 DOM。
+这证明了“构建 → 自动加载 → Worker → content script / MAIN observer → 原生 URL 任务 → 双重去敏结果回传 → 清理”的运行时闭环；它不宣称已经验证了真实平台登录后的 DOM 或私有 API。
 
 ## 为什么测试使用 bundled Chromium，而非用户 Chrome
 
@@ -132,7 +134,7 @@ release artifact directory
 
 ## 后续按风险分层推进
 
-### 1. 继续扩展离线 adapter 合约
+### 1. 继续扩展离线 adapter 与 response 路由合约
 
 每个平台应新增独立 fixture 与状态分支：
 
@@ -143,7 +145,7 @@ no-results.fixture.html
 layout-changed.fixture.html
 ```
 
-并断言 `success`、`authentication_required`、`no_results`、`layout_changed` 互不混淆。每个 adapter 必须继续只输出去敏的白名单字段。
+并断言 `success`、`authentication_required`、`no_results`、`layout_changed` 互不混淆。每个 adapter 必须继续只输出去敏的白名单字段。response 观察路线还必须额外具备精确 origin/path、MIME、状态码、超限和敏感字段 fixture；不能因为 DOM fixture 成功就自动启用 production response route。
 
 ### 2. 增加可自动测试的 extension 页面
 
@@ -166,17 +168,17 @@ chrome-extension://<dynamic-extension-id>/popup.html
 - 结果先经过扩展内字段 allowlist；
 - 默认不写入公共情报库。
 
-### 4. 真实平台 smoke 与登录集成另行处理
+### 4. 真实平台 metadata smoke 与登录集成另行处理
 
 离线 E2E 完全自动化；真实平台 smoke 与登录集成必须分开：
 
 | 层级 | 使用真实站点 | 需要登录 | 默认运行 |
 |---|---:|---:|---:|
 | Extension runtime contract | 否 | 否 | 是 |
-| Anonymous platform smoke | 是 | 否 | 否，低频手动触发 |
+| Anonymous platform metadata smoke | 是，仅 origin/path/status/MIME | 否 | 否，低频显式触发 |
 | Authenticated native-search validation | 是 | 可能 | 否，用户显式授权后 |
 
-用户未来只需要在正常浏览器里自行完成平台登录。系统不得要求或记录任何凭据；而“能不能找到真实搜索卡片”的结论只能来自独立、低频、显式的 live validation，不能从 fixture 推断。
+用户未来只需要在正常浏览器里自行完成平台登录。系统不得要求或记录任何凭据；而“能不能找到真实搜索卡片/搜索响应”的结论只能来自独立、低频、显式的 live validation，不能从 fixture 推断。网络观察的详细安全模型与本轮匿名 metadata-only 结果见 [网络响应观察设计与验证](browser-extension-network-observation-2026-07-17.md)。
 
 ## 一手资料
 
@@ -192,4 +194,3 @@ chrome-extension://<dynamic-extension-id>/popup.html
 - [WXT E2E testing](https://wxt.dev/guide/essentials/e2e-testing.html)
 - [CRXJS issue #1218](https://github.com/crxjs/chrome-extension-tools/issues/1218)
 - [Plasmo issue #1148](https://github.com/PlasmoHQ/plasmo/issues/1148)
-

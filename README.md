@@ -38,9 +38,9 @@ research_*.md              开源项目、中文站点覆盖和架构调研
 
 ## 浏览器扩展执行面
 
-登录态平台的后续执行面改为 [Collector Extension](poc/collector-extension/)，而不是继续向 BrowserWing 的共享 Profile 叠加登录脚本。它使用精确 host permission、页面可见 DOM 和字段白名单，不申请 Cookie、网络抓包或调试权限。
+登录态平台的后续执行面改为 [Collector Extension](poc/collector-extension/)，而不是继续向 BrowserWing 的共享 Profile 叠加登录脚本。它使用精确 host permission、页面可见 DOM 和字段白名单；不申请 Cookie、`webRequest` 或调试权限。扩展内现已具备一个受控的页面响应观察层：仅限 Worker 显式创建、短时授权的站内搜索 tab，严格 route/MIME/大小/数量 gate，且不会导出认证材料。生产平台 response 路由目前保持空白，等待逐站 current-route 验证后再显式加入。
 
-扩展的测试不要求人工到 `chrome://extensions` 加载或点击：Playwright bundled Chromium 自动加载 test build、启动临时 profile、执行 MV3 service worker/content-script 消息链，并以本地 fixture 验证 B站、知乎、微博、小红书的原生搜索 URL 契约。完整设计、框架调研、测试边界和已验证结果见 [浏览器扩展采集架构](docs/research/browser-extension-collection-architecture-2026-07-17.md)。
+扩展的测试不要求人工到 `chrome://extensions` 加载或点击：Playwright bundled Chromium 自动加载 test build、启动临时 profile、执行 MV3 service worker/content-script 消息链，并在严格 CSP 的本地 fixture 中验证 B站、知乎、微博、小红书的原生搜索 URL、fetch/XHR response 去敏桥接、超限拒绝和无外网回归。完整设计、框架调研、测试边界和已验证结果见 [浏览器扩展采集架构](docs/research/browser-extension-collection-architecture-2026-07-17.md) 与 [网络响应观察验证](docs/research/browser-extension-network-observation-2026-07-17.md)。
 
 ## 设计原则
 

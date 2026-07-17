@@ -1,8 +1,16 @@
+import {
+  NETWORK_CAPTURE_OBSERVED,
+  sanitiseNetworkCaptureObservation,
+  type NetworkCaptureObservation
+} from './network-capture';
+
 export const COLLECT_VISIBLE_RESULTS = 'collector.collectVisibleResults' as const;
 export const COLLECT_ACTIVE_TAB = 'collector.collectActiveTab' as const;
 export const COLLECTION_RESULT = 'collector.collectionResult' as const;
 export const CONTENT_READY = 'collector.contentReady' as const;
 export const START_NATIVE_SEARCH = 'collector.startNativeSearch' as const;
+export const NETWORK_CAPTURE_BRIDGE_READY_MESSAGE = 'collector.networkCaptureBridgeReady' as const;
+export { NETWORK_CAPTURE_OBSERVED };
 
 export type SupportedPlatform = 'bilibili' | 'zhihu' | 'weibo' | 'xiaohongshu';
 
@@ -40,6 +48,15 @@ export interface CollectionResultMessage {
 export interface ContentReadyMessage {
   type: typeof CONTENT_READY;
   pageUrl: string;
+}
+
+export interface NetworkCaptureObservedMessage {
+  type: typeof NETWORK_CAPTURE_OBSERVED;
+  observation: NetworkCaptureObservation;
+}
+
+export interface NetworkCaptureBridgeReadyMessage {
+  type: typeof NETWORK_CAPTURE_BRIDGE_READY_MESSAGE;
 }
 
 export interface StartNativeSearchMessage {
@@ -92,5 +109,22 @@ export function isStartNativeSearchMessage(value: unknown): value is StartNative
       candidate.platform === 'xiaohongshu') &&
     typeof candidate.query === 'string' &&
     (candidate.testFixtureBaseUrl === undefined || typeof candidate.testFixtureBaseUrl === 'string')
+  );
+}
+
+export function isNetworkCaptureObservedMessage(value: unknown): value is NetworkCaptureObservedMessage {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as { type?: unknown }).type === NETWORK_CAPTURE_OBSERVED &&
+      sanitiseNetworkCaptureObservation((value as { observation?: unknown }).observation)
+  );
+}
+
+export function isNetworkCaptureBridgeReadyMessage(value: unknown): value is NetworkCaptureBridgeReadyMessage {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as { type?: unknown }).type === NETWORK_CAPTURE_BRIDGE_READY_MESSAGE
   );
 }

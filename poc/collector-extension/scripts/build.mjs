@@ -40,6 +40,28 @@ await build({
 });
 
 await build({
+  entryPoints: [resolve(root, 'src', 'content', 'network-capture-bridge.ts')],
+  bundle: true,
+  format: 'iife',
+  outfile: resolve(outputDirectory, 'network-capture-bridge.js'),
+  target: 'chrome120',
+  sourcemap: true,
+  define: { __COLLECTOR_TEST_BUILD__: JSON.stringify(testBuild) },
+  logLevel: 'info'
+});
+
+await build({
+  entryPoints: [resolve(root, 'src', 'content', 'main-world-network-observer.ts')],
+  bundle: true,
+  format: 'iife',
+  outfile: resolve(outputDirectory, 'main-world-network-observer.js'),
+  target: 'chrome120',
+  sourcemap: true,
+  define: { __COLLECTOR_TEST_BUILD__: JSON.stringify(testBuild) },
+  logLevel: 'info'
+});
+
+await build({
   entryPoints: [resolve(root, 'src', 'content', 'index.ts')],
   bundle: true,
   format: 'iife',

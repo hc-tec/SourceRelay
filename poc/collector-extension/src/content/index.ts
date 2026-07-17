@@ -10,6 +10,15 @@ function collect(): ReturnType<typeof collectVisibleSearchResults> {
   return collectVisibleSearchResults(document, window.location);
 }
 
+function safePageUrl(): string {
+  const url = new URL(window.location.href);
+  url.username = '';
+  url.password = '';
+  url.search = '';
+  url.hash = '';
+  return url.href;
+}
+
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   if (!isCollectVisibleResultsMessage(message)) return;
   const result = collect();
@@ -19,7 +28,7 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
 });
 
 document.documentElement.dataset.collectorExtensionReady = 'true';
-void chrome.runtime.sendMessage({ type: CONTENT_READY, pageUrl: window.location.href }).catch(() => undefined);
+void chrome.runtime.sendMessage({ type: CONTENT_READY, pageUrl: safePageUrl() }).catch(() => undefined);
 
 // Keep the command string referenced by the content bundle, so an accidental
 // protocol rename cannot leave the service worker and content script silently

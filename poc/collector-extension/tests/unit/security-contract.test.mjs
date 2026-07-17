@@ -25,6 +25,21 @@ test('production manifest has a least-privilege extension surface', async () => 
   }
   assert.equal(manifest.host_permissions.includes('<all_urls>'), false);
   assert.equal(manifest.content_scripts.flatMap((entry) => entry.matches).includes('<all_urls>'), false);
+  assert.deepEqual(manifest.permissions, ['activeTab', 'storage', 'scripting']);
+
+  const mainWorldEntries = manifest.content_scripts.filter((entry) => entry.world === 'MAIN');
+  assert.equal(mainWorldEntries.length, 0, 'the observer must be dynamically injected only after a Worker arm');
+  const bridgeEntries = manifest.content_scripts.filter((entry) => entry.js?.includes('network-capture-bridge.js'));
+  assert.equal(bridgeEntries.length, 1, 'the isolated bridge must remain a single static document_start script');
+  assert.deepEqual(bridgeEntries[0].matches, [
+    'https://search.bilibili.com/all*',
+    'https://www.zhihu.com/search*',
+    'https://s.weibo.com/weibo*',
+    'https://www.xiaohongshu.com/search_result_ai*'
+  ]);
+  assert.equal(bridgeEntries[0].run_at, 'document_start');
+  assert.equal(bridgeEntries[0].all_frames, false);
+  assert.equal('web_accessible_resources' in manifest, false);
 });
 
 test('extension source never reads or exports browser credential/state APIs', async () => {
@@ -50,4 +65,27 @@ test('extension source never reads or exports browser credential/state APIs', as
       assert.equal(pattern.test(content), false, `${file} contains forbidden API pattern ${pattern}`);
     }
   }
+});
+
+test('MAIN-world observer has no extension APIs or request-credential access', async () => {
+  const observer = await readFile(resolve(sourceRoot, 'content', 'main-world-network-observer.ts'), 'utf8');
+  const forbiddenPatterns = [
+    /\bchrome\./,
+    /document\.cookie/,
+    /\blocalStorage\b/,
+    /\bsessionStorage\b/,
+    /getAllResponseHeaders/,
+    /setRequestHeader/,
+    /(?:Request|request)\.(?:headers|body)\b/,
+    /\binit\.headers\b/,
+    /Object\.fromEntries\(\s*response\.headers/,
+    /Array\.from\(\s*response\.headers/
+  ];
+  for (const pattern of forbiddenPatterns) {
+    assert.equal(pattern.test(observer), false, `MAIN-world observer contains forbidden capability ${pattern}`);
+  }
+  assert.match(observer, /response\.headers\.get\('content-type'\)/);
+  assert.match(observer, /response\.headers\.get\('content-length'\)/);
+  assert.match(observer, /getResponseHeader\('content-type'\)/);
+  assert.doesNotMatch(observer, /NETWORK_CAPTURE_BRIDGE_READY/);
 });

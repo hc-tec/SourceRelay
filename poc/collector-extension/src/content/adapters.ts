@@ -7,6 +7,15 @@ function cleanText(value: string | null | undefined, maximum = 500): string {
   return (value ?? '').replace(/\s+/g, ' ').trim().slice(0, maximum);
 }
 
+function safePageUrl(location: Location): string {
+  const url = new URL(location.href);
+  url.username = '';
+  url.password = '';
+  url.search = '';
+  url.hash = '';
+  return url.href;
+}
+
 function canonicalUrl(rawHref: string, baseUrl: string): URL | null {
   try {
     const url = new URL(rawHref, baseUrl);
@@ -121,7 +130,7 @@ export function collectVisibleSearchResults(
     schemaVersion: 1,
     platform,
     operation: 'keyword_search',
-    sourceUrl: location.href,
+    sourceUrl: safePageUrl(location),
     partial: true,
     itemCount: items.length,
     items,

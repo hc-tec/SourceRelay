@@ -12,7 +12,8 @@
   },
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "scripting"
   ],
   "host_permissions": [
     "https://search.bilibili.com/*",
@@ -27,6 +28,17 @@
   "content_scripts": [
     {
       "matches": [
+        "https://search.bilibili.com/all*",
+        "https://www.zhihu.com/search*",
+        "https://s.weibo.com/weibo*",
+        "https://www.xiaohongshu.com/search_result_ai*"
+      ],
+      "js": ["network-capture-bridge.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": [
         "https://search.bilibili.com/*",
         "https://www.bilibili.com/*",
         "https://www.zhihu.com/*",
@@ -37,7 +49,8 @@
         "https://www.xiaohongshu.com/*"
       ],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ],
   "commands": {
