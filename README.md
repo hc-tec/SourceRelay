@@ -99,3 +99,8 @@ DeepResearch/蜂群接入不再直接使用框架自带搜索器：
 [DeepAgents + Gateway 验证记录](validation_deepagents_gateway_2026-07-16.md)。
 
 数据源分层、就绪等级和原始文件优先的保存边界见 [数据源层 ADR](docs/design/data-source-layer.md)。不同平台、不同动作的 GitHub 仓库选型与 NewsNow/DailyHotApi 接口级核验见 [平台专用数据源调研](research_platform_specific_data_sources_2026-07-16.md)。
+
+最新专项审计：
+
+- [中文平台原生站内搜索审计](docs/research/platform-native-search-audit-2026-07-17.md)：明确区分 B站/小红书已验证的站内搜索、知乎/微博的登录门禁、36 氪/头条候选、公众号缺口，以及所有外部发现的降级语义；
+- [`my-collection-skills` 可行性与接入边界](docs/research/my-collection-skills-feasibility-2026-07-17.md)：将“用户自己的收藏”与“全平台关键词搜索”分离，说明哪些策略可借鉴，以及为什么不能直接采用 CookieCloud 凭据导出模型。
