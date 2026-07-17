@@ -35,8 +35,10 @@ export interface GatewayPairingChallenge {
   gateway: GatewayIdentity;
   extensionChallenge: string;
   pairingCodeChallenge: string;
+  pairingAuthorizationFingerprint: string;
   issuedAt: string;
   expiresAt: string;
+  gatewaySignature: string;
 }
 
 export interface GatewayPairingRecord {
@@ -47,7 +49,16 @@ export interface GatewayPairingRecord {
   signingPublicKeyJwk: JsonWebKey;
   identityFingerprint: string;
   extensionInstanceId: string;
+  pairingAuthorization: string;
   pairedAt: string;
+}
+
+export type GatewayPairingSummary = Omit<GatewayPairingRecord, 'pairingAuthorization' | 'signingPublicKeyJwk'>;
+
+export interface GatewayPairingClaimResponse {
+  schemaVersion: 1;
+  challenge: GatewayPairingChallenge;
+  pairingAuthorization: string;
 }
 
 export interface EvidencePlanStage {
@@ -108,7 +119,7 @@ export interface StrategyPermissionSnapshot {
 export interface CollectorControlSnapshot {
   schemaVersion: 1;
   protocolVersion: typeof COLLECTOR_CONTROL_PROTOCOL_VERSION;
-  pairing: GatewayPairingRecord | null;
+  pairing: GatewayPairingSummary | null;
   strategies: readonly StrategyPermissionSnapshot[];
   activeLeases: readonly StageLease[];
   capturedAt: string;

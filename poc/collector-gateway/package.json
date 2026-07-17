@@ -1,0 +1,22 @@
+{
+  "name": "@intelligence/collector-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Loopback-only control plane for the Personal Intelligence Collector extension.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
+    "verify:build": "npm run typecheck && npm run build && npm run verify:artifacts",
+    "start": "node dist/server.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0"
+  }
+}

@@ -16,6 +16,7 @@
     "scripting"
   ],
   "optional_host_permissions": [
+    "http://127.0.0.1/*",
     "https://search.bilibili.com/*",
     "https://www.bilibili.com/*",
     "https://www.zhihu.com/*",

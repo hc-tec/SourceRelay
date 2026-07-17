@@ -4,6 +4,10 @@ import {
   GET_CONTROL_SNAPSHOT,
   NETWORK_CAPTURE_BRIDGE_READY_MESSAGE,
   NETWORK_CAPTURE_OBSERVED,
+  PAIR_GATEWAY,
+  REVOKE_GATEWAY_PAIRING,
+  isPairGatewayMessage,
+  isRevokeGatewayPairingMessage,
   isCollectionResultMessage,
   isGetControlSnapshotMessage,
   isNetworkCaptureBridgeReadyMessage,
@@ -20,7 +24,8 @@ import {
 } from '../shared/network-capture';
 import { isSupportedPlatform, type SupportedPlatform } from '../shared/collection-contracts';
 import type { CollectorControlSnapshot, StageLease } from '../shared/control-plane';
-import { getGatewayPairing } from './pairing-store';
+import { pairGateway } from './gateway-pairing';
+import { gatewayPairingSummary, revokeGatewayPairing } from './pairing-store';
 import {
   activeStageLeaseForSender,
   invalidateLeasesWithoutPermissions,
@@ -173,7 +178,7 @@ async function controlSnapshot(): Promise<CollectorControlSnapshot> {
   return {
     schemaVersion: 1,
     protocolVersion: 1,
-    pairing: await getGatewayPairing(),
+    pairing: await gatewayPairingSummary(),
     strategies: await strategyPermissionSnapshots(),
     activeLeases: leases.filter((lease) => lease.status === 'active'),
     capturedAt: new Date().toISOString()
@@ -295,6 +300,50 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return true;
   }
 
+  if (isPairGatewayMessage(message)) {
+    if (!isExtensionControlSender(sender)) {
+      sendResponse({ ok: false, error: 'control_sender_rejected' });
+      return false;
+    }
+    void pairGateway(message).then(
+      (pairing) => sendResponse({
+        ok: true,
+        pairing: {
+          gatewayInstanceId: pairing.gatewayInstanceId,
+          displayName: pairing.displayName,
+          loopbackOrigin: pairing.loopbackOrigin,
+          identityFingerprint: pairing.identityFingerprint,
+          extensionInstanceId: pairing.extensionInstanceId,
+          pairedAt: pairing.pairedAt
+        }
+      }),
+      (error: unknown) => sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : 'gateway_pairing_failed'
+      })
+    );
+    return true;
+  }
+
+  if (isRevokeGatewayPairingMessage(message)) {
+    if (!isExtensionControlSender(sender)) {
+      sendResponse({ ok: false, error: 'control_sender_rejected' });
+      return false;
+    }
+    void Promise.all([
+      revokeGatewayPairing(),
+      listStageLeases().then((leases) => Promise.all(
+        leases
+          .filter((lease) => lease.status === 'active')
+          .map((lease) => updateStageLeaseStatus(lease.tabId, 'cancelled'))
+      ))
+    ]).then(
+      () => sendResponse({ ok: true }),
+      () => sendResponse({ ok: false, error: 'gateway_pairing_revoke_failed' })
+    );
+    return true;
+  }
+
   if (message && typeof message === 'object' && (message as { type?: unknown }).type === CONTENT_READY) {
     const tabId = sender.tab?.id;
     if (typeof tabId !== 'number') {
@@ -319,6 +368,8 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 // Keep the public protocol surface explicit in the bundled worker.
 void COLLECT_VISIBLE_RESULTS;
 void GET_CONTROL_SNAPSHOT;
+void PAIR_GATEWAY;
+void REVOKE_GATEWAY_PAIRING;
 void NETWORK_CAPTURE_OBSERVED;
 void NETWORK_CAPTURE_BRIDGE_READY_MESSAGE;
 

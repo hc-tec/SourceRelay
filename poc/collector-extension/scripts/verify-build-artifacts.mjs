@@ -12,6 +12,7 @@ const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const approved = {
   permissions: ['storage', 'scripting'],
   optionalHostPermissions: [
+    'http://127.0.0.1/*',
     'https://search.bilibili.com/*',
     'https://www.bilibili.com/*',
     'https://www.zhihu.com/*',
@@ -62,10 +63,12 @@ for (const pattern of allHostPatterns) {
   assert.equal(pattern === '<all_urls>', false, 'build artifact must not use <all_urls>');
   assert.equal(/^\*:/.test(pattern), false, `wildcard schemes are forbidden: ${pattern}`);
   assert.equal(/^https?:\/\/\*(?:\.|\/)/.test(pattern), false, `wildcard hosts are forbidden: ${pattern}`);
+  const isApprovedGatewayLoopback = pattern === 'http://127.0.0.1/*' &&
+    (manifest.optional_host_permissions ?? []).includes(pattern);
   assert.equal(
-    /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\//i.test(pattern),
+    /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\//i.test(pattern) && !isApprovedGatewayLoopback,
     false,
-    'build artifact must not contain loopback or localhost matches'
+    'only the approved optional IPv4 loopback Gateway match is allowed'
   );
 }
 

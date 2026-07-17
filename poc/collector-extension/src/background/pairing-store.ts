@@ -21,6 +21,8 @@ function isGatewayPairingRecord(value: unknown): value is GatewayPairingRecord {
     /^[0-9a-f]{64}$/.test(candidate.identityFingerprint) &&
     typeof candidate.extensionInstanceId === 'string' &&
     candidate.extensionInstanceId.length > 0 &&
+    typeof candidate.pairingAuthorization === 'string' &&
+    /^[A-Za-z0-9_-]{40,}$/.test(candidate.pairingAuthorization) &&
     typeof candidate.pairedAt === 'string' &&
     Number.isFinite(Date.parse(candidate.pairedAt))
   );
@@ -41,4 +43,11 @@ export async function saveGatewayPairing(pairing: GatewayPairingRecord): Promise
 
 export async function revokeGatewayPairing(): Promise<void> {
   await chrome.storage.local.remove(GATEWAY_PAIRING_STORAGE_KEY);
+}
+
+export async function gatewayPairingSummary() {
+  const pairing = await getGatewayPairing();
+  if (!pairing) return null;
+  const { pairingAuthorization: _pairingAuthorization, signingPublicKeyJwk: _signingPublicKeyJwk, ...summary } = pairing;
+  return summary;
 }

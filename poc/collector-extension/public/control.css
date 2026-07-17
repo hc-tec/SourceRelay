@@ -24,11 +24,43 @@ main {
 header,
 .section-heading,
 .strategy-header,
-.strategy-actions {
+.strategy-actions,
+.pairing-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.pairing-form {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.pairing-form label {
+  display: grid;
+  gap: 5px;
+  color: #4b5866;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+input {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid #cfd7df;
+  border-radius: 8px;
+  background: #fff;
+  color: #17202a;
+  font: inherit;
+  font-size: 12px;
+}
+
+input:focus {
+  border-color: #1f6feb;
+  outline: 3px solid rgba(31, 111, 235, 0.14);
 }
 
 header {

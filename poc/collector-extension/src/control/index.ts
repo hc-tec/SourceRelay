@@ -2,6 +2,8 @@ import type { CollectorControlSnapshot, StrategyPermissionSnapshot } from '../sh
 import type { SupportedPlatform } from '../shared/collection-contracts';
 import {
   GET_CONTROL_SNAPSHOT,
+  PAIR_GATEWAY,
+  REVOKE_GATEWAY_PAIRING,
   SYNC_STRATEGY_PERMISSIONS
 } from '../shared/protocol';
 import { resolveNativeSearchStrategy } from '../shared/strategy-registry';
@@ -12,6 +14,7 @@ const platformLabels: Record<SupportedPlatform, string> = {
   weibo: '微博',
   xiaohongshu: '小红书'
 };
+const LOOPBACK_GATEWAY_PERMISSION = 'http://127.0.0.1/*';
 
 function element<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -105,13 +108,126 @@ function renderStrategy(snapshot: StrategyPermissionSnapshot): HTMLElement {
   return card;
 }
 
+function pairingForm(): HTMLFormElement {
+  const form = document.createElement('form');
+  form.className = 'pairing-form';
+
+  const originLabel = document.createElement('label');
+  originLabel.textContent = 'Gateway origin';
+  const origin = document.createElement('input');
+  origin.name = 'gateway-origin';
+  origin.type = 'url';
+  origin.required = true;
+  origin.value = 'http://127.0.0.1:43127';
+  origin.autocomplete = 'off';
+  originLabel.append(origin);
+
+  const sessionLabel = document.createElement('label');
+  sessionLabel.textContent = '配对 Session ID';
+  const sessionId = document.createElement('input');
+  sessionId.name = 'pairing-session-id';
+  sessionId.type = 'text';
+  sessionId.required = true;
+  sessionId.autocomplete = 'off';
+  sessionId.placeholder = '从本地 Console 复制';
+  sessionLabel.append(sessionId);
+
+  const codeLabel = document.createElement('label');
+  codeLabel.textContent = '一次性 8 位配对码';
+  const pairingCode = document.createElement('input');
+  pairingCode.name = 'pairing-code';
+  pairingCode.type = 'text';
+  pairingCode.required = true;
+  pairingCode.inputMode = 'numeric';
+  pairingCode.pattern = '\\d{8}';
+  pairingCode.maxLength = 8;
+  pairingCode.autocomplete = 'one-time-code';
+  codeLabel.append(pairingCode);
+
+  const submit = document.createElement('button');
+  submit.type = 'submit';
+  submit.textContent = '核验并配对';
+
+  form.append(originLabel, sessionLabel, codeLabel, submit);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearError();
+    submit.disabled = true;
+    try {
+      const permissionGranted = await chrome.permissions.request({ origins: [LOOPBACK_GATEWAY_PERMISSION] });
+      if (!permissionGranted) throw new Error('未授予本地 Gateway loopback 权限。');
+      const response = await chrome.runtime.sendMessage({
+        type: PAIR_GATEWAY,
+        loopbackOrigin: origin.value,
+        pairingSessionId: sessionId.value.trim(),
+        pairingCode: pairingCode.value.trim()
+      });
+      pairingCode.value = '';
+      if (!response?.ok) throw new Error(response?.error ?? 'Gateway 配对失败。');
+      await refresh();
+    } catch (error) {
+      pairingCode.value = '';
+      showError(error);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  return form;
+}
+
+function renderPairing(snapshot: CollectorControlSnapshot): void {
+  if (!snapshot.pairing) {
+    const description = document.createElement('p');
+    description.className = 'empty-state';
+    description.textContent = '尚未配对。先在本地 Console 创建一次性配对 Session，再在这里核验。';
+    pairingState.replaceChildren(description, pairingForm());
+    return;
+  }
+
+  const details = document.createElement('div');
+  const name = document.createElement('p');
+  name.className = 'strategy-title';
+  name.textContent = snapshot.pairing.displayName;
+  const origin = document.createElement('p');
+  origin.className = 'strategy-meta';
+  origin.textContent = snapshot.pairing.loopbackOrigin;
+  const fingerprint = document.createElement('p');
+  fingerprint.className = 'origins';
+  fingerprint.textContent = `身份指纹 ${snapshot.pairing.identityFingerprint}`;
+  details.append(name, origin, fingerprint);
+
+  const revoke = document.createElement('button');
+  revoke.type = 'button';
+  revoke.className = 'secondary';
+  revoke.textContent = '撤销配对';
+  revoke.addEventListener('click', async () => {
+    clearError();
+    revoke.disabled = true;
+    try {
+      const [response] = await Promise.all([
+        chrome.runtime.sendMessage({ type: REVOKE_GATEWAY_PAIRING }),
+        chrome.permissions.remove({ origins: [LOOPBACK_GATEWAY_PERMISSION] })
+      ]);
+      if (!response?.ok) throw new Error(response?.error ?? '无法撤销 Gateway 配对。');
+      await refresh();
+    } catch (error) {
+      showError(error);
+    } finally {
+      revoke.disabled = false;
+    }
+  });
+
+  const row = document.createElement('div');
+  row.className = 'pairing-row';
+  row.append(details, revoke);
+  pairingState.replaceChildren(row);
+}
+
 function render(snapshot: CollectorControlSnapshot): void {
   runtimeStatus.textContent = 'Core 已连接';
   runtimeStatus.className = 'status ready';
 
-  pairingState.textContent = snapshot.pairing
-    ? `已配对：${snapshot.pairing.displayName}（${snapshot.pairing.loopbackOrigin}）`
-    : '尚未配对本地 Gateway。网页和任意 localhost 客户端不能直接下发任务。';
+  renderPairing(snapshot);
 
   strategyList.replaceChildren(...snapshot.strategies.map(renderStrategy));
 
