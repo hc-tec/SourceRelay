@@ -28,13 +28,7 @@ function canonicalUrl(rawHref: string, baseUrl: string): URL | null {
   }
 }
 
-function platformFromPage(document: Document, location: Location): SupportedPlatform | 'unsupported' {
-  if (location.hostname === '127.0.0.1') {
-    const candidate = document.documentElement.dataset.collectorPlatform;
-    if (candidate === 'bilibili' || candidate === 'zhihu' || candidate === 'weibo' || candidate === 'xiaohongshu') {
-      return candidate;
-    }
-  }
+function platformFromPage(location: Location): SupportedPlatform | 'unsupported' {
   return nativeSearchPlatform(new URL(location.href));
 }
 
@@ -118,7 +112,7 @@ export function collectVisibleSearchResults(
   document: Document,
   location: Location
 ): VisibleCollectionResult {
-  const platform = platformFromPage(document, location);
+  const platform = platformFromPage(location);
   const collectors: Record<SupportedPlatform, () => VisibleSearchItem[]> = {
     bilibili: () => collectBilibili(document, location),
     zhihu: () => collectZhihu(document, location),
@@ -133,7 +127,7 @@ export function collectVisibleSearchResults(
   return {
     schemaVersion: 1,
     platform,
-    operation: 'keyword_search',
+    operation: 'breadth_search',
     strategy,
     sourceUrl: safePageUrl(location),
     partial: true,

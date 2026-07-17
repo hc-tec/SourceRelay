@@ -16,6 +16,7 @@ import {
 import { buildNativeSearchUrl, nativeSearchPlatform } from '../shared/native-search';
 import {
   NETWORK_CAPTURE_MAX_PER_PAGE,
+  hasApprovedNetworkCaptureRoute,
   sanitiseNetworkCaptureObservation,
   type NetworkCaptureObservation
 } from '../shared/network-capture';
@@ -101,7 +102,6 @@ async function getActiveNetworkCaptureArm(tabId: number): Promise<NetworkCapture
 function senderUrlMatchesArmPlatform(senderUrl: string, arm: NetworkCaptureArm): boolean {
   try {
     const url = new URL(senderUrl);
-    if (__COLLECTOR_TEST_BUILD__ && url.protocol === 'http:' && url.hostname === '127.0.0.1') return true;
     return nativeSearchPlatform(url) === arm.platform;
   } catch {
     return false;
@@ -171,31 +171,23 @@ async function collectActiveTab(): Promise<VisibleCollectionResult> {
   return collectTab(tab.id);
 }
 
-function testFixtureNavigationUrl(platform: Parameters<typeof buildNativeSearchUrl>[0], nativeUrl: URL, fixtureBaseUrl?: string): string {
-  if (!__COLLECTOR_TEST_BUILD__ || !fixtureBaseUrl) return nativeUrl.href;
-  const base = new URL(fixtureBaseUrl);
-  if (base.protocol !== 'http:' || base.hostname !== '127.0.0.1') {
-    throw new Error('The extension test fixture must use a loopback HTTP URL.');
-  }
-  const target = new URL(`/${platform}`, base);
-  target.searchParams.set('native_url', nativeUrl.href);
-  return target.href;
-}
-
 async function startNativeSearch(
   platform: Parameters<typeof buildNativeSearchUrl>[0],
-  query: string,
-  fixtureBaseUrl?: string
+  query: string
 ) {
   const strategy = resolveNativeSearchStrategy(platform);
   const nativeUrl = buildNativeSearchUrl(platform, query);
-  const navigationUrl = testFixtureNavigationUrl(platform, nativeUrl, fixtureBaseUrl);
+  const navigationUrl = nativeUrl.href;
   // Create an inert tab first, arm that exact tab ID, then navigate.  This
   // removes the document_start race without ever enabling capture for an
-  // unrelated page or a user-opened search tab.
+  // unrelated page or a user-opened search tab. With the current empty
+  // production route registry, no arm is created and no MAIN-world observer
+  // is injected.
   const tab = await chrome.tabs.create({ url: 'about:blank', active: false });
   if (!tab.id) throw new Error('Chrome did not create a tab for the platform-native search task.');
-  await armNetworkCapture(tab.id, platform, navigationUrl);
+  if (hasApprovedNetworkCaptureRoute(platform)) {
+    await armNetworkCapture(tab.id, platform, navigationUrl);
+  }
   await chrome.tabs.update(tab.id, { url: navigationUrl });
   return {
     tabId: tab.id,
@@ -289,7 +281,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
 
   if (isStartNativeSearchMessage(message)) {
-    void startNativeSearch(message.platform, message.query, message.testFixtureBaseUrl).then(
+    void startNativeSearch(message.platform, message.query).then(
       (task) => sendResponse({ ok: true, task }),
       (error: unknown) => sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) })
     );
@@ -315,9 +307,7 @@ chrome.action.onClicked.addListener(() => {
   void collectActiveTab().catch(() => undefined);
 });
 
-// This explicit reference keeps the public protocol surface visible in the
-// bundled service worker and makes it easy for the E2E harness to verify the
-// same message route a user-triggered command will use.
+// Keep the public protocol surface explicit in the bundled worker.
 void COLLECT_ACTIVE_TAB;
 void START_NATIVE_SEARCH;
 void NETWORK_CAPTURE_OBSERVED;

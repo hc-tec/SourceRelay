@@ -1,4 +1,4 @@
-import type { SupportedPlatform } from './protocol';
+import { isSupportedPlatform, type SupportedPlatform } from './collection-contracts';
 
 // This module is deliberately usable in both content-script worlds.  It has
 // no chrome.* dependency: the page-facing observer, isolated-world bridge,
@@ -52,8 +52,7 @@ const textRedactions = [
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
-export type NetworkCaptureRouteId =
-  | 'test-native-search-response';
+export type NetworkCaptureRouteId = `${SupportedPlatform}.${string}.response.v${number}`;
 
 export type NetworkCaptureRejectionReason =
   | 'mime_not_allowed'
@@ -68,10 +67,6 @@ export interface NetworkCaptureRoute {
   platform: SupportedPlatform;
   origin: string;
   pathname: string;
-  // Dynamic loopback fixtures use an ephemeral port. Production routes must
-  // never opt into this escape hatch: their origin is exact.
-  allowAnyPortForLoopbackTest?: true;
-  testOnly?: true;
 }
 
 export interface NetworkCaptureObservation {
@@ -107,26 +102,6 @@ interface ObservationInput {
 // origin/path contract.  Historical GitHub examples and private API recipes
 // are not evidence that a route remains valid or safe to enable.
 const productionRoutes: readonly NetworkCaptureRoute[] = [];
-
-const testPlatforms: readonly SupportedPlatform[] = [
-  'bilibili',
-  'zhihu',
-  'weibo',
-  'xiaohongshu'
-];
-
-const testRoutes: readonly NetworkCaptureRoute[] = testPlatforms.map((platform) => ({
-  id: 'test-native-search-response',
-  platform,
-  origin: 'http://127.0.0.1',
-  pathname: '/api/network-search',
-  allowAnyPortForLoopbackTest: true,
-  testOnly: true
-}));
-
-function isSupportedPlatform(value: unknown): value is SupportedPlatform {
-  return value === 'bilibili' || value === 'zhihu' || value === 'weibo' || value === 'xiaohongshu';
-}
 
 function normaliseFieldName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -229,27 +204,21 @@ export function sanitiseCaptureUrl(value: string): string | null {
   }
 }
 
-function routes(): readonly NetworkCaptureRoute[] {
-  return __COLLECTOR_TEST_BUILD__ ? [...productionRoutes, ...testRoutes] : productionRoutes;
-}
-
 export function routeMatchesNetworkCaptureUrl(route: NetworkCaptureRoute, responseUrl: string): boolean {
   try {
     const url = new URL(responseUrl);
-    const exactOriginMatch = route.origin === url.origin;
-    const permittedLoopbackTestPort =
-      route.allowAnyPortForLoopbackTest === true &&
-      route.origin === 'http://127.0.0.1' &&
-      url.protocol === 'http:' &&
-      url.hostname === '127.0.0.1';
-    return (exactOriginMatch || permittedLoopbackTestPort) && route.pathname === url.pathname;
+    return route.origin === url.origin && route.pathname === url.pathname;
   } catch {
     return false;
   }
 }
 
 export function findNetworkCaptureRoute(platform: SupportedPlatform, responseUrl: string): NetworkCaptureRoute | null {
-  return routes().find((route) => route.platform === platform && routeMatchesNetworkCaptureUrl(route, responseUrl)) ?? null;
+  return productionRoutes.find((route) => route.platform === platform && routeMatchesNetworkCaptureUrl(route, responseUrl)) ?? null;
+}
+
+export function hasApprovedNetworkCaptureRoute(platform: SupportedPlatform): boolean {
+  return productionRoutes.some((route) => route.platform === platform);
 }
 
 function baseObservation(input: ObservationInput): Omit<NetworkCaptureObservation, 'status' | 'body' | 'rejectionReason'> | null {

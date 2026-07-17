@@ -1,37 +1,24 @@
-import type { SupportedPlatform } from './protocol';
+import type {
+  AcquisitionMechanism,
+  ConsentAction,
+  EvidenceObjective,
+  LiveValidationReference,
+  StrategyMaturity,
+  StrategyProvenance,
+  SupportedPlatform
+} from './collection-contracts';
 
-// These are evidence objectives selected by a research task.  They are
-// deliberately separate from the mechanisms an individual static strategy is
-// permitted to use.  A user can ask for an account archive without granting a
-// generic "crawl this platform" capability, for example.
-export const EVIDENCE_OBJECTIVES = [
-  'breadth_search',
-  'detail_read',
-  'discussion_sample',
-  'account_context',
-  'account_archive',
-  'trend_snapshot'
-] as const;
-
-export type EvidenceObjective = (typeof EVIDENCE_OBJECTIVES)[number];
-
-export const ACQUISITION_MECHANISMS = [
-  'native_navigation',
-  'visible_dom',
-  'bounded_interaction',
-  'approved_response',
-  'detail_navigation',
-  'comment_navigation'
-] as const;
-
-export type AcquisitionMechanism = (typeof ACQUISITION_MECHANISMS)[number];
-
-export type StrategyMaturity =
-  | 'draft'
-  | 'fixture_verified'
-  | 'live_anonymous_verified'
-  | 'live_authenticated_verified'
-  | 'suspended';
+export {
+  ACQUISITION_MECHANISMS,
+  EVIDENCE_OBJECTIVES,
+  STRATEGY_MATURITIES
+} from './collection-contracts';
+export type {
+  AcquisitionMechanism,
+  EvidenceObjective,
+  StrategyMaturity,
+  StrategyProvenance
+} from './collection-contracts';
 
 export type StrategySurface =
   | 'native_search'
@@ -41,36 +28,22 @@ export type StrategySurface =
 
 export type StrategyEntryKind = 'native_search_url' | 'canonical_url' | 'profile_url';
 
-export type StrategyUserConsent =
-  | 'allow_read_only_dom_interaction'
-  | 'allow_response_observation'
-  | 'allow_sanitised_source_projection';
-
 export type StrategyOutputKind = 'search_card' | 'content_detail' | 'comment' | 'collection_state';
 
-export type LiveValidationStatus =
-  | 'not_admitted'
-  | 'anonymous_verified'
-  | 'authenticated_verified'
-  | 'suspended';
-
-export interface StrategyProvenance {
+export interface StaticPlatformStrategy {
   strategyId: string;
   version: string;
-  evidenceObjective: EvidenceObjective;
+  platform: SupportedPlatform;
+  evidenceObjectives: readonly EvidenceObjective[];
   acquisition: readonly AcquisitionMechanism[];
   maturity: StrategyMaturity;
-}
-
-export interface StaticPlatformStrategy extends StrategyProvenance {
-  platform: SupportedPlatform;
   surface: StrategySurface;
   nativeEntry: {
     kind: StrategyEntryKind;
   };
   preconditions: {
     authentication: 'not_required' | 'may_be_required' | 'required';
-    userConsent: readonly StrategyUserConsent[];
+    requiredConsent: readonly ConsentAction[];
   };
   bounds: {
     maxRecords: number;
@@ -86,17 +59,17 @@ export interface StaticPlatformStrategy extends StrategyProvenance {
   };
   approvedResponseRouteIds: readonly string[];
   validation: {
-    fixtureIds: readonly string[];
-    liveValidation: LiveValidationStatus;
+    mode: 'local_live_platform_only';
+    liveRecord: LiveValidationReference | null;
   };
 }
 
 function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStrategy {
   return {
     strategyId: `${platform}.search.breadth.dom.v1`,
-    version: '1',
+    version: '1.0.0',
     platform,
-    evidenceObjective: 'breadth_search',
+    evidenceObjectives: ['breadth_search'],
     surface: 'native_search',
     acquisition: ['native_navigation', 'visible_dom'],
     nativeEntry: { kind: 'native_search_url' },
@@ -105,7 +78,7 @@ function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStr
       // page may still require the user to log in, which is a terminal task
       // status for a future planner rather than a reason to read credentials.
       authentication: 'may_be_required',
-      userConsent: []
+      requiredConsent: ['native_navigation', 'visible_dom']
     },
     bounds: {
       maxRecords: 20,
@@ -123,10 +96,10 @@ function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStr
     // capability until a precise route has separately passed live admission.
     approvedResponseRouteIds: [],
     validation: {
-      fixtureIds: ['native-search-loopback.v1'],
-      liveValidation: 'not_admitted'
+      mode: 'local_live_platform_only',
+      liveRecord: null
     },
-    maturity: 'fixture_verified'
+    maturity: 'build_ready'
   };
 }
 
@@ -145,7 +118,7 @@ export function strategiesFor(
   evidenceObjective: EvidenceObjective
 ): readonly StaticPlatformStrategy[] {
   return STATIC_PLATFORM_STRATEGIES.filter(
-    (strategy) => strategy.platform === platform && strategy.evidenceObjective === evidenceObjective
+    (strategy) => strategy.platform === platform && strategy.evidenceObjectives.includes(evidenceObjective)
   );
 }
 
@@ -163,8 +136,10 @@ export function strategyProvenance(strategy: StaticPlatformStrategy): StrategyPr
   return {
     strategyId: strategy.strategyId,
     version: strategy.version,
-    evidenceObjective: strategy.evidenceObjective,
+    platform: strategy.platform,
+    evidenceObjectives: strategy.evidenceObjectives,
     acquisition: strategy.acquisition,
-    maturity: strategy.maturity
+    maturity: strategy.maturity,
+    liveValidation: strategy.validation.liveRecord
   };
 }

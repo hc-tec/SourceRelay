@@ -3,20 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Manifest V3 in-browser collection bridge with deterministic Playwright extension tests.",
+  "description": "Manifest V3 core for user-approved, read-only browser collection tasks.",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "build:test": "node scripts/build.mjs --test",
-    "setup:browsers": "playwright install chromium",
+    "setup:build-browser": "playwright install chromium",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --test tests/unit/*.test.mjs",
-    "test:release-manifest": "node scripts/assert-release-manifest.mjs",
-    "test:e2e": "node tests/e2e/extension.e2e.mjs",
-    "test": "npm run typecheck && npm run build && npm run test:release-manifest && npm run build:test && npm run test:unit && npm run test:e2e",
-    "test:all": "npm run setup:browsers && npm test"
+    "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
+    "verify:extension-load": "node scripts/verify-extension-load.mjs",
+    "verify:build": "npm run typecheck && npm run build && npm run verify:artifacts && npm run verify:extension-load"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.330",

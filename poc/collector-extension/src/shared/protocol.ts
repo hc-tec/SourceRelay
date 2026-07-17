@@ -4,6 +4,9 @@ import {
   type NetworkCaptureObservation
 } from './network-capture';
 import type { StrategyProvenance } from './strategy-registry';
+import { isSupportedPlatform, type SupportedPlatform } from './collection-contracts';
+
+export type { SupportedPlatform } from './collection-contracts';
 
 export const COLLECT_VISIBLE_RESULTS = 'collector.collectVisibleResults' as const;
 export const COLLECT_ACTIVE_TAB = 'collector.collectActiveTab' as const;
@@ -12,8 +15,6 @@ export const CONTENT_READY = 'collector.contentReady' as const;
 export const START_NATIVE_SEARCH = 'collector.startNativeSearch' as const;
 export const NETWORK_CAPTURE_BRIDGE_READY_MESSAGE = 'collector.networkCaptureBridgeReady' as const;
 export { NETWORK_CAPTURE_OBSERVED };
-
-export type SupportedPlatform = 'bilibili' | 'zhihu' | 'weibo' | 'xiaohongshu';
 
 export interface VisibleSearchItem {
   rank: number;
@@ -25,7 +26,7 @@ export interface VisibleSearchItem {
 export interface VisibleCollectionResult {
   schemaVersion: 1;
   platform: SupportedPlatform | 'unsupported';
-  operation: 'keyword_search';
+  operation: 'breadth_search';
   strategy: StrategyProvenance | null;
   sourceUrl: string;
   partial: true;
@@ -65,8 +66,6 @@ export interface StartNativeSearchMessage {
   type: typeof START_NATIVE_SEARCH;
   platform: SupportedPlatform;
   query: string;
-  // Only honored by the compile-time test build. Production ignores this field.
-  testFixtureBaseUrl?: string;
 }
 
 export function isCollectVisibleResultsMessage(
@@ -102,15 +101,11 @@ export function isCollectionResultMessage(
 
 export function isStartNativeSearchMessage(value: unknown): value is StartNativeSearchMessage {
   if (!value || typeof value !== 'object') return false;
-  const candidate = value as { type?: unknown; platform?: unknown; query?: unknown; testFixtureBaseUrl?: unknown };
+  const candidate = value as { type?: unknown; platform?: unknown; query?: unknown };
   return (
     candidate.type === START_NATIVE_SEARCH &&
-    (candidate.platform === 'bilibili' ||
-      candidate.platform === 'zhihu' ||
-      candidate.platform === 'weibo' ||
-      candidate.platform === 'xiaohongshu') &&
-    typeof candidate.query === 'string' &&
-    (candidate.testFixtureBaseUrl === undefined || typeof candidate.testFixtureBaseUrl === 'string')
+    isSupportedPlatform(candidate.platform) &&
+    typeof candidate.query === 'string'
   );
 }
 

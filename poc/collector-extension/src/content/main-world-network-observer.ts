@@ -22,20 +22,11 @@ interface RequestMetadata {
 }
 
 function platformForCurrentPage(): SupportedPlatform | null {
-  if (__COLLECTOR_TEST_BUILD__ && window.location.protocol === 'http:' && window.location.hostname === '127.0.0.1') {
-    const candidate = document.documentElement.dataset.collectorPlatform;
-    if (candidate === 'bilibili' || candidate === 'zhihu' || candidate === 'weibo' || candidate === 'xiaohongshu') {
-      return candidate;
-    }
-  }
   const platform = nativeSearchPlatform(new URL(window.location.href));
   return platform === 'unsupported' ? null : platform;
 }
 
 function isPotentialSearchPage(): boolean {
-  if (__COLLECTOR_TEST_BUILD__ && window.location.protocol === 'http:' && window.location.hostname === '127.0.0.1') {
-    return true;
-  }
   return nativeSearchPlatform(new URL(window.location.href)) !== 'unsupported';
 }
 

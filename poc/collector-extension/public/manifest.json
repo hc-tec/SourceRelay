@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Personal Intelligence Collector",
   "version": "0.1.0",
-  "description": "Collects explicitly requested, visible platform search cards without exporting browser credentials.",
+  "description": "Runs explicitly approved, read-only collection tasks in the user's browser context.",
   "background": {
     "service_worker": "background.js",
     "type": "module"

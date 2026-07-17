@@ -1,127 +1,126 @@
 # Personal Intelligence Collector Extension
 
-这是浏览器内的个人情报采集底座：Chrome Manifest V3 扩展运行在用户自己的浏览器页面中，而不是把已登录 Profile 交给外部爬虫服务。它的目标是把“在平台内部搜索”变成一个可授权、可测试、可审计的执行能力。
+这是个人情报产品的浏览器内采集底座。一个 Manifest V3 Collector Core 运行在用户自己的 Collection Browser Profile 中，根据已批准的研究计划进入平台页面、读取公开可见内容，并在后续阶段把证据交给本地 Gateway / Evidence Vault。
 
-当前的最小闭环已经实际覆盖：
+当前实现处于 **P0：决策契约与构建门禁**。它尚未宣称任何真实平台能力，也没有接入日常浏览器 Profile、登录态、本地 Gateway、加密 Vault 或 DeepResearch。
 
-```text
-未打包扩展自动加载
-  -> MV3 service worker 启动
-  -> Worker 构造平台原生站内搜索 URL
-  -> 为该搜索 tab 创建短时、平台绑定的采集授权
-  -> document_start 的 isolated bridge 请求 Worker arm
-  -> Worker 将固定 MAIN-world observer 动态注入该精确 tab/document
-  -> 页面可见 DOM / allowlist JSON 响应的去敏投影
-  -> Worker 的 sender、tab、平台、路由和配额复核
-  -> chrome.storage.session 暂存安全结果
-```
+## 产品边界
 
-测试全过程不需要人工到 `chrome://extensions` 加载扩展、不需要点击工具栏图标、不需要登录平台，也不会读取用户日常 Chrome、Edge 或 BrowserWing Profile。
-
-现有四条搜索路线已在代码中注册为静态、版本化策略（例如
-`bilibili.search.breadth.dom.v1`）。它们共同只承诺“原生导航 + 首屏可见 DOM 卡片”，成熟度为 `fixture_verified`，并不会因有了策略注册表就宣称已具备账号归档、详情、评论、翻页或真实平台 response route 能力。策略定义与扩展一同编译、代码审查和 fixture 测试；它不是可在运行时下载的插件，也不能直接取得 tab、Cookie、网络或本地 Gateway 权限。
-
-## 两条独立的采集路线
-
-### 1. 可见 DOM（当前已启用）
-
-平台适配器从用户已经看得到的搜索结果页投影：规范公开 URL、可见标题、内容类型和排名。页面 URL 会去掉 query/hash 后才进入结果，避免把搜索词或短期参数写入 artifact。
-
-### 2. 受控网络响应观察（基础层已实现；生产路由尚未启用）
-
-这里的“抓包”不是 OS 级抓包、MITM、DevTools 调试协议或 `webRequest`。它严格指：在**已经由显式站内搜索任务创建的顶层 tab**中，MAIN-world 脚本只观察页面自己已经完成的 `fetch` / `XMLHttpRequest` 响应。
+目标架构是：
 
 ```text
-Worker 创建 about:blank tab
-  -> 写入 2 分钟的 { tabId, platform, navigationUrlDigest } 授权
-  -> 导航至平台原生搜索页
-  -> isolated bridge 向 Worker 确认授权与精确导航摘要
-  -> Worker 成功动态注入 MAIN observer 后才回传 armed
-  -> 精确 route + JSON + 2xx + 大小/数量门槛
-  -> 页面内第一次脱敏
-  -> window.postMessage（不可信输入）
-  -> isolated bridge 第二次校验/脱敏
-  -> Worker 第三次校验、短时 session 暂存
+Local Research Console / Gateway
+  -> one MV3 Collector Core
+  -> dedicated visible Collection Window
+  -> persistent Collection Browser Profile
+  -> platform-specific static strategy definitions
+  -> encrypted local Evidence Vault
+  -> sealed EvidencePackage
+  -> DeepResearch / swarm analysis
 ```
 
-硬限制如下：
+浏览器 Profile 自然持有用户在平台上的正常登录状态。扩展不设计 Cookie 导入、导出或注入，不读取密码、Token、二维码、验证码、请求头、请求体、Profile 路径，也不复刻签名或模拟私有接口。
 
-| 边界 | 当前约束 |
-|---|---|
-| 授权范围 | 仅 Worker 刚创建、精确导航摘要匹配的顶层搜索 tab；2 分钟后过期 |
-| 路由 | `origin + pathname` 精确匹配；query/hash 永不保存 |
-| 响应 | 仅 2xx JSON；不读取请求体；只临时读取 `Content-Type` / `Content-Length` 作 gate |
-| 体积/数量 | 单响应最多 96 KiB；每页面最多 3 条 |
-| 结果 | JSON 深度、对象属性、数组、字符串均有上限；仅 `chrome.storage.session` 短暂保存 |
-| MAIN world | 视为页面世界的**不可信输入**；不能触发导航、任意请求、本地 Gateway 或权限升级 |
+第三方平台爬虫仓库只能作为页面和产品调研参考，不能复制、集成、运行或成为采集后端。正式采集路线只允许在用户授权的真实浏览器页面中读取正常呈现的数据并执行有界只读动作。它不授权绕过登录、验证码、付费限制、限流或平台安全措施。
 
-递归脱敏会删除或替换 Cookie、Authorization、Token、Session、CSRF/XSRF、`xsec`、密码、验证码、手机号、邮箱及明显的 Bearer/JWT/`key=value` 文本模式。它不是“靠 AI 识别秘密”的边界；真正的前置边界仍然是 tab 授权、精确路由、MIME、大小和数量限制。
+## P0 共享契约
 
-MAIN observer 不再作为静态 content script 出现在每个搜索页。只有 bridge 的 `sender.tab`、顶层 frame、平台和**导航 URL 的 SHA-256 摘要**都与 Worker arm 一致时，Worker 才通过 `scripting` 向该 document 注入固定文件。因此未授权页面和同 tab 的导航漂移不会被 observer 读取。这个选择可能错过页面最早的一次请求；这是刻意的安全取舍，DOM 采集仍是完整 fallback。
+[collection-contracts.ts](src/shared/collection-contracts.ts) 固定了后续 Console、Gateway、策略和 EvidencePackage 必须共同遵守的语言：
 
-为了不把历史私有 API 误当作当前契约，`productionRoutes` 现在刻意为空。test build 只允许 `127.0.0.1` 的精确 `/api/network-search` fixture 路径。真实平台路径只能在低频、用户授权、正常浏览器上下文的 metadata-only 观察后逐条纳入；绝不从 GitHub 的旧签名/Token 方案直接复制进来。
+- 任务目标：`keyword_query`、`account_target`、`known_url`；
+- 研究档案：`scout`、`evidence`、`deep_dive`、`discussion`、`account_archive`；
+- 证据目标：广度搜索、详情、讨论样本、账号上下文、账号归档和趋势快照；
+- 采集机制：原生导航、可见 DOM、有界交互、批准后的 response 投影、详情和评论导航；
+- 任务预算：总预算与每个平台独立上限，未使用预算只能经显式批准后转移；
+- 同意范围：动作类别、证据目标和所有范围升级都在任务级记录；
+- 能力预检：权限、登录、用户动作、缺失选项、能力缺失和策略暂停均可见；
+- 来源与终态：策略 ID / 版本 / 成熟度 / 真实验证记录和每个来源的独立结果必须保留。
 
-## 明确不做的事
+证据目标与采集机制是两个正交维度。用户提出“归档某博主当前可见的所有笔记”并不自动授予无限滚动、评论、response observation 或原始媒体下载能力；这些动作仍受策略、预算和同意范围约束。
 
-- 除最小的定向静态文件注入权限 `scripting` 外，不申请 `cookies`、`webRequest`、`webRequestBlocking`、`debugger`、`downloads` 或 `<all_urls>`；
-- 不读取 Cookie、`localStorage`、`sessionStorage`、页面框架全局状态、浏览器 Profile 路径；
-- 不读取或保存请求头、请求体、Authorization、Cookie、`Set-Cookie`、HAR、trace、二维码、验证码、密码；
-- 不复刻签名、不重放私有请求、不自动登录、不绕过验证码或风控；
-- 不写入公共情报库，也不让页面消息直接调用 Gateway。
+## 策略成熟度
 
-## 自测：无需人工加载或点击
+成熟度固定为：
 
-前置条件：Node.js 22+。测试使用 Playwright 管理的 Chromium，而不是用户日常 Chrome、Google Chrome 或 Edge；这样可以稳定地通过命令行加载未打包的 MV3 扩展。
+```text
+draft
+  -> build_ready
+  -> live_anonymous_verified | live_authenticated_verified
+  -> suspended
+```
+
+当前注册表只有四个 `breadth_search + visible_dom` 静态策略骨架：B站、知乎、微博和小红书。它们是 `build_ready`，且 `liveValidation` 全部为空。
+
+`build_ready` 只表示源码能够编译、生成 MV3 bundle、通过批准的 Manifest 权限清单并由受管理 Chromium 自动加载。它不表示平台页面可访问，不表示选择器仍有效，也不表示登录、翻页、详情、评论、账号归档或 response route 已经验证。
+
+生产 response route 当前刻意为空，因此任务不会 arm 或注入 MAIN-world observer。在完成精确 route、页面可见字段投影、安全生命周期和用户控制环境中的真实验证前，不得加入任何生产 route。
+
+## 构建门禁，不是平台测试
+
+本项目不保留 fixture、离线平台样本、单元测试或 fixture E2E，也没有 test-branded 扩展。远程 CI 只能运行构建门禁，不得访问真实平台或任何登录状态。
+
+`npm run verify:build` 只证明以下事实：
+
+1. TypeScript 能够编译；
+2. 生产 bundle 能够生成；
+3. `manifest.json` 是 MV3，引用的脚本均存在；
+4. API 权限、host permissions 和 content-script 范围与当前批准配置完全一致；
+5. 制品拒绝 `<all_urls>`、通配 scheme / host、localhost、静态 MAIN-world 注入、高风险权限和测试入口；
+6. Playwright 管理的临时空 Chromium Profile 能自动加载生产扩展并启动 MV3 service worker。
+
+自动加载门禁不会打开任何平台页面，不会使用 Chrome / Edge 日常 Profile，也不需要人工进入 `chrome://extensions`、扫码、登录或点击扩展。它使用临时目录，结束后自动删除。
+
+前置条件是 Node.js 22+。首次使用先安装依赖和构建门禁专用 Chromium：
 
 ```powershell
 Set-Location D:\AIProject\inteligence\poc\collector-extension
 npm install
-npm run test:all
+npm run setup:build-browser
+npm run verify:build
 ```
 
-`npm test` 会自动：
-
-1. 执行 TypeScript 类型检查；
-2. 构建 production 与 test-branded 未打包扩展；只有 test build 额外允许 loopback fixture host；
-3. 对 production `manifest.json` 执行 release gate：拒绝高危权限、`<all_urls>`、localhost、任何静态 MAIN world 脚本和 `web_accessible_resources`；
-4. 对纯策略运行单元测试：精确 route、递归脱敏、URL/text 去敏、非 JSON、超限响应和“生产路由默认空”；
-5. 以临时空 Playwright Chromium Profile 自动加载 test extension；
-6. 通过扩展内 test driver 下发四个平台的站内搜索任务；Worker 必须先构造真实 native URL，再仅在 test build 映射到 loopback fixture；
-7. 在严格 CSP fixture 中触发一次 `fetch`、一次 XHR、一次超限响应和一次非 allowlist 路由；
-8. 断言 `MAIN -> bridge -> Worker -> storage.session` 的真实消息链、fetch/XHR 两种传输、敏感 sentinel 缺失、query/hash 缺失、超限被拒绝、未允许路径未入库，以及零非 loopback HTTP(S) 请求；
-9. 自动关闭 context 并删除临时 Profile。
-
-第一次运行中，`npm run test:all` 会下载 Playwright 专用 Chromium；后续会复用该受管理浏览器。测试优先使用 headless Chromium，若环境不支持则自动以 headed 模式重试，但不需要人工点击或加载。
-
-## 生产构建
+浏览器已经安装时，日常只需：
 
 ```powershell
+npm run verify:build
+```
+
+也可以分开执行：
+
+```powershell
+npm run typecheck
 npm run build
+npm run verify:artifacts
+npm run verify:extension-load
 ```
 
-生成物位于 `dist/`，其中没有 test driver、localhost 权限或已启用的生产网络响应路径。正式安装/分发方式与后续本地 Gateway 配对协议独立：开发、回归测试和真实登录态验证都不能共用浏览器 Profile。
+生成物位于 `dist/`。
 
-## 当前平台状态
+## 权限迁移边界
 
-| 平台 | 原生搜索 URL 契约 | 可见 DOM 规则 | 网络响应生产路由 |
-|---|---|---|---|
-| B站 | `/all?keyword=...` | 规范 `https://www.bilibili.com/video/BV...` | 未启用；匿名探测看到首屏 HTML，不能据此假设 JSON API |
-| 知乎 | `/search?type=content&q=...` | 问题/回答与专栏规范 URL | 未启用；匿名探测返回 403，需单独登录态验证 |
-| 微博 | `/weibo?q=...` | PC/mobile 规范帖子 URL | 未启用；匿名探测停在 visitor bootstrap |
-| 小红书 | `/search_result_ai?keyword=...` | 规范 `/explore/<note-id>` | 未启用；匿名探测只见安全/配置相关请求，未确认搜索结果数据路由 |
+当前 P0 仍冻结并审查旧 POC 的精确平台 host 列表，以保证本轮不发生静默权限扩张。最终产品要求在启用具体策略时请求精确 `optional_host_permissions`；这需要和 Gateway 配对、策略启用、Collection Window 及 capability preflight 一起在 P1 完成，不能只改 Manifest 而留下无法执行或永久预授权的半套状态。
 
-这张表把离线 E2E、匿名 metadata-only 探测和真实登录态验证严格分开。fixture 成功不等于真实平台成功；未确认路由不被当作能力承诺。
+扩展不申请 `cookies`、`debugger`、`downloads`、`webRequest`、`webRequestBlocking` 或 `<all_urls>`。MAIN-world observer 不是静态 content script；现阶段即使其安全底座被打包，也因为生产 route allowlist 为空而不能接纳平台响应。
 
-更完整的设计、安全推理、自动化证据和本轮匿名路线探测结论见 [网络响应观察设计与验证](../../docs/research/browser-extension-network-observation-2026-07-17.md)。
+## 真实平台验证
 
-## 后续接入设计
+平台行为只允许在用户控制的本地 Validation Profile 中低频验证：
 
-```text
-用户在正常浏览器中自行登录平台
-  -> 用户明确启动一个只读站内搜索任务
-  -> 扩展收集去敏 DOM / 已批准 response 投影
-  -> 本地 Gateway 以显式配对、平台/动作 allowlist 接收结果
-  -> 本地保存安全 artifact 或交给 DeepResearch 分析
-```
+- 使用专用、可见的 Validation Browser，不接触用户日常 Profile；
+- 严格只读，不点赞、关注、收藏、评论、私信、上传、订阅或发布；
+- 需要登录时由用户在该浏览器上下文中自行完成，然后显式继续；
+- 不索要或传递 Cookie、Token、密码、二维码、验证码、Profile 路径或代理凭据；
+- 每项平台能力独立记录策略版本、匿名 / 登录类别、验证时间、覆盖和失败语义；
+- 只有真实验证记录可以把策略升级为 `live_anonymous_verified` 或 `live_authenticated_verified`。
 
-下一个平台阶段不是“放开抓包”，而是逐站验证：先以 metadata-only 路径确认候选，再在用户正常登录后的专用、可撤销浏览器上下文中验证字段白名单、失败语义和是否需要人工操作。整个过程不会要求或接收 Cookie、密码、二维码、验证码或 Token。
+固定的用户配置浏览器代理可以作为 Profile 的正常网络环境；扩展不读取、管理或轮换代理。
+
+## 下一阶段
+
+P1 将建立本地 Console / Gateway 配对、任务计划入口、专用 Collection Window、精确 optional host permission 和 capability preflight。之后才进入 B站 discovery → detail → bounded discussion 的真实纵向样板；其他平台能力继续按独立策略和真实验证记录推进。
+
+完整产品决策见：
+
+- [Collector 决策审计](../../docs/design/collector-decision-audit.md)
+- [平台采集策略产品规格](../../docs/design/platform-strategy-product-spec.md)
+- [1–100 题决策账本](../../docs/design/collector-grilling-decision-log.md)
