@@ -19,6 +19,25 @@ function safePageUrl(): string {
   return url.href;
 }
 
+async function waitForRenderedPageState(): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if (collect().pageState !== 'layout_unrecognized') return;
+    await new Promise<void>((resolve) => {
+      const observer = new MutationObserver(() => {
+        observer.disconnect();
+        clearTimeout(timeout);
+        resolve();
+      });
+      const timeout = setTimeout(() => {
+        observer.disconnect();
+        resolve();
+      }, 500);
+      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+    });
+  }
+}
+
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   if (!isCollectVisibleResultsMessage(message)) return;
   const result = collect();
@@ -28,7 +47,9 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
 });
 
 document.documentElement.dataset.collectorExtensionReady = 'true';
-void chrome.runtime.sendMessage({ type: CONTENT_READY, pageUrl: safePageUrl() }).catch(() => undefined);
+void waitForRenderedPageState()
+  .then(() => chrome.runtime.sendMessage({ type: CONTENT_READY, pageUrl: safePageUrl() }))
+  .catch(() => undefined);
 
 // Keep the command string referenced by the content bundle, so an accidental
 // protocol rename cannot leave the service worker and content script silently

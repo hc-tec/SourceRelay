@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "recordId": "bb91e996-7758-4447-ba94-486bc99b7872",
+  "strategy": {
+    "strategyId": "bilibili.search.breadth.dom.v1",
+    "version": "1.1.0",
+    "validatedMaturity": "build_ready",
+    "admittedMaturity": "live_anonymous_verified",
+    "evidenceObjective": "breadth_search",
+    "acquisition": [
+      "native_navigation",
+      "visible_dom"
+    ]
+  },
+  "collectorVersion": "0.2.1",
+  "validation": {
+    "category": "anonymous",
+    "environment": "local_user_controlled_validation_profile",
+    "browser": "visible_playwright_chromium",
+    "queryDigest": "161332dd5ba244f14566d9ccfc214dbbd620bcd401cded068fc230e3d4e2815b",
+    "navigationUrlDigest": "67f1dbe3984c4698e5cb1641718a99f4c021fff4455d1f66a7486d591500cb28",
+    "startedAt": "2026-07-17T10:55:33.974Z",
+    "completedAt": "2026-07-17T10:55:37.191Z",
+    "pageState": "results_visible",
+    "terminalStatus": "completed"
+  },
+  "verifiedProjection": {
+    "itemCount": 20,
+    "allItemsHadReadableSemanticTitles": true,
+    "allItemsHadCanonicalBvUrls": true,
+    "sourceUrl": "https://search.bilibili.com/all",
+    "partial": true
+  },
+  "safeguards": {
+    "responseObservation": "disabled",
+    "readOnlyActions": 0,
+    "firstRenderedPageOnly": true,
+    "maximumRecords": 20,
+    "loginUsed": false,
+    "paginationUsed": false,
+    "detailNavigationUsed": false,
+    "commentNavigationUsed": false
+  },
+  "review": {
+    "status": "accepted",
+    "decisionCode": "visible_titles_and_canonical_bv_urls_verified",
+    "reviewedAt": "2026-07-17T10:56:04.262Z",
+    "admittedToStrategyRegistry": true
+  },
+  "scopeLimits": [
+    "This admission covers only anonymous Bilibili keyword search on the first rendered result page.",
+    "It does not cover authentication, pagination, exhaustive ranking, detail pages, comments, account archives, or response observation.",
+    "Titles and the raw query are retained only in the ignored local Gateway runtime record and are not committed in this admission file."
+  ],
+  "supersededRejectedRecord": {
+    "recordId": "1220b4bc-4763-4087-8c83-e85b108e544a",
+    "strategyVersion": "1.0.0",
+    "decisionCode": "title_projection_captured_thumbnail_overlay"
+  }
+}

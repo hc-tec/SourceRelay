@@ -16,7 +16,7 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 已完成：P1b Gateway 固定身份、显式配对与认证任务 preflight
 已完成：P1c stage receipt、dispatch 重投去重与阻塞回报
 已完成：P2a 受管 Collection / Validation Profile 生命周期与任务绑定
-未开始：P2b B站匿名真实平台验证
+已完成：P2b B站匿名 breadth_search / visible_dom 真实验证与显式 admission
 未开始：P3 加密 Evidence Vault
 未开始：P4 EvidencePackage / DeepResearch 正式接入
 ```
@@ -29,7 +29,8 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 | `1ec99cb` | optional host permission、控制页、EvidencePlan/preflight、专用窗口与 session lease | 只证明扩展控制面契约存在 |
 | `95edf75` | loopback Gateway、P-256 固定身份、一次性签名配对 | 只证明配对双方可构建 |
 | `e4a1816` | HMAC 轮询、签名 work item、Console task、preflight、formal-only 批准、stage receipt 与重投去重 | 当前策略会被阻断为 `live_validation_required` |
-| P2a（本提交） | Gateway 受管持久 Profile、可见 Chromium、扩展自动加载、Profile API / Console 与任务绑定 | 只证明本地浏览器生命周期和绑定控制面，不证明平台可用 |
+| `6334d17` | Gateway 受管持久 Profile、可见 Chromium、扩展自动加载、Profile API / Console 与任务绑定 | 只证明本地浏览器生命周期和绑定控制面，不证明平台可用 |
+| P2b（本提交） | 独立 Validation Run、扩展版本恢复、B站 DOM v1.1、记录 review 与源码 admission | 只发布匿名 B站首屏关键词搜索标题与 BV URL |
 
 ## 3. 控制面边界
 
@@ -60,7 +61,7 @@ Console 创建 ResearchTask
   -> 精确任务 tab 动态注入固定 content.js
 ```
 
-当前四个平台策略均为 `build_ready` 且 `liveValidation = null`，因此 preflight 必然返回 `live_validation_required / experimental`。Console 批准按钮必须禁用，Gateway 不生成可执行 dispatch，浏览器不访问平台。
+B站 `bilibili.search.breadth.dom.v1 @ 1.1.0` 具有已审查的匿名 live-validation reference，因此在 Profile、任务同意和精确 host permission 均满足时可返回 `ready / formal`。知乎、微博和小红书仍为 `build_ready / liveValidation = null`，其 preflight 继续返回 `live_validation_required / experimental`，不能批准。
 
 Research Task 必须按平台绑定由 Gateway 注册的 Collection Profile。Gateway 只接受逻辑 Profile ID，并在服务端重新解析平台、类型和账号类别；扩展收到签名任务后再次拒绝 Validation、anonymous、跨平台或畸形绑定。Profile 绑定不提升策略成熟度，也不授予平台权限。
 
@@ -128,6 +129,20 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 
 这只证明本地 Profile 生命周期、生产扩展自动加载和任务绑定边界可工作。扩展与 Gateway 的显式配对、平台权限、平台页面、登录身份核对、DOM 策略和数据采集仍需各自验证；这些结果不能升级任何平台 strategy maturity。
 
+### 4.2 P2b B站真实验证与 admission
+
+- Validation Run 只接受 `validation + bilibili + anonymous` Profile，不复用 Research Task 或正式 stage lease；
+- 使用真实 Chrome optional host permission；自动化只能操作浏览器原生权限对话框，不修改 Profile Preferences；
+- 运行窗口 30 秒到期，只允许原生搜索导航、可见 DOM、首个渲染页面、最多 20 条和 0 次页面交互；
+- production response route 保持为空，验证记录明确写入 `responseObservation = disabled`；
+- `v1.0.0` 虽返回 20 个规范 BV URL，但标题误取“稍后再看”缩略图覆盖层，记录 `1220b4bc-4763-4087-8c83-e85b108e544a` 已以 `title_projection_captured_thumbnail_overlay` 拒绝；
+- `v1.1.0` 按同一 BV URL 聚合多个可见 anchor，优先 `h3[title]` / anchor title / aria-label / heading text，并拒绝没有语义字符的覆盖层标题；
+- `v1.1.0` 记录 `bb91e996-7758-4447-ba94-486bc99b7872` 返回 20 条可读标题、20 条规范 BV URL、`results_visible / completed`，人工 review 为 accepted；
+- 运行时记录只保存在忽略的 Gateway runtime；仓库仅提交不含原查询和标题的[脱敏 admission 记录](../validation/bilibili-search-breadth-dom-v1.1.0.json)；
+- 策略 admission 由源码中的精确 record ID / verifiedAt 显式完成，运行成功本身不会修改 maturity。
+
+该 admission 不证明登录、翻页、排序穷尽、详情、评论、账号归档、response observation 或其他平台能力。
+
 ## 5. 已知未完成项
 
 | 领域 | 当前状态 | 下一门槛 |
@@ -135,7 +150,7 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 | Gateway 配对 | build-ready，未做功能性离线测试 | 在产品允许的本地控制环境中验证，不冒充平台能力 |
 | Task dispatch | preflight、formal-only 批准、stage receipt、at-least-once 重投去重和阻塞回报已落码；Profile 绑定已做本地功能验证 | 与显式配对和真实 Validation Profile 一起验证剩余控制状态，不冒充平台能力 |
 | Profile | 受管持久生命周期、可见 Chromium、生产扩展自动加载、关闭/重启、并发门禁与任务绑定已做本地功能验证 | 平台登录状态仍只由用户在该 Profile 中管理；后续逐平台核对可见身份 |
-| B站 discovery | strategy `build_ready` | 用户控制环境中的匿名真实验证记录 |
+| B站 discovery | `v1.1.0 live_anonymous_verified`，只覆盖首屏可见标题与规范 BV URL | 验证一次正式 Gateway 调度闭环，然后再扩展 detail |
 | response observation | 生产 route 为空 | 先完成 wrapper 到期撤销、route projector 和 document race 验证 |
 | Evidence | `storage.session` 临时结果 | 加密 Vault、不可变批次、coverage、hash manifest |
 | Gateway task persistence | 仅内存 | 与 Vault 密钥和 schema 一起设计加密恢复，不写普通明文队列 |
@@ -144,9 +159,9 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 ## 6. 下一实现顺序
 
 ```text
-P2a  Collection / Validation Profile launcher
-  -> P2b B站匿名 discovery 真实验证
-  -> capability validation record + maturity 升级
+P2a  Collection / Validation Profile launcher（完成）
+  -> P2b B站匿名 discovery 真实验证与 admission（完成）
+  -> 正式 Gateway dispatch 闭环验证
   -> B站 detail / bounded discussion
   -> P3 encrypted Evidence Vault
   -> P4 DeepResearch EvidencePackage adapter

@@ -78,6 +78,7 @@ function actionButton(snapshot: StrategyPermissionSnapshot): HTMLButtonElement {
 function renderStrategy(snapshot: StrategyPermissionSnapshot): HTMLElement {
   const card = document.createElement('article');
   card.className = 'strategy-card';
+  card.dataset.platform = snapshot.platform;
 
   const header = document.createElement('div');
   header.className = 'strategy-header';

@@ -174,6 +174,7 @@ export interface StrategyPermissionSnapshot {
 export interface CollectorControlSnapshot {
   schemaVersion: 1;
   protocolVersion: typeof COLLECTOR_CONTROL_PROTOCOL_VERSION;
+  collectorVersion: string;
   pairing: GatewayPairingSummary | null;
   gatewayRuntime: GatewayRuntimeStatus;
   strategies: readonly StrategyPermissionSnapshot[];

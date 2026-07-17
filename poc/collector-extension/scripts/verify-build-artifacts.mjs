@@ -8,6 +8,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outputDirectory = resolve(root, 'dist');
 const manifestPath = resolve(outputDirectory, 'manifest.json');
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+const packageMetadata = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
 
 const approved = {
   permissions: ['alarms', 'storage', 'scripting'],
@@ -25,6 +26,7 @@ const approved = {
 };
 
 assert.equal(manifest.manifest_version, 3, 'build artifact must be Manifest V3');
+assert.equal(manifest.version, packageMetadata.version, 'manifest and package versions must match');
 assert.equal(/\btest\b/i.test(manifest.name), false, 'production artifact must not be test-branded');
 
 const forbiddenPermissions = new Set([
@@ -103,6 +105,15 @@ assert.equal(
 );
 
 const digest = createHash('sha256').update(await readFile(manifestPath)).digest('hex');
+const backgroundSource = await readFile(resolve(outputDirectory, manifest.background.service_worker), 'utf8');
+assert.match(backgroundSource, /collector\.startCapabilityValidation/, 'validation-run protocol is missing');
+assert.match(
+  backgroundSource,
+  /bb91e996-7758-4447-ba94-486bc99b7872/,
+  'admitted Bilibili live-validation record is missing'
+);
+assert.match(backgroundSource, /live_anonymous_verified/, 'admitted anonymous strategy maturity is missing');
+assert.match(backgroundSource, /productionRoutes\s*=\s*\[\]/, 'production response routes must remain empty');
 console.log(JSON.stringify({
   ok: true,
   gate: 'production-build-artifacts',

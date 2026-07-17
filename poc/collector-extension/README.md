@@ -51,7 +51,7 @@ draft
   -> suspended
 ```
 
-当前注册表只有四个 `breadth_search + visible_dom` 静态策略骨架：B站、知乎、微博和小红书。它们是 `build_ready`，且 `liveValidation` 全部为空。
+当前注册表包含四个 `breadth_search + visible_dom` 静态策略。B站 `bilibili.search.breadth.dom.v1 @ 1.1.0` 已在匿名、可见、用户控制的 Validation Profile 中验证首屏可见标题和规范 BV URL，成熟度为 `live_anonymous_verified`；知乎、微博和小红书仍是 `build_ready / liveValidation = null`。
 
 `build_ready` 只表示源码能够编译、生成 MV3 bundle、通过批准的 Manifest 权限清单并由受管理 Chromium 自动加载。它不表示平台页面可访问，不表示选择器仍有效，也不表示登录、翻页、详情、评论、账号归档或 response route 已经验证。
 
@@ -126,7 +126,7 @@ Manifest 不再静态声明任何平台 `content_scripts`，授予站点权限�
 
 Gateway 已建立 Collection / Validation Profile 生命周期：它从内部逻辑 ID 推导隔离目录，启动可见 Playwright Chromium，自动加载生产扩展，并让 Research Task 按平台绑定同平台 Collection Profile。扩展仍会在签名 task 入口复核绑定形状，拒绝 Validation、匿名、跨平台或伪造 Profile 绑定。
 
-当前四个平台 preflight 仍是 `live_validation_required / experimental`，因此 Console 不能批准，扩展不会访问平台。下一个检查点是在独立匿名 Validation Profile 中完成 B站 `breadth_search + visible_dom` 的低频真实验证；之后才进入 B站 detail → bounded discussion 的真实纵向样板。
+B站 `breadth_search + visible_dom` 的精确 `v1.1.0` 现在可以在 Profile、同意和精确 host permission 都满足时进入 `ready / formal`；其他三平台仍是 `live_validation_required / experimental`。该 admission 只覆盖匿名首屏搜索卡标题与 BV URL，不覆盖登录、翻页、详情或评论。下一检查点是先验证一次正式 Gateway 调度闭环，再进入 B站 detail → bounded discussion。
 
 完整产品决策见：
 

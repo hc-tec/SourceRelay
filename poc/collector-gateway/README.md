@@ -20,7 +20,10 @@
 - 每个平台同一时间默认只运行一个 Profile；关闭浏览器只结束进程，不删除 Profile 中由浏览器正常管理的状态；
 - Console 只显示平台、Profile 类型、逻辑账号标签、扩展加载和配对状态，不显示 Profile 路径、Cookie、Token 或登录内容；
 - Research Task 必须为每个平台选择同平台、`user_managed` 的 Collection Profile；Validation Profile 不能绑定正式任务；
-- 只有所有 stage 同时为 `ready + formal` 时才允许用户批准；当前 `build_ready` 策略会被明确阻断；
+- B站匿名 Validation Run 使用短时专用窗口、生产 content script、首屏 20 条上限和 0 次只读交互，保存白名单字段后进入人工 review；
+- 运行结果不能自动改策略；只有仓库内显式 live-validation reference 才会让 Gateway 将 accepted 记录标记为 admitted；
+- 持久 Profile 启动时核对 Collector Core 运行时版本，必要时通过 `chrome.runtime.reload()` 和 `chrome://extensions` 的 unpacked Reload 恢复最新 MV3 service worker；
+- 只有所有 stage 同时为 `ready + formal` 时才允许用户批准；未 admission 的 `build_ready` 策略会被明确阻断；
 - dispatch 未收到 receipt 时会重投；扩展按 task / stage 查找现有 lease，避免重复窗口，并回传 `accepted` 或固定 `blocked` error code；
 - 不读取仓库 `.env`，不接触搜索 API Key、Cookie、Token、密码、二维码或浏览器 Profile。
 

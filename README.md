@@ -34,21 +34,28 @@ docs/design/              1–100 题决策账本、产品规格、审计和实�
 - 配对后的 HMAC 请求认证、nonce 防重放、Gateway 签名 work item、EvidencePlan preflight 和 Console 计划展示；
 - Gateway 管理的持久 Collection / Validation Profile、可见 Playwright Chromium 启动器、生产扩展自动加载、运行状态与逻辑账号绑定；
 - Research Task 按平台绑定同平台 Collection Profile；Validation Profile、任意磁盘路径和匿名 Profile 不能混入正式采集任务；
-- `build_ready` 能力不能批准为正式任务；当前不会因为创建任务而访问任何平台。
+- 独立的短时 Validation Run、真实 Chrome 权限、终态恢复、字段白名单、人工 review 与显式源码 admission；
+- B站匿名 `breadth_search + visible_dom` 的精确策略 `v1.1.0` 已完成真实验证；其他 `build_ready` 能力仍不能批准。
 
 实现与风险矩阵见 [Collector 实现状态](docs/design/collector-implementation-status.md)。
 
 ## 当前平台能力真相
 
-注册表里存在 B站、知乎、微博和小红书的 `breadth_search + visible_dom` 策略骨架，但全部只有：
+注册表里存在 B站、知乎、微博和小红书的 `breadth_search + visible_dom` 策略。目前只有 B站的精确版本通过真实验证：
 
 ```text
-maturity = build_ready
-liveValidation = null
-production response routes = []
+B站 bilibili.search.breadth.dom.v1 @ 1.1.0
+  maturity = live_anonymous_verified
+  liveValidation.recordId = bb91e996-7758-4447-ba94-486bc99b7872
+
+知乎 / 微博 / 小红书
+  maturity = build_ready
+  liveValidation = null
+
+所有平台 production response routes = []
 ```
 
-这不代表四个平台已经可用。`build_ready` 只表示代码能编译、打包、满足批准权限清单并自动加载。只有用户控制的本地 Validation Profile 中完成低频真实平台验证后，单项能力才能升级为 `live_anonymous_verified` 或 `live_authenticated_verified`。
+B站 admission 只覆盖匿名关键词搜索、首个渲染页面、最多 20 条可见视频标题和规范 BV URL；不覆盖登录、翻页、穷尽排序、详情、评论、账号归档或 response observation。脱敏 admission 记录见 [B站 v1.1.0 验证记录](docs/validation/bilibili-search-breadth-dom-v1.1.0.json)。`build_ready` 仍只表示代码能编译、打包、满足批准权限清单并自动加载。
 
 生产 response route 当前为空，因此不会 arm 或注入 MAIN-world observer。第三方平台爬虫仓库只能作为页面与产品调研参考，不能复制、集成、执行或成为采集后端。
 
@@ -104,12 +111,11 @@ Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git
 
 ## 下一阶段
 
-1. 在独立、可见、匿名 Validation Profile 中对 B站 `breadth_search + visible_dom` 做第一项低频真实验证；
-2. 写入 capability validation record，只有验证通过的精确策略版本才允许计划批准；
-3. 再推进 B站 `detail -> bounded discussion`；
-4. 随后推进小红书登录态 `account identity -> visible inventory -> resumable archive -> selected detail`；
-5. 建设加密 Vault、不可变批次、coverage ledger、hash manifest 和 Evidence Explorer；
-6. 最后通过 EvidencePackage 接入 DeepResearch / 蜂群分析。
+1. 用已 admitted 的 B站 discovery 完成一次配对 Gateway → preflight → 批准 → Collection Window 正式控制链验证；
+2. 推进 B站 `detail -> bounded discussion`，每项能力继续独立验证和 admission；
+3. 随后推进小红书登录态 `account identity -> visible inventory -> resumable archive -> selected detail`；
+4. 建设加密 Vault、不可变批次、coverage ledger、hash manifest 和 Evidence Explorer；
+5. 最后通过 EvidencePackage 接入 DeepResearch / 蜂群分析。
 
 权威产品文档：
 

@@ -70,6 +70,12 @@ export interface StaticPlatformStrategy {
 }
 
 function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStrategy {
+  const admittedBilibiliValidation: LiveValidationReference = {
+    category: 'anonymous',
+    recordId: 'bb91e996-7758-4447-ba94-486bc99b7872',
+    verifiedAt: '2026-07-17T10:55:37.191Z',
+    environment: 'local_user_controlled_validation_profile'
+  };
   const browserByPlatform: Record<SupportedPlatform, StaticPlatformStrategy['browser']> = {
     bilibili: {
       optionalHostPermissions: [
@@ -115,7 +121,7 @@ function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStr
 
   return {
     strategyId: `${platform}.search.breadth.dom.v1`,
-    version: '1.0.0',
+    version: platform === 'bilibili' ? '1.1.0' : '1.0.0',
     platform,
     evidenceObjectives: ['breadth_search'],
     surface: 'native_search',
@@ -146,9 +152,9 @@ function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStr
     approvedResponseRouteIds: [],
     validation: {
       mode: 'local_live_platform_only',
-      liveRecord: null
+      liveRecord: platform === 'bilibili' ? admittedBilibiliValidation : null
     },
-    maturity: 'build_ready'
+    maturity: platform === 'bilibili' ? 'live_anonymous_verified' : 'build_ready'
   };
 }
 

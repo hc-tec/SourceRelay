@@ -6,6 +6,11 @@ import { loadGatewayIdentity } from './identity';
 import { PairingBroker, type PairingClaimInput } from './pairing';
 import { BrowserProfileRegistry, createBrowserProfileInput } from './profiles';
 import { GatewayTaskQueue, scoutTaskInput } from './tasks';
+import {
+  CapabilityValidationRegistry,
+  capabilityValidationInput,
+  capabilityValidationReviewInput
+} from './validations';
 import type {
   GatewayPreflightSubmission,
   GatewayStageReceipt
@@ -126,6 +131,7 @@ const identity = await loadGatewayIdentity(config);
 const pairingBroker = await PairingBroker.create(identity, config.stateDirectory);
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
+const validationRegistry = await CapabilityValidationRegistry.create(config.stateDirectory);
 const taskQueue = new GatewayTaskQueue(identity);
 const expectedHost = `${config.host}:${config.port}`;
 
@@ -168,6 +174,22 @@ const server = createServer(async (request, response) => {
       sendJson(response, 200, { schemaVersion: 1, profiles: await browserManager.list() });
       return;
     }
+    if (request.method === 'GET' && url.pathname === '/v1/validations') {
+      sendJson(response, 200, { schemaVersion: 1, validations: validationRegistry.list() });
+      return;
+    }
+    const validationReviewMatch = url.pathname.match(/^\/v1\/validations\/([0-9a-f-]{36})\/review$/i);
+    if (request.method === 'POST' && validationReviewMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        validation: await validationRegistry.review(
+          validationReviewMatch[1],
+          capabilityValidationReviewInput(await readJsonBody(request))
+        )
+      });
+      return;
+    }
     if (request.method === 'POST' && url.pathname === '/v1/profiles') {
       if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
       const profile = await profileRegistry.createProfile(createBrowserProfileInput(await readJsonBody(request)));
@@ -193,6 +215,20 @@ const server = createServer(async (request, response) => {
           (summary) => summary.profile.profileId === profileCloseMatch[1]
         )
       });
+      return;
+    }
+    const bilibiliValidationMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/validations\/bilibili$/i
+    );
+    if (request.method === 'POST' && bilibiliValidationMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const input = capabilityValidationInput(await readJsonBody(request));
+      const run = await browserManager.runBilibiliAnonymousValidation(
+        bilibiliValidationMatch[1],
+        input.query,
+        new Set(validationRegistry.list().map((validation) => validation.runId))
+      );
+      sendJson(response, 201, { schemaVersion: 1, validation: await validationRegistry.record(run) });
       return;
     }
     if (request.method === 'GET' && url.pathname === '/v1/tasks') {
@@ -328,6 +364,7 @@ const server = createServer(async (request, response) => {
       code.startsWith('request_') ||
       code.startsWith('task_') ||
       code.startsWith('profile_') ||
+      code.startsWith('validation_') ||
       code.startsWith('preflight_') ||
       code.endsWith('_invalid') ||
       code === 'one_or_more_capabilities_are_not_ready';

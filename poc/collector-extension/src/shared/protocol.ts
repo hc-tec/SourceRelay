@@ -4,11 +4,12 @@ import {
   type NetworkCaptureObservation
 } from './network-capture';
 import type { StrategyProvenance } from './strategy-registry';
-import type { SupportedPlatform } from './collection-contracts';
+import type { CollectionTerminalStatus, SupportedPlatform } from './collection-contracts';
 
 export type { SupportedPlatform } from './collection-contracts';
 
 export const COLLECT_VISIBLE_RESULTS = 'collector.collectVisibleResults' as const;
+export const COLLECTOR_CORE_VERSION = '0.2.1' as const;
 export const COLLECTION_RESULT = 'collector.collectionResult' as const;
 export const CONTENT_READY = 'collector.contentReady' as const;
 export const NETWORK_CAPTURE_BRIDGE_READY_MESSAGE = 'collector.networkCaptureBridgeReady' as const;
@@ -16,6 +17,8 @@ export const GET_CONTROL_SNAPSHOT = 'collector.getControlSnapshot' as const;
 export const SYNC_STRATEGY_PERMISSIONS = 'collector.syncStrategyPermissions' as const;
 export const PAIR_GATEWAY = 'collector.pairGateway' as const;
 export const REVOKE_GATEWAY_PAIRING = 'collector.revokeGatewayPairing' as const;
+export const START_CAPABILITY_VALIDATION = 'collector.startCapabilityValidation' as const;
+export const GET_CAPABILITY_VALIDATION = 'collector.getCapabilityValidation' as const;
 export { NETWORK_CAPTURE_OBSERVED };
 
 export interface VisibleSearchItem {
@@ -25,16 +28,56 @@ export interface VisibleSearchItem {
   contentType: 'video' | 'answer_or_question' | 'article' | 'post' | 'note';
 }
 
+export type VisiblePageState =
+  | 'results_visible'
+  | 'no_results_visible'
+  | 'authentication_required'
+  | 'verification_required'
+  | 'rate_limited'
+  | 'source_unavailable'
+  | 'layout_unrecognized';
+
 export interface VisibleCollectionResult {
   schemaVersion: 1;
   platform: SupportedPlatform | 'unsupported';
   operation: 'breadth_search';
   strategy: StrategyProvenance | null;
   sourceUrl: string;
+  pageState: VisiblePageState;
   partial: true;
   itemCount: number;
   items: VisibleSearchItem[];
   warnings: string[];
+}
+
+export type CapabilityValidationRunState =
+  | 'navigating'
+  | 'collecting'
+  | 'completed'
+  | 'inconclusive'
+  | 'failed';
+
+export interface CapabilityValidationRunSnapshot {
+  schemaVersion: 1;
+  collectorVersion: string;
+  runId: string;
+  profileId: string;
+  platform: SupportedPlatform;
+  accountCategory: 'anonymous' | 'user_managed';
+  evidenceObjective: 'breadth_search';
+  strategy: StrategyProvenance;
+  queryDigest: string;
+  navigationUrlDigest: string;
+  windowId: number;
+  tabId: number;
+  documentId?: string;
+  state: CapabilityValidationRunState;
+  terminalStatus: CollectionTerminalStatus | null;
+  errorCode: string | null;
+  startedAt: string;
+  expiresAt: string;
+  completedAt: string | null;
+  result: VisibleCollectionResult | null;
 }
 
 export interface CollectVisibleResultsMessage {
@@ -77,6 +120,20 @@ export interface PairGatewayMessage {
 
 export interface RevokeGatewayPairingMessage {
   type: typeof REVOKE_GATEWAY_PAIRING;
+}
+
+export interface StartCapabilityValidationMessage {
+  type: typeof START_CAPABILITY_VALIDATION;
+  runId: string;
+  profileId: string;
+  platform: SupportedPlatform;
+  accountCategory: 'anonymous' | 'user_managed';
+  query: string;
+}
+
+export interface GetCapabilityValidationMessage {
+  type: typeof GET_CAPABILITY_VALIDATION;
+  runId: string;
 }
 
 export function isCollectVisibleResultsMessage(
@@ -135,6 +192,32 @@ export function isRevokeGatewayPairingMessage(value: unknown): value is RevokeGa
     value &&
       typeof value === 'object' &&
       (value as { type?: unknown }).type === REVOKE_GATEWAY_PAIRING
+  );
+}
+
+export function isStartCapabilityValidationMessage(value: unknown): value is StartCapabilityValidationMessage {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<StartCapabilityValidationMessage>;
+  return (
+    candidate.type === START_CAPABILITY_VALIDATION &&
+    typeof candidate.runId === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate.runId) &&
+    typeof candidate.profileId === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate.profileId) &&
+    typeof candidate.platform === 'string' &&
+    (candidate.accountCategory === 'anonymous' || candidate.accountCategory === 'user_managed') &&
+    typeof candidate.query === 'string' &&
+    candidate.query.length <= 200
+  );
+}
+
+export function isGetCapabilityValidationMessage(value: unknown): value is GetCapabilityValidationMessage {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<GetCapabilityValidationMessage>;
+  return (
+    candidate.type === GET_CAPABILITY_VALIDATION &&
+    typeof candidate.runId === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate.runId)
   );
 }
 

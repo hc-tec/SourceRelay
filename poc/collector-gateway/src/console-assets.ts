@@ -30,8 +30,11 @@ button:disabled { cursor: wait; opacity: .6; }
 .span-2 { grid-column: 1 / -1; }
 input, textarea, select { width: 100%; padding: 9px 11px; border: 1px solid #cfd7df; border-radius: 9px; background: white; color: #17202a; font: inherit; }
 textarea { min-height: 76px; resize: vertical; }
-.profile-list, .task-list { display: grid; gap: 10px; margin-top: 16px; }
+.profile-list, .validation-list, .task-list { display: grid; gap: 10px; margin-top: 16px; }
 .profile, .task { padding: 14px; border: 1px solid #dde4eb; border-radius: 12px; background: #f9fbfc; }
+.validation { padding: 14px; border: 1px solid #dde4eb; border-radius: 12px; background: #f9fbfc; }
+.validation h3 { margin: 0 0 5px; font-size: 14px; }
+.validation-items { display: grid; gap: 5px; margin: 10px 0 0; padding-left: 20px; color: #4c5967; font-size: 12px; }
 .profile h3, .task h3 { margin: 0 0 5px; font-size: 14px; }
 .profile-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .profile-actions { display: flex; align-items: center; gap: 8px; }
@@ -68,10 +71,14 @@ const profileForm = document.querySelector('#profile-form');
 const profileKind = document.querySelector('#profile-kind');
 const accountCategory = document.querySelector('#account-category');
 const profileList = document.querySelector('#profile-list');
+const validationForm = document.querySelector('#validation-form');
+const validationProfile = document.querySelector('#validation-profile');
+const validationList = document.querySelector('#validation-list');
 const taskForm = document.querySelector('#task-form');
 const taskList = document.querySelector('#task-list');
 let profiles = [];
 let profilesSignature = '';
+let validationsSignature = '';
 let tasksSignature = '';
 
 async function json(url, options) {
@@ -119,6 +126,27 @@ function updateTaskProfileSelectors() {
     if (eligible.some((summary) => summary.profile.profileId === previous)) select.value = previous;
     else if (eligible.length === 1) select.value = eligible[0].profile.profileId;
   }
+}
+
+function updateValidationProfileSelector() {
+  const previous = validationProfile.value;
+  const eligible = profiles.filter((summary) =>
+    summary.profile.kind === 'validation' &&
+    summary.profile.platform === 'bilibili' &&
+    summary.profile.account.category === 'anonymous'
+  );
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = eligible.length ? '选择 B站匿名 Validation Profile' : '尚无 B站匿名 Validation Profile';
+  const options = eligible.map((summary) => {
+    const option = document.createElement('option');
+    option.value = summary.profile.profileId;
+    option.textContent = summary.profile.account.label + (summary.running ? ' · 运行中' : '');
+    return option;
+  });
+  validationProfile.replaceChildren(placeholder, ...options);
+  if (eligible.some((summary) => summary.profile.profileId === previous)) validationProfile.value = previous;
+  else if (eligible.length === 1) validationProfile.value = eligible[0].profile.profileId;
 }
 
 function profileElement(summary) {
@@ -186,7 +214,94 @@ async function refreshProfiles() {
   } else {
     profileList.replaceChildren(...profiles.map(profileElement));
   }
+  updateValidationProfileSelector();
   updateTaskProfileSelectors();
+}
+
+function validationElement(validation) {
+  const card = document.createElement('article');
+  card.className = 'validation';
+  const title = document.createElement('h3');
+  title.textContent = 'B站 breadth_search · ' + validation.state;
+  const meta = document.createElement('p');
+  meta.textContent = validation.terminalStatus + ' · ' + validation.strategy.strategyId + ' ' + validation.strategy.version;
+  const badges = document.createElement('div');
+  badges.className = 'profile-meta';
+  badges.append(
+    runtimePill(validation.result ? validation.result.pageState : 'no DOM result', validation.state === 'completed' ? 'good' : 'warn'),
+    runtimePill((validation.result ? validation.result.itemCount : 0) + ' visible items'),
+    runtimePill('Review ' + validation.review.status, validation.review.status === 'accepted' ? 'good' : 'warn'),
+    runtimePill(
+      validation.review.admittedToStrategyRegistry ? 'Admitted' : 'Not admitted',
+      validation.review.admittedToStrategyRegistry ? 'good' : ''
+    )
+  );
+  card.append(title, meta, badges);
+  if (validation.errorCode) {
+    const issue = document.createElement('p');
+    issue.className = 'notice blocked';
+    issue.textContent = validation.errorCode;
+    card.append(issue);
+  }
+  if (validation.result && validation.result.items.length) {
+    const items = document.createElement('ol');
+    items.className = 'validation-items';
+    for (const item of validation.result.items.slice(0, 5)) {
+      const row = document.createElement('li');
+      row.textContent = item.title + ' · ' + item.url;
+      items.append(row);
+    }
+    card.append(items);
+  }
+  if (validation.review.status === 'pending') {
+    const actions = document.createElement('div');
+    actions.className = 'profile-actions';
+    for (const decision of ['reject', 'accept']) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = decision === 'reject' ? 'secondary' : '';
+      button.textContent = decision === 'reject' ? '标记验证不通过' : '标记审查通过（仍不发布）';
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        clearError();
+        try {
+          await json('/v1/validations/' + encodeURIComponent(validation.recordId) + '/review', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              decision,
+              decisionCode: decision === 'reject'
+                ? 'manual_validation_review_rejected'
+                : 'manual_validation_review_accepted'
+            })
+          });
+          await refreshValidations();
+        } catch (reason) {
+          showError(reason);
+        } finally {
+          button.disabled = false;
+        }
+      });
+      actions.append(button);
+    }
+    card.append(actions);
+  }
+  return card;
+}
+
+async function refreshValidations() {
+  const response = await json('/v1/validations');
+  const signature = JSON.stringify(response.validations);
+  if (signature === validationsSignature) return;
+  validationsSignature = signature;
+  if (response.validations.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.textContent = '尚无真实能力验证记录。成功运行也只会进入 Review pending，不会自动升级策略。';
+    validationList.replaceChildren(empty);
+  } else {
+    validationList.replaceChildren(...response.validations.map(validationElement));
+  }
 }
 
 function taskElement(task) {
@@ -259,7 +374,12 @@ async function refreshTasks() {
 }
 
 async function refreshWorkspace() {
-  const [status] = await Promise.all([json('/v1/status'), refreshProfiles(), refreshTasks()]);
+  const [status] = await Promise.all([
+    json('/v1/status'),
+    refreshProfiles(),
+    refreshValidations(),
+    refreshTasks()
+  ]);
   identity.textContent = status.identity.identityFingerprint;
   pairedCount.textContent = String(status.pairedExtensionCount);
   profileCount.textContent = String(status.browserProfileCount);
@@ -299,6 +419,26 @@ profileForm.addEventListener('submit', async (event) => {
     });
     profileForm.elements.accountLabel.value = '';
     profileForm.elements.expectedVisibleIdentity.value = '';
+    await refreshWorkspace();
+  } catch (reason) {
+    showError(reason);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+validationForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  clearError();
+  const submit = validationForm.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  try {
+    if (!validationProfile.value) throw new Error('请先创建并选择 B站匿名 Validation Profile。');
+    await json('/v1/profiles/' + encodeURIComponent(validationProfile.value) + '/validations/bilibili', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query: validationForm.elements.query.value })
+    });
     await refreshWorkspace();
   } catch (reason) {
     showError(reason);
@@ -420,6 +560,17 @@ export const consoleHtml = `<!doctype html>
         </form>
         <p class="notice">启动后 Gateway 会自动加载生产 MV3 扩展并打开扩展控制页。关闭浏览器不会删除 Profile，后续再次启动会复用该 Profile 的浏览器状态。</p>
         <div id="profile-list" class="profile-list"></div>
+      </section>
+
+      <section class="card">
+        <div><h2>B站匿名能力验证</h2><p>只允许 B站匿名 Validation Profile、首个渲染页面、最多 20 条可见 DOM 结果和 0 次页面交互。不会启用 response observation，也不会自动升级策略。</p></div>
+        <form id="validation-form" class="form form-columns">
+          <label>Validation Profile<select id="validation-profile" name="profileId"></select></label>
+          <label>验证查询词<input name="query" required maxlength="200" value="人工智能"></label>
+          <div class="span-2"><button type="submit">运行一次低频真实验证</button></div>
+        </form>
+        <p class="notice">Gateway 会启动可见浏览器，并通过生产扩展的独立短时 Validation Run 注入同一个 content.js。遇到登录墙、验证码、限流、无结果或布局无法识别时会记录为 inconclusive 并停止。</p>
+        <div id="validation-list" class="validation-list"></div>
       </section>
 
       <section class="card">

@@ -15,6 +15,9 @@ assert.match(source, /from\s+["']playwright["']/, 'Gateway artifact must keep Pl
 assert.match(source, /launchPersistentContext/, 'Gateway artifact must launch a persistent browser context');
 assert.match(source, /headless:\s*false/, 'Gateway artifact must launch a visible browser');
 assert.match(source, /--load-extension=/, 'Gateway artifact must automatically load the production extension');
+assert.match(source, /chrome:\/\/extensions\//, 'Gateway artifact must recover stale unpacked service workers');
+assert.match(source, /collector\.startCapabilityValidation/, 'Gateway artifact must include the validation-run control path');
+assert.match(source, /admittedToStrategyRegistry/, 'Gateway artifact must preserve explicit validation admission state');
 
 console.log(JSON.stringify({
   ok: true,
