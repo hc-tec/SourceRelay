@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-17
 - 适用范围：Personal Intelligence 的浏览器扩展执行面、平台采集策略与本地研究证据包
-- 相关决策：[Grill 决策账本](collector-grilling-decision-log.md)、[ADR-002：数据源层](data-source-layer.md)、[浏览器扩展采集系统基线](../research/browser-extension-collection-architecture-2026-07-17.md)、[受控网络响应观察](../research/browser-extension-network-observation-2026-07-17.md)
+- 相关决策：[Grill 决策账本](collector-grilling-decision-log.md)、[决策一致性与实现差距审计](collector-decision-audit.md)、[ADR-002：数据源层](data-source-layer.md)、[浏览器扩展采集系统基线](../research/browser-extension-collection-architecture-2026-07-17.md)、[受控网络响应观察](../research/browser-extension-network-observation-2026-07-17.md)
 
 ## 1. 北极星与边界
 
@@ -76,6 +76,8 @@ trend_snapshot                         detail_navigation
 
 同一个 `account_archive` 在一个平台可通过 `visible_dom + bounded_interaction` 枚举，在另一个平台可辅以 `approved_response`；两者的输出契约、覆盖条件和失败语义必须相同。没有已验证机制时，计划应拒绝或只给出较低层级的 `account_context`，而不是假装完成归档。
 
+`approved_response` 只增强页面正常呈现信息的结构、游标和状态判断。response 中没有呈现给用户的字段不得进入长期证据；可见内容与 response 投影不一致时，优先报告差异或部分覆盖，不得用隐藏字段扩展用户授权的数据表面。
+
 ## 4. 执行架构与权限模型
 
 采用一个 Manifest V3 **Collector Core**，而不是每个平台一个高权限扩展、一个“万能 crawler”，或运行时下载任意插件：
@@ -88,12 +90,12 @@ Collector Core
   ├─ controlled response observer
   ├─ artifact writer
   └─ static Platform Capture Strategy Registry
-       └─ repository-local, code-reviewed, versioned, fixture-tested packs
+       └─ repository-local, code-reviewed, versioned, live-validated packs
 ```
 
-策略包在构建时静态注册、随仓库版本发布。它们不得直接访问特权浏览器 API、Cookie、原始 header、用户 Profile 路径、任意网络、Gateway 连接或任意 JavaScript 执行能力。Core 只向策略暴露受限的页面角色、动作 AST、字段投影与配额接口。
+策略包在构建时静态注册、随仓库版本发布。它们不得直接访问特权浏览器 API、浏览器会话材料、原始 header、用户 Profile 路径、任意网络、Gateway 连接或任意 JavaScript 执行能力。Core 只向策略暴露受限的页面角色、动作 AST、字段投影与配额接口。第三方平台爬虫仓库只能提供调研参考，不能复制、集成、运行或成为策略后端；正式采集只通过扩展在 Collection Browser Profile 的正常页面上下文中执行。
 
-默认权限保持最小化。现有安全底座只在精确任务 tab/document 中做静态文件注入和去敏响应观察；不使用 OS 级抓包、MITM、`webRequest`、`debugger`、Cookie 导出、请求重放或私有 API 签名。所有测试使用 Playwright bundled Chromium 的临时 Profile，不接触用户日常浏览器 Profile。
+默认权限保持最小化。安全底座只在精确任务 tab/document 中做固定文件注入和去敏响应观察；不使用 OS 级抓包、MITM、`webRequest`、`debugger`、浏览器会话导出、请求重放或私有 API 签名。平台行为不使用离线 fixture 验证，只在用户控制环境中的专用 Validation Profile 低频真实验证；远程 CI 只构建制品。编译、bundle、MV3 manifest、脚本存在性、自动加载和权限清单属于构建门禁，不作为平台能力测试。
 
 ## 5. 平台策略契约
 
@@ -103,7 +105,7 @@ Collector Core
 id: xiaohongshu.account_archive.v1
 platform: xiaohongshu
 version: 1.0.0
-maturity: proposed | validated | degraded | blocked
+maturity: draft | build_ready | live_anonymous_verified | live_authenticated_verified | suspended
 objectives: [account_context, account_archive]
 page_roles: [profile, content_list, detail, comments]
 allowed_mechanisms: [native_navigation, visible_dom, bounded_interaction]
@@ -118,7 +120,7 @@ quota:
   max_details: 30
   max_comment_items: 100
 output_contract: content_inventory.v1
-validation_contract: fixture + live-validation evidence + failure semantics
+validation_contract: build gates + local live-validation record + failure semantics
 ```
 
 完整契约至少还要定义：
@@ -128,9 +130,9 @@ validation_contract: fixture + live-validation evidence + failure semantics
 3. 每一步可做的受限交互、前置条件、最大重试、超时和停止条件；
 4. 可以观察的精确响应 route、MIME、状态、投影字段、大小/数量限制；
 5. 输出类型、不可获得字段、覆盖声明和所有失败状态；
-6. 离线 fixture、反例、安全测试和低频真实验证日期/证据。
+6. 构建制品校验、用户控制环境中的低频真实验证日期/证据和失败语义。
 
-策略成熟度采用保守生命周期：`proposed -> validated -> degraded -> blocked`。页面结构漂移、登录门禁、错误相关性或无法满足 output contract 都必须降低成熟度；不能因某次页面能打开就升格为通用能力。
+策略成熟度采用保守生命周期：`draft -> build_ready -> live_anonymous_verified | live_authenticated_verified -> suspended`。`build_ready` 只表示制品可构建、加载和满足批准的权限清单，不代表平台能力；页面结构漂移、登录门禁、错误相关性或无法满足 output contract 都必须降低成熟度，不能因某次页面能打开就升格为通用能力。
 
 ## 6. 有界交互规则
 
@@ -194,7 +196,7 @@ coverage 必须随 artifact 输出，至少包括：账号规范 URL、稳定 ID
 
 ## 8. 本地 raw-first 证据包
 
-第一阶段不要求把每个平台字段拆入数据库。采用“**去敏的原始证据优先 + 最小索引 + schema-on-read**”：保留足以复查和供 AI 读取的平台特有投影，不预先强行统一成作者、热度、评论等列。这里的 raw 是采集后、去敏后的原始页面/响应/卡片投影，绝不包括认证材料或原始网络包。
+第一阶段不要求把每个平台字段拆入数据库。采用“**去敏的原始证据优先 + 最小索引 + schema-on-read**”：保留足以复查和供 AI 读取的平台特有投影，不预先强行统一成作者、热度、评论等列。这里的 raw 是采集后的可见页面、卡片和安全投影，绝不包括认证材料、隐藏页面状态或原始网络包。“去敏”不删除任务页面公开可见的身份、简介、地区、职业和联系字段；这些字段进入本地加密长期档案，并受显式访问、导出和删除规则约束。
 
 建议目录布局：
 
@@ -233,19 +235,19 @@ Collector Core / Gateway -> local evidence bundle -> DeepResearch
 
 | 阶段 | 交付 | 最小验收 |
 |---|---|---|
-| P0：执行安全基座 | MV3 Core、任务绑定 DOM、离线 fixture、自动扩展 E2E、空生产 response allowlist | 不需手工加载/点击；临时 Profile；无 Cookie/Token/原始网络包；失败状态可见 |
-| P1：策略注册表 | `scout` 的平台原生入口、版本化 DOM output contract、能力状态页 | 每个平台能区分站内成功、外部发现、登录门禁、布局漂移和无结果；fixture 不冒充实站验证 |
+| P0：执行安全基座 | MV3 Core、任务绑定 DOM、自动构建 / 加载门禁、专用 Validation Browser、空生产 response allowlist | 不需手工加载/点击；不接触日常 Profile；无认证导出/原始网络包；失败状态可见 |
+| P1：策略注册表 | `scout` 的平台原生入口、版本化 DOM output contract、能力状态页、真实验证记录 | 每个平台能区分站内成功、外部发现、登录门禁、布局漂移和无结果；只以用户控制环境中的真实验证升级能力 |
 | P2：受限深度 | `evidence`/`deep_dive`，详情与有界筛选、分页、展开策略 | 每个动作具备 AST、预算、语义轨迹和失败语义；无任意脚本/无界操作 |
 | P3：讨论与账号 | `discussion`、`account_context`、`account_archive`、可恢复快照 | 清单与详情/评论分层；coverage/终点/部分完成可复查；不宣称不可证明的全历史 |
 | P4：研究接入 | 本地 Gateway/DeepResearch 只读 artifact 工具与证据审计 | 上层保留来源 URL、策略/能力 ID、状态、降级和 artifact 引用；不能抹掉失败或越权采集 |
 
 跨阶段的完成门槛如下：
 
-1. 每个新增平台/目标都有独立策略、fixture、反例、版本和真实验证证据；
+1. 每个新增平台/目标都有独立策略、版本、构建制品校验和用户控制环境中的真实验证证据；
 2. 每条结果可追溯到来源、策略版本、动作轨迹和去敏 artifact；
 3. 深度、评论、账号覆盖与响应观察均有显式预算和停止条件；
-4. 所有测试自动加载扩展并隔离真实用户 Profile；
+4. 所有真实验证自动加载扩展并使用专用 Validation Profile；远程 CI 不访问真实平台；
 5. 生产能力表只陈述当前已验证的范围、登录前提和限制；
 6. DeepResearch 的结论能引用证据包，同时把未覆盖/失败来源视作不确定性而非反证。
 
-这份规格定义的是长期产品边界。具体平台字段、页面选择器、已批准 response route 和可用性等级只能由各策略的验证记录决定，不能从历史 GitHub 爬虫、README 宣称或一次匿名页面访问推断。
+这份规格定义的是长期产品边界。具体平台字段、页面选择器、已批准 response route 和可用性等级只能由各策略的真实验证记录决定，不能从历史 GitHub 爬虫、README 宣称或一次匿名页面访问推断。第三方平台采集仓库只作研究参考，不进入产品代码或运行时依赖。
