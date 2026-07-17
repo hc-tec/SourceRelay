@@ -26,6 +26,7 @@
 | 56–60 | 离线测试范围、实站频率、验证环境、稳定断言、只读测试 | 56 采纳 B；57–60 采纳 A |
 | 61–65 | 构建门禁、实站运行位置、覆盖范围、验证证据、阻断状态 | 已采纳推荐方案 |
 | 66–70 | 目标类型、外部发现、已知 URL、公开网站工厂、搜索凭据 | 已采纳推荐方案 |
+| 71–75 | 分批封存、蜂群并发、补采协议、框架适配、搜索工具 | 已采纳推荐方案 |
 
 ## 批次 1–5：产品北极星与总体架构
 
@@ -343,6 +344,32 @@ DeepResearch 可以提出结构化补采建议，但每一次详情、评论、�
 
 搜索服务 API Key 只由本地 Gateway / Search Adapter 读取和使用。浏览器扩展、页面脚本、平台策略和证据包均不得接收凭据；DeepResearch 只能调用注册后的本地搜索工具，不能读取 `.env`。搜索证据保存 provider、query、requested_at、canonical_url 和 `external_discovery_only` 状态，不保存 Key、Authorization 或原始请求头。
 
+## 批次 71–75：DeepResearch 与蜂群接入
+
+### 71. 按阶段封存证据批次
+
+采集过程可以按 discovery、detail、discussion、account inventory 等阶段生成已封存、校验完成的不可变证据批次。DeepResearch 可提前读取已封存批次，但不得读取仍在写入的临时文件，也不得把阶段覆盖写成最终覆盖。最终报告发布前，Coverage Auditor 必须读取最终 coverage ledger，检查后续失败、取消、缺口和补采结果。
+
+### 72. 账号枚举单一所有者，详情有界并发
+
+账号目录枚举由单一 Enumeration Coordinator 独占，只有它能滚动主页、推进分页游标和判断终点，并持续写入去重后的稳定 item ledger。已稳定入账的条目可交给有界 Detail Workers 并发读取；评论由显式 Discussion Workers 对选中条目执行。平台级并发、动作和时间预算继续生效，由 Coverage Auditor 对目录、详情、评论和失败数量进行对账。
+
+### 73. 结构化补采协议
+
+DeepResearch 只能生成结构化 `CollectionGapRequest`，说明当前证据缺口、补采理由、平台与目标类型、查询 / 账号 / URL、所需证据目标、预算、登录 / 交互 / response observation 前置条件、预期证据和不补采时的报告限制。用户批准后由 Collector Planner 重新检查能力和权限；DeepResearch 不直接提升浏览器 lease，也不能用模糊的“再多搜一点”自动扩容。
+
+### 74. DeepResearch 框架保持可替换
+
+DeerFlow、天工式方案或其他蜂群框架通过稳定适配边界接入：读取 ResearchTask、EvidencePackage、coverage ledger 和 citation index，输出报告、矛盾地图、主题聚类、时间线及 CollectionGapRequest。浏览器扩展、平台策略、Collection Profile、搜索凭据和 artifact writer 留在独立 Collector / Gateway 层；不得把平台采集逻辑复制进每个框架或让框架持有浏览器会话。
+
+### 75. 禁用框架自带搜索
+
+默认禁用或不注册 DeepResearch 框架内置的 Google、Bing、Tavily、Serper 等搜索工具。分析侧只获得本地 Gateway 的 Search Adapter、EvidencePackage Reader、Citation / Coverage 工具和 CollectionGapRequest Writer。新增搜索服务必须先接入本地 Gateway 的统一来源契约，所有结果继续标为 `external_discovery_only`；Agent 不得私自联网或安装未知搜索插件。
+
+### 架构澄清：产品始终是浏览器扩展模式
+
+产品执行面是 **Collector Core 浏览器扩展 + 持久化 Collection Browser Profile**。平台正常登录状态天然由浏览器 Profile 持有，扩展直接运行在该已登录上下文中；产品不设计 Cookie 管理、导入、导出、注入或跨进程分发子系统。DeepResearch、Gateway 和平台策略都不需要接触 Cookie。后续讨论统一围绕 Profile、扩展任务和页面 lease，不再把 Cookie 当作待建设能力反复询问。
+
 ## 进行中的问询
 
-当前正在征求第 71–75 题的选择，主题为 DeepResearch / 蜂群接入：证据何时可读、账号枚举与详情并发、结构化补采协议、框架适配边界，以及是否禁用框架自带搜索工具。它们在收到明确采纳前均不是既定决策。
+当前正在征求第 76–80 题的选择，主题回到浏览器扩展产品本身：任务如何启动、任务 tab / window 的归属、站点权限如何授予、本地 Gateway 如何与扩展配对，以及浏览器重启后如何恢复。它们在收到明确采纳前均不是既定决策。
