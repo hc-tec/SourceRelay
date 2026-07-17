@@ -3,7 +3,7 @@
 - 状态：Accepted
 - 日期：2026-07-17
 - 适用范围：Personal Intelligence 的浏览器扩展执行面、平台采集策略与本地研究证据包
-- 相关决策：[ADR-002：数据源层](data-source-layer.md)、[浏览器扩展采集系统基线](../research/browser-extension-collection-architecture-2026-07-17.md)、[受控网络响应观察](../research/browser-extension-network-observation-2026-07-17.md)
+- 相关决策：[Grill 决策账本](collector-grilling-decision-log.md)、[ADR-002：数据源层](data-source-layer.md)、[浏览器扩展采集系统基线](../research/browser-extension-collection-architecture-2026-07-17.md)、[受控网络响应观察](../research/browser-extension-network-observation-2026-07-17.md)
 
 ## 1. 北极星与边界
 
