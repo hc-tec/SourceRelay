@@ -2,7 +2,7 @@
 
 这是个人情报产品的浏览器内采集底座。一个 Manifest V3 Collector Core 运行在用户自己的 Collection Browser Profile 中，根据已批准的研究计划进入平台页面、读取公开可见内容，并在后续阶段把证据交给本地 Gateway / Evidence Vault。
 
-当前实现处于 **P0：决策契约与构建门禁**。它尚未宣称任何真实平台能力，也没有接入日常浏览器 Profile、登录态、本地 Gateway、加密 Vault 或 DeepResearch。
+当前实现已完成 **P0：决策契约与构建门禁**，正在进入 **P1：扩展控制面**。精确 optional host permission、EvidencePlan / Gateway / lease 契约、状态控制页和任务 tab 动态注入边界已经落码；本地 Gateway 传输、真实平台验证、加密 Vault 与 DeepResearch 尚未接入。
 
 ## 产品边界
 
@@ -23,7 +23,7 @@ Local Research Console / Gateway
 
 第三方平台爬虫仓库只能作为页面和产品调研参考，不能复制、集成、运行或成为采集后端。正式采集路线只允许在用户授权的真实浏览器页面中读取正常呈现的数据并执行有界只读动作。它不授权绕过登录、验证码、付费限制、限流或平台安全措施。
 
-## P0 共享契约
+## P0 / P1 共享契约
 
 [collection-contracts.ts](src/shared/collection-contracts.ts) 固定了后续 Console、Gateway、策略和 EvidencePackage 必须共同遵守的语言：
 
@@ -37,6 +37,8 @@ Local Research Console / Gateway
 - 来源与终态：策略 ID / 版本 / 成熟度 / 真实验证记录和每个来源的独立结果必须保留。
 
 证据目标与采集机制是两个正交维度。用户提出“归档某博主当前可见的所有笔记”并不自动授予无限滚动、评论、response observation 或原始媒体下载能力；这些动作仍受策略、预算和同意范围约束。
+
+[control-plane.ts](src/shared/control-plane.ts) 进一步定义了 `EvidencePlan`、待批准与已批准计划、loopback Gateway 固定身份、一次性配对 challenge、带 nonce / 过期时间 / 计划摘要 / 签名的任务 envelope，以及浏览器重启后失效的 session stage lease。当前 `build_ready` 策略在 preflight 中返回 `live_validation_required`，不能作为正式任务直接启动。
 
 ## 策略成熟度
 
@@ -66,7 +68,8 @@ draft
 3. `manifest.json` 是 MV3，引用的脚本均存在；
 4. API 权限、host permissions 和 content-script 范围与当前批准配置完全一致；
 5. 制品拒绝 `<all_urls>`、通配 scheme / host、localhost、静态 MAIN-world 注入、高风险权限和测试入口；
-6. Playwright 管理的临时空 Chromium Profile 能自动加载生产扩展并启动 MV3 service worker。
+6. Playwright 管理的临时空 Chromium Profile 能自动加载生产扩展、启动 MV3 service worker 并打开内部状态控制页；
+7. 新 Profile 没有任何已授予 optional host permission，也没有持久平台注册脚本。
 
 自动加载门禁不会打开任何平台页面，不会使用 Chrome / Edge 日常 Profile，也不需要人工进入 `chrome://extensions`、扫码、登录或点击扩展。它使用临时目录，结束后自动删除。
 
@@ -96,9 +99,11 @@ npm run verify:extension-load
 
 生成物位于 `dist/`。
 
-## 权限迁移边界
+## 权限与任务页面边界
 
-当前 P0 仍冻结并审查旧 POC 的精确平台 host 列表，以保证本轮不发生静默权限扩张。最终产品要求在启用具体策略时请求精确 `optional_host_permissions`；这需要和 Gateway 配对、策略启用、Collection Window 及 capability preflight 一起在 P1 完成，不能只改 Manifest 而留下无法执行或永久预授权的半套状态。
+安装时 `host_permissions` 现在为空。B站、知乎、微博和小红书的八个精确 origin pattern 只列在 `optional_host_permissions`；用户在控制页首次启用某平台策略时，浏览器显示并请求该策略声明的精确范围。撤销后该策略的 preflight 重新回到 `permission_required`。
+
+Manifest 不再静态声明任何平台 `content_scripts`，授予站点权限也不会把采集代码常驻注入该站所有用户页面。只有已配对 Gateway 提交、用户批准、preflight 为 `ready` 且拥有活动 stage lease 的专用 Collection Window 才允许对精确任务 tab 动态注入固定的 `content.js`。手工导航使 URL 摘要发生变化时，lease 标记为 `task_context_changed`，后续注入和结果接收停止。
 
 扩展不申请 `cookies`、`debugger`、`downloads`、`webRequest`、`webRequestBlocking` 或 `<all_urls>`。MAIN-world observer 不是静态 content script；现阶段即使其安全底座被打包，也因为生产 route allowlist 为空而不能接纳平台响应。
 
@@ -115,9 +120,11 @@ npm run verify:extension-load
 
 固定的用户配置浏览器代理可以作为 Profile 的正常网络环境；扩展不读取、管理或轮换代理。
 
-## 下一阶段
+## 当前控制面与下一阶段
 
-P1 将建立本地 Console / Gateway 配对、任务计划入口、专用 Collection Window、精确 optional host permission 和 capability preflight。之后才进入 B站 discovery → detail → bounded discussion 的真实纵向样板；其他平台能力继续按独立策略和真实验证记录推进。
+点击扩展图标只打开 Collector 状态控制页，用于查看 Gateway 配对、平台 maturity / permission 和活动 lease；它不直接采集当前 tab，也没有旧的快捷键采集入口。当前状态页尚未提供“伪造一个任务直接运行”的调试按钮。
+
+下一个检查点是实现本地 loopback Gateway 的固定身份、一次性显式配对、任务签名验证和 Console 计划批准入口。完成后才进入 B站 discovery → detail → bounded discussion 的真实纵向样板；其他平台能力继续按独立策略和真实验证记录推进。
 
 完整产品决策见：
 

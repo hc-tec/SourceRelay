@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Collector Control</title>
+    <link rel="stylesheet" href="control.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">PERSONAL INTELLIGENCE</p>
+          <h1>Collector Core</h1>
+        </div>
+        <span id="runtime-status" class="status">正在连接</span>
+      </header>
+
+      <section aria-labelledby="gateway-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="gateway-title">本地 Gateway</h2>
+            <p>只允许显式配对的 loopback 实例控制任务。</p>
+          </div>
+        </div>
+        <div id="pairing-state" class="empty-state">读取配对状态中…</div>
+      </section>
+
+      <section aria-labelledby="capability-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="capability-title">平台权限与能力</h2>
+            <p>站点权限按策略单独授予；构建就绪不等于真实平台已验证。</p>
+          </div>
+        </div>
+        <div id="strategy-list" class="strategy-list" aria-live="polite"></div>
+      </section>
+
+      <section aria-labelledby="lease-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="lease-title">Collection Window</h2>
+            <p>每个活动页面必须属于一个短时 stage lease。</p>
+          </div>
+        </div>
+        <div id="lease-state" class="empty-state">当前没有活动阶段。</div>
+      </section>
+
+      <p id="control-error" class="error" role="alert" hidden></p>
+    </main>
+    <script src="control.js"></script>
+  </body>
+</html>

@@ -10,24 +10,8 @@ const manifestPath = resolve(outputDirectory, 'manifest.json');
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 
 const approved = {
-  permissions: ['activeTab', 'storage', 'scripting'],
-  hostPermissions: [
-    'https://search.bilibili.com/*',
-    'https://www.bilibili.com/*',
-    'https://www.zhihu.com/*',
-    'https://zhuanlan.zhihu.com/*',
-    'https://s.weibo.com/*',
-    'https://weibo.com/*',
-    'https://m.weibo.cn/*',
-    'https://www.xiaohongshu.com/*'
-  ],
-  bridgeMatches: [
-    'https://search.bilibili.com/all*',
-    'https://www.zhihu.com/search*',
-    'https://s.weibo.com/weibo*',
-    'https://www.xiaohongshu.com/search_result_ai*'
-  ],
-  contentMatches: [
+  permissions: ['storage', 'scripting'],
+  optionalHostPermissions: [
     'https://search.bilibili.com/*',
     'https://www.bilibili.com/*',
     'https://www.zhihu.com/*',
@@ -59,8 +43,12 @@ for (const permission of declaredPermissions) {
 
 assert.deepEqual(manifest.permissions ?? [], approved.permissions, 'core permissions changed without approval');
 assert.deepEqual(manifest.optional_permissions ?? [], [], 'optional API permissions changed without approval');
-assert.deepEqual(manifest.host_permissions ?? [], approved.hostPermissions, 'host permissions changed without approval');
-assert.deepEqual(manifest.optional_host_permissions ?? [], [], 'optional host permissions changed without approval');
+assert.deepEqual(manifest.host_permissions ?? [], [], 'install-time host permissions are forbidden');
+assert.deepEqual(
+  manifest.optional_host_permissions ?? [],
+  approved.optionalHostPermissions,
+  'optional host permissions changed without approval'
+);
 assert.equal('externally_connectable' in manifest, false, 'external page connections changed without approval');
 
 const allHostPatterns = [
@@ -84,32 +72,24 @@ for (const pattern of allHostPatterns) {
 const mainWorldEntries = (manifest.content_scripts ?? []).filter((entry) => entry.world === 'MAIN');
 assert.equal(mainWorldEntries.length, 0, 'manifest must not statically inject a MAIN-world observer');
 assert.equal('web_accessible_resources' in manifest, false, 'extension scripts must not be page-accessible resources');
-
-const bridgeEntries = (manifest.content_scripts ?? []).filter((entry) =>
-  entry.js?.includes('network-capture-bridge.js')
-);
-assert.equal(bridgeEntries.length, 1, 'manifest must have exactly one isolated network bridge');
-assert.deepEqual(bridgeEntries[0].matches, approved.bridgeMatches, 'bridge page scope changed without approval');
-assert.equal(bridgeEntries[0].run_at, 'document_start');
-assert.equal(bridgeEntries[0].all_frames, false);
-
-const collectionEntries = (manifest.content_scripts ?? []).filter((entry) =>
-  entry.js?.includes('content.js')
-);
-assert.equal(collectionEntries.length, 1, 'manifest must have exactly one isolated DOM collector');
-assert.deepEqual(collectionEntries[0].matches, approved.contentMatches, 'DOM collector scope changed without approval');
-assert.equal(collectionEntries[0].run_at, 'document_idle');
-assert.equal(collectionEntries[0].all_frames, false);
-assert.equal(manifest.content_scripts.length, 2, 'content-script declarations changed without approval');
+assert.deepEqual(manifest.content_scripts ?? [], [], 'platform scripts must be registered only after optional permission grant');
+assert.equal('commands' in manifest, false, 'the control surface must not expose a legacy active-tab collection command');
+assert.equal(manifest.action?.default_popup, 'control.html', 'the extension action must open the control surface');
 
 const referencedScripts = [
   manifest.background?.service_worker,
-  ...(manifest.content_scripts ?? []).flatMap((entry) => entry.js ?? []),
-  'main-world-network-observer.js'
+  'content.js',
+  'network-capture-bridge.js',
+  'main-world-network-observer.js',
+  'control.js'
 ];
 for (const script of referencedScripts) {
   assert.equal(typeof script, 'string', 'manifest and build contract must reference JavaScript files');
   await access(resolve(outputDirectory, script));
+}
+
+for (const pageArtifact of ['control.html', 'control.css']) {
+  await access(resolve(outputDirectory, pageArtifact));
 }
 
 const outputNames = await readdir(outputDirectory);
@@ -126,5 +106,6 @@ console.log(JSON.stringify({
   manifest: 'dist/manifest.json',
   sha256: digest,
   permissions: manifest.permissions,
-  hostPermissions: manifest.host_permissions
+  hostPermissions: manifest.host_permissions ?? [],
+  optionalHostPermissions: manifest.optional_host_permissions
 }, null, 2));

@@ -8,14 +8,14 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Collect visible results"
+    "default_title": "Open Collector control",
+    "default_popup": "control.html"
   },
   "permissions": [
-    "activeTab",
     "storage",
     "scripting"
   ],
-  "host_permissions": [
+  "optional_host_permissions": [
     "https://search.bilibili.com/*",
     "https://www.bilibili.com/*",
     "https://www.zhihu.com/*",
@@ -24,41 +24,5 @@
     "https://weibo.com/*",
     "https://m.weibo.cn/*",
     "https://www.xiaohongshu.com/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": [
-        "https://search.bilibili.com/all*",
-        "https://www.zhihu.com/search*",
-        "https://s.weibo.com/weibo*",
-        "https://www.xiaohongshu.com/search_result_ai*"
-      ],
-      "js": ["network-capture-bridge.js"],
-      "run_at": "document_start",
-      "all_frames": false
-    },
-    {
-      "matches": [
-        "https://search.bilibili.com/*",
-        "https://www.bilibili.com/*",
-        "https://www.zhihu.com/*",
-        "https://zhuanlan.zhihu.com/*",
-        "https://s.weibo.com/*",
-        "https://weibo.com/*",
-        "https://m.weibo.cn/*",
-        "https://www.xiaohongshu.com/*"
-      ],
-      "js": ["content.js"],
-      "run_at": "document_idle",
-      "all_frames": false
-    }
-  ],
-  "commands": {
-    "collect-visible-results": {
-      "suggested_key": {
-        "default": "Alt+Shift+Y"
-      },
-      "description": "Collect visible result cards from the active supported page"
-    }
-  }
+  ]
 }

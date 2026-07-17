@@ -1,29 +1,42 @@
 import {
-  COLLECTION_RESULT,
-  COLLECT_ACTIVE_TAB,
   COLLECT_VISIBLE_RESULTS,
   CONTENT_READY,
+  GET_CONTROL_SNAPSHOT,
   NETWORK_CAPTURE_BRIDGE_READY_MESSAGE,
   NETWORK_CAPTURE_OBSERVED,
-  START_NATIVE_SEARCH,
-  isCollectActiveTabMessage,
   isCollectionResultMessage,
+  isGetControlSnapshotMessage,
   isNetworkCaptureBridgeReadyMessage,
   isNetworkCaptureObservedMessage,
-  isStartNativeSearchMessage,
+  isSyncStrategyPermissionsMessage,
   type VisibleCollectionResult
 } from '../shared/protocol';
-import { buildNativeSearchUrl, nativeSearchPlatform } from '../shared/native-search';
+import { nativeSearchPlatform } from '../shared/native-search';
 import {
   NETWORK_CAPTURE_MAX_PER_PAGE,
   hasApprovedNetworkCaptureRoute,
   sanitiseNetworkCaptureObservation,
   type NetworkCaptureObservation
 } from '../shared/network-capture';
-import { resolveNativeSearchStrategy, strategyProvenance } from '../shared/strategy-registry';
+import { isSupportedPlatform, type SupportedPlatform } from '../shared/collection-contracts';
+import type { CollectorControlSnapshot, StageLease } from '../shared/control-plane';
+import { getGatewayPairing } from './pairing-store';
+import {
+  activeStageLeaseForSender,
+  invalidateLeasesWithoutPermissions,
+  listStageLeases,
+  markTaskContextChanged,
+  markWindowClosed,
+  stageLeaseForTab,
+  updateStageLeaseStatus
+} from './stage-leases';
+import {
+  strategyPermissionSnapshots,
+  synchroniseStrategyContentScripts
+} from './strategy-permissions';
 
-function resultStorageKey(tabId: number): string {
-  return `collector.visible-result.${tabId}`;
+function resultStorageKey(lease: StageLease): string {
+  return `collector.visible-result.${lease.taskId}.${lease.stageId}`;
 }
 
 function networkCaptureStorageKey(tabId: number): string {
@@ -35,7 +48,7 @@ function networkCaptureArmStorageKey(tabId: number): string {
 }
 
 interface NetworkCaptureArm {
-  platform: Parameters<typeof buildNativeSearchUrl>[0];
+  platform: SupportedPlatform;
   navigationUrlDigest: string;
   documentId?: string;
   expiresAt: number;
@@ -45,25 +58,10 @@ interface BoundNetworkCaptureArm extends NetworkCaptureArm {
   documentId: string;
 }
 
-const NETWORK_CAPTURE_ARM_TTL_MS = 2 * 60 * 1000;
-
 async function navigationUrlDigest(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-async function armNetworkCapture(
-  tabId: number,
-  platform: Parameters<typeof buildNativeSearchUrl>[0],
-  navigationUrl: string
-): Promise<void> {
-  const arm: NetworkCaptureArm = {
-    platform,
-    navigationUrlDigest: await navigationUrlDigest(navigationUrl),
-    expiresAt: Date.now() + NETWORK_CAPTURE_ARM_TTL_MS
-  };
-  await chrome.storage.session.set({ [networkCaptureArmStorageKey(tabId)]: arm });
 }
 
 async function getActiveNetworkCaptureArm(tabId: number): Promise<NetworkCaptureArm | null> {
@@ -77,10 +75,7 @@ async function getActiveNetworkCaptureArm(tabId: number): Promise<NetworkCapture
         : null;
   if (
     candidate &&
-    (candidate.platform === 'bilibili' ||
-      candidate.platform === 'zhihu' ||
-      candidate.platform === 'weibo' ||
-      candidate.platform === 'xiaohongshu') &&
+    isSupportedPlatform(candidate.platform) &&
     typeof candidate.navigationUrlDigest === 'string' &&
     /^[0-9a-f]{64}$/.test(candidate.navigationUrlDigest) &&
     typeof candidate.expiresAt === 'number' &&
@@ -165,35 +160,23 @@ async function collectTab(tabId: number): Promise<VisibleCollectionResult> {
   return response.result as VisibleCollectionResult;
 }
 
-async function collectActiveTab(): Promise<VisibleCollectionResult> {
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (!tab?.id) throw new Error('No active tab is available for visible-result collection.');
-  return collectTab(tab.id);
+function isExtensionControlSender(sender: chrome.runtime.MessageSender): boolean {
+  return (
+    sender.id === chrome.runtime.id &&
+    typeof sender.url === 'string' &&
+    sender.url.startsWith(chrome.runtime.getURL(''))
+  );
 }
 
-async function startNativeSearch(
-  platform: Parameters<typeof buildNativeSearchUrl>[0],
-  query: string
-) {
-  const strategy = resolveNativeSearchStrategy(platform);
-  const nativeUrl = buildNativeSearchUrl(platform, query);
-  const navigationUrl = nativeUrl.href;
-  // Create an inert tab first, arm that exact tab ID, then navigate.  This
-  // removes the document_start race without ever enabling capture for an
-  // unrelated page or a user-opened search tab. With the current empty
-  // production route registry, no arm is created and no MAIN-world observer
-  // is injected.
-  const tab = await chrome.tabs.create({ url: 'about:blank', active: false });
-  if (!tab.id) throw new Error('Chrome did not create a tab for the platform-native search task.');
-  if (hasApprovedNetworkCaptureRoute(platform)) {
-    await armNetworkCapture(tab.id, platform, navigationUrl);
-  }
-  await chrome.tabs.update(tab.id, { url: navigationUrl });
+async function controlSnapshot(): Promise<CollectorControlSnapshot> {
+  const leases = await listStageLeases();
   return {
-    tabId: tab.id,
-    nativeUrl: nativeUrl.href,
-    navigationUrl,
-    strategy: strategyProvenance(strategy)
+    schemaVersion: 1,
+    protocolVersion: 1,
+    pairing: await getGatewayPairing(),
+    strategies: await strategyPermissionSnapshots(),
+    activeLeases: leases.filter((lease) => lease.status === 'active'),
+    capturedAt: new Date().toISOString()
   };
 }
 
@@ -207,6 +190,11 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     void bindArmToDocument(tabId, sender.url, sender.documentId).then(
       async (arm) => {
         if (!arm) {
+          sendResponse({ ok: true, armed: false });
+          return;
+        }
+        if (!hasApprovedNetworkCaptureRoute(arm.platform)) {
+          await chrome.storage.session.remove(networkCaptureArmStorageKey(tabId));
           sendResponse({ ok: true, armed: false });
           return;
         }
@@ -265,58 +253,114 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 
   if (isCollectionResultMessage(message)) {
     const tabId = sender.tab?.id;
-    if (typeof tabId === 'number') {
-      void chrome.storage.session.set({ [resultStorageKey(tabId)]: message.result });
+    if (typeof tabId !== 'number') {
+      sendResponse({ ok: false, error: 'collection_result_source_rejected' });
+      return false;
     }
-    sendResponse({ ok: true });
-    return false;
-  }
-
-  if (isCollectActiveTabMessage(message)) {
-    void collectActiveTab().then(
-      (result) => sendResponse({ ok: true, result }),
-      (error: unknown) => sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) })
+    void activeStageLeaseForSender(tabId, sender.url, sender.documentId).then(
+      async (lease) => {
+        if (!lease) return { ok: false, error: 'collection_result_without_active_lease' };
+        await chrome.storage.session.set({ [resultStorageKey(lease)]: message.result });
+        await updateStageLeaseStatus(tabId, 'completed');
+        return { ok: true, taskId: lease.taskId, stageId: lease.stageId };
+      }
+    ).then(
+      (result) => sendResponse(result),
+      () => sendResponse({ ok: false, error: 'collection_result_storage_failed' })
     );
     return true;
   }
 
-  if (isStartNativeSearchMessage(message)) {
-    void startNativeSearch(message.platform, message.query).then(
-      (task) => sendResponse({ ok: true, task }),
-      (error: unknown) => sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) })
+  if (isGetControlSnapshotMessage(message)) {
+    if (!isExtensionControlSender(sender)) {
+      sendResponse({ ok: false, error: 'control_sender_rejected' });
+      return false;
+    }
+    void controlSnapshot().then(
+      (snapshot) => sendResponse({ ok: true, snapshot }),
+      () => sendResponse({ ok: false, error: 'control_snapshot_failed' })
+    );
+    return true;
+  }
+
+  if (isSyncStrategyPermissionsMessage(message)) {
+    if (!isExtensionControlSender(sender)) {
+      sendResponse({ ok: false, error: 'control_sender_rejected' });
+      return false;
+    }
+    void synchroniseStrategyContentScripts().then(
+      () => sendResponse({ ok: true }),
+      () => sendResponse({ ok: false, error: 'strategy_permission_sync_failed' })
     );
     return true;
   }
 
   if (message && typeof message === 'object' && (message as { type?: unknown }).type === CONTENT_READY) {
     const tabId = sender.tab?.id;
-    if (typeof tabId === 'number') {
-      void collectTab(tabId).catch(() => undefined);
+    if (typeof tabId !== 'number') {
+      sendResponse({ ok: false, error: 'content_ready_source_rejected' });
+      return false;
     }
-    sendResponse({ ok: true });
+    void activeStageLeaseForSender(tabId, sender.url, sender.documentId).then(
+      async (lease) => {
+        if (!lease) return { ok: false, error: 'content_ready_without_active_lease' };
+        await collectTab(tabId);
+        return { ok: true };
+      }
+    ).then(
+      (result) => sendResponse(result),
+      () => sendResponse({ ok: false, error: 'content_collection_failed' })
+    );
+    return true;
   }
   return false;
 });
 
-chrome.commands.onCommand.addListener((command) => {
-  if (command !== 'collect-visible-results') return;
-  void collectActiveTab().catch(() => undefined);
-});
-
-chrome.action.onClicked.addListener(() => {
-  void collectActiveTab().catch(() => undefined);
-});
-
 // Keep the public protocol surface explicit in the bundled worker.
-void COLLECT_ACTIVE_TAB;
-void START_NATIVE_SEARCH;
+void COLLECT_VISIBLE_RESULTS;
+void GET_CONTROL_SNAPSHOT;
 void NETWORK_CAPTURE_OBSERVED;
 void NETWORK_CAPTURE_BRIDGE_READY_MESSAGE;
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  void chrome.storage.session.remove([
-    resultStorageKey(tabId),
-    networkCaptureStorageKey(tabId),
-    networkCaptureArmStorageKey(tabId)
-  ]);
+  void updateStageLeaseStatus(tabId, 'window_closed');
+  void chrome.storage.session.remove([networkCaptureStorageKey(tabId), networkCaptureArmStorageKey(tabId)]);
 });
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.url) void markTaskContextChanged(tabId, changeInfo.url);
+  if (changeInfo.status !== 'complete') return;
+  void chrome.tabs.get(tabId).then(async (tab) => {
+    if (!tab.url) return;
+    await markTaskContextChanged(tabId, tab.url);
+    const lease = await stageLeaseForTab(tabId);
+    if (!lease || lease.status !== 'active') return;
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js']
+    });
+  }).catch(() => undefined);
+});
+
+chrome.windows.onRemoved.addListener((windowId) => {
+  void markWindowClosed(windowId);
+});
+
+chrome.permissions.onAdded.addListener(() => {
+  void synchroniseStrategyContentScripts();
+});
+
+chrome.permissions.onRemoved.addListener(() => {
+  void synchroniseStrategyContentScripts();
+  void invalidateLeasesWithoutPermissions();
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  void synchroniseStrategyContentScripts();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void synchroniseStrategyContentScripts();
+});
+
+void synchroniseStrategyContentScripts();

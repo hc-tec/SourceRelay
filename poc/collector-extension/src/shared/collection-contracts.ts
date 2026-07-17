@@ -177,11 +177,14 @@ export interface CapabilityPreflight {
   targetType: TaskTargetType;
   evidenceObjective: EvidenceObjective;
   status: CapabilityPreflightStatus;
+  releaseTrack: 'formal' | 'experimental' | 'unsupported';
   strategy: StrategyProvenance | null;
+  lastVerifiedAt: string | null;
   requiredHostPermissions: readonly string[];
   missingHostPermissions: readonly string[];
   requiredConsent: readonly ConsentAction[];
   missingConsent: readonly ConsentAction[];
+  objectiveApproved: boolean;
   budgetStatus: 'accepted' | 'invalid' | 'requires_approval';
   requiredUserActions: readonly (
     | 'approve_task_plan'
@@ -189,6 +192,9 @@ export interface CapabilityPreflight {
     | 'authenticate_in_collection_window'
     | 'confirm_plan_change'
   )[];
+  estimatedReadOnlyActions: number;
+  knownGaps: readonly string[];
+  externalDiscoveryOnly: boolean;
   checkedAt: string;
 }
 

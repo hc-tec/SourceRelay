@@ -57,6 +57,11 @@ export interface StaticPlatformStrategy {
     kind: StrategyOutputKind;
     partialByDefault: boolean;
   };
+  browser: {
+    optionalHostPermissions: readonly string[];
+    domContentMatches: readonly string[];
+    responseBridgeMatches: readonly string[];
+  };
   approvedResponseRouteIds: readonly string[];
   validation: {
     mode: 'local_live_platform_only';
@@ -65,6 +70,49 @@ export interface StaticPlatformStrategy {
 }
 
 function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStrategy {
+  const browserByPlatform: Record<SupportedPlatform, StaticPlatformStrategy['browser']> = {
+    bilibili: {
+      optionalHostPermissions: [
+        'https://search.bilibili.com/*',
+        'https://www.bilibili.com/*'
+      ],
+      domContentMatches: [
+        'https://search.bilibili.com/*',
+        'https://www.bilibili.com/*'
+      ],
+      responseBridgeMatches: ['https://search.bilibili.com/all*']
+    },
+    zhihu: {
+      optionalHostPermissions: [
+        'https://www.zhihu.com/*',
+        'https://zhuanlan.zhihu.com/*'
+      ],
+      domContentMatches: [
+        'https://www.zhihu.com/*',
+        'https://zhuanlan.zhihu.com/*'
+      ],
+      responseBridgeMatches: ['https://www.zhihu.com/search*']
+    },
+    weibo: {
+      optionalHostPermissions: [
+        'https://s.weibo.com/*',
+        'https://weibo.com/*',
+        'https://m.weibo.cn/*'
+      ],
+      domContentMatches: [
+        'https://s.weibo.com/*',
+        'https://weibo.com/*',
+        'https://m.weibo.cn/*'
+      ],
+      responseBridgeMatches: ['https://s.weibo.com/weibo*']
+    },
+    xiaohongshu: {
+      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      domContentMatches: ['https://www.xiaohongshu.com/*'],
+      responseBridgeMatches: ['https://www.xiaohongshu.com/search_result_ai*']
+    }
+  };
+
   return {
     strategyId: `${platform}.search.breadth.dom.v1`,
     version: '1.0.0',
@@ -92,6 +140,7 @@ function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStr
       kind: 'search_card',
       partialByDefault: true
     },
+    browser: browserByPlatform[platform],
     // The response-observation engine is intentionally not a platform
     // capability until a precise route has separately passed live admission.
     approvedResponseRouteIds: [],

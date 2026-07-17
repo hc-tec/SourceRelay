@@ -4,16 +4,16 @@ import {
   type NetworkCaptureObservation
 } from './network-capture';
 import type { StrategyProvenance } from './strategy-registry';
-import { isSupportedPlatform, type SupportedPlatform } from './collection-contracts';
+import type { SupportedPlatform } from './collection-contracts';
 
 export type { SupportedPlatform } from './collection-contracts';
 
 export const COLLECT_VISIBLE_RESULTS = 'collector.collectVisibleResults' as const;
-export const COLLECT_ACTIVE_TAB = 'collector.collectActiveTab' as const;
 export const COLLECTION_RESULT = 'collector.collectionResult' as const;
 export const CONTENT_READY = 'collector.contentReady' as const;
-export const START_NATIVE_SEARCH = 'collector.startNativeSearch' as const;
 export const NETWORK_CAPTURE_BRIDGE_READY_MESSAGE = 'collector.networkCaptureBridgeReady' as const;
+export const GET_CONTROL_SNAPSHOT = 'collector.getControlSnapshot' as const;
+export const SYNC_STRATEGY_PERMISSIONS = 'collector.syncStrategyPermissions' as const;
 export { NETWORK_CAPTURE_OBSERVED };
 
 export interface VisibleSearchItem {
@@ -39,10 +39,6 @@ export interface CollectVisibleResultsMessage {
   type: typeof COLLECT_VISIBLE_RESULTS;
 }
 
-export interface CollectActiveTabMessage {
-  type: typeof COLLECT_ACTIVE_TAB;
-}
-
 export interface CollectionResultMessage {
   type: typeof COLLECTION_RESULT;
   result: VisibleCollectionResult;
@@ -62,10 +58,12 @@ export interface NetworkCaptureBridgeReadyMessage {
   type: typeof NETWORK_CAPTURE_BRIDGE_READY_MESSAGE;
 }
 
-export interface StartNativeSearchMessage {
-  type: typeof START_NATIVE_SEARCH;
-  platform: SupportedPlatform;
-  query: string;
+export interface GetControlSnapshotMessage {
+  type: typeof GET_CONTROL_SNAPSHOT;
+}
+
+export interface SyncStrategyPermissionsMessage {
+  type: typeof SYNC_STRATEGY_PERMISSIONS;
 }
 
 export function isCollectVisibleResultsMessage(
@@ -78,13 +76,11 @@ export function isCollectVisibleResultsMessage(
   );
 }
 
-export function isCollectActiveTabMessage(
-  value: unknown
-): value is CollectActiveTabMessage {
+export function isGetControlSnapshotMessage(value: unknown): value is GetControlSnapshotMessage {
   return Boolean(
     value &&
       typeof value === 'object' &&
-      (value as { type?: unknown }).type === COLLECT_ACTIVE_TAB
+      (value as { type?: unknown }).type === GET_CONTROL_SNAPSHOT
   );
 }
 
@@ -99,13 +95,11 @@ export function isCollectionResultMessage(
   );
 }
 
-export function isStartNativeSearchMessage(value: unknown): value is StartNativeSearchMessage {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as { type?: unknown; platform?: unknown; query?: unknown };
-  return (
-    candidate.type === START_NATIVE_SEARCH &&
-    isSupportedPlatform(candidate.platform) &&
-    typeof candidate.query === 'string'
+export function isSyncStrategyPermissionsMessage(value: unknown): value is SyncStrategyPermissionsMessage {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as { type?: unknown }).type === SYNC_STRATEGY_PERMISSIONS
   );
 }
 

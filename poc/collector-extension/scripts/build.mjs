@@ -37,6 +37,11 @@ const bundles = [
     input: resolve(root, 'src', 'content', 'index.ts'),
     output: resolve(outputDirectory, 'content.js'),
     format: 'iife'
+  },
+  {
+    input: resolve(root, 'src', 'control', 'index.ts'),
+    output: resolve(outputDirectory, 'control.js'),
+    format: 'iife'
   }
 ];
 
@@ -50,6 +55,10 @@ for (const bundle of bundles) {
     sourcemap: true,
     logLevel: 'info'
   });
+}
+
+for (const publicFile of ['control.html', 'control.css']) {
+  await cp(resolve(root, 'public', publicFile), resolve(outputDirectory, publicFile));
 }
 
 // Keep this explicit so a future asset directory cannot become an unreviewed
