@@ -200,8 +200,16 @@ async function main() {
       assert.equal(response.ok, true);
       assert.equal(response.task.nativeUrl, fixture.nativeUrl);
       assert.equal(response.task.navigationUrl.startsWith(`${fixtureServer.baseUrl}/${fixture.platform}`), true);
+      assert.deepEqual(response.task.strategy, {
+        strategyId: `${fixture.platform}.search.breadth.dom.v1`,
+        version: '1',
+        evidenceObjective: 'breadth_search',
+        acquisition: ['native_navigation', 'visible_dom'],
+        maturity: 'fixture_verified'
+      });
       const stored = await waitForStoredResult(worker, response.task.tabId);
       assert.equal(stored.platform, fixture.platform);
+      assert.deepEqual(stored.strategy, response.task.strategy);
       assert.equal(stored.sourceUrl.startsWith(`${fixtureServer.baseUrl}/${fixture.platform}`), true);
       assert.equal(stored.items[0].url, fixture.expectedUrl);
 

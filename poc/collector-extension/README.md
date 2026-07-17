@@ -18,6 +18,9 @@
 
 测试全过程不需要人工到 `chrome://extensions` 加载扩展、不需要点击工具栏图标、不需要登录平台，也不会读取用户日常 Chrome、Edge 或 BrowserWing Profile。
 
+现有四条搜索路线已在代码中注册为静态、版本化策略（例如
+`bilibili.search.breadth.dom.v1`）。它们共同只承诺“原生导航 + 首屏可见 DOM 卡片”，成熟度为 `fixture_verified`，并不会因有了策略注册表就宣称已具备账号归档、详情、评论、翻页或真实平台 response route 能力。策略定义与扩展一同编译、代码审查和 fixture 测试；它不是可在运行时下载的插件，也不能直接取得 tab、Cookie、网络或本地 Gateway 权限。
+
 ## 两条独立的采集路线
 
 ### 1. 可见 DOM（当前已启用）

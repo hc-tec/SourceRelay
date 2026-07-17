@@ -19,6 +19,7 @@ import {
   sanitiseNetworkCaptureObservation,
   type NetworkCaptureObservation
 } from '../shared/network-capture';
+import { resolveNativeSearchStrategy, strategyProvenance } from '../shared/strategy-registry';
 
 function resultStorageKey(tabId: number): string {
   return `collector.visible-result.${tabId}`;
@@ -186,6 +187,7 @@ async function startNativeSearch(
   query: string,
   fixtureBaseUrl?: string
 ) {
+  const strategy = resolveNativeSearchStrategy(platform);
   const nativeUrl = buildNativeSearchUrl(platform, query);
   const navigationUrl = testFixtureNavigationUrl(platform, nativeUrl, fixtureBaseUrl);
   // Create an inert tab first, arm that exact tab ID, then navigate.  This
@@ -195,7 +197,12 @@ async function startNativeSearch(
   if (!tab.id) throw new Error('Chrome did not create a tab for the platform-native search task.');
   await armNetworkCapture(tab.id, platform, navigationUrl);
   await chrome.tabs.update(tab.id, { url: navigationUrl });
-  return { tabId: tab.id, nativeUrl: nativeUrl.href, navigationUrl };
+  return {
+    tabId: tab.id,
+    nativeUrl: nativeUrl.href,
+    navigationUrl,
+    strategy: strategyProvenance(strategy)
+  };
 }
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {

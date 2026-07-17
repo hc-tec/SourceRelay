@@ -3,6 +3,7 @@ import {
   sanitiseNetworkCaptureObservation,
   type NetworkCaptureObservation
 } from './network-capture';
+import type { StrategyProvenance } from './strategy-registry';
 
 export const COLLECT_VISIBLE_RESULTS = 'collector.collectVisibleResults' as const;
 export const COLLECT_ACTIVE_TAB = 'collector.collectActiveTab' as const;
@@ -25,6 +26,7 @@ export interface VisibleCollectionResult {
   schemaVersion: 1;
   platform: SupportedPlatform | 'unsupported';
   operation: 'keyword_search';
+  strategy: StrategyProvenance | null;
   sourceUrl: string;
   partial: true;
   itemCount: number;

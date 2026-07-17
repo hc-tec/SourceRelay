@@ -1,5 +1,6 @@
 import type { SupportedPlatform, VisibleCollectionResult, VisibleSearchItem } from '../shared/protocol';
 import { nativeSearchPlatform } from '../shared/native-search';
+import { resolveNativeSearchStrategy, strategyProvenance } from '../shared/strategy-registry';
 
 const MAX_ITEMS = 20;
 
@@ -125,11 +126,15 @@ export function collectVisibleSearchResults(
     xiaohongshu: () => collectXiaohongshu(document, location)
   };
   const items = platform === 'unsupported' ? [] : collectors[platform]();
+  const strategy = platform === 'unsupported'
+    ? null
+    : strategyProvenance(resolveNativeSearchStrategy(platform));
 
   return {
     schemaVersion: 1,
     platform,
     operation: 'keyword_search',
+    strategy,
     sourceUrl: safePageUrl(location),
     partial: true,
     itemCount: items.length,
