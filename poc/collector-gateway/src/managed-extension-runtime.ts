@@ -1,9 +1,10 @@
 import { access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { chromium, type BrowserContext, type Page } from 'playwright';
+import { chromium, type BrowserContext, type Page, type Worker } from 'playwright';
 import {
-  COLLECTOR_CONTROL_SURFACE_REVISION
+  COLLECTOR_CONTROL_SURFACE_REVISION,
+  type BrowserProfileRuntimeSummary
 } from '../../collector-extension/src/shared/control-plane';
 import {
   COLLECTOR_CORE_VERSION,
@@ -16,15 +17,109 @@ export interface RunningExtensionProfile {
   context: BrowserContext;
   extensionId: string;
   extensionVersion: string;
+  extensionAdoption: NonNullable<BrowserProfileRuntimeSummary['extensionAdoption']>;
   controlPage: Page | null;
   controlPagePromise: Promise<Page> | null;
-  versionRecovery: Promise<Page> | null;
+  controlVerification: Promise<Page> | null;
 }
 
-async function waitForExtensionWorker(context: BrowserContext) {
-  const existing = context.serviceWorkers();
-  if (existing.length > 0) return existing[0];
-  return context.waitForEvent('serviceworker', { timeout: 15_000 });
+interface ExtensionWorkerProbe {
+  worker: Worker;
+  extensionId: string;
+  version: string;
+}
+
+const EXTENSION_WORKER_WAIT_MS = 15_000;
+const EXTENSION_WORKER_RELOAD_WAIT_MS = 5_000;
+const CONTROL_VERSION_WAIT_MS = 3_000;
+const LOCAL_POLL_MS = 100;
+
+async function extensionWorkerProbe(worker: Worker): Promise<ExtensionWorkerProbe | null> {
+  const snapshot = await worker.evaluate(() => {
+    const extensionGlobal = globalThis as typeof globalThis & {
+      chrome: {
+        runtime: {
+          id: string;
+          getManifest(): { version?: unknown };
+        };
+      };
+    };
+    return {
+      extensionId: extensionGlobal.chrome.runtime.id,
+      version: extensionGlobal.chrome.runtime.getManifest().version
+    };
+  }).catch(() => null);
+  if (
+    !snapshot ||
+    typeof snapshot.extensionId !== 'string' ||
+    !/^[a-p]{32}$/.test(snapshot.extensionId) ||
+    typeof snapshot.version !== 'string'
+  ) return null;
+  return { worker, extensionId: snapshot.extensionId, version: snapshot.version };
+}
+
+async function waitForExtensionWorker(
+  context: BrowserContext,
+  timeoutMs: number,
+  predicate: (probe: ExtensionWorkerProbe) => boolean = () => true
+): Promise<ExtensionWorkerProbe | null> {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    for (const worker of context.serviceWorkers()) {
+      const probe = await extensionWorkerProbe(worker);
+      if (probe && predicate(probe)) return probe;
+    }
+    await delay(LOCAL_POLL_MS);
+  } while (Date.now() < deadline);
+  return null;
+}
+
+async function adoptExtensionWorker(
+  context: BrowserContext,
+  expectedVersion: string
+): Promise<{
+  probe: ExtensionWorkerProbe;
+  adoption: NonNullable<BrowserProfileRuntimeSummary['extensionAdoption']>;
+}> {
+  const initial = await waitForExtensionWorker(context, EXTENSION_WORKER_WAIT_MS);
+  if (!initial) throw new Error('collector_extension_worker_missing');
+  if (initial.version === expectedVersion) {
+    return {
+      probe: initial,
+      adoption: {
+        expectedVersion,
+        initialVersion: initial.version,
+        finalVersion: initial.version,
+        runtimeReloadAttempted: false,
+        chromeUiReloadAttempted: false,
+        contextRestarted: false
+      }
+    };
+  }
+
+  await initial.worker.evaluate(() => {
+    const extensionGlobal = globalThis as typeof globalThis & {
+      chrome: { runtime: { reload(): void } };
+    };
+    extensionGlobal.chrome.runtime.reload();
+  }).catch(() => undefined);
+  const adopted = await waitForExtensionWorker(
+    context,
+    EXTENSION_WORKER_RELOAD_WAIT_MS,
+    (probe) => probe.extensionId === initial.extensionId && probe.version === expectedVersion
+  );
+  if (!adopted) throw new Error('collector_extension_worker_version_mismatch');
+  return {
+    probe: adopted,
+    adoption: {
+      expectedVersion,
+      initialVersion: initial.version,
+      finalVersion: adopted.version,
+      runtimeReloadAttempted: true,
+      chromeUiReloadAttempted: false,
+      contextRestarted: false
+    }
+  };
 }
 
 export async function extensionHasOrigins(page: Page, origins: readonly string[]): Promise<boolean> {
@@ -87,15 +182,6 @@ export async function extensionControlSnapshot(page: Page): Promise<{
   return { pairing: { gatewayInstanceId: pairing.gatewayInstanceId } };
 }
 
-async function reloadExtension(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const extensionGlobal = globalThis as typeof globalThis & {
-      chrome: { runtime: { reload(): void } };
-    };
-    extensionGlobal.chrome.runtime.reload();
-  }).catch(() => undefined);
-}
-
 export class ManagedExtensionRuntime {
   readonly #config: GatewayConfig;
   readonly #registry: BrowserProfileRegistry;
@@ -122,7 +208,7 @@ export class ManagedExtensionRuntime {
       throw new Error('profile_platform_concurrency_rejected');
     }
 
-    const operation = this.#launchProfileWithRecovery(profileId);
+    const operation = this.#launchProfile(profileId);
     this.#launching.set(profileId, operation);
     try {
       return await operation;
@@ -135,20 +221,6 @@ export class ManagedExtensionRuntime {
     const running = this.#running.get(profileId);
     if (!running) throw new Error('profile_browser_not_running');
     return this.#ensureExtensionVersion(running, await this.#extensionControlPage(running));
-  }
-
-  async #launchProfileWithRecovery(profileId: string): Promise<RunningExtensionProfile> {
-    try {
-      return await this.#launchProfile(profileId);
-    } catch (error) {
-      const code = error instanceof Error ? error.message : '';
-      if (code !== 'validation_extension_ui_reload_failed' && code !== 'validation_control_version_mismatch') {
-        throw error;
-      }
-      // A changed unpacked extension may be adopted only after the persistent
-      // context exits. This one local recovery never navigates to a platform.
-      return this.#launchProfile(profileId);
-    }
   }
 
   async #launchProfile(profileId: string): Promise<RunningExtensionProfile> {
@@ -182,20 +254,18 @@ export class ManagedExtensionRuntime {
       }
     );
     try {
-      const worker = await waitForExtensionWorker(context);
-      const extensionId = new URL(worker.url()).host;
-      if (!/^[a-p]{32}$/.test(extensionId)) throw new Error('collector_extension_id_invalid');
+      const { probe, adoption } = await adoptExtensionWorker(context, manifest.version);
       const running: RunningExtensionProfile = {
         context,
-        extensionId,
+        extensionId: probe.extensionId,
         extensionVersion: manifest.version,
+        extensionAdoption: adoption,
         controlPage: null,
         controlPagePromise: null,
-        versionRecovery: null
+        controlVerification: null
       };
       this.#running.set(profile.profileId, running);
       context.on('close', () => this.#running.delete(profile.profileId));
-      await this.#registry.markLaunched(profile.profileId);
 
       // Login state stays in browser storage, but restored web tabs are never
       // allowed to replay a platform visit after launch or crash recovery.
@@ -213,6 +283,7 @@ export class ManagedExtensionRuntime {
         await this.#extensionControlPage(running)
       );
       await controlPage.bringToFront();
+      await this.#registry.markLaunched(profile.profileId);
       return running;
     } catch (error) {
       await context.close().catch(() => undefined);
@@ -272,13 +343,13 @@ export class ManagedExtensionRuntime {
     running: RunningExtensionProfile,
     initialPage: Page
   ): Promise<Page> {
-    if (running.versionRecovery) return running.versionRecovery;
+    if (running.controlVerification) return running.controlVerification;
     const pending = this.#ensureExtensionVersionOnce(running, initialPage);
-    running.versionRecovery = pending;
+    running.controlVerification = pending;
     try {
       return await pending;
     } finally {
-      if (running.versionRecovery === pending) running.versionRecovery = null;
+      if (running.controlVerification === pending) running.controlVerification = null;
     }
   }
 
@@ -286,11 +357,10 @@ export class ManagedExtensionRuntime {
     running: RunningExtensionProfile,
     initialPage: Page
   ): Promise<Page> {
-    let page = initialPage;
-    let unpackedReloadFailed = false;
-    for (let attempt = 0; attempt < 31; attempt += 1) {
+    const deadline = Date.now() + CONTROL_VERSION_WAIT_MS;
+    do {
       try {
-        const response = await extensionMessage(page, { type: GET_CONTROL_SNAPSHOT });
+        const response = await extensionMessage(initialPage, { type: GET_CONTROL_SNAPSHOT });
         if (response && typeof response === 'object') {
           const probe = response as {
             ok?: unknown;
@@ -303,44 +373,14 @@ export class ManagedExtensionRuntime {
             probe.ok === true &&
             probe.snapshot?.collectorVersion === running.extensionVersion &&
             probe.snapshot.controlSurfaceRevision === COLLECTOR_CONTROL_SURFACE_REVISION
-          ) return page;
+          ) return initialPage;
         }
       } catch {
-        // The control page may disappear while the MV3 worker reloads.
+        // Readiness is local and bounded; launch never opens recovery tabs.
       }
-      if (attempt === 0) await reloadExtension(page);
-      if (attempt === 10) {
-        try {
-          await this.#reloadUnpackedExtensionFromChromeUi(running);
-        } catch {
-          unpackedReloadFailed = true;
-        }
-      }
-      await delay(500);
-      try {
-        page = await this.#extensionControlPage(running);
-      } catch {
-        // The extension origin is briefly unavailable during replacement.
-      }
-    }
-    throw new Error(
-      unpackedReloadFailed
-        ? 'validation_extension_ui_reload_failed'
-        : 'validation_control_version_mismatch'
-    );
-  }
-
-  async #reloadUnpackedExtensionFromChromeUi(running: RunningExtensionProfile): Promise<void> {
-    const page = await running.context.newPage();
-    try {
-      await page.goto('chrome://extensions/');
-      const extension = page.locator(`extensions-item#${running.extensionId}`);
-      await extension.locator('#dev-reload-button').click({ timeout: 10_000 });
-    } catch {
-      throw new Error('validation_extension_ui_reload_failed');
-    } finally {
-      await page.close().catch(() => undefined);
-    }
+      await delay(LOCAL_POLL_MS);
+    } while (Date.now() < deadline);
+    throw new Error('validation_control_version_mismatch');
   }
 
   async close(profileId: string): Promise<void> {

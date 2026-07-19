@@ -17,7 +17,9 @@ assert.match(source, /headless:\s*false/, 'Gateway artifact must launch a visibl
 assert.match(source, /--load-extension=/, 'Gateway artifact must automatically load the production extension');
 assert.match(source, /--autoplay-policy=user-gesture-required/, 'managed collection browsers must suppress autoplay');
 assert.match(source, /controlPagePromise/, 'control-page creation must be single-flight');
-assert.match(source, /versionRecovery/, 'extension version recovery must be single-flight');
+assert.match(source, /controlVerification/, 'control-version verification must be single-flight');
+assert.match(source, /runtimeReloadAttempted/, 'worker-level extension adoption must be observable');
+assert.match(source, /collector_extension_worker_version_mismatch/, 'worker adoption must fail with an explicit version error');
 assert.match(
   source,
   /controlSurfaceRevision\s*===\s*COLLECTOR_CONTROL_SURFACE_REVISION|controlSurfaceRevision\s*===\s*2/,
@@ -28,7 +30,8 @@ assert.match(
   /extensionPages\.filter\([\s\S]{0,120}page\d*\s*!==\s*existing[\s\S]{0,120}\.map\(/,
   'duplicate extension control tabs must be closed'
 );
-assert.match(source, /chrome:\/\/extensions\//, 'Gateway artifact must recover stale unpacked service workers');
+assert.doesNotMatch(source, /chrome:\/\/extensions\//, 'Gateway must not open the visible extensions page for recovery');
+assert.doesNotMatch(source, /validation_extension_ui_reload_failed/, 'Gateway must not retain Chrome UI reload recovery');
 assert.match(source, /collector\.startCapabilityValidation/, 'Gateway artifact must include the validation-run control path');
 assert.match(source, /collector\.startDetailCapabilityValidation/, 'Gateway artifact must include detail validation control');
 assert.match(

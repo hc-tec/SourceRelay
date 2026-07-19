@@ -233,6 +233,15 @@ export interface BrowserProfileRuntimeSummary {
   profile: BrowserProfileRecord;
   running: boolean;
   extensionLoaded: boolean;
+  extensionVersion: string | null;
+  extensionAdoption: {
+    expectedVersion: string;
+    initialVersion: string;
+    finalVersion: string;
+    runtimeReloadAttempted: boolean;
+    chromeUiReloadAttempted: false;
+    contextRestarted: false;
+  } | null;
   extensionPaired: boolean;
   strategyPermission: 'granted' | 'missing' | 'unknown';
 }

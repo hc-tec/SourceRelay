@@ -238,6 +238,8 @@ export class CollectionBrowserManager {
         profile,
         running: Boolean(running),
         extensionLoaded: Boolean(running),
+        extensionVersion: running?.extensionVersion ?? null,
+        extensionAdoption: running?.extensionAdoption ?? null,
         extensionPaired,
         strategyPermission
       });
