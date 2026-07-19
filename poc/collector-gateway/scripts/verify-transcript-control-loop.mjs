@@ -42,7 +42,7 @@ function snapshot(state) {
   const isTerminal = state === 'completed' || state === 'inconclusive' || state === 'failed';
   return {
     schemaVersion: 1,
-    collectorVersion: '0.4.23',
+    collectorVersion: '0.4.24',
     runId,
     profileId,
     platform: 'bilibili',
@@ -89,7 +89,7 @@ try {
     runId,
     profileId,
     canonicalUrl,
-    extensionVersion: '0.4.23',
+    extensionVersion: '0.4.24',
     pollingDelayMs: 0,
     executeInteraction: async () => {
       interactions += 1;
@@ -123,7 +123,7 @@ try {
     runId,
     profileId,
     canonicalUrl,
-    extensionVersion: '0.4.23',
+    extensionVersion: '0.4.24',
     pollingDelayMs: 0,
     executeInteraction: async () => {
       interactions += 1;
@@ -156,7 +156,7 @@ try {
     runId,
     profileId,
     canonicalUrl,
-    extensionVersion: '0.4.23',
+    extensionVersion: '0.4.24',
     pollingDelayMs: 0,
     executeInteraction: async () => {
       interactions += 1;
@@ -185,7 +185,7 @@ try {
     () => transcriptValidationSnapshot({
       ok: true,
       validation: { ...snapshot('completed'), collectorVersion: 'stale' }
-    }, runId, profileId, '0.4.23'),
+    }, runId, profileId, '0.4.24'),
     (error) => error instanceof Error && error.message === 'transcript_validation_extension_version_mismatch'
   );
 
@@ -195,7 +195,7 @@ try {
       runId,
       profileId,
       canonicalUrl,
-      extensionVersion: '0.4.23',
+      extensionVersion: '0.4.24',
       pollingDelayMs: 0,
       maximumPollAttempts: 1,
       executeInteraction: async () => {

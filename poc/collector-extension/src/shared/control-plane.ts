@@ -244,9 +244,13 @@ export interface BrowserProfileRuntimeSummary {
   extensionVersion: string | null;
   extensionAdoption: {
     expectedVersion: string;
+    expectedControlSurfaceRevision: number;
     initialManifestVersion: string;
     initialRuntimeVersion: string | null;
+    initialControlSurfaceRevision: number | null;
     finalRuntimeVersion: string;
+    finalControlSurfaceRevision: number;
+    headlessProbePerformed: true;
     headlessPrewarmPerformed: boolean;
     prewarmRuntimeReloadAttempted: boolean;
     chromeUiReloadAttempted: false;

@@ -32,10 +32,69 @@ interface ExtensionWorkerProbe {
   controlSurfaceRevision: number | null;
 }
 
+type ExtensionRuntimeDiagnosticPhase =
+  | 'headless_after_reload'
+  | 'visible_after_headless_verification';
+
+export interface ExtensionRuntimeDiagnostics {
+  phase: ExtensionRuntimeDiagnosticPhase;
+  expectedVersion: string;
+  expectedControlSurfaceRevision: number;
+  observedManifestVersion: string | null;
+  observedRuntimeVersion: string | null;
+  observedControlSurfaceRevision: number | null;
+}
+
+class ManagedExtensionRuntimeError extends Error {
+  readonly diagnostics: ExtensionRuntimeDiagnostics;
+
+  constructor(code: string, diagnostics: ExtensionRuntimeDiagnostics) {
+    super(code);
+    this.name = 'ManagedExtensionRuntimeError';
+    this.diagnostics = diagnostics;
+  }
+}
+
+interface ExtensionWorkerPreparation {
+  initialManifestVersion: string;
+  initialRuntimeVersion: string | null;
+  initialControlSurfaceRevision: number | null;
+  headlessPrewarmPerformed: boolean;
+  prewarmRuntimeReloadAttempted: boolean;
+}
+
 const EXTENSION_WORKER_WAIT_MS = 15_000;
 const CONTROL_VERSION_WAIT_MS = 3_000;
 const LOCAL_POLL_MS = 100;
 const PREWARM_RELOAD_SETTLE_MS = 500;
+
+function workerMatchesExpected(probe: ExtensionWorkerProbe, expectedVersion: string): boolean {
+  return (
+    probe.manifestVersion === expectedVersion &&
+    probe.runtimeVersion === expectedVersion &&
+    probe.controlSurfaceRevision === COLLECTOR_CONTROL_SURFACE_REVISION
+  );
+}
+
+function workerVersionMismatch(
+  code: string,
+  phase: ExtensionRuntimeDiagnosticPhase,
+  expectedVersion: string,
+  probe: ExtensionWorkerProbe | null
+): ManagedExtensionRuntimeError {
+  return new ManagedExtensionRuntimeError(code, {
+    phase,
+    expectedVersion,
+    expectedControlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION,
+    observedManifestVersion: probe?.manifestVersion ?? null,
+    observedRuntimeVersion: probe?.runtimeVersion ?? null,
+    observedControlSurfaceRevision: probe?.controlSurfaceRevision ?? null
+  });
+}
+
+export function managedExtensionRuntimeDiagnostics(error: unknown): ExtensionRuntimeDiagnostics | null {
+  return error instanceof ManagedExtensionRuntimeError ? error.diagnostics : null;
+}
 
 async function extensionWorkerProbe(worker: Worker): Promise<ExtensionWorkerProbe | null> {
   const snapshot = await worker.evaluate(async (bootstrapKey) => {
@@ -100,33 +159,38 @@ async function waitForExtensionWorker(
 async function adoptExtensionWorker(
   context: BrowserContext,
   expectedVersion: string,
-  headlessPrewarmPerformed: boolean,
-  prewarmRuntimeReloadAttempted: boolean
+  preparation: ExtensionWorkerPreparation
 ): Promise<{
   probe: ExtensionWorkerProbe;
   adoption: NonNullable<BrowserProfileRuntimeSummary['extensionAdoption']>;
 }> {
   const initial = await waitForExtensionWorker(context, EXTENSION_WORKER_WAIT_MS);
   if (!initial) throw new Error('collector_extension_worker_missing');
-  if (
-    initial.runtimeVersion === expectedVersion &&
-    initial.controlSurfaceRevision === COLLECTOR_CONTROL_SURFACE_REVISION
-  ) {
+  if (workerMatchesExpected(initial, expectedVersion)) {
     return {
       probe: initial,
       adoption: {
         expectedVersion,
-        initialManifestVersion: initial.manifestVersion,
-        initialRuntimeVersion: initial.runtimeVersion,
-        finalRuntimeVersion: initial.runtimeVersion,
-        headlessPrewarmPerformed,
-        prewarmRuntimeReloadAttempted,
+        expectedControlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION,
+        initialManifestVersion: preparation.initialManifestVersion,
+        initialRuntimeVersion: preparation.initialRuntimeVersion,
+        initialControlSurfaceRevision: preparation.initialControlSurfaceRevision,
+        finalRuntimeVersion: expectedVersion,
+        finalControlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION,
+        headlessProbePerformed: true,
+        headlessPrewarmPerformed: preparation.headlessPrewarmPerformed,
+        prewarmRuntimeReloadAttempted: preparation.prewarmRuntimeReloadAttempted,
         chromeUiReloadAttempted: false,
         contextRestarted: false
       }
     };
   }
-  throw new Error('collector_extension_worker_version_mismatch');
+  throw workerVersionMismatch(
+    'collector_extension_worker_version_mismatch',
+    'visible_after_headless_verification',
+    expectedVersion,
+    initial
+  );
 }
 
 async function requestExtensionWorkerReload(worker: Worker): Promise<void> {
@@ -255,18 +319,21 @@ export class ManagedExtensionRuntime {
       throw new Error('collector_extension_artifact_invalid');
     }
 
-    const headlessPrewarmPerformed = profile.lastExtensionVersion !== manifest.version;
-    if (headlessPrewarmPerformed) {
-      await this.#prewarmExtensionProfile(profile.profileId, extensionDirectory, manifest.version);
-    }
+    // lastExtensionVersion is historical telemetry, not proof of the worker
+    // currently cached by Chromium. Every cold launch verifies the executing
+    // worker headlessly before any visible window is allowed to open.
+    const preparation = await this.#prepareExtensionProfile(
+      profile.profileId,
+      extensionDirectory,
+      manifest.version
+    );
     const context = await this.#launchPersistentProfileContext(profile.profileId, extensionDirectory, false);
     try {
       await this.#closeRestoredWebPages(context);
       const { probe, adoption } = await adoptExtensionWorker(
         context,
         manifest.version,
-        headlessPrewarmPerformed,
-        headlessPrewarmPerformed
+        preparation
       );
       const running: RunningExtensionProfile = {
         context,
@@ -293,22 +360,33 @@ export class ManagedExtensionRuntime {
     }
   }
 
-  async #prewarmExtensionProfile(
+  async #prepareExtensionProfile(
     profileId: string,
     extensionDirectory: string,
     expectedVersion: string
-  ): Promise<void> {
-    const adoptionContext = await this.#launchPersistentProfileContext(profileId, extensionDirectory, true);
+  ): Promise<ExtensionWorkerPreparation> {
+    const probeContext = await this.#launchPersistentProfileContext(profileId, extensionDirectory, true);
+    let initial: ExtensionWorkerProbe;
     try {
-      await this.#closeRestoredWebPages(adoptionContext);
-      const initial = await waitForExtensionWorker(adoptionContext, EXTENSION_WORKER_WAIT_MS);
-      if (!initial) {
+      await this.#closeRestoredWebPages(probeContext);
+      const observed = await waitForExtensionWorker(probeContext, EXTENSION_WORKER_WAIT_MS);
+      if (!observed) {
         throw new Error('collector_extension_prewarm_worker_missing');
+      }
+      initial = observed;
+      if (workerMatchesExpected(initial, expectedVersion)) {
+        return {
+          initialManifestVersion: initial.manifestVersion,
+          initialRuntimeVersion: initial.runtimeVersion,
+          initialControlSurfaceRevision: initial.controlSurfaceRevision,
+          headlessPrewarmPerformed: false,
+          prewarmRuntimeReloadAttempted: false
+        };
       }
       await requestExtensionWorkerReload(initial.worker);
       await delay(PREWARM_RELOAD_SETTLE_MS);
     } finally {
-      await adoptionContext.close().catch(() => undefined);
+      await probeContext.close().catch(() => undefined);
     }
 
     const verificationContext = await this.#launchPersistentProfileContext(profileId, extensionDirectory, true);
@@ -317,11 +395,24 @@ export class ManagedExtensionRuntime {
       const verified = await waitForExtensionWorker(
         verificationContext,
         EXTENSION_WORKER_WAIT_MS,
-        (probe) =>
-          probe.runtimeVersion === expectedVersion &&
-          probe.controlSurfaceRevision === COLLECTOR_CONTROL_SURFACE_REVISION
+        (probe) => workerMatchesExpected(probe, expectedVersion)
       );
-      if (!verified) throw new Error('collector_extension_prewarm_version_mismatch');
+      if (!verified) {
+        const observed = await waitForExtensionWorker(verificationContext, LOCAL_POLL_MS);
+        throw workerVersionMismatch(
+          'collector_extension_prewarm_version_mismatch',
+          'headless_after_reload',
+          expectedVersion,
+          observed
+        );
+      }
+      return {
+        initialManifestVersion: initial.manifestVersion,
+        initialRuntimeVersion: initial.runtimeVersion,
+        initialControlSurfaceRevision: initial.controlSurfaceRevision,
+        headlessPrewarmPerformed: true,
+        prewarmRuntimeReloadAttempted: true
+      };
     } finally {
       await verificationContext.close().catch(() => undefined);
     }

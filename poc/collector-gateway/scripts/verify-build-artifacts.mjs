@@ -27,8 +27,19 @@ assert.match(source, /--load-extension=/, 'Gateway artifact must automatically l
 assert.match(source, /--autoplay-policy=user-gesture-required/, 'managed collection browsers must suppress autoplay');
 assert.match(source, /controlPagePromise/, 'control-page creation must be single-flight');
 assert.match(source, /controlVerification/, 'control-version verification must be single-flight');
+assert.match(source, /headlessProbePerformed/, 'every cold launch must expose its headless worker probe');
+assert.match(
+  source,
+  /await this\.#prepareExtensionProfile\([\s\S]{0,320}await this\.#launchPersistentProfileContext\([^\n]{0,160},\s*false\)/,
+  'headless worker readiness must complete before the visible context is launched'
+);
 assert.match(source, /prewarmRuntimeReloadAttempted/, 'headless worker adoption must be observable');
 assert.match(source, /collector_extension_worker_version_mismatch/, 'worker adoption must fail with an explicit version error');
+assert.doesNotMatch(
+  source,
+  /lastExtensionVersion\s*!==\s*manifest\.version/,
+  'historical Profile metadata must not decide whether the live worker is probed'
+);
 assert.match(
   source,
   /controlSurfaceRevision\s*===\s*COLLECTOR_CONTROL_SURFACE_REVISION|controlSurfaceRevision\s*===\s*2/,

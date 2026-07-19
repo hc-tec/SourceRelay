@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { CollectionBrowserManager } from './browser-manager';
+import { managedExtensionRuntimeDiagnostics } from './managed-extension-runtime';
 import { AccountSafetyRegistry, accountSafetyUnlockInput } from './account-safety';
 import { loadGatewayConfig } from './config';
 import { consoleHtml, consoleScript, consoleStyles } from './console-assets';
@@ -673,6 +674,7 @@ const server = createServer(async (request, response) => {
     sendJson(response, 404, { error: 'route_not_found' });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'gateway_request_failed';
+    const runtimeDiagnostics = managedExtensionRuntimeDiagnostics(error);
     const clientError =
       code.startsWith('pairing_') ||
       code.startsWith('request_') ||
@@ -688,7 +690,10 @@ const server = createServer(async (request, response) => {
       code.startsWith('preflight_') ||
       code.endsWith('_invalid') ||
       code === 'one_or_more_capabilities_are_not_ready';
-    sendJson(response, clientError ? 400 : 500, { error: clientError ? code : 'gateway_request_failed' });
+    sendJson(response, clientError ? 400 : 500, {
+      error: clientError ? code : 'gateway_request_failed',
+      ...(runtimeDiagnostics ? { diagnostics: runtimeDiagnostics } : {})
+    });
   }
 });
 
