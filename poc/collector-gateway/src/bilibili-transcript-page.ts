@@ -38,6 +38,32 @@ export async function waitForVisible(locator: Locator, timeoutMs: number): Promi
   return false;
 }
 
+export async function waitForAttached(locator: Locator, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    if (await locator.count().catch(() => 0) > 0) return true;
+    await delay(POLL_MS);
+  } while (Date.now() < deadline);
+  return false;
+}
+
+export async function waitForPlayerControlsRevealed(page: Page, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    const revealed = await page.evaluate(() => {
+      const controls = document.querySelector('.bpx-player-control-bottom');
+      if (!controls) return false;
+      const rect = controls.getBoundingClientRect();
+      const style = getComputedStyle(controls);
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+        style.visibility !== 'hidden' && Number(style.opacity || 0) > 0.5;
+    }).catch(() => false);
+    if (revealed) return true;
+    await delay(POLL_MS);
+  } while (Date.now() < deadline);
+  return false;
+}
+
 async function hardRiskCode(page: Page): Promise<string | null> {
   return page.evaluate(() => {
     const visible = (element: Element): boolean => {

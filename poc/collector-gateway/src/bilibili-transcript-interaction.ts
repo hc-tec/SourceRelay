@@ -12,7 +12,9 @@ import {
   transcriptPageFailure,
   visibleSubtitlePanel,
   waitForBilibiliTranscriptPage,
+  waitForAttached,
   waitForCaptionMenu,
+  waitForPlayerControlsRevealed,
   waitForVisible
 } from './bilibili-transcript-page';
 import {
@@ -22,7 +24,8 @@ import {
 } from './transcript-interaction-result';
 
 const TARGET_PAGE_WAIT_MS = 15_000;
-const PLAYER_WAIT_MS = 10_000;
+const CONTROL_MOUNT_WAIT_MS = 12_000;
+const VIDEO_AREA_WAIT_MS = 3_000;
 const CONTROL_REVEAL_WAIT_MS = 2_500;
 const MENU_WAIT_MS = 2_500;
 const ACTION_TAIL_MS = 3_000;
@@ -60,65 +63,63 @@ export async function executeBilibiliTranscriptInteraction(input: {
 
   const videoArea = page.locator('.bpx-player-video-area,video').first();
   const control = page.locator('.bpx-player-ctrl-subtitle[aria-label="字幕"],.bpx-player-ctrl-subtitle').first();
-  let controlVisible = await control.isVisible().catch(() => false);
-  if (controlVisible) {
-    actions.push(transcriptAction('reveal_player_controls', false, 'completed', {
-      visibleLabels: ['字幕'],
-      postconditionAcknowledged: true
-    }));
-  } else {
-    if (!await waitForVisible(videoArea, PLAYER_WAIT_MS)) {
-      return stopTranscriptInteraction(
-        canonicalUrl, actions, 'reveal_player_controls', false, 'control_missing',
-        'transcript_validation_video_area_missing'
-      );
-    }
-    const videoAreaBox = await videoArea.boundingBox();
-    if (!videoAreaBox) {
-      return stopTranscriptInteraction(
-        canonicalUrl, actions, 'reveal_player_controls', false, 'control_missing',
-        'transcript_validation_video_area_bounds_missing'
-      );
-    }
-    try {
-      await input.beforeAction('reveal_player_controls');
-    } catch {
-      return stopTranscriptInteraction(
-        canonicalUrl, actions, 'reveal_player_controls', false, 'prerequisite_unmet',
-        'transcript_validation_action_ledger_failed', {}, true
-      );
-    }
-    try {
-      await page.mouse.move(
-        videoAreaBox.x + videoAreaBox.width * 0.62,
-        videoAreaBox.y + Math.max(1, videoAreaBox.height - 20),
-        { steps: 8 }
-      );
-    } catch {
-      return stopTranscriptInteraction(
-        canonicalUrl, actions, 'reveal_player_controls', true, 'postcondition_unmet',
-        'transcript_validation_control_reveal_input_failed', {}, true
-      );
-    }
-    controlVisible = await waitForVisible(control, CONTROL_REVEAL_WAIT_MS);
-    failure = await transcriptPageFailure(page, canonicalUrl);
-    if (failure) {
-      return stopTranscriptInteraction(
-        canonicalUrl, actions, 'reveal_player_controls', true, failure.outcome,
-        failure.errorCode, {}, true
-      );
-    }
-    if (!controlVisible) {
-      return stopTranscriptInteraction(
-        canonicalUrl, actions, 'reveal_player_controls', true, 'postcondition_unmet',
-        'transcript_validation_control_reveal_postcondition_unmet'
-      );
-    }
-    actions.push(transcriptAction('reveal_player_controls', true, 'completed', {
-      visibleLabels: ['字幕'],
-      postconditionAcknowledged: true
-    }));
+  if (!await waitForAttached(control, CONTROL_MOUNT_WAIT_MS)) {
+    return stopTranscriptInteraction(
+      canonicalUrl, actions, 'reveal_player_controls', false, 'control_missing',
+      'transcript_validation_caption_control_not_mounted'
+    );
   }
+  if (!await waitForVisible(videoArea, VIDEO_AREA_WAIT_MS)) {
+    return stopTranscriptInteraction(
+      canonicalUrl, actions, 'reveal_player_controls', false, 'control_missing',
+      'transcript_validation_video_area_missing'
+    );
+  }
+  const videoAreaBox = await videoArea.boundingBox();
+  if (!videoAreaBox) {
+    return stopTranscriptInteraction(
+      canonicalUrl, actions, 'reveal_player_controls', false, 'control_missing',
+      'transcript_validation_video_area_bounds_missing'
+    );
+  }
+  try {
+    await input.beforeAction('reveal_player_controls');
+  } catch {
+    return stopTranscriptInteraction(
+      canonicalUrl, actions, 'reveal_player_controls', false, 'prerequisite_unmet',
+      'transcript_validation_action_ledger_failed', {}, true
+    );
+  }
+  try {
+    await page.mouse.move(
+      videoAreaBox.x + videoAreaBox.width * 0.62,
+      videoAreaBox.y + Math.max(1, videoAreaBox.height - 20),
+      { steps: 8 }
+    );
+  } catch {
+    return stopTranscriptInteraction(
+      canonicalUrl, actions, 'reveal_player_controls', true, 'postcondition_unmet',
+      'transcript_validation_control_reveal_input_failed', {}, true
+    );
+  }
+  const controlsRevealed = await waitForPlayerControlsRevealed(page, CONTROL_REVEAL_WAIT_MS);
+  failure = await transcriptPageFailure(page, canonicalUrl);
+  if (failure) {
+    return stopTranscriptInteraction(
+      canonicalUrl, actions, 'reveal_player_controls', true, failure.outcome,
+      failure.errorCode, {}, true
+    );
+  }
+  if (!controlsRevealed) {
+    return stopTranscriptInteraction(
+      canonicalUrl, actions, 'reveal_player_controls', true, 'postcondition_unmet',
+      'transcript_validation_control_reveal_postcondition_unmet'
+    );
+  }
+  actions.push(transcriptAction('reveal_player_controls', true, 'completed', {
+    visibleLabels: ['字幕'],
+    postconditionAcknowledged: true
+  }));
 
   failure = await transcriptPageFailure(page, canonicalUrl);
   if (failure) {
