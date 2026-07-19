@@ -1,7 +1,7 @@
 # Collector 实现状态
 
 - 分支：`feat/browser-extension-system`
-- 状态日期：2026-07-19
+- 状态日期：2026-07-20
 - 权威决策：[collector-grilling-decision-log.md](collector-grilling-decision-log.md)
 - 产品规格：[platform-strategy-product-spec.md](platform-strategy-product-spec.md)
 - 冲突审计：[collector-decision-audit.md](collector-decision-audit.md)
@@ -13,6 +13,8 @@
 Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面。B站匿名首屏关键词搜索是目前唯一获得真实平台 admission、并完成正式 Research Task 调度与本地 Evidence batch 闭环的能力；其他平台和深度能力仍未发布。
 
 B站字幕目前已具备“按需真实采集”的产品底层能力，但仍是 research-only validation、`admissionEligible=false`，没有进入正式 Task production routes。v0.4.23 的 Gateway + 生产 MV3 扩展已在真实登录 Profile 中完成轨道目录、中文选择、字幕正文和本地 raw-first artifact 闭环；这证明能力可用，不等于把单一样本升级为正式策略 admission。
+
+B站账号目录已新增独立 research-only runner，并使用保存的登录 Collection Profile 完成真实 9 页 / 330 条公开视频投稿目录：末页 10 条、跨页 0 重复、九页 DOM/response 身份摘要与标题全部互证，账号昵称、简介、头像也与公开页面一致。artifact 采用逐页 JSON、manifest 和 SHA-256 恢复校验，敏感字段扫描为 0；第二个一页预算 run 复用原目标 tab，没有累积新 B站标签页。该能力仍未迁移到 MV3 response projector，`admissionEligible=false`，不能冒充正式生产策略。
 
 2026-07-18 检查点补充：B站视频详情字段的独立 Validation Run `v1.4.0` 已 accepted，但正式多阶段 Task 在当前页面 document / content-script 生命周期中仍出现 `gateway_stage_watchdog_expired`，因此该详情策略已降为 `suspended`。任务 stage 窗口在 Evidence 或 blocked 后自动关闭；详情控制面修正仍须用真实单 stage 与双 stage 任务复验。扩展启动阶段的重复页/闪退先在 v0.4.23 去除了 `chrome://extensions` 和可见 context 自动恢复，但仍会因历史 `lastExtensionVersion` 与实际 worker 状态分离而永久 mismatch；v0.4.24 已改为每次冷启动先 headless 读取实际 marker，不匹配才 reload 一次并跨 context 复核，复核前不打开可见窗口。
 
@@ -55,6 +57,7 @@ B站详情正式 Task 的 receipt / Evidence race 已加入控制面修复：acc
 已完成：P2b B站匿名 breadth_search / visible_dom 真实验证与显式 admission
 已完成：P2c 正式 B站 dispatch、认证 Evidence 回传、本地原始批次与 completed 闭环
 已完成：B站字幕 production-extension validation 闭环、raw-first artifact、终态窗口保留与复用（尚未 admission）
+已完成：B站 account_profile / account_inventory research runner 9 页 / 330 条真实闭环（尚未 admission）
 进行中：P2d B站详情 DOM / XHR-fetch 并行 Source Reconnaissance（production route 仍为空）
 未开始：P3 加密 Evidence Vault
 未开始：P4 EvidencePackage / DeepResearch 正式接入
@@ -242,6 +245,7 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 | Task dispatch | B站单阶段 preflight → approval → signed dispatch → lease → evidence → completed 已实测；多阶段使用无时间等待的显式 user resume，单元状态机已通过 | 详情策略重新 admission 后做真实双 stage 验证；再增加取消和加密重启恢复 |
 | Profile | 受管持久生命周期、可见 Chromium、生产扩展自动加载、关闭/重启、并发门禁、任务绑定与 B站固定官方登录页入口已实现 | 平台认证动作仍只由用户执行；完成扫码后的可见身份与关闭/重启持久性核验 |
 | B站 discovery | `v1.1.0 live_anonymous_verified`，正式闭环已验证；只覆盖首屏可见标题与规范 BV URL | 再扩展独立的 detail 策略，不复用 breadth admission |
+| B站账号档案/投稿目录 | 保存的登录 Profile 已完成 9 页 / 330 条真实 research 闭环；公开昵称、简介、头像互证，逐页 digest、去重、声明终点、artifact 恢复与同目标 tab 复用均通过 | 将 DOM/response 观察迁移到 MV3 Extension；补零投稿、单页、置顶/重排、采集中新增和登录失效样本后独立 review/admission |
 | B站字幕 | v0.4.23 已两次完成生产扩展/Gateway 真实 validation：三个必需动作完成、轨道目录与字幕正文各捕获一次、`lang=zh`、509/509 段、raw-first artifact 完整；终态窗口保留且下一 run 复用，无窗口堆积 | 扩展人工字幕、多语言、无字幕、锁定/删除、长视频与风险样本；保持 production route 为空和 `admissionEligible=false`，直到独立策略版本完成覆盖与正式 review |
 | response observation | 生产 route 为空 | 先完成 wrapper 到期撤销、route projector 和 document race 验证 |
 | Evidence | 认证回传、待提交重试、原子原始 JSON batch、task manifest、result SHA-256 与重启摘要恢复 | 加密 Vault、不可变审计、coverage 与删除/导出边界 |
@@ -255,7 +259,10 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 P2a  Collection / Validation Profile launcher（完成）
   -> P2b B站匿名 discovery 真实验证与 admission（完成）
   -> P2c 正式 Gateway dispatch / Evidence 闭环（完成）
-  -> B站 detail / subtitle / bounded discussion（各自独立策略与独立 admission）
+  -> B站 account profile / inventory research 闭环（完成，待 MV3 迁移与 admission）
+  -> B站原生搜索分页筛选、detail / multi-P / subtitle（各自独立策略与 admission）
+  -> B站 discussion / danmaku / dynamic / article / collection / live replay
+  -> B站 trend / relationship / 统一 provenance_coverage
   -> P3 encrypted Evidence Vault
   -> P4 DeepResearch EvidencePackage adapter
 ```

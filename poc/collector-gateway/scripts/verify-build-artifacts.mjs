@@ -274,6 +274,51 @@ assert.match(
   /progress\.state\s*===\s*["']completed["'][\s\S]{0,320}return this\.#summary\(record\)/,
   'completed-stage Evidence must not regress task state'
 );
+assert.match(
+  source,
+  /\/v1\/account-archives/,
+  'Gateway artifact must expose compact account-archive lookup routes'
+);
+assert.match(
+  source,
+  /authenticated_account_archive_reconnaissance/,
+  'Account archive reconnaissance must use the persistent account-safety circuit breaker'
+);
+assert.match(
+  source,
+  /bilibili\.account\.archive\.response\.v1/,
+  'Gateway artifact must retain the independently versioned Bilibili account-archive candidate'
+);
+assert.match(
+  source,
+  /bilibili-account-archives/,
+  'Account archive pages and manifest must persist below an isolated runtime artifact root'
+);
+assert.match(
+  source,
+  /bilibili_account_archive_manifest_digest_mismatch/,
+  'Account archive reads must verify the manifest digest'
+);
+assert.match(
+  source,
+  /responseIdDigest[\s\S]{0,240}domIdDigest[\s\S]{0,240}exactIdentityMatch/,
+  'Every admitted account-inventory page candidate must retain DOM/response identity evidence'
+);
+assert.match(
+  source,
+  /reused_matching_managed_tab/,
+  'Repeated account-archive research must reuse an unchanged managed target tab instead of accumulating tabs'
+);
+assert.match(
+  source,
+  /runDeadlineMs:\s*RUN_DEADLINE_MS/,
+  'Account-archive research must expose its fixed total run deadline'
+);
+assert.match(
+  source,
+  /queryAndFragmentValues:\s*["']discarded["']/,
+  'Account archive artifacts must discard request query and fragment values'
+);
 
 console.log(JSON.stringify({
   ok: true,

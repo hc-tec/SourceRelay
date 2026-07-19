@@ -18,6 +18,8 @@ import {
 } from './source-reconnaissance';
 import { bilibiliInteractionReconnaissanceInput } from './interaction-reconnaissance';
 import { InteractionReconnaissanceRegistry } from './interaction-reconnaissance-registry';
+import { bilibiliAccountArchiveInput } from './bilibili-account-archive';
+import { BilibiliAccountArchiveArtifactStore } from './bilibili-account-archive-artifacts';
 import {
   TranscriptArtifactRegistry,
   bilibiliTranscriptValidationInput
@@ -170,6 +172,7 @@ const detailValidationRegistry = await DetailCapabilityValidationRegistry.create
 const sourceReconnaissanceRegistry = await SourceReconnaissanceRegistry.create(config.stateDirectory);
 const interactionReconnaissanceRegistry = await InteractionReconnaissanceRegistry.create(config.stateDirectory);
 const transcriptArtifactRegistry = await TranscriptArtifactRegistry.create(config.stateDirectory);
+const accountArchiveArtifactStore = await BilibiliAccountArchiveArtifactStore.create(config.stateDirectory);
 const evidenceRegistry = await GatewayEvidenceRegistry.create(config.stateDirectory);
 const taskQueue = new GatewayTaskQueue(identity, evidenceRegistry, accountSafetyRegistry);
 const expectedHost = `${config.host}:${config.port}`;
@@ -243,6 +246,19 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'GET' && url.pathname === '/v1/transcripts') {
       sendJson(response, 200, { schemaVersion: 1, artifacts: transcriptArtifactRegistry.list() });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/account-archives') {
+      sendJson(response, 200, { schemaVersion: 1, artifacts: accountArchiveArtifactStore.list() });
+      return;
+    }
+    const accountArchiveArtifactMatch = url.pathname.match(
+      /^\/v1\/account-archives\/([0-9a-f-]{36})$/i
+    );
+    if (request.method === 'GET' && accountArchiveArtifactMatch) {
+      const artifact = await accountArchiveArtifactStore.get(accountArchiveArtifactMatch[1]);
+      if (!artifact) throw new Error('bilibili_account_archive_artifact_not_found');
+      sendJson(response, 200, { schemaVersion: 1, artifact });
       return;
     }
     const transcriptArtifactMatch = url.pathname.match(/^\/v1\/transcripts\/([0-9a-f-]{36})$/i);
@@ -453,6 +469,31 @@ const server = createServer(async (request, response) => {
       sendJson(response, 201, {
         schemaVersion: 1,
         run: await interactionReconnaissanceRegistry.record(run)
+      });
+      return;
+    }
+    const bilibiliAccountArchiveReconnaissanceMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/reconnaissance\/bilibili-account-archive$/i
+    );
+    if (request.method === 'POST' && bilibiliAccountArchiveReconnaissanceMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const input = bilibiliAccountArchiveInput(await readJsonBody(request));
+      const run = await browserManager.runBilibiliAuthenticatedAccountArchiveReconnaissance(
+        bilibiliAccountArchiveReconnaissanceMatch[1],
+        input
+      );
+      const artifact = await accountArchiveArtifactStore.record(run);
+      sendJson(response, 201, {
+        schemaVersion: 1,
+        run: {
+          runId: run.runId,
+          state: run.state,
+          errorCode: run.errorCode,
+          coverage: run.coverage,
+          accountStableId: run.account?.stableAccountId ?? null,
+          admissionEligible: false
+        },
+        artifact
       });
       return;
     }
