@@ -244,3 +244,31 @@ active run = null
 3. 为 `collection_series` 分开总览和每个系列的有界枚举，保持平台定义顺序；
 4. 扩展权限只增加经审查的 `https://space.bilibili.com/*`，不能扩大为 `<all_urls>`；
 5. 完成生产 MV3 projector、Gateway coordinator、ignored runtime artifact、真实 E2E 与人工 review 后再 admission。
+
+## I. `account_profile` research runner 真实闭环
+
+在上述人工式侦察完成后，Gateway 增加独立的 `bilibili.account.profile.dom.v1 @ 1.0.0` research runner。它只执行一次规范账号主页导航；DOM projector 只接受账号头部、公开统计、账号导航、公告、充电区和代表作白名单，明确排除全站 header 和当前登录用户。Network 只保存七条目标 route 的 method、origin、pathname、status、query key 名和时间，不读取 response body、request header/body、Cookie 或 Token。
+
+第一次真实 artifact `ca139760-fc5c-46f8-9590-5e334928cf75` 已完成核心身份，但 coverage 诚实显示 `bannerCaptured=false / chargeSectionCaptured=false`。原因不是平台缺少数据，而是横幅位于页面顶部 CSS/伪元素且可能使用协议相对媒体 URL，充电卡当前 DOM 不使用预设 `.charge-section` 类名。
+
+修复后用独立 run 复验：
+
+```text
+artifact id = 3fbff896-aa28-4b47-babd-bceef7317a40
+manifest sha256 = 5637efef14ac0083af732fd6a724d4313ce43a9dd52773a97c5b810e0e20376f
+state = completed
+terminal reason = profile_captured
+identity captured = true
+avatar captured = true
+banner captured = true
+badge count = 1
+public field count = 8
+announcement captured = true
+charge section captured = true
+highlight count = 3
+observed target routes = 7
+```
+
+唯一 `open_account_profile` 动作为 `attempted=true / attemptCount=1 / completed`，账号安全终态为 `ready / activeRun=null`。artifact 读取时重新验证 manifest 与 `profile-snapshot.json` SHA-256；递归敏感字段扫描为 0，没有 Profile ID、当前登录用户字段、认证材料、本机路径、扩展 URL 或 query/fragment 值。
+
+这证明目标账号公开档案已具备按需本地保存的 research 能力；它仍未迁移到生产 MV3 projector，也没有通过多账号、默认头像/横幅、无公告、无代表作、特殊认证标识和页面漂移样本，因此 `admissionEligible=false`。

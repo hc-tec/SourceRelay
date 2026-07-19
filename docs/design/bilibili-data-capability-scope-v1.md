@@ -69,7 +69,7 @@ coverage / terminal_reason / status
 | `video_detail` | 独立 Validation 曾 accepted；正式策略仍 suspended |
 | `transcript` | 登录态真实闭环两次取得 509/509 段；仍 research-only |
 | `discussion` | 已证明排序与楼中楼动作到 route 的因果；正文 projector 尚未 admission |
-| `account_profile` | research-only Gateway runner 已投影稳定 MID、规范主页、昵称、简介、头像和页面公开字段；最新真实 run 中昵称、简介、头像均通过 DOM 互证，字段完整性和正式扩展策略仍未 admission |
+| `account_profile` | research-only Gateway runner 已真实保存稳定 MID、昵称、简介、头像、横幅、公开标识、8 个统计/导航字段、公告、充电区、代表作和 7 条 route metadata；artifact digest 与敏感字段扫描通过，正式 MV3 策略和多账号覆盖仍未 admission |
 | `account_inventory` | research-only Gateway runner 已完成真实 9 页 / 330 条视频目录，逐页 DOM/response 身份摘要一致、跨页 0 重复、末页 10 条、manifest/page digest 可恢复；正式 MV3 response projector 与边缘样本仍未 admission |
 | `article` | 已证明 `/upload/opus` 的全部图文/专栏分面与 `/opus/<id>` 服务端正文 DOM；目录 cursor/终点、正文 artifact 和正式策略仍未实现 |
 | `collection_series` | 已证明总览、稳定系列详情、默认/倒序和 `/x/series/archives` 分页；全系列 coordinator、artifact 和正式策略仍未实现 |

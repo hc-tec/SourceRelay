@@ -319,6 +319,36 @@ assert.match(
   /queryAndFragmentValues:\s*["']discarded["']/,
   'Account archive artifacts must discard request query and fragment values'
 );
+assert.match(
+  source,
+  /\/v1\/account-profile-artifacts/,
+  'Gateway artifact must expose compact account-profile artifact lookup routes'
+);
+assert.match(
+  source,
+  /authenticated_account_profile_reconnaissance/,
+  'Account-profile research must use the persistent account-safety circuit breaker'
+);
+assert.match(
+  source,
+  /bilibili\.account\.profile\.dom\.v1/,
+  'Gateway artifact must retain the independently versioned Bilibili account-profile candidate'
+);
+assert.match(
+  source,
+  /currentViewerIdentity:\s*["']excluded["']/,
+  'Account-profile artifacts must exclude the current logged-in viewer identity'
+);
+assert.match(
+  source,
+  /responseBody:\s*["']not_read["']/,
+  'Account-profile reconnaissance must not read response bodies'
+);
+assert.match(
+  source,
+  /bilibili_account_profile_snapshot_digest_mismatch/,
+  'Account-profile reads must verify the public snapshot digest'
+);
 
 console.log(JSON.stringify({
   ok: true,

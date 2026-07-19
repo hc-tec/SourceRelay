@@ -182,7 +182,7 @@ function positiveInteger(value: unknown): number | null {
   return number !== null && number > 0 ? number : null;
 }
 
-function safePublicImageUrl(value: unknown): string | null {
+export function safeBilibiliPublicImageUrl(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 2_000) return null;
   try {
     const url = new URL(value.startsWith('//') ? `https:${value}` : value);
@@ -192,6 +192,9 @@ function safePublicImageUrl(value: unknown): string | null {
       url.password ||
       !(url.hostname === 'hdslb.com' || url.hostname.endsWith('.hdslb.com'))
     ) return null;
+    const pathname = normaliseBilibiliPublicImagePathname(url.pathname);
+    if (!pathname) return null;
+    url.pathname = pathname;
     url.search = '';
     url.hash = '';
     return url.href;
@@ -263,7 +266,7 @@ export function projectBilibiliAccountInfoResponse(
   const mid = String(value.data.mid ?? '');
   const displayName = cleanText(value.data.name, 200);
   const descriptionValue = value.data.sign === '' ? null : cleanText(value.data.sign, 2_000);
-  const avatarUrl = value.data.face === '' ? null : safePublicImageUrl(value.data.face);
+  const avatarUrl = value.data.face === '' ? null : safeBilibiliPublicImageUrl(value.data.face);
   if (mid !== expectedAccountId || !displayName || descriptionValue === undefined) return null;
   return {
     stableAccountId: mid,
@@ -303,7 +306,7 @@ export function projectBilibiliArchivePageResponse(
     const mid = String(rawItem.mid ?? '');
     const title = cleanText(rawItem.title, 500);
     const durationText = rawItem.length === '' ? null : cleanText(rawItem.length, 40);
-    const coverUrl = rawItem.pic === '' ? null : safePublicImageUrl(rawItem.pic);
+    const coverUrl = rawItem.pic === '' ? null : safeBilibiliPublicImageUrl(rawItem.pic);
     const views = nonNegativeInteger(rawItem.play);
     const danmaku = nonNegativeInteger(rawItem.video_review);
     if (!bvid || mid !== expectedAccountId || !title || seen.has(bvid)) return null;

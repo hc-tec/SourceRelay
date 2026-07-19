@@ -31,6 +31,12 @@ import {
   type BilibiliAccountArchiveInput,
   type BilibiliAccountArchiveRunRecord
 } from './bilibili-account-archive';
+import {
+  BilibiliAccountProfileRunner,
+  safeBilibiliAccountProfileErrorCode,
+  type BilibiliAccountProfileInput,
+  type BilibiliAccountProfileRunRecord
+} from './bilibili-account-profile';
 import { runTranscriptValidationControlLoop } from './transcript-control-loop';
 import { executeBilibiliTranscriptInteraction } from './bilibili-transcript-interaction';
 import {
@@ -311,6 +317,67 @@ export class CollectionBrowserManager {
       return record;
     } catch (error) {
       const reason = safeBilibiliAccountArchiveErrorCode(error);
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        profile.platform,
+        permit.runId,
+        reason
+      ).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async runBilibiliAuthenticatedAccountProfileReconnaissance(
+    profileId: string,
+    input: BilibiliAccountProfileInput
+  ): Promise<BilibiliAccountProfileRunRecord> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('account_profile_collection_kind_required');
+    if (profile.platform !== 'bilibili') throw new Error('account_profile_platform_mismatch');
+    if (profile.account.category !== 'user_managed') {
+      throw new Error('account_profile_user_managed_required');
+    }
+    const permit = await this.#accountSafety.beginAuthenticatedRun(
+      profileId,
+      profile.platform,
+      'authenticated_account_profile_reconnaissance'
+    );
+    try {
+      await this.launch(profileId);
+      const running = this.#runtime.get(profileId);
+      if (!running) throw new Error('account_profile_browser_not_running');
+      const runner = new BilibiliAccountProfileRunner({
+        context: running.context,
+        runId: permit.runId,
+        collectorVersion: running.extensionVersion,
+        canonicalProfileUrl: input.canonicalProfileUrl,
+        onActionAttempt: async (actionId) => {
+          await this.#accountSafety.recordActionAttempt(profileId, profile.platform, permit.runId, actionId);
+        }
+      });
+      const record = await runner.run();
+      const finishReasonByTerminal: Record<
+        BilibiliAccountProfileRunRecord['coverage']['terminalReason'],
+        string
+      > = {
+        profile_captured: 'account_profile_captured',
+        verification_required: 'account_profile_verification_required',
+        rate_limited: 'account_profile_rate_limited',
+        risk_controlled: 'account_profile_risk_control',
+        context_changed: 'account_profile_context_changed',
+        run_deadline_exceeded: 'account_profile_run_deadline_exceeded',
+        dom_projection_failed: 'account_profile_dom_projection_failed',
+        source_unavailable: 'account_profile_source_unavailable'
+      };
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        profile.platform,
+        permit.runId,
+        finishReasonByTerminal[record.coverage.terminalReason]
+      );
+      return record;
+    } catch (error) {
+      const reason = safeBilibiliAccountProfileErrorCode(error);
       await this.#accountSafety.finishAuthenticatedRun(
         profileId,
         profile.platform,
