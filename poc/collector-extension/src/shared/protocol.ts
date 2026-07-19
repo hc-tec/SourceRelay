@@ -8,7 +8,7 @@ import type { CollectionTerminalStatus, SupportedPlatform } from './collection-c
 export type { SupportedPlatform } from './collection-contracts';
 
 export const COLLECT_VISIBLE_RESULTS = 'collector.collectVisibleResults' as const;
-export const COLLECTOR_CORE_VERSION = '0.4.19' as const;
+export const COLLECTOR_CORE_VERSION = '0.4.20' as const;
 export const COLLECTION_RESULT = 'collector.collectionResult' as const;
 export const CONTENT_READY = 'collector.contentReady' as const;
 export const PROBE_CONTENT_INSTALLATION = 'collector.probeContentInstallation' as const;
@@ -214,7 +214,7 @@ export interface TranscriptCapabilityValidationRunSnapshot {
     requestHeaders: 'not_read';
     requestBody: 'not_read';
     queryAndFragmentValues: 'discarded';
-    targetPage: 'closed_after_validation';
+    targetPage: 'retained_after_validation';
   };
 }
 

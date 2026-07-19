@@ -15,6 +15,7 @@ import {
   getActiveNetworkCaptureArm,
   readNetworkCaptures
 } from './network-capture-runtime';
+import { acquireTranscriptTargetWindow } from './transcript-target-window';
 
 const STORAGE_KEY = 'collector.transcript-capability-validations.v1';
 const VALIDATION_TTL_MS = 45_000;
@@ -192,19 +193,15 @@ export async function createTranscriptCapabilityValidationRun(input: {
   if ((await getTranscriptCapabilityValidationRun(input.runId)) !== null) {
     throw new Error('transcript_validation_run_already_exists');
   }
-  if ((await storedRuns()).some((run) => !terminalStates.has(run.state))) {
+  const existingRuns = await storedRuns();
+  if (existingRuns.some((run) => !terminalStates.has(run.state))) {
     throw new Error('transcript_validation_run_already_active');
   }
   const strategy = resolveTranscriptStrategy('bilibili');
   if (!await chrome.permissions.contains({ origins: [...strategy.browser.optionalHostPermissions] })) {
     throw new Error('transcript_validation_host_permission_required');
   }
-  const createdWindow = await chrome.windows.create({ url: 'about:blank', focused: true, type: 'normal' });
-  const tab = createdWindow?.tabs?.[0];
-  if (typeof createdWindow?.id !== 'number' || typeof tab?.id !== 'number') {
-    if (typeof createdWindow?.id === 'number') await chrome.windows.remove(createdWindow.id).catch(() => undefined);
-    throw new Error('transcript_validation_window_creation_failed');
-  }
+  const target = await acquireTranscriptTargetWindow(existingRuns);
   const startedAt = new Date();
   const expiresAt = startedAt.getTime() + VALIDATION_TTL_MS;
   const targetDigest = await sha256(canonicalUrl);
@@ -219,8 +216,8 @@ export async function createTranscriptCapabilityValidationRun(input: {
     strategy: strategyProvenance(strategy),
     targetUrlDigest: targetDigest,
     navigationUrlDigest: targetDigest,
-    windowId: createdWindow.id,
-    tabId: tab.id,
+    windowId: target.windowId,
+    tabId: target.tabId,
     state: 'navigating',
     terminalStatus: null,
     errorCode: null,
@@ -238,7 +235,7 @@ export async function createTranscriptCapabilityValidationRun(input: {
       requestHeaders: 'not_read',
       requestBody: 'not_read',
       queryAndFragmentValues: 'discarded',
-      targetPage: 'closed_after_validation'
+      targetPage: 'retained_after_validation'
     }
   };
   await saveRun(run);
@@ -266,7 +263,7 @@ export async function createTranscriptCapabilityValidationRun(input: {
       completedAt: new Date().toISOString()
     };
     await saveRun(failed);
-    await cleanupRun(failed, true);
+    await cleanupRun(failed, !target.reused);
     throw error;
   }
   return run;
@@ -332,15 +329,14 @@ export async function completeTranscriptValidation(
     captures
   };
   await saveRun(snapshot);
-  await cleanupRun(snapshot, true);
+  await cleanupRun(snapshot, false);
   return snapshot;
 }
 
 export async function completeTranscriptValidationWithError(
   runId: string,
   terminalStatus: NonNullable<TranscriptCapabilityValidationRunSnapshot['terminalStatus']>,
-  errorCode: string,
-  closeWindow = true
+  errorCode: string
 ): Promise<TranscriptCapabilityValidationRunSnapshot> {
   const run = await getTranscriptCapabilityValidationRun(runId);
   if (!run) throw new Error('transcript_validation_run_not_found');
@@ -356,7 +352,7 @@ export async function completeTranscriptValidationWithError(
     captures
   };
   await saveRun(snapshot);
-  await cleanupRun(snapshot, closeWindow);
+  await cleanupRun(snapshot, false);
   return snapshot;
 }
 
@@ -379,8 +375,7 @@ export async function markTranscriptValidationWindowClosed(windowId: number): Pr
     await completeTranscriptValidationWithError(
       run.runId,
       'cancelled_partial',
-      'transcript_validation_window_closed',
-      false
+      'transcript_validation_window_closed'
     );
   }
 }
@@ -391,8 +386,7 @@ export async function markTranscriptValidationTabClosed(tabId: number): Promise<
     await completeTranscriptValidationWithError(
       run.runId,
       'cancelled_partial',
-      'transcript_validation_tab_closed',
-      false
+      'transcript_validation_tab_closed'
     );
   }
 }
