@@ -71,6 +71,12 @@ sha256
 
 但 Profile 目录存在不等于当前仍已登录。平台可以使会话过期或要求再验证，所以认证状态必须通过真实固定样本判断，不能通过文件存在性推断。Gateway 不导出 Profile Cookie，也不把它转交给 yt-dlp 等命令行工具；需登录的平台必须拥有独立的 `manual_persistent_profile` 只读 Capability。
 
+#### 2026-07-19：保留小红书 BrowserWing Profile
+
+当前 `poc/browserwing/runtime/chrome-user-data` 作为已由用户完成小红书登录的本地侦察 Profile 长期保留。即使当前开发重点切回其他平台，BrowserWing 的停止、重启和常规清理也只能结束相关进程和运行状态，不得删除、重建或清空这个目录；销毁 Profile、退出账号或清除站点数据必须来自用户的显式指令。
+
+该目录继续留在 Git 忽略范围内，不复制或导出其中的 Cookie、Token、storage state 及其他认证材料，也不把它误报为正式产品 Collection Profile。未来恢复小红书站内搜索、账号目录、笔记详情或评论侦察时可以复用这个浏览器上下文，但每次仍须通过真实页面检查当前登录状态；会话过期时才请求用户重新完成必要身份动作。
+
 ## 2. “数据源可用”的定义
 
 健康检查通过不等于数据源可用。一个来源至少要分开报告以下维度：
