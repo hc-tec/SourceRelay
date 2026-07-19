@@ -11,6 +11,7 @@ export type AccountSafetyRunPurpose =
   | 'authenticated_interaction_reconnaissance'
   | 'authenticated_account_archive_reconnaissance'
   | 'authenticated_account_profile_reconnaissance'
+  | 'authenticated_collection_series_reconnaissance'
   | 'authenticated_transcript_validation'
   | 'formal_collection_stage';
 
@@ -78,6 +79,7 @@ function isSafetyRecord(value: unknown): value is PersistedAccountSafetyRecord {
       (activeRun.purpose === 'authenticated_interaction_reconnaissance' ||
         activeRun.purpose === 'authenticated_account_archive_reconnaissance' ||
         activeRun.purpose === 'authenticated_account_profile_reconnaissance' ||
+        activeRun.purpose === 'authenticated_collection_series_reconnaissance' ||
         activeRun.purpose === 'authenticated_transcript_validation' ||
         activeRun.purpose === 'formal_collection_stage') &&
       typeof activeRun.startedAt === 'string' &&

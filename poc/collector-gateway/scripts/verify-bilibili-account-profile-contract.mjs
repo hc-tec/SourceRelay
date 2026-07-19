@@ -65,6 +65,14 @@ try {
   assert.ok(snapshot);
   assert.equal(snapshot.media.avatarUrl, 'https://i1.hdslb.com/bfs/face/avatar.jpg');
   assert.equal(snapshot.media.bannerUrl, 'https://i0.hdslb.com/bfs/space/banner.png');
+  assert.equal(
+    contract.projectBilibiliAccountProfileDom({
+      stableAccountId: '123456',
+      displayName: '公开账号',
+      avatarUrl: 'http://i1.hdslb.com/bfs/face/avatar.jpg'
+    }, canonicalProfileUrl, '2026-07-20T00:00:00.000Z').media.avatarUrl,
+    'https://i1.hdslb.com/bfs/face/avatar.jpg'
+  );
   assert.equal(snapshot.badges.length, 2);
   assert.equal(snapshot.publicFields.length, 4);
   assert.equal(snapshot.highlights.length, 1);

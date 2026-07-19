@@ -20,6 +20,8 @@ B站账号主页、图文/专栏与合集/系列完成新一轮真实三面侦�
 
 随后 `account_profile` 独立 research runner 完成真实 artifact：一次主页导航保存头像、横幅、公开标识、8 个统计/导航字段、公告、充电区与 3 个代表作，七条 route 仅保留 metadata；manifest/profile snapshot digest、重启读取契约和敏感字段扫描均通过。当前登录用户明确排除，公开简介/公告只存在 ignored runtime。该 runner 仍由 Gateway 读 DOM，尚未 admission。
 
+`collection_series` 总览 runner 也完成真实闭环：11 个 series ID、标题与声明数量全部互证，32 个 DOM 可见预览都能在 response 白名单中找到，1 个 0 条系列正确保留；额外 response 预览不冒充页面展示。overview/response-schema/manifest digest 和敏感字段扫描通过。系列详情全目录仍未形成 artifact，因此该 capability 仍是 partial。
+
 2026-07-18 检查点补充：B站视频详情字段的独立 Validation Run `v1.4.0` 已 accepted，但正式多阶段 Task 在当前页面 document / content-script 生命周期中仍出现 `gateway_stage_watchdog_expired`，因此该详情策略已降为 `suspended`。任务 stage 窗口在 Evidence 或 blocked 后自动关闭；详情控制面修正仍须用真实单 stage 与双 stage 任务复验。扩展启动阶段的重复页/闪退先在 v0.4.23 去除了 `chrome://extensions` 和可见 context 自动恢复，但仍会因历史 `lastExtensionVersion` 与实际 worker 状态分离而永久 mismatch；v0.4.24 已改为每次冷启动先 headless 读取实际 marker，不匹配才 reload 一次并跨 context 复核，复核前不打开可见窗口。
 
 同日新增隔离的 `parallel_dom_and_network_metadata` Source Reconnaissance：DOM checkpoint、页面生命周期、扩展 validation/documentId 与 B站域名 XHR/fetch metadata 使用同一 run 时间轴。该模式不读取请求头/体、响应正文、Cookie 或 Token，不改变 production response routes，也不产生可 admission 的 Evidence。Google Chrome DevTools CLI 已在独立临时 Profile 中自动安装/重载生产扩展、触发 action、识别 service worker/Control 页并完成 B站 Fetch/XHR 去 query/hash 交叉观察，不再需要用户手工加载或点击扩展完成这类测试。
@@ -251,7 +253,7 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 | B站 discovery | `v1.1.0 live_anonymous_verified`，正式闭环已验证；只覆盖首屏可见标题与规范 BV URL | 再扩展独立的 detail 策略，不复用 breadth admission |
 | B站账号档案/投稿目录 | 保存的登录 Profile 已完成公开档案 artifact 与 9 页 / 330 条目录真实闭环；头像/横幅/公开标识/统计/公告/充电/代表作、逐页 digest、去重、声明终点、artifact 恢复与 tab 复用均通过 | 将 DOM/response 观察迁移到 MV3 Extension；补多账号档案、零投稿、单页、置顶/重排、采集中新增和登录失效样本后独立 review/admission |
 | B站图文/专栏 | 已证明 `/upload/opus`、全部图文/专栏 route 和 `/opus/<id>` 完整正文 DOM；评论 route 独立 | 实现 opus cursor/滚动账本、正文 raw-first artifact、删除/锁定与大账号样本后独立 admission |
-| B站合集/系列 | 已证明 `/lists` 总览、稳定 series ID、series metadata、30 条分页、默认/倒序和一次真实翻页 0 重叠 | 实现所有系列的有界 coordinator、顺序/终点/恢复 artifact 和边缘样本后独立 admission |
+| B站合集/系列 | 总览 artifact 已真实保存 11 个稳定 series ID，并完成 DOM/response/0 条系列互证；人工另已证明详情 30 条分页、默认/倒序和一次真实翻页 0 重叠 | 实现单系列有界详情 runner，再由 planner 遍历所有系列；补 season 样本、顺序/终点/恢复 artifact 后独立 admission |
 | B站字幕 | v0.4.23 已两次完成生产扩展/Gateway 真实 validation：三个必需动作完成、轨道目录与字幕正文各捕获一次、`lang=zh`、509/509 段、raw-first artifact 完整；终态窗口保留且下一 run 复用，无窗口堆积 | 扩展人工字幕、多语言、无字幕、锁定/删除、长视频与风险样本；保持 production route 为空和 `admissionEligible=false`，直到独立策略版本完成覆盖与正式 review |
 | response observation | 生产 route 为空 | 先完成 wrapper 到期撤销、route projector 和 document race 验证 |
 | Evidence | 认证回传、待提交重试、原子原始 JSON batch、task manifest、result SHA-256 与重启摘要恢复 | 加密 Vault、不可变审计、coverage 与删除/导出边界 |

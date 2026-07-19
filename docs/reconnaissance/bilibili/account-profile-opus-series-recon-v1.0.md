@@ -272,3 +272,48 @@ observed target routes = 7
 唯一 `open_account_profile` 动作为 `attempted=true / attemptCount=1 / completed`，账号安全终态为 `ready / activeRun=null`。artifact 读取时重新验证 manifest 与 `profile-snapshot.json` SHA-256；递归敏感字段扫描为 0，没有 Profile ID、当前登录用户字段、认证材料、本机路径、扩展 URL 或 query/fragment 值。
 
 这证明目标账号公开档案已具备按需本地保存的 research 能力；它仍未迁移到生产 MV3 projector，也没有通过多账号、默认头像/横幅、无公告、无代表作、特殊认证标识和页面漂移样本，因此 `admissionEligible=false`。
+
+## J. `collection_series` 总览 research runner 真实闭环
+
+Gateway 随后增加独立的 `bilibili.collection-series.overview.response.v1 @ 1.0.0` research runner。唯一动作是导航规范 `/lists`；它只读取当前页面产生的精确 `seasons_series_list` response，长期保存 `meta` 与预览卡片白名单，同时把未知字段压缩为 schema path/type/array length，绝不持久化未知值。
+
+第一轮真实 artifact `f91a0b54-0888-4fb2-bbe4-6e526ebf03e8` 为 `partial / response_projection_failed`。schema 证明当前响应为：
+
+```text
+data.items_lists.page
+data.items_lists.seasons_list = []
+data.items_lists.series_list = 11 items
+series item = meta + archives + recent_aids
+```
+
+无值诊断进一步定位为 `item_0_cover_invalid`：公开 `hdslb.com` 封面使用 HTTP URL，而原 sanitizer 只接受原始 HTTPS。修复只允许 `http(s)://hdslb.com` 及子域，并确定性升级成 HTTPS、去 query/hash 和 `@...webp/avif` 变体；没有扩大主机范围。
+
+第二阶段 response 投影成功，但 artifact `66cfc877-1de8-45a4-b66d-53f6e881ab38` 诚实记录 `dom_response_mismatch`。结构诊断确认：
+
+- 每个正常区块最近容器是 `.video-list`；
+- response 最多返回 6 个预览，DOM 只公开显示前 5 个，因此只要求每个 DOM 预览能在 response 找到；
+- 一个 0 条系列没有视频或“查看更多”，旧逻辑错误向上爬到 `.contet-list`；
+- 声明数量在 `.video-list__header` 组合文本中，不是独立纯数字叶节点。
+
+最终真实 artifact：
+
+```text
+artifact id = f274a267-3d89-45de-b301-ee221a8a78b1
+manifest sha256 = c741e0360b5525568f0c636dac29feaa9b9590da8f99a49de8f95323bcbb528c
+state = completed
+declared lists = 11
+captured lists = 11
+series = 11
+seasons = 0
+response preview items = 37
+DOM visible preview BVIDs = 32
+matched DOM preview BVIDs = 32
+zero-item series = 1
+terminal reason = overview_captured
+```
+
+11 个标题、11 个声明数量、11 个稳定 series ID 全部互证；response 中额外但未显示的预览没有被冒充为 DOM 可见项。唯一导航动作 `attemptCount=1 / completed`，账号安全回到 `ready / activeRun=null`。
+
+artifact 包含 `overview.json`、`response-schema.json` 和 manifest，三类 SHA-256 均在读取时复核。敏感字段扫描为 0：没有 Profile ID、当前登录用户、认证材料、本机路径、网络 query 值或未知 response 值。
+
+该检查点只证明合集/系列总览及稳定 ID 发现。每个系列的完整分页目录仍是独立 runner；已有人工证据的 129 条、30 条/页和真实第二页 0 重叠尚未迁移成可恢复 artifact，因此整个 `collection_series` 仍未 admission。

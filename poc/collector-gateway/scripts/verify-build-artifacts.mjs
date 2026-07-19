@@ -349,6 +349,31 @@ assert.match(
   /bilibili_account_profile_snapshot_digest_mismatch/,
   'Account-profile reads must verify the public snapshot digest'
 );
+assert.match(
+  source,
+  /\/v1\/collection-series-artifacts/,
+  'Gateway artifact must expose compact collection-series artifact lookup routes'
+);
+assert.match(
+  source,
+  /authenticated_collection_series_reconnaissance/,
+  'Collection-series research must use the persistent account-safety circuit breaker'
+);
+assert.match(
+  source,
+  /bilibili\.collection-series\.overview\.response\.v1/,
+  'Gateway artifact must retain the independently versioned collection-series overview candidate'
+);
+assert.match(
+  source,
+  /unknownResponseValues:\s*["']not_persisted["']/,
+  'Collection-series schema reconnaissance must not persist unknown response values'
+);
+assert.match(
+  source,
+  /bilibili_collection_series_response_evidence_digest_mismatch/,
+  'Collection-series reads must verify the bounded response-schema evidence digest'
+);
 
 console.log(JSON.stringify({
   ok: true,

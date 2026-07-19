@@ -187,11 +187,12 @@ export function safeBilibiliPublicImageUrl(value: unknown): string | null {
   try {
     const url = new URL(value.startsWith('//') ? `https:${value}` : value);
     if (
-      url.protocol !== 'https:' ||
+      (url.protocol !== 'https:' && url.protocol !== 'http:') ||
       url.username ||
       url.password ||
       !(url.hostname === 'hdslb.com' || url.hostname.endsWith('.hdslb.com'))
     ) return null;
+    url.protocol = 'https:';
     const pathname = normaliseBilibiliPublicImagePathname(url.pathname);
     if (!pathname) return null;
     url.pathname = pathname;
