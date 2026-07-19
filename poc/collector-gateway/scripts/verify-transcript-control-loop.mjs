@@ -14,7 +14,7 @@ const canonicalUrl = 'https://www.bilibili.com/video/BV1qZSLBYEpa';
 function snapshot(state) {
   return {
     schemaVersion: 1,
-    collectorVersion: '0.4.17',
+    collectorVersion: '0.4.18',
     runId,
     profileId,
     platform: 'bilibili',
@@ -59,7 +59,7 @@ try {
     runId,
     profileId,
     canonicalUrl,
-    extensionVersion: '0.4.17',
+    extensionVersion: '0.4.18',
     pollingDelayMs: 0,
     sendMessage: async (message) => {
       if (message.type === 'collector.startTranscriptCapabilityValidation') {
@@ -80,7 +80,7 @@ try {
     runId,
     profileId,
     canonicalUrl,
-    extensionVersion: '0.4.17',
+    extensionVersion: '0.4.18',
     pollingDelayMs: 0,
     sendMessage: async (message) => {
       if (message.type === 'collector.startTranscriptCapabilityValidation') {
@@ -99,7 +99,7 @@ try {
     () => transcriptValidationSnapshot({
       ok: true,
       validation: { ...snapshot('completed'), collectorVersion: 'stale' }
-    }, runId, profileId, '0.4.17'),
+    }, runId, profileId, '0.4.18'),
     (error) => error instanceof Error && error.message === 'transcript_validation_extension_version_mismatch'
   );
   await assert.rejects(
@@ -107,7 +107,7 @@ try {
       runId,
       profileId,
       canonicalUrl,
-      extensionVersion: '0.4.17',
+      extensionVersion: '0.4.18',
       pollingDelayMs: 0,
       maximumPollAttempts: 1,
       sendMessage: async () => ({ ok: true, validation: snapshot('navigating') })

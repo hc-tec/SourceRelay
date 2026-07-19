@@ -164,7 +164,6 @@ export class BilibiliInteractionReconnaissanceRunner {
 
       if (this.#actionScope === 'subtitle' || this.#actionScope === 'all') {
         const openCaptionMenu = await this.#runAction(page, 'open_caption_menu', async () => {
-          if (await player.isVisible().catch(() => false)) await player.hover().catch(() => undefined);
           const control = await firstVisible([
             page.locator('.bpx-player-ctrl-subtitle'),
             page.locator('[aria-label*="字幕"]'),
@@ -172,7 +171,7 @@ export class BilibiliInteractionReconnaissanceRunner {
             page.getByText('字幕', { exact: true })
           ]);
           if (!control) return { outcome: 'control_missing' as const, dom: { captionControlVisible: false } };
-          await control.click({ timeout: 10_000 });
+          await control.hover({ timeout: 10_000 });
           const menu = await waitForCaptionMenuReadiness(page);
           return {
             outcome: menu.ready ? 'completed' as const : 'postcondition_unmet' as const,
@@ -194,15 +193,28 @@ export class BilibiliInteractionReconnaissanceRunner {
             if (!selectedLabel) {
               return { outcome: 'option_unavailable' as const, dom: { visibleCaptionLabels: labels } };
             }
-            const option = await firstVisible([
-              player.getByText(selectedLabel, { exact: true }),
-              page.getByText(selectedLabel, { exact: true })
-            ]);
+            const verifiedOption = page.locator(
+              '.bpx-player-ctrl-subtitle-language-item[data-lan="ai-zh"]'
+            ).first();
+            const option = await verifiedOption.isVisible().catch(() => false)
+              ? verifiedOption
+              : await firstVisible([
+                  player.locator('.bpx-player-ctrl-subtitle-language-item').filter({ hasText: selectedLabel }),
+                  page.locator('.bpx-player-ctrl-subtitle-language-item').filter({ hasText: selectedLabel })
+                ]);
             if (!option) {
               return { outcome: 'option_unavailable' as const, dom: { selectedLabel, optionVisible: false } };
             }
-            await option.click({ timeout: 10_000 });
-            await delay(200);
+            const selectedStateBeforeClick = await option.evaluate((element) => {
+              const className = typeof element.className === 'string' ? element.className : '';
+              return element.getAttribute('aria-selected') === 'true' ||
+                element.getAttribute('aria-checked') === 'true' ||
+                /(?:^|[-_\s])(?:active|selected|checked|current|on)(?:$|[-_\s])/i.test(className);
+            }).catch(() => false);
+            if (!selectedStateBeforeClick) {
+              await option.click({ timeout: 10_000 });
+              await delay(200);
+            }
             const optionVisibleAfterClick = await option.isVisible().catch(() => false);
             const selectedState = await option.evaluate((element) => {
               const className = typeof element.className === 'string' ? element.className : '';
@@ -210,14 +222,19 @@ export class BilibiliInteractionReconnaissanceRunner {
                 element.getAttribute('aria-checked') === 'true' ||
                 /(?:^|[-_\s])(?:active|selected|checked|current|on)(?:$|[-_\s])/i.test(className);
             }).catch(() => false);
-            const selectionAcknowledged = !optionVisibleAfterClick || selectedState;
+            const visibleSubtitle = await page.locator('.bili-subtitle-x-subtitle-panel')
+              .filter({ hasText: /\S/ })
+              .isVisible()
+              .catch(() => false);
+            const selectionAcknowledged = selectedState || visibleSubtitle;
             return {
               outcome: selectionAcknowledged ? 'completed' as const : 'postcondition_unmet' as const,
               dom: {
                 selectedLabel,
                 optionVisibleBeforeClick: true,
                 optionVisibleAfterClick,
-                selectionAcknowledged
+                selectionAcknowledged,
+                visibleSubtitle
               }
             };
           }));

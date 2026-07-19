@@ -26,6 +26,8 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 
 该 run 暴露的结果语义随后已修正：字幕控件点击后必须在 2.5 秒内满足菜单后置条件，否则 `open_caption_menu=postcondition_unmet`；依赖动作记为 `select_caption_language=prerequisite_unmet / attempted=false`。run 新增 scope objective，只有全部 required actions 完成才能标记 `completed`。认证 interaction 结果现在原子保存为不含 Profile ID、原始 URL、正文和未知 DOM 字段的 ignored runtime artifact；列表只返回 compact summary，详情按 record ID 读取完整安全 schema 投影。
 
+同日最新一轮人工与 DevTools 联合侦察已真正复现字幕操作：真实页面把规范 URL 追加为唯一的 `vd_source` query；hover `.bpx-player-ctrl-subtitle` 即展开菜单；中文项的正确交互节点是 `.bpx-player-ctrl-subtitle-language-item[data-lan="ai-zh"]`，选中后该父节点获得 `bpx-state-active`，字幕面板可见。Network 真实读取到 87175 字节、509 段的公开 AI 字幕 JSON，并确认 `lang=zh` 与 `body[].from/to/content`。扩展已升级到 v0.4.18，修复 observed-document URL 规范化、精确父节点选择和真实后置条件；扩展与 Gateway 全构建门禁已通过，但 v0.4.18 尚未获得新的实站闭环授权，因此不能标为 admission。
+
 B站详情正式 Task 的 receipt / Evidence race 已加入控制面修复：accepted receipt 后最多 3 次、100ms 恢复 pending Evidence；Gateway poll 先恢复 pending 再取 work；content push 失败只安排本地 continuation，成功则立即清 watchdog。伪造平台页面与 fake Gateway 的集成诊断已删除；该修复必须通过新的真实单 stage 与双 stage 任务验证，`bilibili.video.detail.dom.v1 @ 1.4.0` 继续 `suspended`。
 
 多 stage 推进使用显式任务状态 `waiting_for_user_resume`。非最终 stage 的 Evidence 完成后，任务不会后台取得下一 stage；Console-origin 保护的 `POST /v1/tasks/<task-id>/resume` 核对已批准计划中的下一个 pending stage 及其既有 Profile binding，并把任务放回调度队列。该端点没有时间等待，自身不启动浏览器、不导航、不修改计划，也不能代替 locked Profile 的人工解锁。单元测试覆盖立即显式恢复、精确下一 stage、重复恢复、completed 与 locked 拒绝；Console 和平台闭环仍只接受真实任务验证。

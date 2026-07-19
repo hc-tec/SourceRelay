@@ -7,6 +7,7 @@ import {
 } from '../shared/protocol';
 import { bilibiliTranscriptResearchRouteIds } from '../shared/network-capture';
 import { resolveTranscriptStrategy, strategyProvenance } from '../shared/strategy-registry';
+import { canonicalBilibiliVideoUrl } from '../shared/bilibili-video-url';
 import {
   activeBoundNetworkCaptureArmForSender,
   armNetworkCapture,
@@ -21,17 +22,6 @@ const BRIDGE_REGISTRATION_PREFIX = 'collector-transcript-bridge-';
 const CONTENT_REGISTRATION_PREFIX = 'collector-transcript-content-';
 export const TRANSCRIPT_VALIDATION_ALARM_PREFIX = 'collector.transcript-validation-deadline.';
 const terminalStates = new Set(['completed', 'inconclusive', 'failed']);
-
-function canonicalBilibiliVideoUrl(value: string): string | null {
-  try {
-    const url = new URL(value);
-    const match = url.hostname === 'www.bilibili.com' && url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/);
-    if (url.protocol !== 'https:' || !match || url.username || url.password || url.search || url.hash) return null;
-    return `https://www.bilibili.com/video/${match[1]}`;
-  } catch {
-    return null;
-  }
-}
 
 async function sha256(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -291,7 +281,7 @@ export async function activeTranscriptValidationForSender(
   documentId: string | undefined
 ): Promise<TranscriptCapabilityValidationRunSnapshot | null> {
   if (!senderUrl || !documentId) return null;
-  const canonicalUrl = canonicalBilibiliVideoUrl(senderUrl);
+  const canonicalUrl = canonicalBilibiliVideoUrl(senderUrl, 'observed_document');
   const run = (await storedRuns()).find((candidate) => candidate.tabId === tabId);
   if (!canonicalUrl || !run || terminalStates.has(run.state)) return null;
   if ((await sha256(canonicalUrl)) !== run.navigationUrlDigest) return null;
@@ -310,7 +300,7 @@ export async function completeTranscriptValidation(
   if (!run) throw new Error('transcript_validation_run_not_found');
   if (terminalStates.has(run.state)) return run;
   const tab = await chrome.tabs.get(run.tabId).catch(() => null);
-  const canonicalUrl = canonicalBilibiliVideoUrl(tab?.url ?? '');
+  const canonicalUrl = canonicalBilibiliVideoUrl(tab?.url ?? '', 'observed_document');
   const interaction = canonicalUrl ? sanitiseInteraction(interactionCandidate, canonicalUrl) : null;
   const arm = await getActiveNetworkCaptureArm(run.tabId);
   const captures = arm ? await readNetworkCaptures(run.tabId, arm) : [];
@@ -374,7 +364,7 @@ export async function completeTranscriptValidationWithError(
 export async function markTranscriptValidationTabChanged(tabId: number, changedUrl: string): Promise<void> {
   const run = (await storedRuns()).find((candidate) => candidate.tabId === tabId);
   if (!run || terminalStates.has(run.state)) return;
-  const canonical = canonicalBilibiliVideoUrl(changedUrl);
+  const canonical = canonicalBilibiliVideoUrl(changedUrl, 'observed_document');
   if (!canonical || (await sha256(canonical)) !== run.navigationUrlDigest) {
     await completeTranscriptValidationWithError(
       run.runId,

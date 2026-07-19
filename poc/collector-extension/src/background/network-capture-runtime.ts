@@ -7,6 +7,7 @@ import {
   type NetworkCaptureRouteId
 } from '../shared/network-capture';
 import { isSupportedPlatform, type SupportedPlatform } from '../shared/collection-contracts';
+import { canonicalBilibiliVideoUrl, type BilibiliVideoUrlMode } from '../shared/bilibili-video-url';
 
 const MAXIMUM_ARM_LIFETIME_MS = 60_000;
 
@@ -43,15 +44,14 @@ async function sha256(value: string): Promise<string> {
 function canonicalCapturePageUrl(
   value: string,
   platform: SupportedPlatform,
-  purpose: NetworkCaptureArmPurpose
+  purpose: NetworkCaptureArmPurpose,
+  bilibiliVideoMode: BilibiliVideoUrlMode = 'strict_input'
 ): string | null {
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.username || url.password || url.hash) return null;
     if (purpose === 'transcript_validation') {
-      const match = url.hostname === 'www.bilibili.com' && url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/);
-      if (platform !== 'bilibili' || !match || url.search) return null;
-      return `https://www.bilibili.com/video/${match[1]}`;
+      return platform === 'bilibili' ? canonicalBilibiliVideoUrl(value, bilibiliVideoMode) : null;
     }
     return nativeSearchPlatform(url) === platform ? url.href : null;
   } catch {
@@ -147,7 +147,7 @@ async function activeArmForNavigation(tabId: number, senderUrl: string | undefin
   if (!senderUrl) return null;
   const arm = await getActiveNetworkCaptureArm(tabId);
   if (!arm) return null;
-  const canonicalUrl = canonicalCapturePageUrl(senderUrl, arm.platform, arm.purpose);
+  const canonicalUrl = canonicalCapturePageUrl(senderUrl, arm.platform, arm.purpose, 'observed_document');
   return canonicalUrl && (await sha256(canonicalUrl)) === arm.navigationUrlDigest ? arm : null;
 }
 

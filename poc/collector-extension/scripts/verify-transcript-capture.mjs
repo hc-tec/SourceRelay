@@ -7,18 +7,43 @@ import { build } from 'esbuild';
 
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'collector-transcript-capture-'));
 const bundlePath = join(temporaryDirectory, 'network-capture.mjs');
+const urlBundlePath = join(temporaryDirectory, 'bilibili-video-url.mjs');
 
 try {
-  await build({
-    entryPoints: [fileURLToPath(new URL('../src/shared/network-capture.ts', import.meta.url))],
-    outfile: bundlePath,
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    target: 'node22',
-    logLevel: 'silent'
-  });
+  await Promise.all([
+    build({
+      entryPoints: [fileURLToPath(new URL('../src/shared/network-capture.ts', import.meta.url))],
+      outfile: bundlePath,
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      target: 'node22',
+      logLevel: 'silent'
+    }),
+    build({
+      entryPoints: [fileURLToPath(new URL('../src/shared/bilibili-video-url.ts', import.meta.url))],
+      outfile: urlBundlePath,
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      target: 'node22',
+      logLevel: 'silent'
+    })
+  ]);
   const capture = await import(pathToFileURL(bundlePath).href);
+  const urls = await import(pathToFileURL(urlBundlePath).href);
+  const canonicalVideoUrl = 'https://www.bilibili.com/video/BV1qZSLBYEpa';
+  assert.equal(urls.canonicalBilibiliVideoUrl(canonicalVideoUrl), canonicalVideoUrl);
+  assert.equal(urls.canonicalBilibiliVideoUrl(`${canonicalVideoUrl}?vd_source=${'a'.repeat(32)}`), null);
+  assert.equal(
+    urls.canonicalBilibiliVideoUrl(
+      `${canonicalVideoUrl}/?vd_source=${'a'.repeat(32)}`,
+      'observed_document'
+    ),
+    canonicalVideoUrl
+  );
+  assert.equal(urls.canonicalBilibiliVideoUrl(`${canonicalVideoUrl}?foo=bar`, 'observed_document'), null);
+  assert.equal(urls.canonicalBilibiliVideoUrl(`${canonicalVideoUrl}?vd_source=short`, 'observed_document'), null);
   const routeIds = capture.bilibiliTranscriptResearchRouteIds();
   assert.deepEqual(routeIds, [
     'bilibili.video.transcript.track-directory.response.v1',
@@ -166,6 +191,7 @@ try {
     researchRouteCount: routeIds.length,
     directoryFieldsWhitelisted: true,
     publicSubtitleSegmentsPreserved: 2,
+    observedDocumentTrackingQueryCanonicalized: true,
     queryValuesDiscarded: true,
     unknownAndSensitiveFieldsDiscarded: true,
     forgedResearchObservationRejectedWithoutArm: true

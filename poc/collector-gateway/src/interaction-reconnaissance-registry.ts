@@ -20,6 +20,7 @@ const SAFE_DOM_KEYS = new Set([
   'optionVisibleBeforeClick',
   'optionVisibleAfterClick',
   'selectionAcknowledged',
+  'visibleSubtitle',
   'commentsHostPresent',
   'visibleDiscussionLabels',
   'latestControlVisible',

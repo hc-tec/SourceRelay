@@ -148,7 +148,7 @@ async function acceptAndSubmit(queue, dispatchWork, leaseId, capturedAt, title) 
   const result = detailResult(stage, title);
   return queue.submitEvidence({
     schemaVersion: 1,
-    collectorVersion: '0.4.17',
+    collectorVersion: '0.4.18',
     taskId: dispatch.taskId,
     stageId: dispatch.stageId,
     leaseId,

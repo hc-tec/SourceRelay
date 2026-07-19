@@ -1,6 +1,6 @@
 # B站视频字幕 Source Reconnaissance v1.0
 
-- 状态：两次相互独立、均已消费的一次性 subtitle-only / schema-only 实网勘察已完成；第二次首次映射到 AI 字幕正文结构，但 DOM 选中后置条件未满足，仍不可 admission
+- 状态：三次相互独立、均已消费的 subtitle-only 实网勘察已完成；最新一次以人工与 DevTools 双视角确认真实操作、选中后置条件和 509 段字幕正文，扩展 v0.4.18 已据此修正但尚未实站闭环，仍不可 admission
 - 日期：2026-07-19
 - 页面角色：公开视频详情播放器
 - Evidence objective：未来独立的 transcript / subtitle evidence，不并入视频详情 DOM 策略
@@ -166,17 +166,30 @@ JSON 映射只输出路径、类型和数组规模，没有保存字段值。该
 - 去除 Profile ID、原始 URL、正文和未知 DOM 字段的原子 runtime artifact；
 - compact 列表与完整安全 schema 详情两个读取层级。
 
-上述实现修正目前只通过纯逻辑和构建门禁；不能据此声称 B站字幕能力已完成。菜单、中文轨道、字幕响应与目标页清理仍须在新的单次授权下用真实 B站页面验证。
+上述历史实现修正没有通过正确的人工流程验证，因此当时不能声称 B站字幕能力已完成。最新人工与 DevTools 证据见下一节；v0.4.18 的扩展闭环仍须新的单次授权实站验证。
+
+### F.5 人工流程与 DevTools 联合侦察
+
+2026-07-19 用户再次授权目标 `BV1qZSLBYEpa` 的单次字幕侦察。此次不先运行既有 selector，而是按“导航、等待、快照、hover、DOM/XHR 增量、单次选择、后置条件”的真实人类流程执行。结论如下：
+
+1. 规范 URL 会由真实页面变为同一 BV 路径加 `?vd_source=<32位十六进制>`；旧实现把这一平台追加参数误判为上下文改变，直接导致上一轮 `transcript_validation_context_changed`。
+2. 字幕入口的真实 DOM 是 `.bpx-player-ctrl-subtitle[aria-label="字幕"]`。人类只需 hover 该控件，菜单即展开，无须先盲点按钮。
+3. 中文轨道的真实可交互容器是 `.bpx-player-ctrl-subtitle-language-item[data-lan="ai-zh"]`；内层文本只是“中文”。旧实现点击最小文本子节点，并在错误节点上检查 active class。
+4. 点击前 `.bpx-player-ctrl-subtitle-close-switch` 带 `bpx-state-active`；只点击中文容器一次后，`ai-zh` 容器获得 `bpx-state-active`、关闭项失去 active，页面出现“字幕已切换至 中文”，`.bili-subtitle-x-subtitle-panel` 变为可见并显示逐句字幕。
+5. DevTools Network 确认三条相关 200 route：`/x/player/wbi/v2`、`/x/v2/subtitle/web/view`、`aisubtitle.hdslb.com/bfs/ai_subtitle/prod/<opaque-id>`。query 和鉴权值不写入文档或产品 artifact。
+6. CDN 正文是 87175 字节 UTF-8 JSON，根级 `lang=zh`，包含 509 个 `body` 片段；片段字段为 `from / to / sid / location / content / music`。首段从 0.22 秒开始，末段到 1061.66 秒结束；播放器当前可见字幕与正文内容类型一致。
+
+扩展 v0.4.18 据此完成三项修正：只在 observed-document 边界接受唯一且格式严格的 `vd_source`，输入 API 仍拒绝任何 query；语言选择锁定 `data-lan="ai-zh"` 容器；选中后置条件检查容器 active 状态与可见字幕面板。构建、自动扩展加载、Gateway 控制循环和真实响应 projector 门禁均已通过，但没有把这次人工 DevTools 结果冒充扩展闭环验证。
 
 ## G. 字段—证据映射（当前）
 
 | 输出字段 | 页面可见 | 当前证据表面 | 状态 |
 |---|---|---|---|
 | 字幕能力存在 | 是 | visible DOM 字幕控件 | 已观察 |
-| 可用语言“中文” | 是 | 第二次 run 的 visible DOM 菜单 | 已观察并只点击一次；DOM 选中确认未满足 |
-| 轨道类型（人工/自动） | 可能 | player response schema | 已确认 `ai_status / ai_type / type / is_lock` 路径形状，字段值与语义尚未验证 |
-| 字幕时间片与正文 | 播放时可见 | `aisubtitle.hdslb.com` response schema + 后续 DOM cross-check | 已确认 `body[].content / from / to` 结构；未读取值、未逐段比对、未 admission |
-| 字幕来源/语言代码 | 间接 | player response + subtitle CDN response schema | 已确认轨道 `lan / lan_doc` 与正文根级 `lang` 路径形状；值与一致性尚未验证 |
+| 可用语言“中文” | 是 | visible DOM 菜单与选中后置条件 | 人工 DevTools 流程只点击一次，确认 `data-lan=ai-zh`、active class、切换提示和字幕面板可见 |
+| 轨道类型（人工/自动） | 可能 | player response + visible AI badge | 已确认 `ai-zh` 与 AI 标识；更多字幕类型仍需样本 |
+| 字幕时间片与正文 | 播放时可见 | `aisubtitle.hdslb.com` response + DOM cross-check | 已真实读取 509 段 `content / from / to`；只抽查当前可见字幕，尚未逐段比对、未 admission |
+| 字幕来源/语言代码 | 间接 | player response + subtitle CDN response | 已确认轨道 `ai-zh`、CDN 根级 `lang=zh` 以及同一 approved CDN pathname；多语言一致性仍待验证 |
 
 ## H. 策略候选
 
@@ -214,4 +227,4 @@ bounded_interaction
 - 可见 Chrome、`chrome-devtools-mcp` 与 `collector-gateway` 进程：均为 0；
 - 生产 response routes：仍为空；
 - `admissionEligible`：仍为 `false`；
-- 第二张独立的一次性授权已经消费；`ready` 不得触发后台自动恢复，新的实网动作仍需新的明确批准。
+- 最新人工与 DevTools 单次授权已经消费；扩展 v0.4.18 的真实闭环仍需新的明确批准。

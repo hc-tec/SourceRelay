@@ -5,6 +5,7 @@ import {
   type TranscriptInteractionActionResult,
   type TranscriptInteractionResult
 } from '../shared/protocol';
+import { canonicalBilibiliVideoUrl } from '../shared/bilibili-video-url';
 
 const CONTROL_WAIT_MS = 10_000;
 const MENU_READY_MS = 2_500;
@@ -14,17 +15,6 @@ const marker = 'collectorTranscriptValidationStarted';
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-function canonicalBilibiliVideoUrl(value: string): string | null {
-  try {
-    const url = new URL(value);
-    const match = url.hostname === 'www.bilibili.com' && url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/);
-    if (url.protocol !== 'https:' || !match || url.username || url.password || url.search || url.hash) return null;
-    return `https://www.bilibili.com/video/${match[1]}`;
-  } catch {
-    return null;
-  }
 }
 
 function visible(element: Element): element is HTMLElement {
@@ -62,6 +52,25 @@ function captionControl(): HTMLElement | null {
   ];
   return candidates.filter((element): element is HTMLElement => Boolean(element) && visible(element!))[0] ??
     smallestVisibleExact('字幕');
+}
+
+function chineseSubtitleOption(): HTMLElement | null {
+  const exact = Array.from(document.querySelectorAll<HTMLElement>(
+    '.bpx-player-ctrl-subtitle-language-item[data-lan="ai-zh"]'
+  )).find(visible);
+  if (exact) return exact;
+  return Array.from(document.querySelectorAll<HTMLElement>('.bpx-player-ctrl-subtitle-language-item'))
+    .filter(visible)
+    .find((element) => /^(?:中文|汉语)(?:[（(].{1,30}[）)])?$/.test(compactText(element))) ?? null;
+}
+
+function subtitleOptionSelected(option: HTMLElement): boolean {
+  const className = typeof option.className === 'string' ? option.className : '';
+  const panel = document.querySelector('.bili-subtitle-x-subtitle-panel');
+  return option.getAttribute('aria-selected') === 'true' ||
+    option.getAttribute('aria-checked') === 'true' ||
+    /(?:^|[-_\s])(?:active|selected|checked|current|on)(?:$|[-_\s])/i.test(className) ||
+    Boolean(panel && visible(panel) && compactText(panel).length > 0);
 }
 
 function pageRiskDetected(): boolean {
@@ -112,7 +121,7 @@ function action(
 }
 
 async function run(): Promise<TranscriptInteractionResult> {
-  const canonicalUrl = canonicalBilibiliVideoUrl(window.location.href);
+  const canonicalUrl = canonicalBilibiliVideoUrl(window.location.href, 'observed_document');
   if (!canonicalUrl) throw new Error('transcript_validation_url_invalid');
   const actions: TranscriptInteractionActionResult[] = [];
   const requiredActions: TranscriptInteractionAction[] = ['open_caption_menu', 'select_caption_language'];
@@ -123,6 +132,9 @@ async function run(): Promise<TranscriptInteractionResult> {
     if (!control) {
       actions.push(action('open_caption_menu', false, pageRiskDetected() ? 'risk_detected' : 'control_missing'));
     } else {
+      // The real player exposes this menu on a trusted pointer hover. Content
+      // scripts cannot synthesize CSS :hover state, so activating the verified
+      // tabindex control is the bounded extension equivalent.
       control.click();
       const menu = await waitForMenu();
       actions.push(action(
@@ -136,22 +148,23 @@ async function run(): Promise<TranscriptInteractionResult> {
       } else {
         const labels = relevantLabels(/^(?:中文|汉语)(?:[（(].{1,30}[）)])?$/)
           .sort((left, right) => left.length - right.length);
-        const selectedLabel = labels[0] ?? null;
-        const option = selectedLabel ? smallestVisibleExact(selectedLabel) : null;
+        const option = chineseSubtitleOption();
+        const selectedLabel = option ? compactText(option) : labels[0] ?? null;
         if (!selectedLabel || !option) {
           actions.push(action('select_caption_language', false, 'option_unavailable', {
             visibleLabels: labels,
             selectedLabel
           }));
+        } else if (subtitleOptionSelected(option)) {
+          actions.push(action('select_caption_language', false, 'completed', {
+            visibleLabels: labels,
+            selectedLabel,
+            postconditionAcknowledged: true
+          }));
         } else {
           option.click();
           await delay(ACTION_TAIL_MS);
-          const optionVisible = visible(option);
-          const className = typeof option.className === 'string' ? option.className : '';
-          const acknowledged = !optionVisible ||
-            option.getAttribute('aria-selected') === 'true' ||
-            option.getAttribute('aria-checked') === 'true' ||
-            /(?:^|[-_\s])(?:active|selected|checked|current|on)(?:$|[-_\s])/i.test(className);
+          const acknowledged = subtitleOptionSelected(option);
           actions.push(action(
             'select_caption_language',
             true,
@@ -194,7 +207,8 @@ async function start(): Promise<void> {
   } catch (error) {
     result = {
       schemaVersion: 1,
-      canonicalUrl: canonicalBilibiliVideoUrl(window.location.href) ?? 'https://www.bilibili.com/',
+      canonicalUrl: canonicalBilibiliVideoUrl(window.location.href, 'observed_document') ??
+        'https://www.bilibili.com/',
       state: 'failed',
       objective: {
         status: 'not_satisfied',

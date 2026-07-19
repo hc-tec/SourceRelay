@@ -208,6 +208,16 @@ assert.match(transcriptSource, /select_caption_language/, 'Transcript content mu
 assert.match(transcriptSource, /prerequisite_unmet/, 'Language selection must stop when the menu postcondition fails');
 assert.match(transcriptSource, /control\.click\(\)/, 'Caption-menu delivery must contain exactly one explicit control click site');
 assert.match(transcriptSource, /option\.click\(\)/, 'Language delivery must contain exactly one explicit option click site');
+assert.match(
+  transcriptSource,
+  /bpx-player-ctrl-subtitle-language-item\[data-lan=["']ai-zh["']\]/,
+  'Language selection must target the verified Bilibili ai-zh option container'
+);
+assert.match(
+  transcriptSource,
+  /vd_source/,
+  'Observed Bilibili documents must canonicalize the verified platform tracking query'
+);
 assert.match(bridgeSource, /armedRouteIds/, 'The isolated bridge must revalidate the exact armed research route IDs');
 assert.match(
   mainWorldObserverSource,
