@@ -75,7 +75,7 @@ B站 `bilibili.video.detail.dom.v1 @ 1.4.0` 保留历史字段 validation record
 
 自动加载门禁不会打开任何平台页面，不会使用 Chrome / Edge 日常 Profile，也不需要人工进入 `chrome://extensions`、扫码、登录或点击扩展。它使用临时目录，结束后自动删除。
 
-仓库不再保留把平台域名拦截到本地 HTML、假响应或 fake Gateway 的平台集成诊断。真实 selector、登录、DOM/XHR、交付竞态和页面状态都必须在用户明确授权的专用 Profile 中通过真实网站验证；单元测试只能证明纯逻辑，不得生成 admission。
+仓库不再保留把平台域名拦截到本地 HTML、假响应或 fake Gateway 的平台集成诊断。真实 selector、登录、DOM/XHR、交付竞态和页面状态都必须在项目专用 Profile 中通过真实网站验证；项目所有者已授予开发/验证常设实网权限，不再逐 run 询问聊天授权。单元测试只能证明纯逻辑，不得生成 admission。
 
 前置条件是 Node.js 22+。首次使用先安装依赖和构建门禁专用 Chromium：
 
@@ -117,7 +117,7 @@ Manifest 不再静态声明任何平台 `content_scripts`，授予站点权限�
 
 - 使用专用、可见的 Validation Browser，不接触用户日常 Profile；
 - 严格只读，不点赞、关注、收藏、评论、私信、上传、订阅或发布；
-- 需要登录时由用户在该浏览器上下文中自行完成，然后显式继续；
+- 需要登录时通知用户在该浏览器上下文中自行完成；检测到登录恢复后，代理按常设权限继续，不再重新申请 run 授权；
 - 不索要或传递 Cookie、Token、密码、二维码、验证码、Profile 路径或代理凭据；
 - 每项平台能力独立记录策略版本、匿名 / 登录类别、验证时间、覆盖和失败语义；
 - 只有真实验证记录可以把策略升级为 `live_anonymous_verified` 或 `live_authenticated_verified`。

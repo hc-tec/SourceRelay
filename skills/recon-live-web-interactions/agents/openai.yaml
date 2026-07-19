@@ -1,0 +1,4 @@
+interface:
+  display_name: "真实网页交互侦察"
+  short_description: "结合视觉、DOM、可信输入与网络证据验证真实平台交互可行性"
+  default_prompt: "Use $recon-live-web-interactions to investigate and prove a real website interaction before implementing automation."

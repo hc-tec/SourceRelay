@@ -26,9 +26,13 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 
 该 run 暴露的结果语义随后已修正：字幕控件点击后必须在 2.5 秒内满足菜单后置条件，否则 `open_caption_menu=postcondition_unmet`；依赖动作记为 `select_caption_language=prerequisite_unmet / attempted=false`。run 新增 scope objective，只有全部 required actions 完成才能标记 `completed`。认证 interaction 结果现在原子保存为不含 Profile ID、原始 URL、正文和未知 DOM 字段的 ignored runtime artifact；列表只返回 compact summary，详情按 record ID 读取完整安全 schema 投影。
 
-同日最新一轮人工与 DevTools 联合侦察已真正复现字幕操作：真实页面把规范 URL 追加为唯一的 `vd_source` query；hover `.bpx-player-ctrl-subtitle` 即展开菜单；中文项的正确交互节点是 `.bpx-player-ctrl-subtitle-language-item[data-lan="ai-zh"]`，选中后该父节点获得 `bpx-state-active`，字幕面板可见。Network 真实读取到 87175 字节、509 段的公开 AI 字幕 JSON，并确认 `lang=zh` 与 `body[].from/to/content`。扩展已升级到 v0.4.18，修复 observed-document URL 规范化、精确父节点选择和真实后置条件；扩展与 Gateway 全构建门禁已通过，但 v0.4.18 尚未获得新的实站闭环授权，因此不能标为 admission。
+同日人工与 DevTools 联合侦察真正复现字幕操作：真实页面把规范 URL 追加为唯一的 `vd_source` query；hover `.bpx-player-ctrl-subtitle` 即展开菜单；中文项的正确交互节点是 `.bpx-player-ctrl-subtitle-language-item[data-lan="ai-zh"]`，选中后该父节点获得 `bpx-state-active`，字幕面板可见。Network 真实读取到 87175 字节、509 段的公开 AI 字幕 JSON，并确认 `lang=zh` 与 `body[].from/to/content`。扩展升级到 v0.4.18，修复 observed-document URL 规范化、精确父节点选择和真实后置条件；扩展与 Gateway 全构建门禁通过，但这仍未证明 v0.4.18 产品控制循环能够完成可信交互。
 
-v0.4.18 的第一张真实闭环授权随后只提交一次，但在账号 run 和平台导航之前返回 HTTP 400：生产扩展已加载、已配对，`strategyPermission` 却为 `missing`，账号 `lastRunAt` 未变化且没有新增 artifact。纯本地 Control 页权限恢复已重新获得精确 B站 origins；关闭并重启 Profile/Gateway 后复核 `extensionLoaded=true / extensionPaired=true / strategyPermission=granted / manifest=0.4.18`。今后不得让独立 DevTools CLI 直接拥有生产 Collection Profile，并必须在消费实网授权前完成上述本地 preflight。该次授权已消费，未自动补发；v0.4.18 仍未完成生产扩展实站闭环。
+v0.4.18 的第一次真实闭环提交在账号 run 和平台导航之前返回 HTTP 400：生产扩展已加载、已配对，`strategyPermission` 却为 `missing`，账号 `lastRunAt` 未变化且没有新增 artifact。纯本地 Control 页权限恢复重新获得精确 B站 origins；关闭并重启 Profile/Gateway 后复核 `extensionLoaded=true / extensionPaired=true / strategyPermission=granted / manifest=0.4.18`。
+
+第二次 v0.4.18 产品 run 只提交一次并返回 HTTP 201，但最终为 `inconclusive / partial`：轨道目录捕获到 1 条，`open_caption_menu=postcondition_unmet`，中文选择因前置条件不满足而未尝试，字幕正文和 segment 均未捕获。随后执行了一次完全绕开 Collector 扩展、Gateway 和既有字幕脚本的干净浏览器可行性研究：从视觉上先显现播放器控制栏，DOM 取得字幕按钮与中文父项的实时边界框，再用浏览器级真实 mouse move/hover 和一次 click 完成中文切换；页面出现 `bpx-state-active` 与可见字幕面板，Network 同时返回 87175 字节、`lang=zh`、509 段的真实字幕 JSON。由此已经证明网页操作可行，v0.4.18 的错误位于 content-script synthetic interaction 执行层，产品闭环仍保持 `partial`。
+
+该经验和项目所有者的常设实网授权已经固化为仓库内 [`recon-live-web-interactions`](../../skills/recon-live-web-interactions/SKILL.md)。今后不得让独立调试浏览器与 Gateway 同时占有生产 Collection Profile；但代理不再等待逐 run 聊天授权，而是在安全 preflight、独立 run、动作 at-most-once 和清理门禁满足后自主推进真实验证。
 
 B站详情正式 Task 的 receipt / Evidence race 已加入控制面修复：accepted receipt 后最多 3 次、100ms 恢复 pending Evidence；Gateway poll 先恢复 pending 再取 work；content push 失败只安排本地 continuation，成功则立即清 watchdog。伪造平台页面与 fake Gateway 的集成诊断已删除；该修复必须通过新的真实单 stage 与双 stage 任务验证，`bilibili.video.detail.dom.v1 @ 1.4.0` 继续 `suspended`。
 

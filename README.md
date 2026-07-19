@@ -21,6 +21,7 @@ Local Research Console / Collector Gateway
 poc/collector-extension/  单一最小权限 MV3 Collector Core
 poc/collector-gateway/    只监听 127.0.0.1 的本地 Console / 控制面
 docs/design/              1–100 题决策账本、产品规格、审计和实现状态
+skills/recon-live-web-interactions/  真实网页人类视角交互侦察 Skill
 ```
 
 当前已经完成：
@@ -73,6 +74,12 @@ poc/intelligence-gateway/
 
 `poc/deepresearch-gateway/` 也是历史适配 POC。DeerFlow、天工式系统或其他蜂群框架未来只能通过稳定 EvidencePackage / Coverage / Citation / CollectionGapRequest 边界接入；框架自带搜索器默认禁用，`.env` 搜索凭据只归本地 Gateway / Search Adapter，分析 Agent 不拥有浏览器和平台策略。
 
+## 真实平台侦察方法
+
+所有平台交互先遵循项目内 [真实网页交互侦察 Skill](skills/recon-live-web-interactions/SKILL.md)：暂时绕开待验证的扩展和已有 runner，以可见真实浏览器从人类视角理解页面，并行使用视觉、DOM 与 Network/XHR 建立动作因果；只有可信浏览器输入、页面后置条件和网络副作用被真实证明后，才允许把流程写入生产策略。
+
+项目所有者已对本仓库范围内的低频真实平台侦察、能力验证和只读采集开发授予常设权限。代理不再逐次询问聊天授权；只有扫码、密码、验证码等必须由用户本人完成的身份动作才通知用户。该常设授权不删除产品面向最终用户的任务同意、预算和审计机制，也不授权导出浏览器凭据或绕过平台安全措施。
+
 ## 构建门禁
 
 扩展：
@@ -95,7 +102,7 @@ npm run verify:build
 
 这些命令是构建门禁，不是平台能力测试。扩展门禁只检查 TypeScript、bundle、MV3、批准权限、引用制品、临时空 Profile 自动加载、零已授予 optional origin、零持久平台注册脚本和内部控制页加载；不会访问真实平台或登录状态。
 
-平台行为不使用离线 fixture、单元测试或 fixture E2E 冒充验证。真实验证只能在本地、可见、用户控制的 Validation Browser 中低频、只读执行，远程 CI 不得访问平台。
+平台行为不使用离线 fixture、单元测试或 fixture E2E 冒充验证。真实验证只能在本地、可见、项目管理的专用 Browser Profile 中低频、只读执行，远程 CI 不得访问平台；本地代理按上述常设权限自主推进，不再等待逐次聊天批准。
 
 ## 本地状态不进入 Git
 

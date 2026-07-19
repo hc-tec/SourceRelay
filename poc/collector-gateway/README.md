@@ -45,6 +45,8 @@
 
 独立 DevTools 交叉验证可以使用 Google `chrome-devtools-mcp` CLI 的 extension 与 network 工具，自动安装/重载 `collector-extension/dist`、触发 extension action、检查 service worker/Control 页并列出 Fetch/XHR。该工具只用于研究与测试，不是 Collector runtime backend；运行时应使用隔离 Profile、关闭 usage statistics / CrUX，并在输出前去除 query/hash，避免调用会导出 request/response body 的命令。
 
+真实页面交互开发必须先遵循仓库内 [`recon-live-web-interactions`](../../skills/recon-live-web-interactions/SKILL.md)：先在不调用待验证 Gateway runner、扩展交互脚本或旧 selector 的可见浏览器中，从视觉、DOM、可信浏览器输入和 Network 四个表面证明人类流程，再迁移到产品控制循环。项目所有者已对本仓库开发/验证授予常设实网权限，不再要求逐 run 聊天授权；产品本身的 EvidencePlan、预算、最终用户同意和风险锁仍保持不变。
+
 安装和构建：
 
 ```powershell
@@ -54,7 +56,7 @@ npm run setup:browser
 npm run verify:build
 ```
 
-平台集成和端到端测试不得通过 Playwright route 伪造 B站页面、DOM、XHR 或 Gateway 响应。纯状态机、投影器和本地产物逻辑可以使用单元测试；浏览器侧平台能力只接受用户明确授权下的真实网站运行记录。
+平台集成和端到端测试不得通过 Playwright route 伪造 B站页面、DOM、XHR 或 Gateway 响应。纯状态机、投影器和本地产物逻辑可以使用单元测试；浏览器侧平台能力只接受项目专用 Profile 中按常设权限产生的真实网站运行记录。
 
 启动：
 

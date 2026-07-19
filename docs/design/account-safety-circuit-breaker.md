@@ -1,6 +1,6 @@
 # 账号安全、弱网与验证码熔断设计
 
-- 状态：Accepted product safety gate；implemented；一次性实网验证后继续按逐次授权门禁
+- 状态：Accepted product safety gate；implemented；项目开发/验证采用常设实网授权，不再使用逐次聊天授权门禁
 - 日期：2026-07-19
 - 适用范围：所有使用 `user_managed` Collection Profile 的实网页面导航、语义动作、response reconnaissance 和正式采集 stage
 - 优先级：高于数据覆盖、任务完成率、自动恢复和吞吐量
@@ -18,7 +18,7 @@
   -> 关闭自动化目标页
   -> ready 或 persistent lock
   -> 告知用户真实原因
-  -> 只有新的显式用户授权才能开始新 run
+  -> 由代理在常设授权下创建新的独立 run；不得恢复或重放旧 run
 ```
 
 自动恢复仅适用于本地控制页、扩展 service worker、状态查询和 Evidence 幂等提交。它不得自动重放平台导航、点击、滚动、翻页、筛选、评论展开或字幕选择。
@@ -71,7 +71,7 @@ Gateway 启动时若发现上次状态仍为 `running`，必须转换为 `locked
 - 同一 Profile 已有另一个 active run；
 - Gateway 重启后发现未正常完成的 run。
 
-验证码、风控、限流和登录失效进入 `locked`，绝不自动刷新、点击验证、切换代理、重新登录或稍后自动续跑。断网、弱网、超时和普通失败立即结束本轮并回到 `ready`；没有计时冷却，但新的平台动作仍必须来自新的显式用户请求，不能后台恢复或重试。
+验证码、风控、限流和登录失效进入 `locked`，绝不自动刷新、点击验证、切换代理、重新登录或稍后自动续跑。断网、弱网、超时和普通失败立即结束本轮并回到 `ready`；没有计时冷却。代理可以在项目常设授权下新建独立 run，但不能后台恢复、补发或重试已经失败/未知的旧 run。
 
 ## 5. At-most-once 语义动作
 
@@ -107,7 +107,7 @@ run 的 `completed` 也不能由“至少一个动作完成”推导。每个 sc
 - 验证码、风控、限流、进程中断和用户暂停必须人工解锁；
 - 不进行随机化、代理轮换、指纹伪装或其他规避平台安全措施的行为。
 
-研究需要更高预算时，必须在计划中展示增量动作和账号风险，由用户明确批准；不得由 DeepResearch、AI Planner 或失败恢复逻辑自动提高。
+研究需要更高预算时，必须在计划和动作账本中明确展示增量动作与账号风险，并由控制面显式配置；不得由 DeepResearch、AI Planner 或失败恢复逻辑因为结果不足而自动提高。
 
 ## 7. 页面关闭与用户体验
 
@@ -134,8 +134,8 @@ run 的 `completed` 也不能由“至少一个动作完成”推导。每个 sc
 7. 构建制品断言包含固定动作预算、at-most-once 和禁止自动验证码恢复；
 8. 去敏 interaction artifact 必须原子落盘，剔除 Profile ID、原始 URL、原始 response body 和未知 DOM 字段，并提供 compact summary；
 9. 安全状态机和投影器可先做单元测试；浏览器管线、DOM/XHR、弱网、验证码与页面清理必须实站验证，伪造平台 fixture 不得保留或 admission；
-10. 最终仍需用户明确批准，才可进行下一次 B站实网 run。
+10. 项目所有者的常设授权已经满足开发/验证权限前提；下一次 B站实网 run 可由代理自主创建，但必须是新的独立 run，并继续满足本门禁的 Profile、预算、at-most-once、风险停止和清理条件。
 
 多阶段任务的单元门禁已通过：`verify-task-account-safety-resume.mjs` 覆盖 stage 后等待、无后台恢复、无时间延迟的显式继续、精确下一 stage、重复/完成/locked 拒绝。平台与 Console 闭环只接受真实任务验证，不再使用 fake Gateway 或伪平台诊断。
 
-当前实现已按用户最新决定删除 `cooldown` 状态和 `cooldownUntil` 字段；持久记录升级为 schema v2，历史 v1 JSON 中的旧 `cooldown` 会在 Gateway 启动时一次性迁移为 `ready`。最近一次字幕真实 run 捕获到真实轨道目录后因 `transcript_validation_context_changed` 停止，字幕按钮和“中文”均未点击；本轮没有重试，Profile、Gateway、43127/43128 和受管 Chrome 均已关闭。后续平台动作仍须新的明确批准，但不再等待任何计时冷却。
+当前实现已按用户最新决定删除 `cooldown` 状态和 `cooldownUntil` 字段；持久记录升级为 schema v2，历史 v1 JSON 中的旧 `cooldown` 会在 Gateway 启动时一次性迁移为 `ready`。v0.4.18 最近一次产品字幕 run 捕获到真实轨道目录，但 content script 的合成交互没有展开字幕菜单，结果为 `partial`，本轮没有重试。随后不加载 Collector 扩展/Gateway runner 的干净浏览器侦察，以真实 mouse move/hover 和一次中文点击完整触发 87175 字节、509 段的中文字幕 JSON，证明可行性成立且错误位于交互执行层。详细方法已固化到仓库内 [`recon-live-web-interactions`](../../skills/recon-live-web-interactions/SKILL.md)。项目开发/验证后续采用常设授权，不再等待逐次聊天批准。
