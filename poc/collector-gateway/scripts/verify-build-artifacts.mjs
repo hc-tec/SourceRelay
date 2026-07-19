@@ -13,12 +13,21 @@ assert.doesNotMatch(source, /0\.0\.0\.0/, 'Gateway artifact must not contain an 
 assert.doesNotMatch(source, /express|fastify|koa/i, 'Gateway build must remain on the reviewed Node HTTP surface');
 assert.match(source, /from\s+["']playwright["']/, 'Gateway artifact must keep Playwright as an installed runtime dependency');
 assert.match(source, /launchPersistentContext/, 'Gateway artifact must launch a persistent browser context');
-assert.match(source, /headless:\s*false/, 'Gateway artifact must launch a visible browser');
+assert.match(
+  source,
+  /launchPersistentProfileContext\([^\n]{0,160},\s*false\)/,
+  'Gateway artifact must launch exactly one user-visible browser after readiness'
+);
+assert.match(
+  source,
+  /launchPersistentProfileContext\([^\n]{0,160},\s*true\)/,
+  'Gateway artifact must adopt changed unpacked extensions in a headless prewarm context'
+);
 assert.match(source, /--load-extension=/, 'Gateway artifact must automatically load the production extension');
 assert.match(source, /--autoplay-policy=user-gesture-required/, 'managed collection browsers must suppress autoplay');
 assert.match(source, /controlPagePromise/, 'control-page creation must be single-flight');
 assert.match(source, /controlVerification/, 'control-version verification must be single-flight');
-assert.match(source, /runtimeReloadAttempted/, 'worker-level extension adoption must be observable');
+assert.match(source, /prewarmRuntimeReloadAttempted/, 'headless worker adoption must be observable');
 assert.match(source, /collector_extension_worker_version_mismatch/, 'worker adoption must fail with an explicit version error');
 assert.match(
   source,

@@ -79,7 +79,7 @@ try {
   }));
   const snapshot = {
     schemaVersion: 1,
-    collectorVersion: '0.4.21',
+    collectorVersion: '0.4.23',
     runId: '11111111-1111-4111-8111-111111111111',
     profileId: '22222222-2222-4222-8222-222222222222',
     platform: 'bilibili',

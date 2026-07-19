@@ -285,7 +285,7 @@ function profileElement(summary) {
     runtimePill(summary.extensionLoaded ? 'Extension loaded' : 'Extension not loaded', summary.extensionLoaded ? 'good' : ''),
     runtimePill(summary.extensionVersion ? 'Extension v' + summary.extensionVersion : 'Extension version unavailable', summary.extensionVersion ? 'good' : ''),
     runtimePill(
-      summary.extensionAdoption?.runtimeReloadAttempted ? 'Worker updated once' : 'Worker already current',
+      summary.extensionAdoption?.headlessPrewarmPerformed ? 'Worker adopted headlessly' : 'Worker already current',
       summary.extensionAdoption ? 'good' : ''
     ),
     runtimePill(summary.extensionPaired ? 'Gateway paired' : 'Pairing required', summary.extensionPaired ? 'good' : 'warn'),

@@ -18,6 +18,7 @@ export interface CreateBrowserProfileInput {
 }
 
 const profileIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const extensionVersionPattern = /^\d{1,6}(?:\.\d{1,6}){2,3}$/;
 
 function boundedLabel(value: unknown, name: string, maximum: number): string {
   if (typeof value !== 'string') throw new Error(`${name}_invalid`);
@@ -56,11 +57,11 @@ export function createBrowserProfileInput(value: unknown): CreateBrowserProfileI
   };
 }
 
-function isBrowserProfileRecord(value: unknown): value is BrowserProfileRecord {
-  if (!value || typeof value !== 'object') return false;
+function browserProfileRecord(value: unknown): BrowserProfileRecord | null {
+  if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<BrowserProfileRecord>;
   const account = candidate.account;
-  return (
+  const valid = (
     candidate.schemaVersion === 1 &&
     typeof candidate.profileId === 'string' &&
     profileIdPattern.test(candidate.profileId) &&
@@ -76,8 +77,15 @@ function isBrowserProfileRecord(value: unknown): value is BrowserProfileRecord {
     (candidate.kind !== 'collection' || account.category === 'user_managed') &&
     candidate.browser === 'playwright_chromium' &&
     typeof candidate.createdAt === 'string' &&
-    (candidate.lastLaunchedAt === null || typeof candidate.lastLaunchedAt === 'string')
+    (candidate.lastLaunchedAt === null || typeof candidate.lastLaunchedAt === 'string') &&
+    (candidate.lastExtensionVersion === undefined || candidate.lastExtensionVersion === null ||
+      (typeof candidate.lastExtensionVersion === 'string' && extensionVersionPattern.test(candidate.lastExtensionVersion)))
   );
+  if (!valid) return null;
+  return {
+    ...(candidate as BrowserProfileRecord),
+    lastExtensionVersion: candidate.lastExtensionVersion ?? null
+  };
 }
 
 export class BrowserProfileRegistry {
@@ -97,7 +105,10 @@ export class BrowserProfileRegistry {
     await mkdir(registry.#profileRoot, { recursive: true });
     try {
       const parsed = JSON.parse(await readFile(registry.#registryPath, 'utf8')) as unknown;
-      if (Array.isArray(parsed)) registry.#profiles = parsed.filter(isBrowserProfileRecord);
+      if (Array.isArray(parsed)) {
+        registry.#profiles = parsed.map(browserProfileRecord)
+          .filter((profile): profile is BrowserProfileRecord => profile !== null);
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
@@ -134,7 +145,8 @@ export class BrowserProfileRegistry {
       },
       browser: 'playwright_chromium',
       createdAt: now.toISOString(),
-      lastLaunchedAt: null
+      lastLaunchedAt: null,
+      lastExtensionVersion: null
     };
     await mkdir(this.userDataDirectory(profile.profileId), { recursive: true });
     this.#profiles.push(profile);
@@ -175,15 +187,23 @@ export class BrowserProfileRegistry {
     return bindings;
   }
 
-  async markLaunched(profileId: string, launchedAt = new Date()): Promise<BrowserProfileRecord> {
+  async markLaunched(
+    profileId: string,
+    extensionVersion: string,
+    launchedAt = new Date()
+  ): Promise<BrowserProfileRecord> {
     const profile = this.#profiles.find((candidate) => candidate.profileId === profileId);
     if (!profile) throw new Error('profile_not_found');
-    const previous = profile.lastLaunchedAt;
+    if (!extensionVersionPattern.test(extensionVersion)) throw new Error('profile_extension_version_invalid');
+    const previousLaunch = profile.lastLaunchedAt;
+    const previousExtensionVersion = profile.lastExtensionVersion;
     profile.lastLaunchedAt = launchedAt.toISOString();
+    profile.lastExtensionVersion = extensionVersion;
     try {
       await this.#save();
     } catch (error) {
-      profile.lastLaunchedAt = previous;
+      profile.lastLaunchedAt = previousLaunch;
+      profile.lastExtensionVersion = previousExtensionVersion;
       throw error;
     }
     return structuredClone(profile);

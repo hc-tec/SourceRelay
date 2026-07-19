@@ -23,7 +23,14 @@ export const COLLECTOR_CONTROL_PROTOCOL_VERSION = 1 as const;
 // stale persistent MV3 service worker can be detected and reloaded without
 // invalidating existing pairing records.
 export const COLLECTOR_CONTROL_SURFACE_REVISION = 2 as const;
+export const COLLECTOR_RUNTIME_BOOTSTRAP_KEY = 'collector.runtime-bootstrap.v1' as const;
 export const STAGE_LEASE_SCHEMA_VERSION = 1 as const;
+
+export interface CollectorRuntimeBootstrap {
+  schemaVersion: 1;
+  collectorVersion: string;
+  controlSurfaceRevision: typeof COLLECTOR_CONTROL_SURFACE_REVISION;
+}
 
 export interface GatewayIdentity {
   schemaVersion: 1;
@@ -227,6 +234,7 @@ export interface BrowserProfileRecord extends BrowserProfileBinding {
   browser: 'playwright_chromium';
   createdAt: string;
   lastLaunchedAt: string | null;
+  lastExtensionVersion: string | null;
 }
 
 export interface BrowserProfileRuntimeSummary {
@@ -236,9 +244,11 @@ export interface BrowserProfileRuntimeSummary {
   extensionVersion: string | null;
   extensionAdoption: {
     expectedVersion: string;
-    initialVersion: string;
-    finalVersion: string;
-    runtimeReloadAttempted: boolean;
+    initialManifestVersion: string;
+    initialRuntimeVersion: string | null;
+    finalRuntimeVersion: string;
+    headlessPrewarmPerformed: boolean;
+    prewarmRuntimeReloadAttempted: boolean;
     chromeUiReloadAttempted: false;
     contextRestarted: false;
   } | null;

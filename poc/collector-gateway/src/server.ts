@@ -678,6 +678,7 @@ const server = createServer(async (request, response) => {
       code.startsWith('request_') ||
       code.startsWith('task_') ||
       code.startsWith('profile_') ||
+      code.startsWith('collector_extension_') ||
       code.startsWith('account_safety_') ||
       code.startsWith('validation_') ||
       code.startsWith('source_reconnaissance_') ||

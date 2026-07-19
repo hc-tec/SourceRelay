@@ -16,7 +16,8 @@ try {
     extensionVersion: chrome.runtime.getManifest().version,
     extensionName: chrome.runtime.getManifest().name,
     permissions: await chrome.permissions.getAll(),
-    registeredContentScripts: await chrome.scripting.getRegisteredContentScripts()
+    registeredContentScripts: await chrome.scripting.getRegisteredContentScripts(),
+    runtimeBootstrap: (await chrome.storage.session.get('collector.runtime-bootstrap.v1'))['collector.runtime-bootstrap.v1']
   }));
 
   const grantedPermissions = runtime.permissions;
@@ -27,6 +28,11 @@ try {
   assert.equal(runtime.extensionName, 'Personal Intelligence Collector');
   assert.deepEqual(grantedPermissions.origins ?? [], [], 'fresh Profile must not grant optional host permissions');
   assert.deepEqual(registeredContentScripts, [], 'fresh Profile must not register persistent platform scripts');
+  assert.deepEqual(runtime.runtimeBootstrap, {
+    schemaVersion: 1,
+    collectorVersion: runtime.extensionVersion,
+    controlSurfaceRevision: 2
+  }, 'service worker must publish its compiled runtime identity');
 
   const controlPage = await context.newPage();
   await controlPage.goto(`chrome-extension://${runtime.extensionId}/control.html`);
@@ -55,6 +61,7 @@ try {
     manifestVersion: runtime.manifestVersion,
     optionalHostOriginsGranted: grantedPermissions.origins?.length ?? 0,
     registeredPlatformScripts: registeredContentScripts.length,
+    runtimeBootstrapPublished: true,
     controlSurfaceLoaded: true,
     controlSurfaceRevision: controlResponse.snapshot.controlSurfaceRevision
   }, null, 2));

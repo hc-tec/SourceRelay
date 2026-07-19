@@ -40,6 +40,8 @@ import {
 } from './network-capture-runtime';
 import {
   COLLECTOR_CONTROL_SURFACE_REVISION,
+  COLLECTOR_RUNTIME_BOOTSTRAP_KEY,
+  type CollectorRuntimeBootstrap,
   type CollectorControlSnapshot
 } from '../shared/control-plane';
 import { flushPendingEvidenceSubmissions, submitStageEvidence } from './evidence-submission';
@@ -113,6 +115,13 @@ async function collectTab(tabId: number): Promise<VisibleCollectionResult> {
   }
   return response.result as VisibleCollectionResult;
 }
+
+const runtimeBootstrap: CollectorRuntimeBootstrap = {
+  schemaVersion: 1,
+  collectorVersion: COLLECTOR_CORE_VERSION,
+  controlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION
+};
+void chrome.storage.session.set({ [COLLECTOR_RUNTIME_BOOTSTRAP_KEY]: runtimeBootstrap });
 
 function isExtensionControlSender(sender: chrome.runtime.MessageSender): boolean {
   return (

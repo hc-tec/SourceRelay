@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { chromium, type BrowserContext, type Page, type Worker } from 'playwright';
 import {
   COLLECTOR_CONTROL_SURFACE_REVISION,
+  COLLECTOR_RUNTIME_BOOTSTRAP_KEY,
   type BrowserProfileRuntimeSummary
 } from '../../collector-extension/src/shared/control-plane';
 import {
@@ -26,36 +27,58 @@ export interface RunningExtensionProfile {
 interface ExtensionWorkerProbe {
   worker: Worker;
   extensionId: string;
-  version: string;
+  manifestVersion: string;
+  runtimeVersion: string | null;
+  controlSurfaceRevision: number | null;
 }
 
 const EXTENSION_WORKER_WAIT_MS = 15_000;
-const EXTENSION_WORKER_RELOAD_WAIT_MS = 5_000;
 const CONTROL_VERSION_WAIT_MS = 3_000;
 const LOCAL_POLL_MS = 100;
+const PREWARM_RELOAD_SETTLE_MS = 500;
 
 async function extensionWorkerProbe(worker: Worker): Promise<ExtensionWorkerProbe | null> {
-  const snapshot = await worker.evaluate(() => {
+  const snapshot = await worker.evaluate(async (bootstrapKey) => {
     const extensionGlobal = globalThis as typeof globalThis & {
       chrome: {
         runtime: {
           id: string;
           getManifest(): { version?: unknown };
         };
+        storage: {
+          session: {
+            get(key: string): Promise<Record<string, unknown>>;
+          };
+        };
       };
     };
+    const stored = await extensionGlobal.chrome.storage.session.get(bootstrapKey);
     return {
       extensionId: extensionGlobal.chrome.runtime.id,
-      version: extensionGlobal.chrome.runtime.getManifest().version
+      manifestVersion: extensionGlobal.chrome.runtime.getManifest().version,
+      runtimeBootstrap: stored[bootstrapKey]
     };
-  }).catch(() => null);
+  }, COLLECTOR_RUNTIME_BOOTSTRAP_KEY).catch(() => null);
   if (
     !snapshot ||
     typeof snapshot.extensionId !== 'string' ||
     !/^[a-p]{32}$/.test(snapshot.extensionId) ||
-    typeof snapshot.version !== 'string'
+    typeof snapshot.manifestVersion !== 'string'
   ) return null;
-  return { worker, extensionId: snapshot.extensionId, version: snapshot.version };
+  const bootstrap = snapshot.runtimeBootstrap && typeof snapshot.runtimeBootstrap === 'object'
+    ? snapshot.runtimeBootstrap as { schemaVersion?: unknown; collectorVersion?: unknown; controlSurfaceRevision?: unknown }
+    : null;
+  return {
+    worker,
+    extensionId: snapshot.extensionId,
+    manifestVersion: snapshot.manifestVersion,
+    runtimeVersion: bootstrap?.schemaVersion === 1 && typeof bootstrap.collectorVersion === 'string'
+      ? bootstrap.collectorVersion
+      : null,
+    controlSurfaceRevision: bootstrap?.schemaVersion === 1 && typeof bootstrap.controlSurfaceRevision === 'number'
+      ? bootstrap.controlSurfaceRevision
+      : null
+  };
 }
 
 async function waitForExtensionWorker(
@@ -76,50 +99,43 @@ async function waitForExtensionWorker(
 
 async function adoptExtensionWorker(
   context: BrowserContext,
-  expectedVersion: string
+  expectedVersion: string,
+  headlessPrewarmPerformed: boolean,
+  prewarmRuntimeReloadAttempted: boolean
 ): Promise<{
   probe: ExtensionWorkerProbe;
   adoption: NonNullable<BrowserProfileRuntimeSummary['extensionAdoption']>;
 }> {
   const initial = await waitForExtensionWorker(context, EXTENSION_WORKER_WAIT_MS);
   if (!initial) throw new Error('collector_extension_worker_missing');
-  if (initial.version === expectedVersion) {
+  if (
+    initial.runtimeVersion === expectedVersion &&
+    initial.controlSurfaceRevision === COLLECTOR_CONTROL_SURFACE_REVISION
+  ) {
     return {
       probe: initial,
       adoption: {
         expectedVersion,
-        initialVersion: initial.version,
-        finalVersion: initial.version,
-        runtimeReloadAttempted: false,
+        initialManifestVersion: initial.manifestVersion,
+        initialRuntimeVersion: initial.runtimeVersion,
+        finalRuntimeVersion: initial.runtimeVersion,
+        headlessPrewarmPerformed,
+        prewarmRuntimeReloadAttempted,
         chromeUiReloadAttempted: false,
         contextRestarted: false
       }
     };
   }
+  throw new Error('collector_extension_worker_version_mismatch');
+}
 
-  await initial.worker.evaluate(() => {
+async function requestExtensionWorkerReload(worker: Worker): Promise<void> {
+  await worker.evaluate(() => {
     const extensionGlobal = globalThis as typeof globalThis & {
       chrome: { runtime: { reload(): void } };
     };
     extensionGlobal.chrome.runtime.reload();
   }).catch(() => undefined);
-  const adopted = await waitForExtensionWorker(
-    context,
-    EXTENSION_WORKER_RELOAD_WAIT_MS,
-    (probe) => probe.extensionId === initial.extensionId && probe.version === expectedVersion
-  );
-  if (!adopted) throw new Error('collector_extension_worker_version_mismatch');
-  return {
-    probe: adopted,
-    adoption: {
-      expectedVersion,
-      initialVersion: initial.version,
-      finalVersion: adopted.version,
-      runtimeReloadAttempted: true,
-      chromeUiReloadAttempted: false,
-      contextRestarted: false
-    }
-  };
 }
 
 export async function extensionHasOrigins(page: Page, origins: readonly string[]): Promise<boolean> {
@@ -239,22 +255,19 @@ export class ManagedExtensionRuntime {
       throw new Error('collector_extension_artifact_invalid');
     }
 
-    const context = await chromium.launchPersistentContext(
-      this.#registry.userDataDirectory(profile.profileId),
-      {
-        channel: 'chromium',
-        headless: false,
-        args: [
-          '--no-first-run',
-          '--autoplay-policy=user-gesture-required',
-          `--disable-extensions-except=${extensionDirectory}`,
-          `--load-extension=${extensionDirectory}`
-        ],
-        ...(this.#config.proxyServer ? { proxy: { server: this.#config.proxyServer } } : {})
-      }
-    );
+    const headlessPrewarmPerformed = profile.lastExtensionVersion !== manifest.version;
+    if (headlessPrewarmPerformed) {
+      await this.#prewarmExtensionProfile(profile.profileId, extensionDirectory, manifest.version);
+    }
+    const context = await this.#launchPersistentProfileContext(profile.profileId, extensionDirectory, false);
     try {
-      const { probe, adoption } = await adoptExtensionWorker(context, manifest.version);
+      await this.#closeRestoredWebPages(context);
+      const { probe, adoption } = await adoptExtensionWorker(
+        context,
+        manifest.version,
+        headlessPrewarmPerformed,
+        headlessPrewarmPerformed
+      );
       const running: RunningExtensionProfile = {
         context,
         extensionId: probe.extensionId,
@@ -267,28 +280,84 @@ export class ManagedExtensionRuntime {
       this.#running.set(profile.profileId, running);
       context.on('close', () => this.#running.delete(profile.profileId));
 
-      // Login state stays in browser storage, but restored web tabs are never
-      // allowed to replay a platform visit after launch or crash recovery.
-      await Promise.all(context.pages().filter((page) => {
-        try {
-          const protocol = new URL(page.url()).protocol;
-          return protocol === 'http:' || protocol === 'https:';
-        } catch {
-          return false;
-        }
-      }).map((page) => page.close().catch(() => undefined)));
-
       const controlPage = await this.#ensureExtensionVersion(
         running,
         await this.#extensionControlPage(running)
       );
       await controlPage.bringToFront();
-      await this.#registry.markLaunched(profile.profileId);
+      await this.#registry.markLaunched(profile.profileId, manifest.version);
       return running;
     } catch (error) {
       await context.close().catch(() => undefined);
       throw error;
     }
+  }
+
+  async #prewarmExtensionProfile(
+    profileId: string,
+    extensionDirectory: string,
+    expectedVersion: string
+  ): Promise<void> {
+    const adoptionContext = await this.#launchPersistentProfileContext(profileId, extensionDirectory, true);
+    try {
+      await this.#closeRestoredWebPages(adoptionContext);
+      const initial = await waitForExtensionWorker(adoptionContext, EXTENSION_WORKER_WAIT_MS);
+      if (!initial) {
+        throw new Error('collector_extension_prewarm_worker_missing');
+      }
+      await requestExtensionWorkerReload(initial.worker);
+      await delay(PREWARM_RELOAD_SETTLE_MS);
+    } finally {
+      await adoptionContext.close().catch(() => undefined);
+    }
+
+    const verificationContext = await this.#launchPersistentProfileContext(profileId, extensionDirectory, true);
+    try {
+      await this.#closeRestoredWebPages(verificationContext);
+      const verified = await waitForExtensionWorker(
+        verificationContext,
+        EXTENSION_WORKER_WAIT_MS,
+        (probe) =>
+          probe.runtimeVersion === expectedVersion &&
+          probe.controlSurfaceRevision === COLLECTOR_CONTROL_SURFACE_REVISION
+      );
+      if (!verified) throw new Error('collector_extension_prewarm_version_mismatch');
+    } finally {
+      await verificationContext.close().catch(() => undefined);
+    }
+  }
+
+  #launchPersistentProfileContext(
+    profileId: string,
+    extensionDirectory: string,
+    headless: boolean
+  ): Promise<BrowserContext> {
+    return chromium.launchPersistentContext(
+      this.#registry.userDataDirectory(profileId),
+      {
+        channel: 'chromium',
+        headless,
+        args: [
+          '--disable-background-networking',
+          '--no-first-run',
+          '--autoplay-policy=user-gesture-required',
+          `--disable-extensions-except=${extensionDirectory}`,
+          `--load-extension=${extensionDirectory}`
+        ],
+        ...(this.#config.proxyServer ? { proxy: { server: this.#config.proxyServer } } : {})
+      }
+    );
+  }
+
+  async #closeRestoredWebPages(context: BrowserContext): Promise<void> {
+    await Promise.all(context.pages().filter((page) => {
+      try {
+        const protocol = new URL(page.url()).protocol;
+        return protocol === 'http:' || protocol === 'https:';
+      } catch {
+        return false;
+      }
+    }).map((page) => page.close().catch(() => undefined)));
   }
 
   async #extensionControlPage(running: RunningExtensionProfile): Promise<Page> {
