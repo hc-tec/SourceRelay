@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "strategy": {
+    "strategyId": "bilibili.video.detail.dom.v1",
+    "version": "1.4.0",
+    "platform": "bilibili",
+    "evidenceObjective": "detail_read",
+    "maturity": "live_anonymous_verified"
+  },
+  "admission": {
+    "recordId": "2a5008a7-97ab-488c-b0bd-25b98e277093",
+    "verifiedAt": "2026-07-18T13:05:01.696Z",
+    "environment": "local_user_controlled_validation_profile",
+    "accountCategory": "anonymous",
+    "collectorVersion": "0.4.4",
+    "review": "accepted",
+    "decisionCode": "visible_title_description_time_six_metrics_and_tags_verified"
+  },
+  "verifiedProjection": {
+    "records": 1,
+    "required": [
+      "canonical video URL",
+      "visible title",
+      "visible publication text",
+      "at least two visible metrics",
+      "visible description or creator context"
+    ],
+    "observed": [
+      "visible title",
+      "visible description",
+      "visible publication text",
+      "views",
+      "danmaku",
+      "likes",
+      "coins",
+      "favorites",
+      "shares",
+      "visible tags"
+    ],
+    "nullable": [
+      "creator",
+      "creator visible description",
+      "video description"
+    ]
+  },
+  "safety": {
+    "readOnlyActions": 0,
+    "firstRenderedPageOnly": true,
+    "responseObservation": "disabled",
+    "commentCollection": "disabled",
+    "recommendationCollection": "disabled",
+    "browserCredentialsCollected": false,
+    "originalMediaDownloaded": false
+  },
+  "notAdmitted": [
+    "comments or reply threads",
+    "recommended videos",
+    "playback media or subtitles",
+    "page interaction",
+    "authenticated-only fields",
+    "response observation",
+    "other Bilibili page roles",
+    "other platforms"
+  ],
+  "predecessors": [
+    {
+      "version": "1.0.0",
+      "recordId": "f5c2150f-efe3-4c2e-97dd-4ba1d5bb0747",
+      "outcome": "rejected",
+      "decisionCode": "creator_projection_raced_late_dom"
+    },
+    {
+      "version": "1.1.0",
+      "recordId": "672b34bd-a487-4865-9a97-02ee902c078b",
+      "outcome": "rejected",
+      "decisionCode": "creator_wait_preempted_by_player_login_prompt"
+    },
+    {
+      "version": "1.2.0",
+      "recordId": "462f19fe-79e6-46a7-bba6-7e3dbdd4af17",
+      "outcome": "rejected",
+      "decisionCode": "creator_region_exceeded_ten_second_readiness_window"
+    },
+    {
+      "version": "1.3.0",
+      "recordId": "22eceee6-d5a4-4b79-b88e-2d342371e7f6",
+      "outcome": "rejected",
+      "decisionCode": "creator_not_stably_visible_in_anonymous_page_variant"
+    }
+  ]
+}

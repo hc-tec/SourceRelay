@@ -97,6 +97,8 @@ Collector Core
 
 默认权限保持最小化。安全底座只在精确任务 tab/document 中做固定文件注入和去敏响应观察；不使用 OS 级抓包、MITM、`webRequest`、`debugger`、浏览器会话导出、请求重放或私有 API 签名。平台行为不使用离线 fixture 验证，只在用户控制环境中的专用 Validation Profile 低频真实验证；远程 CI 只构建制品。编译、bundle、MV3 manifest、脚本存在性、自动加载和权限清单属于构建门禁，不作为平台能力测试。
 
+任何新策略进入代码前，必须先完成[数据源勘察工作流](source-reconnaissance-workflow.md)。系统先像人类研究者一样复现浏览路径，联合观察页面 DOM、正常交互和页面自己触发的 XHR / fetch，再按字段选择最小且稳定的证据表面。未形成 Source Reconnaissance Dossier、字段—证据映射、失败状态矩阵和真实验证计划时，不得创建 production selector、action graph 或 response route；“先写采集代码再看能不能用”不属于本产品流程。
+
 ## 5. 平台策略契约
 
 每个策略包必须声明能力，不得靠 LLM 临场生成选择器或任意点击脚本。最小契约如下：
@@ -121,6 +123,7 @@ quota:
   max_comment_items: 100
 output_contract: content_inventory.v1
 validation_contract: build gates + local live-validation record + failure semantics
+reconnaissance_dossier: docs/reconnaissance/xiaohongshu/...
 ```
 
 完整契约至少还要定义：
@@ -130,7 +133,8 @@ validation_contract: build gates + local live-validation record + failure semant
 3. 每一步可做的受限交互、前置条件、最大重试、超时和停止条件；
 4. 可以观察的精确响应 route、MIME、状态、投影字段、大小/数量限制；
 5. 输出类型、不可获得字段、覆盖声明和所有失败状态；
-6. 构建制品校验、用户控制环境中的低频真实验证日期/证据和失败语义。
+6. Source Reconnaissance Dossier、字段—证据映射和被否决的替代方案；
+7. 构建制品校验、用户控制环境中的低频真实验证日期/证据和失败语义。
 
 策略成熟度采用保守生命周期：`draft -> build_ready -> live_anonymous_verified | live_authenticated_verified -> suspended`。`build_ready` 只表示制品可构建、加载和满足批准的权限清单，不代表平台能力；页面结构漂移、登录门禁、错误相关性或无法满足 output contract 都必须降低成熟度，不能因某次页面能打开就升格为通用能力。
 
@@ -148,6 +152,8 @@ collect visible cards / declared terminal marker
 ```
 
 每个动作记录目标页面角色、原因、开始/结束、影响的条目数和结果。禁止执行模型生成的任意脚本、无界滚动、隐式关注/点赞/发布、登录按钮、验证码处理或跨平台跳转。若页面要求人工确认，任务返回 `authentication_required` 或 `user_action_required`，等待用户在该浏览器上下文中处理后由用户显式恢复。
+
+账号安全是有界交互的更高优先级门禁。认证 Profile 的动作结果未知、断网、弱网、导航失败、验证码、风控或限流时，本轮立即停止；相同 action ID 不得重试，Gateway 重启不得清除风险状态。验证码/风控进入人工解锁，普通网络失败进入冷却且不会后台自动恢复。具体状态机、审计分类和验收条件见[账号安全熔断设计](account-safety-circuit-breaker.md)。
 
 ## 7. 账号内容归档（account corpus）
 

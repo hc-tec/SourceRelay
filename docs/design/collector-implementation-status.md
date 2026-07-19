@@ -1,14 +1,34 @@
 # Collector 实现状态
 
 - 分支：`feat/browser-extension-system`
-- 状态日期：2026-07-17
+- 状态日期：2026-07-19
 - 权威决策：[collector-grilling-decision-log.md](collector-grilling-decision-log.md)
 - 产品规格：[platform-strategy-product-spec.md](platform-strategy-product-spec.md)
 - 冲突审计：[collector-decision-audit.md](collector-decision-audit.md)
+- 数据源勘察门禁：[source-reconnaissance-workflow.md](source-reconnaissance-workflow.md)
+- 账号安全熔断门禁：[account-safety-circuit-breaker.md](account-safety-circuit-breaker.md)
 
 ## 1. 当前结论
 
 Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面。B站匿名首屏关键词搜索是目前唯一获得真实平台 admission、并完成正式 Research Task 调度与本地 Evidence batch 闭环的能力；其他平台和深度能力仍未发布。
+
+2026-07-18 检查点补充：B站视频详情字段的独立 Validation Run `v1.4.0` 已 accepted，但正式多阶段 Task 在当前页面 document / content-script 生命周期中仍出现 `gateway_stage_watchdog_expired`，因此该详情策略已降为 `suspended`。启动时重复 `chrome-extension://` 控制页问题已经通过 control-page / version-recovery single-flight 和重复页清理修复；任务 stage 窗口也在 Evidence 或 blocked 后自动关闭。这些控制面修正仍须用真实单 stage 与双 stage 任务复验。
+
+同日新增隔离的 `parallel_dom_and_network_metadata` Source Reconnaissance：DOM checkpoint、页面生命周期、扩展 validation/documentId 与 B站域名 XHR/fetch metadata 使用同一 run 时间轴。该模式不读取请求头/体、响应正文、Cookie 或 Token，不改变 production response routes，也不产生可 admission 的 Evidence。Google Chrome DevTools CLI 已在独立临时 Profile 中自动安装/重载生产扩展、触发 action、识别 service worker/Control 页并完成 B站 Fetch/XHR 去 query/hash 交叉观察，不再需要用户手工加载或点击扩展完成这类测试。
+
+2026-07-19 新增认证 Profile 的有界交互勘察 runner：固定最多五个只读语义动作，每个动作三秒网络差分窗，观察 Fetch/XHR/texttrack 的 origin、pathname、query key、MIME、状态和声明尺寸；平台 API、`hdslb.com` CDN 与第三方/未知来源分开分类。该 runner 不读取请求头/体、响应正文、Cookie 或 Token，不修改 production route，结果仍不具备 admission 资格。
+
+同一 runner 另有默认关闭的 `schema_only` 研究模式：仅允许四条精确 B站 API route 与路径含 subtitle 的平台 CDN 响应，单响应 512 KiB、总计 1 MiB；JSON 只输出过滤敏感字段后的路径、类型和数组规模，非 JSON 只输出内容类别、大小和摘要，原始正文不落盘。该模式仍不改变 production route 或策略成熟度。
+
+用户指出断网、弱网、验证码和异常恢复可能导致重复平台动作并带来封号风险后，所有 B站认证实网研究曾立即暂停并写入 `locked / user_safety_pause`。账号安全门禁完成后，用户于 2026-07-19 先后给出两张相互独立的 subtitle-only / schema-only 单次授权票；两次都只提交一次并已消费，不能解释为恢复其他认证实网研究。随后第三张字幕单次授权在平台导航前因旧 MV3 service worker 返回 `control_message_unsupported` 而终止：没有导航、点击或字幕产物，但授权和安全冷却仍按一次提交消费。根因修复为独立的 control-surface revision 握手；相同扩展版本下的旧 worker 也必须自动重载，尚未再次实站验证。
+
+实现已加入 `account-safety.json` 原子状态、崩溃遗留 run 启动锁定、固定 acknowledgement 解锁、同 action ID 二次拒绝、30 分钟冷却、60 秒 run deadline、三次 Fetch/XHR failure 中止、正式 task dispatch 风险门禁和启动时 HTTP(S) 旧 tab 清理。账号安全状态机由纯单元测试覆盖；两次独立的单次实网 run 又验证了 `ready -> running -> cooldown`：每次请求只提交一次，动作结果未知时均没有补点或重试，Profile/Gateway/Chrome 随后全部关闭。
+
+该 run 暴露的结果语义随后已修正：字幕控件点击后必须在 2.5 秒内满足菜单后置条件，否则 `open_caption_menu=postcondition_unmet`；依赖动作记为 `select_caption_language=prerequisite_unmet / attempted=false`。run 新增 scope objective，只有全部 required actions 完成才能标记 `completed`。认证 interaction 结果现在原子保存为不含 Profile ID、原始 URL、正文和未知 DOM 字段的 ignored runtime artifact；列表只返回 compact summary，详情按 record ID 读取完整安全 schema 投影。
+
+B站详情正式 Task 的 receipt / Evidence race 已加入控制面修复：accepted receipt 后最多 3 次、100ms 恢复 pending Evidence；Gateway poll 先恢复 pending 再取 work；content push 失败只安排本地 continuation，成功则立即清 watchdog。伪造平台页面与 fake Gateway 的集成诊断已删除；该修复必须通过新的真实单 stage 与双 stage 任务验证，`bilibili.video.detail.dom.v1 @ 1.4.0` 继续 `suspended`。
+
+多 stage 账号安全推进现已加入显式任务状态 `waiting_for_account_safety`。非最终 stage 的 Evidence 完成后，任务不会再保持可调度的 `stage_completed`；cooldown 到期也不会后台续跑。只有 Console-origin 保护的精确任务端点 `POST /v1/tasks/<task-id>/resume-after-account-safety` 才能核对已批准计划中的下一个 pending stage 及其既有 Profile binding，并把任务放回调度队列；该端点自身不启动浏览器、不导航、不修改计划，也不能代替 locked Profile 的人工解锁。纯状态机单元测试覆盖未到期拒绝、到期后显式恢复、精确下一 stage、重复恢复、completed 与 locked 拒绝；Console 和平台闭环仍只接受真实任务验证。
 
 ```text
 已完成：P0 决策契约与构建门禁
@@ -18,6 +38,7 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 已完成：P2a 受管 Collection / Validation Profile 生命周期与任务绑定
 已完成：P2b B站匿名 breadth_search / visible_dom 真实验证与显式 admission
 已完成：P2c 正式 B站 dispatch、认证 Evidence 回传、本地原始批次与 completed 闭环
+进行中：P2d B站详情 DOM / XHR-fetch 并行 Source Reconnaissance（production route 仍为空）
 未开始：P3 加密 Evidence Vault
 未开始：P4 EvidencePackage / DeepResearch 正式接入
 ```
@@ -81,7 +102,9 @@ Research Task 必须按平台绑定由 Gateway 注册的 Collection Profile。Ga
 - 不启动 Chrome / Edge 日常 Profile，不复用 BrowserWing / Maxun 或旧 POC Profile；
 - 同一平台默认只运行一个 Profile，关闭进程后目录保留；
 - UI 只暴露逻辑账号标签、expected visible identity 和运行 / 扩展 / 配对布尔状态；
-- Collection Profile 提供“配对 Gateway”“授予当前平台精确权限”“立即轮询任务”入口；一次性配对码只在 Gateway 进程和受管扩展页面之间传递，Profile API 不返回；
+- B站 `collection + user_managed` Profile 提供固定官方登录页入口；API 不接受任意 URL、不返回页面内容，扫码与验证码只由用户执行；
+- B站登录状态探针使用独立短时官方首页，只返回公开页头账号入口/“登录”入口布尔信号和 `authenticated / anonymous / indeterminate` 三态，不读取身份内容或浏览器凭据；
+- Collection Profile 另提供“配对 Gateway”“授予当前平台精确权限”“立即轮询任务”入口；一次性配对码只在 Gateway 进程和受管扩展页面之间传递，Profile API 不返回；
 - 可选固定代理只接收无凭据、带 host 和 port 的 `http`、`https` 或 `socks5` server URL，不接受代理用户名或密码。
 
 ### 3.4 重启和页面漂移
@@ -167,17 +190,44 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 
 这个闭环只证明已经 admission 的 B站匿名 breadth stage 可用于正式本地采集；它不扩大策略的页面、动作、登录或数据类型范围。
 
+### 4.4 账号安全门禁与字幕 schema-only 单次实网验证
+
+2026-07-19 在用户明确批准且仅批准一次后，对唯一 `collection + bilibili + user_managed` Profile 执行 subtitle-only 交互勘察：
+
+- preflight 为 `ready`、`manualUnlockRequired=false`、无 active run；
+- 唯一 POST 返回 HTTP 201，runner 为 `completed / errorCode=null`；
+- `open_caption_menu` 为 `attempted=true / completed`，但动作尾窗内只看到字幕控件标签；
+- `select_caption_language` 为 `attempted=false / option_unavailable`，没有盲点、坐标点击或重试；
+- 观察 111 条网络 metadata，0 条因上限丢弃，2 条 Fetch/XHR failure，未达到 3 条中止阈值；
+- `/x/player/wbi/v2` 映射为 3263 字节 JSON，只保留路径、类型、数组规模和 SHA-256；
+- `/x/v2/subtitle/web/view` 映射为 408 字节 binary，只保留大小和 SHA-256，没有猜测正文；
+- JSON 候选包含播放器、账号与区域相关的混合路径，生产 projector 因此必须使用字幕字段显式白名单，不能持久化整个通用对象；
+- run 结束进入 30 分钟 `cooldown`，没有验证码/风控 hard lock；Profile 正常关闭后停止 Gateway；43127 监听器、可见 Chrome、DevTools MCP 和 Gateway 进程均为 0；
+- production response routes 保持为空，`admissionEligible=false`，本轮结果不升级任何策略成熟度。
+
+实网完成后的离线修复又通过两类零平台请求验证：
+
+- contract verifier 覆盖菜单后置条件、依赖动作不投递、scope objective、artifact 原子恢复、Profile ID/未知 DOM 字段剔除，以及 compact-list/full-detail 分层；
+- Playwright intercepted diagnostic 在生产扩展中真实完成 optional host permission 原生对话框、content injection、3 条 DOM 结果和权限撤销；另一个 Gateway diagnostic 完成字幕菜单、中文选择、JSON schema、binary 分类和目标页关闭；
+- 两个 diagnostic 的所有 B站 URL 均在 BrowserContext 内本地 fulfill/abort，`livePlatformRequests=0`；它们不进入 `verify:build`，也不构成 platform validation 或 admission。
+
+同日用户又给出第二张独立的一次性 subtitle-only / schema-only 授权票。系统在旧 cooldown 到期后仍未后台恢复，直到收到新授权才提交唯一一次 POST。该 run 返回 `inconclusive / objective=partial`：字幕菜单在 2.5 秒内就绪，精确“中文”只点击一次；点击后选项仍可见且没有可验证的选中状态，因此严格记为 `postcondition_unmet`，没有补点或重试。动作窗首次捕获到 `aisubtitle.hdslb.com/bfs/ai_subtitle/prod/<opaque-id>` 的 200 JSON schema，确认 `body[].content/from/to` 与根级 `lang` 结构；导航阶段播放器对象也确认了 `subtitle.subtitles[].lan/ai_type/subtitle_url` 等轨道目录结构。原始字段值与正文没有落盘，production response routes 仍为空，`admissionEligible=false`。运行后进入 `authenticated_run_inconclusive_cooldown`，Profile、Gateway、43127/43128、受管 Chrome 与 DevTools MCP 均已关闭，第二张授权已经消费。
+
+完整证据与二进制/JSON 摘要见[字幕 Source Reconnaissance](../reconnaissance/bilibili/video-subtitle-recon-v1.0.md)。
+
 ## 5. 已知未完成项
 
 | 领域 | 当前状态 | 下一门槛 |
 |---|---|---|
 | Gateway 配对 | Profile 级显式配对已通过真实 Chromium loopback 权限与 HMAC 轮询 | 后续补撤销、身份变化与失败恢复的产品验收 |
-| Task dispatch | B站单阶段 preflight → approval → signed dispatch → lease → evidence → completed 已实测 | 增加多阶段推进、取消和重启恢复状态机 |
-| Profile | 受管持久生命周期、可见 Chromium、生产扩展自动加载、关闭/重启、并发门禁与任务绑定已做本地功能验证 | 平台登录状态仍只由用户在该 Profile 中管理；后续逐平台核对可见身份 |
+| Task dispatch | B站单阶段 preflight → approval → signed dispatch → lease → evidence → completed 已实测；多阶段 cooldown 后显式 resume 已通过零平台状态机与生产 Console 浏览器诊断 | 详情策略重新 admission 后做真实双 stage 验证；再增加取消和加密重启恢复 |
+| Profile | 受管持久生命周期、可见 Chromium、生产扩展自动加载、关闭/重启、并发门禁、任务绑定与 B站固定官方登录页入口已实现 | 平台认证动作仍只由用户执行；完成扫码后的可见身份与关闭/重启持久性核验 |
 | B站 discovery | `v1.1.0 live_anonymous_verified`，正式闭环已验证；只覆盖首屏可见标题与规范 BV URL | 再扩展独立的 detail 策略，不复用 breadth admission |
+| B站字幕 | 第二张单次授权下，菜单完成且精确“中文”只点击一次；DOM 选中确认未满足，但动作窗首次映射到 AI 字幕 JSON 的 `body[].content/from/to` 与 `lang`，播放器响应也确认轨道目录结构 | 设计两段显式字段白名单并完成轨道 URL、语言、正文与可见 DOM 的一致性验证；production route 继续为空，后续实网仍需新授权 |
 | response observation | 生产 route 为空 | 先完成 wrapper 到期撤销、route projector 和 document race 验证 |
 | Evidence | 认证回传、待提交重试、原子原始 JSON batch、task manifest、result SHA-256 与重启摘要恢复 | 加密 Vault、不可变审计、coverage 与删除/导出边界 |
 | Gateway task persistence | 仅内存 | 与 Vault 密钥和 schema 一起设计加密恢复，不写普通明文队列 |
+| 多 stage 账号冷却 | `waiting_for_account_safety`、精确任务 resume API、Console 按钮及纯本地状态机/浏览器诊断已完成；不会后台续跑，也不能用 resume 代替 manual unlock | 详情策略重新 admission 后验证真实两 stage；任务队列持久化前保持 Gateway 重启即清空 |
 | DeepResearch | 未接入当前 Collector | 只读 EvidencePackage / Citation / Coverage / CollectionGapRequest |
 
 ## 6. 下一实现顺序
@@ -186,9 +236,9 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 P2a  Collection / Validation Profile launcher（完成）
   -> P2b B站匿名 discovery 真实验证与 admission（完成）
   -> P2c 正式 Gateway dispatch / Evidence 闭环（完成）
-  -> B站 detail / bounded discussion（独立策略与独立 admission）
+  -> B站 detail / subtitle / bounded discussion（各自独立策略与独立 admission）
   -> P3 encrypted Evidence Vault
   -> P4 DeepResearch EvidencePackage adapter
 ```
 
-任何真实平台验证前，生产 response route 继续为空；任何 capability 未获得当前策略版本的真实验证记录前，Console 不得批准执行。
+任何真实平台验证前，生产 response route 继续为空；任何 capability 未获得当前策略版本的真实验证记录前，Console 不得批准执行。认证 Profile 的新实网动作还必须满足账号安全状态门禁并取得新的明确、逐次授权；cooldown 到期本身不构成授权。
