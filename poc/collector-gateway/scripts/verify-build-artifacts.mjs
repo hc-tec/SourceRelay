@@ -174,6 +174,31 @@ assert.match(
 );
 assert.match(
   source,
+  /collector\.completeTranscriptCapabilityValidation/,
+  'Gateway must complete the transcript run through the extension-owned control surface'
+);
+assert.match(
+  source,
+  /reveal_player_controls/,
+  'Gateway transcript interaction must model the human control-reveal action explicitly'
+);
+assert.match(
+  source,
+  /transcript_validation_caption_hover_input_failed/,
+  'Gateway transcript interaction must use browser-level caption hover input'
+);
+assert.match(
+  source,
+  /transcript_validation_chinese_caption_click_failed/,
+  'Gateway transcript interaction must use one browser-level language click'
+);
+assert.match(
+  source,
+  /navigate_transcript_target/,
+  'Transcript navigation must enter the persistent account-safety action ledger'
+);
+assert.match(
+  source,
   /transcript-document\.json/,
   'Gateway must persist the public subtitle document as a local raw-first JSON artifact'
 );

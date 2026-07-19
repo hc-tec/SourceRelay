@@ -1,5 +1,15 @@
 import { setTimeout as delay } from 'node:timers/promises';
-import type { TranscriptCapabilityValidationRunSnapshot } from '../../collector-extension/src/shared/protocol';
+import {
+  COMPLETE_TRANSCRIPT_CAPABILITY_VALIDATION,
+  GET_TRANSCRIPT_CAPABILITY_VALIDATION,
+  START_TRANSCRIPT_CAPABILITY_VALIDATION,
+  type TranscriptCapabilityValidationRunSnapshot,
+  type TranscriptInteractionResult
+} from '../../collector-extension/src/shared/protocol';
+
+function terminal(snapshot: TranscriptCapabilityValidationRunSnapshot): boolean {
+  return snapshot.state === 'completed' || snapshot.state === 'inconclusive' || snapshot.state === 'failed';
+}
 
 export function transcriptValidationSnapshot(
   value: unknown,
@@ -50,6 +60,7 @@ export async function runTranscriptValidationControlLoop(input: {
   canonicalUrl: string;
   extensionVersion: string;
   sendMessage: (message: object) => Promise<unknown>;
+  executeInteraction: () => Promise<TranscriptInteractionResult>;
   pollingDelayMs?: number;
   maximumPollAttempts?: number;
   recoveryAttempts?: number;
@@ -58,9 +69,14 @@ export async function runTranscriptValidationControlLoop(input: {
   const maximumPollAttempts = input.maximumPollAttempts ?? 100;
   const recoveryAttempts = input.recoveryAttempts ?? 10;
   let snapshot: TranscriptCapabilityValidationRunSnapshot | null = null;
+  const readSnapshot = async (): Promise<TranscriptCapabilityValidationRunSnapshot> =>
+    transcriptValidationSnapshot(await input.sendMessage({
+      type: GET_TRANSCRIPT_CAPABILITY_VALIDATION,
+      runId: input.runId
+    }), input.runId, input.profileId, input.extensionVersion);
   try {
     snapshot = transcriptValidationSnapshot(await input.sendMessage({
-      type: 'collector.startTranscriptCapabilityValidation',
+      type: START_TRANSCRIPT_CAPABILITY_VALIDATION,
       runId: input.runId,
       profileId: input.profileId,
       platform: 'bilibili',
@@ -72,25 +88,38 @@ export async function runTranscriptValidationControlLoop(input: {
     // restricted to local reads of the same run ID.
     for (let attempt = 0; attempt < recoveryAttempts && snapshot === null; attempt += 1) {
       await delay(pollingDelayMs);
-      snapshot = await input.sendMessage({
-        type: 'collector.getTranscriptCapabilityValidation',
-        runId: input.runId
-      }).then(
-        (value) => transcriptValidationSnapshot(value, input.runId, input.profileId, input.extensionVersion),
-        () => null
-      ).catch(() => null);
+      snapshot = await readSnapshot().catch(() => null);
     }
     if (!snapshot) throw startError;
   }
+
   for (let attempt = 0; attempt < maximumPollAttempts; attempt += 1) {
-    if (snapshot.state === 'completed' || snapshot.state === 'inconclusive' || snapshot.state === 'failed') {
-      return snapshot;
-    }
+    if (terminal(snapshot)) return snapshot;
+    if (snapshot.state === 'collecting') break;
     await delay(pollingDelayMs);
-    snapshot = transcriptValidationSnapshot(await input.sendMessage({
-      type: 'collector.getTranscriptCapabilityValidation',
-      runId: input.runId
-    }), input.runId, input.profileId, input.extensionVersion);
+    snapshot = await readSnapshot();
   }
-  throw new Error('transcript_validation_gateway_wait_timed_out');
+  if (terminal(snapshot)) return snapshot;
+  if (snapshot.state !== 'collecting') throw new Error('transcript_validation_gateway_wait_timed_out');
+
+  const interaction = await input.executeInteraction();
+  try {
+    snapshot = transcriptValidationSnapshot(await input.sendMessage({
+      type: COMPLETE_TRANSCRIPT_CAPABILITY_VALIDATION,
+      runId: input.runId,
+      result: interaction
+    }), input.runId, input.profileId, input.extensionVersion);
+  } catch (completionError) {
+    // Completion is a local control message, but it is still submitted once.
+    // If its response is lost, only read the same run until a terminal state
+    // appears; never repeat browser interaction or completion delivery.
+    for (let attempt = 0; attempt < recoveryAttempts; attempt += 1) {
+      await delay(pollingDelayMs);
+      const recovered = await readSnapshot().catch(() => null);
+      if (recovered && terminal(recovered)) return recovered;
+    }
+    throw completionError;
+  }
+  if (!terminal(snapshot)) throw new Error('transcript_validation_completion_not_terminal');
+  return snapshot;
 }

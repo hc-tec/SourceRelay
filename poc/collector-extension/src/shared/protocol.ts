@@ -8,7 +8,7 @@ import type { CollectionTerminalStatus, SupportedPlatform } from './collection-c
 export type { SupportedPlatform } from './collection-contracts';
 
 export const COLLECT_VISIBLE_RESULTS = 'collector.collectVisibleResults' as const;
-export const COLLECTOR_CORE_VERSION = '0.4.18' as const;
+export const COLLECTOR_CORE_VERSION = '0.4.19' as const;
 export const COLLECTION_RESULT = 'collector.collectionResult' as const;
 export const CONTENT_READY = 'collector.contentReady' as const;
 export const PROBE_CONTENT_INSTALLATION = 'collector.probeContentInstallation' as const;
@@ -24,8 +24,7 @@ export const START_DETAIL_CAPABILITY_VALIDATION = 'collector.startDetailCapabili
 export const GET_DETAIL_CAPABILITY_VALIDATION = 'collector.getDetailCapabilityValidation' as const;
 export const START_TRANSCRIPT_CAPABILITY_VALIDATION = 'collector.startTranscriptCapabilityValidation' as const;
 export const GET_TRANSCRIPT_CAPABILITY_VALIDATION = 'collector.getTranscriptCapabilityValidation' as const;
-export const TRANSCRIPT_CONTENT_READY = 'collector.transcriptContentReady' as const;
-export const TRANSCRIPT_INTERACTION_RESULT = 'collector.transcriptInteractionResult' as const;
+export const COMPLETE_TRANSCRIPT_CAPABILITY_VALIDATION = 'collector.completeTranscriptCapabilityValidation' as const;
 export { NETWORK_CAPTURE_OBSERVED };
 
 export interface VisibleSearchItem {
@@ -146,13 +145,19 @@ export interface DetailCapabilityValidationRunSnapshot {
   result: VisibleDetailCollectionResult | null;
 }
 
-export type TranscriptInteractionAction = 'open_caption_menu' | 'select_caption_language';
+export type TranscriptInteractionAction =
+  | 'reveal_player_controls'
+  | 'open_caption_menu'
+  | 'select_caption_language';
 export type TranscriptInteractionOutcome =
   | 'completed'
   | 'control_missing'
   | 'option_unavailable'
   | 'prerequisite_unmet'
   | 'postcondition_unmet'
+  | 'page_unavailable'
+  | 'context_changed'
+  | 'network_unavailable'
   | 'risk_detected';
 
 export interface TranscriptInteractionActionResult {
@@ -305,13 +310,87 @@ export interface GetTranscriptCapabilityValidationMessage {
   runId: string;
 }
 
-export interface TranscriptContentReadyMessage {
-  type: typeof TRANSCRIPT_CONTENT_READY;
+export interface CompleteTranscriptCapabilityValidationMessage {
+  type: typeof COMPLETE_TRANSCRIPT_CAPABILITY_VALIDATION;
+  runId: string;
+  result: TranscriptInteractionResult;
 }
 
-export interface TranscriptInteractionResultMessage {
-  type: typeof TRANSCRIPT_INTERACTION_RESULT;
-  result: TranscriptInteractionResult;
+const transcriptInteractionActions: readonly TranscriptInteractionAction[] = [
+  'reveal_player_controls',
+  'open_caption_menu',
+  'select_caption_language'
+];
+
+const transcriptInteractionOutcomes: readonly TranscriptInteractionOutcome[] = [
+  'completed',
+  'control_missing',
+  'option_unavailable',
+  'prerequisite_unmet',
+  'postcondition_unmet',
+  'page_unavailable',
+  'context_changed',
+  'network_unavailable',
+  'risk_detected'
+];
+
+function isTranscriptInteractionActionResult(value: unknown): value is TranscriptInteractionActionResult {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<TranscriptInteractionActionResult>;
+  return (
+    transcriptInteractionActions.includes(candidate.action as TranscriptInteractionAction) &&
+    typeof candidate.attempted === 'boolean' &&
+    transcriptInteractionOutcomes.includes(candidate.outcome as TranscriptInteractionOutcome) &&
+    Array.isArray(candidate.visibleLabels) &&
+    candidate.visibleLabels.length <= 40 &&
+    candidate.visibleLabels.every((label) => typeof label === 'string' && label.length > 0 && label.length <= 300) &&
+    (candidate.selectedLabel === null || (
+      typeof candidate.selectedLabel === 'string' &&
+      /^(?:中文|汉语)(?:[（(].{1,30}[）)])?$/.test(candidate.selectedLabel)
+    )) &&
+    (candidate.postconditionAcknowledged === null || typeof candidate.postconditionAcknowledged === 'boolean')
+  );
+}
+
+export function isTranscriptInteractionResult(value: unknown): value is TranscriptInteractionResult {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<TranscriptInteractionResult>;
+  if (
+    candidate.schemaVersion !== 1 ||
+    typeof candidate.canonicalUrl !== 'string' ||
+    !/^https:\/\/www\.bilibili\.com\/video\/BV[0-9A-Za-z]{10}$/.test(candidate.canonicalUrl) ||
+    (candidate.state !== 'completed' && candidate.state !== 'inconclusive' && candidate.state !== 'failed') ||
+    !candidate.objective ||
+    !Array.isArray(candidate.objective.requiredActions) ||
+    !Array.isArray(candidate.objective.completedActions) ||
+    !Array.isArray(candidate.actions) ||
+    candidate.actions.length !== transcriptInteractionActions.length ||
+    !candidate.actions.every(isTranscriptInteractionActionResult) ||
+    (candidate.errorCode !== null && (
+      typeof candidate.errorCode !== 'string' || !/^[a-z0-9_]{1,100}$/.test(candidate.errorCode)
+    )) ||
+    typeof candidate.completedAt !== 'string' ||
+    !Number.isFinite(Date.parse(candidate.completedAt))
+  ) return false;
+  if (
+    candidate.objective.requiredActions.length !== transcriptInteractionActions.length ||
+    !candidate.objective.requiredActions.every((action, index) => action === transcriptInteractionActions[index]) ||
+    !candidate.actions.every((action, index) => action.action === transcriptInteractionActions[index])
+  ) return false;
+  const completedActions = candidate.actions
+    .filter((action) => action.outcome === 'completed')
+    .map((action) => action.action);
+  const expectedStatus = completedActions.length === transcriptInteractionActions.length
+    ? 'satisfied'
+    : completedActions.length > 0
+      ? 'partial'
+      : 'not_satisfied';
+  return (
+    candidate.objective.status === expectedStatus &&
+    candidate.objective.completedActions.length === completedActions.length &&
+    candidate.objective.completedActions.every((action, index) => action === completedActions[index]) &&
+    (expectedStatus === 'satisfied' ? candidate.state === 'completed' : candidate.state !== 'completed')
+  );
 }
 
 export function isCollectVisibleResultsMessage(
@@ -477,22 +556,16 @@ export function isGetTranscriptCapabilityValidationMessage(
   );
 }
 
-export function isTranscriptContentReadyMessage(value: unknown): value is TranscriptContentReadyMessage {
-  return Boolean(
-    value &&
-      typeof value === 'object' &&
-      (value as { type?: unknown }).type === TRANSCRIPT_CONTENT_READY
-  );
-}
-
-export function isTranscriptInteractionResultMessage(
+export function isCompleteTranscriptCapabilityValidationMessage(
   value: unknown
-): value is TranscriptInteractionResultMessage {
-  return Boolean(
-    value &&
-      typeof value === 'object' &&
-      (value as { type?: unknown }).type === TRANSCRIPT_INTERACTION_RESULT &&
-      (value as { result?: unknown }).result
+): value is CompleteTranscriptCapabilityValidationMessage {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<CompleteTranscriptCapabilityValidationMessage>;
+  return (
+    candidate.type === COMPLETE_TRANSCRIPT_CAPABILITY_VALIDATION &&
+    typeof candidate.runId === 'string' &&
+    /^[0-9a-f-]{36}$/i.test(candidate.runId) &&
+    isTranscriptInteractionResult(candidate.result)
   );
 }
 

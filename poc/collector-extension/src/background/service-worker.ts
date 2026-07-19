@@ -1,6 +1,7 @@
 import {
   COLLECT_VISIBLE_RESULTS,
   COLLECTOR_CORE_VERSION,
+  COMPLETE_TRANSCRIPT_CAPABILITY_VALIDATION,
   CONTENT_READY,
   GET_CAPABILITY_VALIDATION,
   GET_DETAIL_CAPABILITY_VALIDATION,
@@ -20,8 +21,7 @@ import {
   isStartCapabilityValidationMessage,
   isStartDetailCapabilityValidationMessage,
   isStartTranscriptCapabilityValidationMessage,
-  isTranscriptContentReadyMessage,
-  isTranscriptInteractionResultMessage,
+  isCompleteTranscriptCapabilityValidationMessage,
   isPairGatewayMessage,
   isRevokeGatewayPairingMessage,
   isCollectionResultMessage,
@@ -185,6 +185,10 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
             files: ['main-world-network-observer.js'],
             injectImmediately: true
           });
+          if (arm.purpose === 'transcript_validation') {
+            const run = await activeTranscriptValidationForSender(tabId, sender.url, arm.documentId);
+            if (!run) throw new Error('transcript_validation_document_binding_failed');
+          }
           sendResponse({ ok: true, armed: true, expiresAt: arm.expiresAt, routeIds: arm.routeIds });
         } catch {
           sendResponse({ ok: true, armed: false });
@@ -213,40 +217,6 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     ).then(
       (result) => sendResponse({ ok: true, ...result }),
       () => sendResponse({ ok: false, error: 'network_capture_storage_failed' })
-    );
-    return true;
-  }
-
-  if (isTranscriptContentReadyMessage(message)) {
-    const tabId = sender.tab?.id;
-    if (typeof tabId !== 'number' || sender.frameId !== 0) {
-      sendResponse({ ok: false, armed: false, error: 'transcript_validation_source_rejected' });
-      return false;
-    }
-    void activeTranscriptValidationForSender(tabId, sender.url, sender.documentId).then(
-      (run) => sendResponse(run
-        ? { ok: true, armed: true, runId: run.runId }
-        : { ok: true, armed: false }),
-      () => sendResponse({ ok: false, armed: false, error: 'transcript_validation_state_unavailable' })
-    );
-    return true;
-  }
-
-  if (isTranscriptInteractionResultMessage(message)) {
-    const tabId = sender.tab?.id;
-    if (typeof tabId !== 'number' || sender.frameId !== 0) {
-      sendResponse({ ok: false, error: 'transcript_validation_source_rejected' });
-      return false;
-    }
-    void activeTranscriptValidationForSender(tabId, sender.url, sender.documentId).then(
-      async (run) => {
-        if (!run) return { ok: false, error: 'transcript_validation_without_active_run' };
-        const completed = await completeTranscriptValidation(run.runId, message.result);
-        return { ok: true, validationRunId: completed.runId, validationState: completed.state };
-      }
-    ).then(
-      (result) => sendResponse(result),
-      () => sendResponse({ ok: false, error: 'transcript_validation_completion_failed' })
     );
     return true;
   }
@@ -431,6 +401,30 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return true;
   }
 
+  if (isCompleteTranscriptCapabilityValidationMessage(message)) {
+    if (!isExtensionControlSender(sender)) {
+      sendResponse({ ok: false, error: 'control_sender_rejected' });
+      return false;
+    }
+    void getTranscriptCapabilityValidationRun(message.runId).then(async (run) => {
+      if (!run) return { ok: false, error: 'transcript_validation_run_not_found' };
+      if (run.state !== 'collecting') {
+        return { ok: false, error: 'transcript_validation_run_not_active' };
+      }
+      const validation = await completeTranscriptValidation(run.runId, message.result);
+      return { ok: true, validation };
+    }).then(
+      (result) => sendResponse(result),
+      (error: unknown) => sendResponse({
+        ok: false,
+        error: error instanceof Error && /^[a-z0-9_]{1,100}$/.test(error.message)
+          ? error.message
+          : 'transcript_validation_completion_failed'
+      })
+    );
+    return true;
+  }
+
   if (isSyncStrategyPermissionsMessage(message)) {
     if (!isExtensionControlSender(sender)) {
       sendResponse({ ok: false, error: 'control_sender_rejected' });
@@ -558,6 +552,7 @@ void START_DETAIL_CAPABILITY_VALIDATION;
 void GET_DETAIL_CAPABILITY_VALIDATION;
 void START_TRANSCRIPT_CAPABILITY_VALIDATION;
 void GET_TRANSCRIPT_CAPABILITY_VALIDATION;
+void COMPLETE_TRANSCRIPT_CAPABILITY_VALIDATION;
 void NETWORK_CAPTURE_OBSERVED;
 void NETWORK_CAPTURE_BRIDGE_READY_MESSAGE;
 

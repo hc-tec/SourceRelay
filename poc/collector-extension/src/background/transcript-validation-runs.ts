@@ -19,7 +19,6 @@ import {
 const STORAGE_KEY = 'collector.transcript-capability-validations.v1';
 const VALIDATION_TTL_MS = 45_000;
 const BRIDGE_REGISTRATION_PREFIX = 'collector-transcript-bridge-';
-const CONTENT_REGISTRATION_PREFIX = 'collector-transcript-content-';
 export const TRANSCRIPT_VALIDATION_ALARM_PREFIX = 'collector.transcript-validation-deadline.';
 const terminalStates = new Set(['completed', 'inconclusive', 'failed']);
 
@@ -34,7 +33,7 @@ function registrationSuffix(runId: string): string {
 
 function registrationIds(runId: string): string[] {
   const suffix = registrationSuffix(runId);
-  return [`${BRIDGE_REGISTRATION_PREFIX}${suffix}`, `${CONTENT_REGISTRATION_PREFIX}${suffix}`];
+  return [`${BRIDGE_REGISTRATION_PREFIX}${suffix}`];
 }
 
 function isRun(value: unknown): value is TranscriptCapabilityValidationRunSnapshot {
@@ -86,21 +85,13 @@ async function cleanupRun(run: TranscriptCapabilityValidationRunSnapshot, closeW
 }
 
 async function registerRunScripts(runId: string): Promise<void> {
-  const [bridgeId, contentId] = registrationIds(runId);
+  const [bridgeId] = registrationIds(runId);
   await chrome.scripting.registerContentScripts([
     {
       id: bridgeId,
       matches: ['https://www.bilibili.com/video/*'],
       js: ['network-capture-bridge.js'],
       runAt: 'document_start',
-      allFrames: false,
-      persistAcrossSessions: false
-    },
-    {
-      id: contentId,
-      matches: ['https://www.bilibili.com/video/*'],
-      js: ['transcript-validation.js'],
-      runAt: 'document_idle',
       allFrames: false,
       persistAcrossSessions: false
     }
@@ -118,11 +109,14 @@ function safeLabels(value: unknown): string[] {
 function sanitiseAction(value: unknown): TranscriptInteractionActionResult | null {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<TranscriptInteractionActionResult>;
-  const action = candidate.action === 'open_caption_menu' || candidate.action === 'select_caption_language'
+  const action = candidate.action === 'reveal_player_controls' ||
+    candidate.action === 'open_caption_menu' ||
+    candidate.action === 'select_caption_language'
     ? candidate.action
     : null;
   const outcomes = new Set([
-    'completed', 'control_missing', 'option_unavailable', 'prerequisite_unmet', 'postcondition_unmet', 'risk_detected'
+    'completed', 'control_missing', 'option_unavailable', 'prerequisite_unmet', 'postcondition_unmet',
+    'page_unavailable', 'context_changed', 'network_unavailable', 'risk_detected'
   ]);
   if (!action || typeof candidate.attempted !== 'boolean' || !outcomes.has(candidate.outcome ?? '')) return null;
   const selectedLabel = candidate.selectedLabel === null
@@ -149,14 +143,17 @@ function sanitiseInteraction(
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<TranscriptInteractionResult>;
   if (candidate.schemaVersion !== 1 || canonicalBilibiliVideoUrl(candidate.canonicalUrl ?? '') !== canonicalUrl) return null;
-  if (!Array.isArray(candidate.actions) || candidate.actions.length === 0 || candidate.actions.length > 2) return null;
+  if (!Array.isArray(candidate.actions) || candidate.actions.length !== 3) return null;
   const actions = candidate.actions.map(sanitiseAction);
   if (actions.some((action) => action === null)) return null;
   const safeActions = actions as TranscriptInteractionActionResult[];
   const names = safeActions.map((action) => action.action);
-  if (new Set(names).size !== names.length || names[0] !== 'open_caption_menu') return null;
-  if (names.length === 2 && names[1] !== 'select_caption_language') return null;
-  const requiredActions: TranscriptInteractionAction[] = ['open_caption_menu', 'select_caption_language'];
+  const requiredActions: TranscriptInteractionAction[] = [
+    'reveal_player_controls',
+    'open_caption_menu',
+    'select_caption_language'
+  ];
+  if (new Set(names).size !== names.length || names.some((name, index) => name !== requiredActions[index])) return null;
   const completedActions = safeActions.filter((action) => action.outcome === 'completed').map((action) => action.action);
   const status = completedActions.length === requiredActions.length
     ? 'satisfied'
@@ -301,7 +298,9 @@ export async function completeTranscriptValidation(
   if (terminalStates.has(run.state)) return run;
   const tab = await chrome.tabs.get(run.tabId).catch(() => null);
   const canonicalUrl = canonicalBilibiliVideoUrl(tab?.url ?? '', 'observed_document');
-  const interaction = canonicalUrl ? sanitiseInteraction(interactionCandidate, canonicalUrl) : null;
+  if (!canonicalUrl) throw new Error('transcript_validation_context_changed');
+  const interaction = sanitiseInteraction(interactionCandidate, canonicalUrl);
+  if (!interaction) throw new Error('transcript_validation_interaction_invalid');
   const arm = await getActiveNetworkCaptureArm(run.tabId);
   const captures = arm ? await readNetworkCaptures(run.tabId, arm) : [];
   const directory = captures.find((capture) =>

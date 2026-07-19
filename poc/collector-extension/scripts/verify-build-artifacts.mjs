@@ -86,7 +86,6 @@ const referencedScripts = [
   'content.js',
   'network-capture-bridge.js',
   'main-world-network-observer.js',
-  'transcript-validation.js',
   'control.js'
 ];
 for (const script of referencedScripts) {
@@ -99,6 +98,11 @@ for (const pageArtifact of ['control.html', 'control.css']) {
 }
 
 const outputNames = await readdir(outputDirectory);
+assert.equal(
+  outputNames.includes('transcript-validation.js'),
+  false,
+  'Synthetic transcript interaction content must not be present in the production artifact'
+);
 assert.equal(
   outputNames.some((name) => /(?:^|[-_.])(?:test|fixture)(?:[-_.]|$)/i.test(name)),
   false,
@@ -142,7 +146,6 @@ assert.match(
   'Content-driven delivery failure may schedule loopback recovery but must not repeat platform work'
 );
 const contentSource = await readFile(resolve(outputDirectory, 'content.js'), 'utf8');
-const transcriptSource = await readFile(resolve(outputDirectory, 'transcript-validation.js'), 'utf8');
 const bridgeSource = await readFile(resolve(outputDirectory, 'network-capture-bridge.js'), 'utf8');
 const mainWorldObserverSource = await readFile(resolve(outputDirectory, 'main-world-network-observer.js'), 'utf8');
 assert.match(contentSource, /collector\.collectionResult/, 'content-driven result delivery is missing');
@@ -173,6 +176,11 @@ assert.match(
 );
 assert.match(
   backgroundSource,
+  /collector\.completeTranscriptCapabilityValidation/,
+  'The Gateway-owned transcript completion protocol is missing'
+);
+assert.match(
+  backgroundSource,
   /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*2/,
   'The runtime snapshot must expose the current control-surface revision'
 );
@@ -196,25 +204,20 @@ assert.match(
   /runAt:\s*["']document_start["'][\s\S]{0,180}persistAcrossSessions:\s*false/,
   'The network bridge must be a short-lived document-start registration'
 );
-assert.match(
+assert.doesNotMatch(
   backgroundSource,
-  /runAt:\s*["']document_idle["'][\s\S]{0,180}persistAcrossSessions:\s*false/,
-  'The bounded transcript interaction must be a short-lived document-idle registration'
+  /collector-transcript-content-|transcript-validation\.js/,
+  'Transcript validation must not register a synthetic interaction content script'
 );
 assert.match(backgroundSource, /admissionEligible:\s*false/, 'Transcript validation must remain ineligible for admission');
 assert.match(backgroundSource, /unchanged_empty/, 'Transcript validation must retain the empty production-route safeguard');
-assert.match(transcriptSource, /open_caption_menu/, 'Transcript content must expose the caption-menu action ledger');
-assert.match(transcriptSource, /select_caption_language/, 'Transcript content must expose the exact language action ledger');
-assert.match(transcriptSource, /prerequisite_unmet/, 'Language selection must stop when the menu postcondition fails');
-assert.match(transcriptSource, /control\.click\(\)/, 'Caption-menu delivery must contain exactly one explicit control click site');
-assert.match(transcriptSource, /option\.click\(\)/, 'Language delivery must contain exactly one explicit option click site');
 assert.match(
-  transcriptSource,
-  /bpx-player-ctrl-subtitle-language-item\[data-lan=["']ai-zh["']\]/,
-  'Language selection must target the verified Bilibili ai-zh option container'
+  backgroundSource,
+  /reveal_player_controls[\s\S]{0,600}open_caption_menu[\s\S]{0,600}select_caption_language/,
+  'The complete human transcript action ledger must remain explicit'
 );
 assert.match(
-  transcriptSource,
+  backgroundSource,
   /vd_source/,
   'Observed Bilibili documents must canonicalize the verified platform tracking query'
 );

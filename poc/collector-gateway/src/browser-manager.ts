@@ -26,6 +26,7 @@ import {
   type BilibiliInteractionReconnaissanceRecord
 } from './interaction-reconnaissance';
 import { runTranscriptValidationControlLoop } from './transcript-control-loop';
+import { executeBilibiliTranscriptInteraction } from './bilibili-transcript-interaction';
 import {
   ManagedExtensionRuntime,
   extensionControlSnapshot,
@@ -436,12 +437,28 @@ export class CollectionBrowserManager {
     );
     let snapshot: TranscriptCapabilityValidationRunSnapshot;
     try {
+      await this.#accountSafety.recordActionAttempt(
+        profileId,
+        'bilibili',
+        permit.runId,
+        'navigate_transcript_target'
+      );
       snapshot = await runTranscriptValidationControlLoop({
         runId: permit.runId,
         profileId,
         canonicalUrl,
         extensionVersion: running.extensionVersion,
-        sendMessage: (message) => extensionMessage(controlPage, message)
+        sendMessage: (message) => extensionMessage(controlPage, message),
+        executeInteraction: () => executeBilibiliTranscriptInteraction({
+          context: running.context,
+          canonicalUrl,
+          beforeAction: (actionId) => this.#accountSafety.recordActionAttempt(
+            profileId,
+            'bilibili',
+            permit.runId,
+            actionId
+          ).then(() => undefined)
+        })
       });
       const finishReason = snapshot.state === 'completed'
         ? 'authenticated_transcript_validation_completed'
