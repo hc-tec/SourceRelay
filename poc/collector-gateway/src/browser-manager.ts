@@ -1,23 +1,122 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { access, readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { chromium, type BrowserContext, type Page } from 'playwright';
+import type { Page } from 'playwright';
 import type { BrowserProfileRuntimeSummary } from '../../collector-extension/src/shared/control-plane';
 import {
-  COLLECTOR_CORE_VERSION,
-  GET_CONTROL_SNAPSHOT,
   POLL_GATEWAY_TASKS,
-  type CapabilityValidationRunSnapshot
+  type CapabilityValidationRunSnapshot,
+  type DetailCapabilityValidationRunSnapshot,
+  type TranscriptCapabilityValidationRunSnapshot
 } from '../../collector-extension/src/shared/protocol';
-import { resolveNativeSearchStrategy } from '../../collector-extension/src/shared/strategy-registry';
+import {
+  resolveDetailStrategy,
+  resolveNativeSearchStrategy,
+  resolveTranscriptStrategy
+} from '../../collector-extension/src/shared/strategy-registry';
 import type { GatewayConfig } from './config';
 import type { BrowserProfileRegistry } from './profiles';
+import type { AccountSafetyRegistry } from './account-safety';
+import {
+  BilibiliDetailSourceObserver,
+  sourceReconnaissanceErrorCode,
+  type BilibiliDetailSourceReconnaissanceRecord
+} from './source-reconnaissance';
+import {
+  BilibiliInteractionReconnaissanceRunner,
+  type BilibiliInteractionReconnaissanceRecord
+} from './interaction-reconnaissance';
+import { runTranscriptValidationControlLoop } from './transcript-control-loop';
+import {
+  ManagedExtensionRuntime,
+  extensionControlSnapshot,
+  extensionHasOrigins,
+  extensionMessage,
+  extensionStoredValidationRuns
+} from './managed-extension-runtime';
 
-interface RunningProfile {
-  context: BrowserContext;
-  extensionId: string;
-  extensionVersion: string;
+function canonicalBilibiliVideoUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    const match = url.hostname === 'www.bilibili.com' && url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/);
+    if (url.protocol !== 'https:' || !match || url.username || url.password || url.search || url.hash) return null;
+    return `https://www.bilibili.com/video/${match[1]}`;
+  } catch {
+    return null;
+  }
+}
+
+function platformLoginEntrypoint(platform: string): string {
+  if (platform === 'bilibili') return 'https://passport.bilibili.com/login';
+  throw new Error('profile_login_entrypoint_unsupported');
+}
+
+function platformHomeEntrypoint(platform: string): string {
+  if (platform === 'bilibili') return 'https://www.bilibili.com/';
+  throw new Error('profile_login_status_unsupported');
+}
+
+function isPlatformLoginPage(page: Page, platform: string): boolean {
+  try {
+    const url = new URL(page.url());
+    return platform === 'bilibili' &&
+      url.protocol === 'https:' &&
+      url.hostname === 'passport.bilibili.com' &&
+      url.pathname === '/login';
+  } catch {
+    return false;
+  }
+}
+
+export interface PlatformLoginStatusSnapshot {
+  schemaVersion: 1;
+  platform: 'bilibili';
+  state: 'authenticated' | 'anonymous' | 'indeterminate';
+  checkedAt: string;
+  visibleSignals: {
+    accountEntry: boolean;
+    loginEntry: boolean;
+  };
+}
+
+async function inspectBilibiliLoginStatus(page: Page): Promise<PlatformLoginStatusSnapshot> {
+  let visibleSignals = { accountEntry: false, loginEntry: false };
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    visibleSignals = await page.evaluate(() => {
+      const visible = (element: Element): boolean => {
+        const html = element as HTMLElement;
+        const rect = html.getBoundingClientRect();
+        const style = getComputedStyle(html);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      };
+      const inHeader = (element: Element): boolean => Boolean(element.closest(
+        'header, .bili-header, .mini-header, [class*="header-channel"], [class*="header-bar"]'
+      ));
+      const accountEntry = Array.from(document.querySelectorAll<HTMLAnchorElement>(
+        'a[href*="space.bilibili.com/"]'
+      )).some((anchor) =>
+        visible(anchor) && inHeader(anchor) && /^https:\/\/space\.bilibili\.com\/\d+\/?(?:[?#].*)?$/.test(anchor.href)
+      );
+      const loginEntry = Array.from(document.querySelectorAll(
+        '.header-login-entry, a[href*="passport.bilibili.com/login"], button, [role="button"]'
+      )).some((element) =>
+        visible(element) && inHeader(element) && (element.textContent ?? '').replace(/\s+/g, ' ').trim() === '登录'
+      );
+      return { accountEntry, loginEntry };
+    });
+    if (visibleSignals.accountEntry || visibleSignals.loginEntry) break;
+    await delay(500);
+  }
+  return {
+    schemaVersion: 1,
+    platform: 'bilibili',
+    state: visibleSignals.accountEntry
+      ? 'authenticated'
+      : visibleSignals.loginEntry
+        ? 'anonymous'
+        : 'indeterminate',
+    checkedAt: new Date().toISOString(),
+    visibleSignals
+  };
 }
 
 export interface ManagedProfilePairingInput {
@@ -25,65 +124,6 @@ export interface ManagedProfilePairingInput {
   gatewayInstanceId: string;
   pairingSessionId: string;
   pairingCode: string;
-}
-
-async function waitForExtensionWorker(context: BrowserContext) {
-  const existing = context.serviceWorkers();
-  if (existing.length > 0) return existing[0];
-  return context.waitForEvent('serviceworker', { timeout: 15_000 });
-}
-
-async function extensionHasOrigins(page: Page, origins: readonly string[]): Promise<boolean> {
-  return page.evaluate(async (requestedOrigins) => {
-    const extensionGlobal = globalThis as typeof globalThis & {
-      chrome: {
-        permissions: {
-          contains(permission: { origins: string[] }): Promise<boolean>;
-        };
-      };
-    };
-    return extensionGlobal.chrome.permissions.contains({ origins: requestedOrigins });
-  }, [...origins]);
-}
-
-async function extensionMessage(page: Page, message: object): Promise<unknown> {
-  return page.evaluate(async (payload) => {
-    const extensionGlobal = globalThis as typeof globalThis & {
-      chrome: {
-        runtime: {
-          sendMessage(value: object): Promise<unknown>;
-        };
-      };
-    };
-    return extensionGlobal.chrome.runtime.sendMessage(payload);
-  }, message);
-}
-
-async function reloadExtension(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const extensionGlobal = globalThis as typeof globalThis & {
-      chrome: { runtime: { reload(): void } };
-    };
-    extensionGlobal.chrome.runtime.reload();
-  }).catch(() => undefined);
-}
-
-async function extensionStoredValidationRuns(page: Page): Promise<unknown[]> {
-  return page.evaluate(async () => {
-    const extensionGlobal = globalThis as typeof globalThis & {
-      chrome: {
-        storage: {
-          session: {
-            get(key: null): Promise<Record<string, unknown>>;
-          };
-        };
-      };
-    };
-    const stored = await extensionGlobal.chrome.storage.session.get(null);
-    return Object.entries(stored)
-      .filter(([key]) => key.startsWith('collector.capability-validation.'))
-      .map(([, value]) => value);
-  });
 }
 
 function validationSnapshot(
@@ -114,21 +154,50 @@ function validationSnapshot(
   return validation as CapabilityValidationRunSnapshot;
 }
 
-export class CollectionBrowserManager {
-  readonly #config: GatewayConfig;
-  readonly #registry: BrowserProfileRegistry;
-  readonly #running = new Map<string, RunningProfile>();
-  readonly #launching = new Map<string, Promise<BrowserProfileRuntimeSummary>>();
+function detailValidationSnapshot(
+  value: unknown,
+  runId: string,
+  profileId: string,
+  extensionVersion: string
+): DetailCapabilityValidationRunSnapshot {
+  if (!value || typeof value !== 'object') throw new Error('detail_validation_extension_response_missing');
+  const response = value as { ok?: unknown; validation?: unknown; error?: unknown };
+  if (response.ok !== true) {
+    const error = typeof response.error === 'string' && /^[a-z0-9_]{1,100}$/.test(response.error)
+      ? response.error
+      : 'detail_validation_extension_rejected';
+    throw new Error(error);
+  }
+  if (!response.validation || typeof response.validation !== 'object') {
+    throw new Error('detail_validation_extension_snapshot_missing');
+  }
+  const validation = response.validation as Partial<DetailCapabilityValidationRunSnapshot>;
+  if (validation.schemaVersion !== 1) throw new Error('detail_validation_extension_schema_mismatch');
+  if (validation.collectorVersion !== extensionVersion) throw new Error('detail_validation_extension_version_mismatch');
+  if (validation.runId !== runId) throw new Error('detail_validation_extension_run_mismatch');
+  if (validation.profileId !== profileId) throw new Error('detail_validation_extension_profile_mismatch');
+  if (validation.platform !== 'bilibili') throw new Error('detail_validation_extension_platform_mismatch');
+  if (validation.accountCategory !== 'anonymous') throw new Error('detail_validation_extension_account_mismatch');
+  if (validation.evidenceObjective !== 'detail_read') throw new Error('detail_validation_extension_objective_mismatch');
+  if (typeof validation.state !== 'string') throw new Error('detail_validation_extension_state_invalid');
+  return validation as DetailCapabilityValidationRunSnapshot;
+}
 
-  constructor(config: GatewayConfig, registry: BrowserProfileRegistry) {
-    this.#config = config;
+export class CollectionBrowserManager {
+  readonly #registry: BrowserProfileRegistry;
+  readonly #accountSafety: AccountSafetyRegistry;
+  readonly #runtime: ManagedExtensionRuntime;
+
+  constructor(config: GatewayConfig, registry: BrowserProfileRegistry, accountSafety: AccountSafetyRegistry) {
     this.#registry = registry;
+    this.#accountSafety = accountSafety;
+    this.#runtime = new ManagedExtensionRuntime(config, registry);
   }
 
   async list(): Promise<BrowserProfileRuntimeSummary[]> {
     const summaries: BrowserProfileRuntimeSummary[] = [];
     for (const profile of this.#registry.list()) {
-      const running = this.#running.get(profile.profileId);
+      const running = this.#runtime.get(profile.profileId);
       let extensionPaired = false;
       let strategyPermission: BrowserProfileRuntimeSummary['strategyPermission'] = 'unknown';
       if (running) {
@@ -176,23 +245,8 @@ export class CollectionBrowserManager {
   }
 
   async launch(profileId: string): Promise<BrowserProfileRuntimeSummary> {
-    const pending = this.#launching.get(profileId);
-    if (pending) return pending;
-    const profile = this.#registry.get(profileId);
-    const alreadyRunning = this.#running.get(profileId);
-    if (alreadyRunning) return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
-    const activeProfileIds = [...this.#running.keys(), ...this.#launching.keys()];
-    if (activeProfileIds.some((activeId) => this.#registry.get(activeId).platform === profile.platform)) {
-      throw new Error('profile_platform_concurrency_rejected');
-    }
-
-    const operation = this.#launchProfile(profileId);
-    this.#launching.set(profileId, operation);
-    try {
-      return await operation;
-    } finally {
-      this.#launching.delete(profileId);
-    }
+    await this.#runtime.launch(profileId);
+    return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
   }
 
   async runBilibiliAnonymousValidation(
@@ -208,15 +262,12 @@ export class CollectionBrowserManager {
     if (!query || query.length > 200) throw new Error('validation_query_invalid');
 
     await this.launch(profileId);
-    const running = this.#running.get(profileId);
+    const running = this.#runtime.get(profileId);
     if (!running) throw new Error('validation_browser_not_running');
-    const controlPage = await this.#ensureExtensionVersion(
-      running,
-      await this.#extensionControlPage(running)
-    );
+    const controlPage = await this.#runtime.controlPage(profileId);
     const queryDigest = createHash('sha256').update(query).digest('hex');
     const recoverable: CapabilityValidationRunSnapshot[] = [];
-    for (const candidate of await extensionStoredValidationRuns(controlPage)) {
+    for (const candidate of await extensionStoredValidationRuns(controlPage, 'collector.capability-validation.')) {
       if (!candidate || typeof candidate !== 'object') continue;
       const partial = candidate as Partial<CapabilityValidationRunSnapshot>;
       if (
@@ -278,6 +329,228 @@ export class CollectionBrowserManager {
     throw new Error('validation_gateway_wait_timed_out');
   }
 
+  async runBilibiliAnonymousDetailValidation(
+    profileId: string,
+    rawCanonicalUrl: string,
+    knownRunIds: ReadonlySet<string> = new Set()
+  ): Promise<DetailCapabilityValidationRunSnapshot> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'validation') throw new Error('detail_validation_profile_kind_required');
+    if (profile.platform !== 'bilibili') throw new Error('detail_validation_profile_platform_mismatch');
+    if (profile.account.category !== 'anonymous') throw new Error('detail_validation_profile_anonymous_required');
+    const canonicalUrl = canonicalBilibiliVideoUrl(rawCanonicalUrl);
+    if (!canonicalUrl) throw new Error('detail_validation_url_invalid');
+
+    await this.launch(profileId);
+    const running = this.#runtime.get(profileId);
+    if (!running) throw new Error('detail_validation_browser_not_running');
+    const controlPage = await this.#runtime.controlPage(profileId);
+    const targetUrlDigest = createHash('sha256').update(canonicalUrl).digest('hex');
+    const recoverable: DetailCapabilityValidationRunSnapshot[] = [];
+    for (const candidate of await extensionStoredValidationRuns(
+      controlPage,
+      'collector.detail-capability-validation.'
+    )) {
+      if (!candidate || typeof candidate !== 'object') continue;
+      const partial = candidate as Partial<DetailCapabilityValidationRunSnapshot>;
+      if (
+        typeof partial.runId !== 'string' ||
+        knownRunIds.has(partial.runId) ||
+        partial.targetUrlDigest !== targetUrlDigest ||
+        (partial.state !== 'completed' && partial.state !== 'inconclusive' && partial.state !== 'failed')
+      ) continue;
+      try {
+        recoverable.push(detailValidationSnapshot(
+          { ok: true, validation: candidate },
+          partial.runId,
+          profileId,
+          running.extensionVersion
+        ));
+      } catch {
+        // Invalid session values are never returned to the Gateway registry.
+      }
+    }
+    recoverable.sort((left, right) => Date.parse(right.completedAt ?? '') - Date.parse(left.completedAt ?? ''));
+    if (recoverable[0]) return recoverable[0];
+
+    const strategy = resolveDetailStrategy('bilibili');
+    if (!(await extensionHasOrigins(controlPage, strategy.browser.optionalHostPermissions))) {
+      await controlPage.bringToFront();
+      const card = controlPage.locator('[data-platform="bilibili"]');
+      await card.getByRole('button', { name: '授予站点权限' }).click({ timeout: 15_000 });
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        if (await extensionHasOrigins(controlPage, strategy.browser.optionalHostPermissions)) break;
+        await delay(500);
+      }
+      if (!(await extensionHasOrigins(controlPage, strategy.browser.optionalHostPermissions))) {
+        throw new Error('detail_validation_host_permission_user_action_required');
+      }
+    }
+
+    const runId = randomUUID();
+    let snapshot = detailValidationSnapshot(await extensionMessage(controlPage, {
+      type: 'collector.startDetailCapabilityValidation',
+      runId,
+      profileId,
+      platform: 'bilibili',
+      accountCategory: 'anonymous',
+      canonicalUrl
+    }), runId, profileId, running.extensionVersion);
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (snapshot.state === 'completed' || snapshot.state === 'inconclusive' || snapshot.state === 'failed') {
+        return snapshot;
+      }
+      await delay(500);
+      snapshot = detailValidationSnapshot(await extensionMessage(controlPage, {
+        type: 'collector.getDetailCapabilityValidation',
+        runId
+      }), runId, profileId, running.extensionVersion);
+    }
+    throw new Error('detail_validation_gateway_wait_timed_out');
+  }
+
+  async runBilibiliAuthenticatedTranscriptValidation(
+    profileId: string,
+    rawCanonicalUrl: string
+  ): Promise<TranscriptCapabilityValidationRunSnapshot> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('transcript_validation_collection_kind_required');
+    if (profile.platform !== 'bilibili') throw new Error('transcript_validation_platform_mismatch');
+    if (profile.account.category !== 'user_managed') {
+      throw new Error('transcript_validation_user_managed_required');
+    }
+    const canonicalUrl = canonicalBilibiliVideoUrl(rawCanonicalUrl);
+    if (!canonicalUrl) throw new Error('transcript_validation_url_invalid');
+    await this.launch(profileId);
+    const running = this.#runtime.get(profileId);
+    if (!running) throw new Error('transcript_validation_browser_not_running');
+    const controlPage = await this.#runtime.controlPage(profileId);
+    const strategy = resolveTranscriptStrategy('bilibili');
+    if (!(await extensionHasOrigins(controlPage, strategy.browser.optionalHostPermissions))) {
+      throw new Error('transcript_validation_host_permission_user_action_required');
+    }
+    const permit = await this.#accountSafety.beginAuthenticatedRun(
+      profileId,
+      'bilibili',
+      'authenticated_transcript_validation'
+    );
+    let snapshot: TranscriptCapabilityValidationRunSnapshot;
+    try {
+      snapshot = await runTranscriptValidationControlLoop({
+        runId: permit.runId,
+        profileId,
+        canonicalUrl,
+        extensionVersion: running.extensionVersion,
+        sendMessage: (message) => extensionMessage(controlPage, message)
+      });
+      const finishReason = snapshot.state === 'completed'
+        ? 'authenticated_transcript_validation_completed_cooldown'
+        : snapshot.terminalStatus === 'verification_required'
+          ? 'transcript_validation_verification_required'
+          : snapshot.terminalStatus === 'rate_limited'
+            ? 'transcript_validation_rate_limited'
+            : snapshot.errorCode ?? 'authenticated_transcript_validation_inconclusive_cooldown';
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        'bilibili',
+        permit.runId,
+        finishReason
+      );
+      return snapshot;
+    } catch (error) {
+      const safety = this.#accountSafety.get(profileId, 'bilibili');
+      if (safety.state === 'running' && safety.activeRun?.runId === permit.runId) {
+        const candidate = error instanceof Error ? error.message : '';
+        await this.#accountSafety.finishAuthenticatedRun(
+          profileId,
+          'bilibili',
+          permit.runId,
+          /^[a-z0-9_]{1,100}$/.test(candidate)
+            ? candidate
+            : 'authenticated_transcript_validation_failed_cooldown'
+        );
+      }
+      throw error;
+    }
+  }
+
+  async runBilibiliAnonymousDetailReconnaissance(
+    profileId: string,
+    rawCanonicalUrl: string
+  ): Promise<BilibiliDetailSourceReconnaissanceRecord> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'validation') throw new Error('source_reconnaissance_profile_kind_required');
+    if (profile.platform !== 'bilibili') throw new Error('source_reconnaissance_profile_platform_mismatch');
+    if (profile.account.category !== 'anonymous') {
+      throw new Error('source_reconnaissance_profile_anonymous_required');
+    }
+    const canonicalUrl = canonicalBilibiliVideoUrl(rawCanonicalUrl);
+    if (!canonicalUrl) throw new Error('source_reconnaissance_url_invalid');
+
+    await this.launch(profileId);
+    const running = this.#runtime.get(profileId);
+    if (!running) throw new Error('source_reconnaissance_browser_not_running');
+    const controlPage = await this.#runtime.controlPage(profileId);
+    const strategy = resolveDetailStrategy('bilibili');
+    if (!(await extensionHasOrigins(controlPage, strategy.browser.optionalHostPermissions))) {
+      await controlPage.bringToFront();
+      const card = controlPage.locator('[data-platform="bilibili"]');
+      await card.getByRole('button', { name: '授予站点权限' }).click({ timeout: 15_000 });
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        if (await extensionHasOrigins(controlPage, strategy.browser.optionalHostPermissions)) break;
+        await delay(500);
+      }
+      if (!(await extensionHasOrigins(controlPage, strategy.browser.optionalHostPermissions))) {
+        throw new Error('source_reconnaissance_host_permission_user_action_required');
+      }
+    }
+
+    const runId = randomUUID();
+    const observer = new BilibiliDetailSourceObserver({
+      context: running.context,
+      runId,
+      profileId,
+      collectorVersion: running.extensionVersion,
+      canonicalUrl
+    });
+    observer.start();
+
+    let snapshot: DetailCapabilityValidationRunSnapshot | null = null;
+    let failureCode: string | null = null;
+    try {
+      snapshot = detailValidationSnapshot(await extensionMessage(controlPage, {
+        type: 'collector.startDetailCapabilityValidation',
+        runId,
+        profileId,
+        platform: 'bilibili',
+        accountCategory: 'anonymous',
+        canonicalUrl
+      }), runId, profileId, running.extensionVersion);
+      observer.recordExtensionSnapshot(snapshot);
+
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if (snapshot.state === 'completed' || snapshot.state === 'inconclusive' || snapshot.state === 'failed') break;
+        await delay(500);
+        snapshot = detailValidationSnapshot(await extensionMessage(controlPage, {
+          type: 'collector.getDetailCapabilityValidation',
+          runId
+        }), runId, profileId, running.extensionVersion);
+        observer.recordExtensionSnapshot(snapshot);
+      }
+      if (snapshot.state !== 'completed' && snapshot.state !== 'inconclusive' && snapshot.state !== 'failed') {
+        failureCode = 'source_reconnaissance_validation_wait_timed_out';
+      } else {
+        // Keep a short, bounded tail after DOM terminal readiness so initial
+        // page-state XHR/fetch can be compared with the completed DOM without
+        // turning reconnaissance into an open-ended network monitor.
+        await delay(5_000);
+      }
+    } catch (error) {
+      failureCode = sourceReconnaissanceErrorCode(error);
+    }
+    return observer.finish(snapshot, failureCode);
+  }
+
   async pairProfileWithGateway(
     profileId: string,
     input: ManagedProfilePairingInput
@@ -285,13 +558,10 @@ export class CollectionBrowserManager {
     const profile = this.#registry.get(profileId);
     if (profile.kind !== 'collection') throw new Error('profile_collection_kind_required');
     await this.launch(profileId);
-    const running = this.#running.get(profileId);
+    const running = this.#runtime.get(profileId);
     if (!running) throw new Error('profile_browser_not_running');
-    const controlPage = await this.#ensureExtensionVersion(
-      running,
-      await this.#extensionControlPage(running)
-    );
-    const current = await this.#controlSnapshot(controlPage);
+    const controlPage = await this.#runtime.controlPage(profileId);
+    const current = await extensionControlSnapshot(controlPage);
     if (current.pairing?.gatewayInstanceId === input.gatewayInstanceId) {
       return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
     }
@@ -305,7 +575,7 @@ export class CollectionBrowserManager {
 
     for (let attempt = 0; attempt < 120; attempt += 1) {
       await delay(500);
-      const snapshot = await this.#controlSnapshot(controlPage).catch(() => null);
+      const snapshot = await extensionControlSnapshot(controlPage).catch(() => null);
       if (snapshot?.pairing?.gatewayInstanceId === input.gatewayInstanceId) {
         return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
       }
@@ -319,12 +589,9 @@ export class CollectionBrowserManager {
     const profile = this.#registry.get(profileId);
     if (profile.kind !== 'collection') throw new Error('profile_collection_kind_required');
     await this.launch(profileId);
-    const running = this.#running.get(profileId);
+    const running = this.#runtime.get(profileId);
     if (!running) throw new Error('profile_browser_not_running');
-    const controlPage = await this.#ensureExtensionVersion(
-      running,
-      await this.#extensionControlPage(running)
-    );
+    const controlPage = await this.#runtime.controlPage(profileId);
     const strategy = resolveNativeSearchStrategy(profile.platform);
     if (await extensionHasOrigins(controlPage, strategy.browser.optionalHostPermissions)) {
       return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
@@ -347,12 +614,9 @@ export class CollectionBrowserManager {
   async pollGatewayTasks(profileId: string): Promise<BrowserProfileRuntimeSummary> {
     const profile = this.#registry.get(profileId);
     if (profile.kind !== 'collection') throw new Error('profile_collection_kind_required');
-    const running = this.#running.get(profileId);
+    const running = this.#runtime.get(profileId);
     if (!running) throw new Error('profile_browser_not_running');
-    const controlPage = await this.#ensureExtensionVersion(
-      running,
-      await this.#extensionControlPage(running)
-    );
+    const controlPage = await this.#runtime.controlPage(profileId);
     const response = await extensionMessage(controlPage, { type: POLL_GATEWAY_TASKS });
     if (!response || typeof response !== 'object' || (response as { ok?: unknown }).ok !== true) {
       throw new Error('profile_gateway_poll_failed');
@@ -360,151 +624,122 @@ export class CollectionBrowserManager {
     return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
   }
 
-  async #launchProfile(profileId: string): Promise<BrowserProfileRuntimeSummary> {
+  async openPlatformLoginPage(profileId: string): Promise<BrowserProfileRuntimeSummary> {
     const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('profile_login_collection_kind_required');
+    if (profile.account.category !== 'user_managed') throw new Error('profile_login_user_managed_required');
+    const loginEntrypoint = platformLoginEntrypoint(profile.platform);
+    await this.#accountSafety.assertPlatformNavigationAllowed(profileId, profile.platform);
 
-    const extensionDirectory = resolve(this.#config.extensionDirectory);
-    await access(resolve(extensionDirectory, 'manifest.json'));
-    const manifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8')) as {
-      manifest_version?: unknown;
-      version?: unknown;
-    };
-    if (
-      manifest.manifest_version !== 3 ||
-      typeof manifest.version !== 'string' ||
-      manifest.version !== COLLECTOR_CORE_VERSION
-    ) {
-      throw new Error('collector_extension_artifact_invalid');
-    }
+    await this.launch(profileId);
+    const running = this.#runtime.get(profileId);
+    if (!running) throw new Error('profile_browser_not_running');
 
-    const context = await chromium.launchPersistentContext(
-      this.#registry.userDataDirectory(profile.profileId),
-      {
-        channel: 'chromium',
-        headless: false,
-        args: [
-          '--no-first-run',
-          `--disable-extensions-except=${extensionDirectory}`,
-          `--load-extension=${extensionDirectory}`
-        ],
-        ...(this.#config.proxyServer ? { proxy: { server: this.#config.proxyServer } } : {})
-      }
-    );
+    const existing = running.context.pages().find((page) => isPlatformLoginPage(page, profile.platform));
+    const page = existing ?? await running.context.newPage();
     try {
-      const worker = await waitForExtensionWorker(context);
-      const extensionId = new URL(worker.url()).host;
-      if (!/^[a-p]{32}$/.test(extensionId)) throw new Error('collector_extension_id_invalid');
-      this.#running.set(profile.profileId, { context, extensionId, extensionVersion: manifest.version });
-      context.on('close', () => this.#running.delete(profile.profileId));
-      await this.#registry.markLaunched(profile.profileId);
-
-      let page = context.pages()[0] ?? await context.newPage();
-      await page.goto(`chrome-extension://${extensionId}/control.html`);
-      page = await this.#ensureExtensionVersion(this.#running.get(profile.profileId)!, page);
+      if (!existing) {
+        await page.goto(loginEntrypoint, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      }
       await page.bringToFront();
-      return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
     } catch (error) {
-      await context.close().catch(() => undefined);
+      if (!existing) await page.close().catch(() => undefined);
       throw error;
     }
+
+    return (await this.list()).find((summary) => summary.profile.profileId === profileId)!;
   }
 
-  async #extensionControlPage(running: RunningProfile): Promise<Page> {
-    const existing = running.context.pages().find((page) => {
-      try {
-        return new URL(page.url()).host === running.extensionId && new URL(page.url()).pathname === '/control.html';
-      } catch {
-        return false;
-      }
-    });
-    if (existing) return existing;
-    const page = await running.context.newPage();
-    await page.goto(`chrome-extension://${running.extensionId}/control.html`);
-    return page;
-  }
+  async inspectPlatformLoginStatus(profileId: string): Promise<PlatformLoginStatusSnapshot> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('profile_login_collection_kind_required');
+    if (profile.account.category !== 'user_managed') throw new Error('profile_login_user_managed_required');
+    const homeEntrypoint = platformHomeEntrypoint(profile.platform);
+    await this.#accountSafety.assertPlatformNavigationAllowed(profileId, profile.platform);
 
-  async #controlSnapshot(page: Page): Promise<{
-    pairing: { gatewayInstanceId: string } | null;
-  }> {
-    const response = await extensionMessage(page, { type: GET_CONTROL_SNAPSHOT });
-    if (!response || typeof response !== 'object') throw new Error('profile_control_snapshot_missing');
-    const candidate = response as {
-      ok?: unknown;
-      snapshot?: { pairing?: { gatewayInstanceId?: unknown } | null };
-    };
-    if (candidate.ok !== true || !candidate.snapshot) throw new Error('profile_control_snapshot_missing');
-    const pairing = candidate.snapshot.pairing;
-    if (pairing === null || pairing === undefined) return { pairing: null };
-    if (typeof pairing.gatewayInstanceId !== 'string') throw new Error('profile_control_snapshot_invalid');
-    return { pairing: { gatewayInstanceId: pairing.gatewayInstanceId } };
-  }
+    await this.launch(profileId);
+    const running = this.#runtime.get(profileId);
+    if (!running) throw new Error('profile_browser_not_running');
 
-  async #ensureExtensionVersion(running: RunningProfile, initialPage: Page): Promise<Page> {
-    let page = initialPage;
-    let unpackedReloadFailed = false;
-    for (let attempt = 0; attempt < 31; attempt += 1) {
-      try {
-        const response = await extensionMessage(page, { type: GET_CONTROL_SNAPSHOT });
-        if (response && typeof response === 'object') {
-          const probe = response as { ok?: unknown; snapshot?: { collectorVersion?: unknown } };
-          if (probe.ok === true && probe.snapshot?.collectorVersion === running.extensionVersion) return page;
-        }
-      } catch {
-        // A control page is expected to disappear while chrome.runtime.reload
-        // replaces the extension service worker.
-      }
-      if (attempt === 0) await reloadExtension(page);
-      if (attempt === 10) {
-        try {
-          await this.#reloadUnpackedExtensionFromChromeUi(running);
-        } catch {
-          // chrome.runtime.reload may already be replacing the old worker
-          // while chrome://extensions is rebuilding its custom element tree.
-          // Keep probing the runtime before declaring the UI fallback failed.
-          unpackedReloadFailed = true;
-        }
-      }
-      await delay(500);
-      try {
-        page = await this.#extensionControlPage(running);
-      } catch {
-        // The extension origin can be briefly unavailable while Chrome
-        // replaces the unpacked extension service worker and pages.
-      }
-    }
-    throw new Error(
-      unpackedReloadFailed
-        ? 'validation_extension_ui_reload_failed'
-        : 'validation_control_version_mismatch'
-    );
-  }
-
-  async #reloadUnpackedExtensionFromChromeUi(running: RunningProfile): Promise<void> {
     const page = await running.context.newPage();
     try {
-      await page.goto('chrome://extensions/');
-      const extension = page.locator(`extensions-item#${running.extensionId}`);
-      await extension.locator('#dev-reload-button').click({ timeout: 10_000 });
-    } catch {
-      throw new Error('validation_extension_ui_reload_failed');
+      await page.goto(homeEntrypoint, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      if (profile.platform !== 'bilibili') throw new Error('profile_login_status_unsupported');
+      return await inspectBilibiliLoginStatus(page);
     } finally {
       await page.close().catch(() => undefined);
     }
   }
 
+  async runBilibiliAuthenticatedInteractionReconnaissance(
+    profileId: string,
+    rawCanonicalUrl: string,
+    actionScope: 'subtitle' | 'discussion' | 'all',
+    responseBodyMapping: 'disabled' | 'schema_only'
+  ): Promise<BilibiliInteractionReconnaissanceRecord> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('interaction_reconnaissance_collection_kind_required');
+    if (profile.platform !== 'bilibili') throw new Error('interaction_reconnaissance_platform_mismatch');
+    if (profile.account.category !== 'user_managed') {
+      throw new Error('interaction_reconnaissance_user_managed_required');
+    }
+    const canonicalUrl = canonicalBilibiliVideoUrl(rawCanonicalUrl);
+    if (!canonicalUrl) throw new Error('interaction_reconnaissance_url_invalid');
+    const permit = await this.#accountSafety.beginAuthenticatedRun(
+      profileId,
+      profile.platform,
+      'authenticated_interaction_reconnaissance'
+    );
+    try {
+      await this.launch(profileId);
+      const running = this.#runtime.get(profileId);
+      if (!running) throw new Error('interaction_reconnaissance_browser_not_running');
+      const result = await new BilibiliInteractionReconnaissanceRunner({
+        context: running.context,
+        runId: permit.runId,
+        profileId,
+        collectorVersion: running.extensionVersion,
+        canonicalUrl,
+        actionScope,
+        responseBodyMapping,
+        beforeAction: async (actionId) => {
+          await this.#accountSafety.recordActionAttempt(
+            profileId,
+            profile.platform,
+            permit.runId,
+            actionId
+          );
+        }
+      }).run();
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        profile.platform,
+        permit.runId,
+        result.errorCode ?? (result.state === 'completed'
+          ? 'authenticated_run_completed_cooldown'
+          : 'authenticated_run_inconclusive_cooldown')
+      );
+      return result;
+    } catch (error) {
+      const candidate = error instanceof Error ? error.message : '';
+      const reasonCode = /^[a-z0-9_]{1,100}$/.test(candidate)
+        ? candidate
+        : 'authenticated_run_failed_cooldown';
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        profile.platform,
+        permit.runId,
+        reasonCode
+      ).catch(() => undefined);
+      throw error;
+    }
+  }
+
   async close(profileId: string): Promise<void> {
-    const pending = this.#launching.get(profileId);
-    if (pending) await pending.catch(() => undefined);
-    const running = this.#running.get(profileId);
-    if (!running) return;
-    this.#running.delete(profileId);
-    await running.context.close();
+    await this.#runtime.close(profileId);
   }
 
   async closeAll(): Promise<void> {
-    await Promise.all([...this.#launching.values()].map((pending) => pending.catch(() => undefined)));
-    const running = [...this.#running.values()];
-    this.#running.clear();
-    await Promise.all(running.map(({ context }) => context.close().catch(() => undefined)));
+    await this.#runtime.closeAll();
   }
 }

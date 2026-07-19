@@ -15,8 +15,11 @@ import {
 } from '../../collector-extension/src/shared/collection-contracts';
 import type {
   VisibleCollectionResult,
+  VisibleDetailCollectionResult,
   VisiblePageState,
-  VisibleSearchItem
+  VisibleSearchCollectionResult,
+  VisibleSearchItem,
+  VisibleVideoDetail
 } from '../../collector-extension/src/shared/protocol';
 import { canonicalJson } from '../../collector-extension/src/shared/cryptography';
 
@@ -66,6 +69,15 @@ interface EvidenceManifest {
   taskId: string;
   batches: GatewayEvidenceBatchSummary[];
   updatedAt: string;
+}
+
+export interface GatewayEvidenceBatchView extends GatewayEvidenceBatchSummary {
+  collectorVersion: string;
+  platform: GatewayEvidenceSubmission['platform'];
+  strategy: StrategyProvenance;
+  capturedAt: string;
+  result: VisibleCollectionResult;
+  safety: PersistedEvidenceBatch['safety'];
 }
 
 function hasOnlyKeys(value: object, allowed: readonly string[]): boolean {
@@ -175,7 +187,7 @@ function sanitiseVisibleItem(value: unknown, expectedRank: number): VisibleSearc
   };
 }
 
-function sanitiseVisibleResult(value: unknown): VisibleCollectionResult | null {
+function sanitiseVisibleSearchResult(value: unknown): VisibleSearchCollectionResult | null {
   if (!value || typeof value !== 'object' || !hasOnlyKeys(value, [
     'schemaVersion', 'platform', 'operation', 'strategy', 'sourceUrl', 'pageState',
     'partial', 'itemCount', 'items', 'warnings'
@@ -213,6 +225,122 @@ function sanitiseVisibleResult(value: unknown): VisibleCollectionResult | null {
   };
 }
 
+function nullableCleanText(value: unknown, maximum: number): string | null | undefined {
+  if (value === null) return null;
+  return boundedCleanText(value, maximum) ?? undefined;
+}
+
+function sanitiseVisibleDetailResult(value: unknown): VisibleDetailCollectionResult | null {
+  if (!value || typeof value !== 'object' || !hasOnlyKeys(value, [
+    'schemaVersion', 'platform', 'operation', 'strategy', 'sourceUrl', 'pageState',
+    'partial', 'itemCount', 'detail', 'warnings'
+  ])) return null;
+  const candidate = value as Partial<VisibleDetailCollectionResult>;
+  if (
+    candidate.schemaVersion !== 1 ||
+    !isSupportedPlatform(candidate.platform) ||
+    candidate.operation !== 'detail_read' ||
+    candidate.partial !== true ||
+    !VISIBLE_PAGE_STATES.includes(candidate.pageState as never) ||
+    !Array.isArray(candidate.warnings) || candidate.warnings.length > MAX_WARNINGS
+  ) return null;
+  const strategy = sanitiseStrategy(candidate.strategy);
+  const sourceUrl = safeHttpsUrl(candidate.sourceUrl);
+  const warnings = candidate.warnings.map((warning) => boundedCleanText(warning, 500));
+  if (!strategy || !sourceUrl || strategy.platform !== candidate.platform || warnings.some((item) => item === null)) {
+    return null;
+  }
+  if (candidate.detail === null) {
+    if (candidate.itemCount !== 0 || candidate.pageState === 'results_visible') return null;
+    return {
+      schemaVersion: 1,
+      platform: candidate.platform,
+      operation: 'detail_read',
+      strategy,
+      sourceUrl,
+      pageState: candidate.pageState!,
+      partial: true,
+      itemCount: 0,
+      detail: null,
+      warnings: warnings as string[]
+    };
+  }
+  if (!candidate.detail || typeof candidate.detail !== 'object' || candidate.itemCount !== 1) return null;
+  const detail = candidate.detail;
+  if (!hasOnlyKeys(detail, [
+    'contentId', 'contentType', 'canonicalUrl', 'title', 'creator', 'description',
+    'publishedText', 'visibleMetrics', 'tags'
+  ])) return null;
+  const title = boundedCleanText(detail.title, MAX_TITLE_LENGTH);
+  const canonicalUrl = safeHttpsUrl(detail.canonicalUrl);
+  const description = nullableCleanText(detail.description, 5_000);
+  const publishedText = nullableCleanText(detail.publishedText, 200);
+  if (
+    typeof detail.contentId !== 'string' || !/^BV[0-9A-Za-z]{10}$/.test(detail.contentId) ||
+    detail.contentType !== 'video' ||
+    !canonicalUrl || !title ||
+    description === undefined || publishedText === undefined ||
+    !Array.isArray(detail.visibleMetrics) || detail.visibleMetrics.length > 20 ||
+    !Array.isArray(detail.tags) || detail.tags.length > 20
+  ) return null;
+  const visibleMetrics = detail.visibleMetrics.map((metric) => {
+    if (!metric || typeof metric !== 'object' || !hasOnlyKeys(metric, ['label', 'value'])) return null;
+    const label = boundedCleanText(metric.label, 80);
+    const metricValue = boundedCleanText(metric.value, 100);
+    return label && metricValue ? { label, value: metricValue } : null;
+  });
+  const tags = detail.tags.map((tag) => boundedCleanText(tag, 100));
+  if (
+    visibleMetrics.some((metric) => metric === null) ||
+    new Set(visibleMetrics.map((metric) => metric?.label)).size !== visibleMetrics.length ||
+    tags.some((tag) => tag === null) || new Set(tags).size !== tags.length
+  ) return null;
+  let creator: VisibleVideoDetail['creator'] = null;
+  if (detail.creator !== null) {
+    if (!detail.creator || typeof detail.creator !== 'object' || !hasOnlyKeys(detail.creator, [
+      'displayName', 'canonicalProfileUrl', 'visibleDescription'
+    ])) return null;
+    const displayName = boundedCleanText(detail.creator.displayName, 200);
+    const canonicalProfileUrl = safeHttpsUrl(detail.creator.canonicalProfileUrl);
+    const visibleDescription = nullableCleanText(detail.creator.visibleDescription, 1_000);
+    if (
+      !displayName || !canonicalProfileUrl || visibleDescription === undefined ||
+      !/^https:\/\/space\.bilibili\.com\/\d+\/$/.test(canonicalProfileUrl)
+    ) return null;
+    creator = { displayName, canonicalProfileUrl, visibleDescription };
+  }
+  return {
+    schemaVersion: 1,
+    platform: candidate.platform,
+    operation: 'detail_read',
+    strategy,
+    sourceUrl,
+    pageState: candidate.pageState!,
+    partial: true,
+    itemCount: 1,
+    detail: {
+      contentId: detail.contentId,
+      contentType: 'video',
+      canonicalUrl,
+      title,
+      creator,
+      description,
+      publishedText,
+      visibleMetrics: visibleMetrics as { label: string; value: string }[],
+      tags: tags as string[]
+    },
+    warnings: warnings as string[]
+  };
+}
+
+export function sanitiseVisibleCollectionResult(value: unknown): VisibleCollectionResult | null {
+  if (!value || typeof value !== 'object') return null;
+  const operation = (value as { operation?: unknown }).operation;
+  if (operation === 'breadth_search') return sanitiseVisibleSearchResult(value);
+  if (operation === 'detail_read') return sanitiseVisibleDetailResult(value);
+  return null;
+}
+
 export function gatewayEvidenceSubmission(value: unknown): GatewayEvidenceSubmission {
   if (!value || typeof value !== 'object' || !hasOnlyKeys(value, [
     'schemaVersion', 'collectorVersion', 'taskId', 'stageId', 'leaseId',
@@ -220,7 +348,7 @@ export function gatewayEvidenceSubmission(value: unknown): GatewayEvidenceSubmis
   ])) throw new Error('evidence_submission_invalid');
   const candidate = value as Partial<GatewayEvidenceSubmission>;
   const strategy = sanitiseStrategy(candidate.strategy);
-  const result = sanitiseVisibleResult(candidate.result);
+  const result = sanitiseVisibleCollectionResult(candidate.result);
   if (
     candidate.schemaVersion !== 1 ||
     typeof candidate.collectorVersion !== 'string' ||
@@ -264,7 +392,7 @@ function isPersistedBatch(value: unknown): value is PersistedEvidenceBatch {
     isIsoDate(candidate.receivedAt) &&
     typeof candidate.digest === 'string' && SHA256_PATTERN.test(candidate.digest) &&
     Number.isSafeInteger(candidate.itemCount) && candidate.itemCount! >= 0 &&
-    Boolean(sanitiseVisibleResult(candidate.result)) &&
+    Boolean(sanitiseVisibleCollectionResult(candidate.result)) &&
     candidate.safety?.browserSurface === 'user_controlled_collection_profile' &&
     candidate.safety.acquisition === 'visible_dom' &&
     candidate.safety.responseObservation === 'disabled' &&
@@ -288,6 +416,7 @@ export class GatewayEvidenceRegistry {
   readonly #evidenceDirectory: string;
   readonly #byIdempotencyKey = new Map<string, GatewayEvidenceBatchSummary>();
   readonly #byTask = new Map<string, GatewayEvidenceBatchSummary[]>();
+  readonly #batchById = new Map<string, PersistedEvidenceBatch>();
   readonly #recording = new Map<string, Promise<GatewayEvidenceBatchSummary>>();
 
   private constructor(stateDirectory: string) {
@@ -304,6 +433,20 @@ export class GatewayEvidenceRegistry {
   list(taskId?: string): GatewayEvidenceBatchSummary[] {
     if (taskId) return structuredClone(this.#byTask.get(taskId) ?? []);
     return structuredClone([...this.#byTask.values()].flat());
+  }
+
+  getBatch(batchId: string, taskId?: string): GatewayEvidenceBatchView | null {
+    const batch = this.#batchById.get(batchId);
+    if (!batch || (taskId && batch.taskId !== taskId)) return null;
+    return structuredClone({
+      ...summary(batch),
+      collectorVersion: batch.collectorVersion,
+      platform: batch.platform,
+      strategy: batch.strategy,
+      capturedAt: batch.capturedAt,
+      result: batch.result,
+      safety: batch.safety
+    });
   }
 
   async record(
@@ -368,7 +511,7 @@ export class GatewayEvidenceRegistry {
       updatedAt: now.toISOString()
     };
     await this.#atomicWrite(resolve(taskDirectory, 'manifest.json'), manifest);
-    this.#remember(batchSummary);
+    this.#remember(batch);
     return batchSummary;
   }
 
@@ -387,7 +530,7 @@ export class GatewayEvidenceRegistry {
           if (!isPersistedBatch(parsed) || parsed.taskId !== taskEntry.name) continue;
           const digest = createHash('sha256').update(canonicalJson(parsed.result)).digest('hex');
           if (digest !== parsed.digest || parsed.itemCount !== parsed.result.itemCount) continue;
-          this.#remember(summary(parsed));
+          this.#remember(parsed);
         } catch {
           // A damaged local batch is ignored, never partially trusted.
         }
@@ -395,11 +538,13 @@ export class GatewayEvidenceRegistry {
     }
   }
 
-  #remember(batch: GatewayEvidenceBatchSummary): void {
+  #remember(batch: PersistedEvidenceBatch): void {
+    const batchSummary = summary(batch);
     const idempotencyKey = `${batch.taskId}:${batch.stageId}:${batch.digest}`;
     if (this.#byIdempotencyKey.has(idempotencyKey)) return;
-    this.#byIdempotencyKey.set(idempotencyKey, batch);
-    this.#byTask.set(batch.taskId, [...(this.#byTask.get(batch.taskId) ?? []), batch]);
+    this.#byIdempotencyKey.set(idempotencyKey, batchSummary);
+    this.#byTask.set(batch.taskId, [...(this.#byTask.get(batch.taskId) ?? []), batchSummary]);
+    this.#batchById.set(batch.batchId, batch);
   }
 
   async #atomicWrite(path: string, value: unknown): Promise<void> {

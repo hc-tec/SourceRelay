@@ -1,4 +1,10 @@
 import { isSupportedPlatform, type SupportedPlatform } from './collection-contracts';
+import {
+  BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
+  BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID,
+  BILIBILI_TRANSCRIPT_RESEARCH_ROUTE_IDS,
+  projectBilibiliTranscriptRouteBody
+} from './transcript-capture';
 
 // This module is deliberately usable in both content-script worlds.  It has
 // no chrome.* dependency: the page-facing observer, isolated-world bridge,
@@ -67,6 +73,10 @@ export interface NetworkCaptureRoute {
   platform: SupportedPlatform;
   origin: string;
   pathname: string;
+  pathnameMatch: 'exact' | 'opaque_suffix_prefix';
+  maximumBodyBytes: number;
+  projector: 'bounded_json' | 'bilibili_transcript';
+  admission: 'production' | 'research_validation';
 }
 
 export interface NetworkCaptureObservation {
@@ -79,6 +89,7 @@ export interface NetworkCaptureObservation {
   contentType: string;
   httpStatus: number;
   capturedAt: number;
+  admission: NetworkCaptureRoute['admission'];
   body?: JsonValue;
   rejectionReason?: NetworkCaptureRejectionReason;
 }
@@ -102,6 +113,50 @@ interface ObservationInput {
 // origin/path contract.  Historical GitHub examples and private API recipes
 // are not evidence that a route remains valid or safe to enable.
 const productionRoutes: readonly NetworkCaptureRoute[] = [];
+
+const researchValidationRoutes: readonly NetworkCaptureRoute[] = [
+  {
+    id: BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
+    platform: 'bilibili',
+    origin: 'https://api.bilibili.com',
+    pathname: '/x/player/wbi/v2',
+    pathnameMatch: 'exact',
+    maximumBodyBytes: 128 * 1024,
+    projector: 'bilibili_transcript',
+    admission: 'research_validation'
+  },
+  {
+    id: BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID,
+    platform: 'bilibili',
+    origin: 'https://aisubtitle.hdslb.com',
+    pathname: '/bfs/ai_subtitle/prod/',
+    pathnameMatch: 'opaque_suffix_prefix',
+    maximumBodyBytes: 512 * 1024,
+    projector: 'bilibili_transcript',
+    admission: 'research_validation'
+  }
+];
+
+const allKnownRoutes: readonly NetworkCaptureRoute[] = [...productionRoutes, ...researchValidationRoutes];
+
+export function bilibiliTranscriptResearchRouteIds(): readonly NetworkCaptureRouteId[] {
+  return [...BILIBILI_TRANSCRIPT_RESEARCH_ROUTE_IDS];
+}
+
+export function approvedNetworkCaptureRouteIds(platform: SupportedPlatform): readonly NetworkCaptureRouteId[] {
+  return productionRoutes.filter((route) => route.platform === platform).map((route) => route.id);
+}
+
+export function validateNetworkCaptureRouteIds(
+  platform: SupportedPlatform,
+  routeIds: readonly string[],
+  admission: NetworkCaptureRoute['admission']
+): readonly NetworkCaptureRouteId[] | null {
+  if (routeIds.length === 0 || new Set(routeIds).size !== routeIds.length) return null;
+  const routes = routeIds.map((routeId) => allKnownRoutes.find((route) => route.id === routeId));
+  if (routes.some((route) => !route || route.platform !== platform || route.admission !== admission)) return null;
+  return routes.map((route) => route!.id);
+}
 
 function normaliseFieldName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -207,14 +262,25 @@ export function sanitiseCaptureUrl(value: string): string | null {
 export function routeMatchesNetworkCaptureUrl(route: NetworkCaptureRoute, responseUrl: string): boolean {
   try {
     const url = new URL(responseUrl);
-    return route.origin === url.origin && route.pathname === url.pathname;
+    if (route.origin !== url.origin) return false;
+    if (route.pathnameMatch === 'exact') return route.pathname === url.pathname;
+    if (!url.pathname.startsWith(route.pathname)) return false;
+    const suffix = url.pathname.slice(route.pathname.length);
+    return /^[A-Za-z0-9_-]{20,200}$/.test(suffix);
   } catch {
     return false;
   }
 }
 
-export function findNetworkCaptureRoute(platform: SupportedPlatform, responseUrl: string): NetworkCaptureRoute | null {
-  return productionRoutes.find((route) => route.platform === platform && routeMatchesNetworkCaptureUrl(route, responseUrl)) ?? null;
+export function findNetworkCaptureRoute(
+  platform: SupportedPlatform,
+  responseUrl: string,
+  allowedRouteIds: readonly string[] = approvedNetworkCaptureRouteIds(platform)
+): NetworkCaptureRoute | null {
+  const allowed = new Set(allowedRouteIds);
+  return allKnownRoutes.find((route) =>
+    allowed.has(route.id) && route.platform === platform && routeMatchesNetworkCaptureUrl(route, responseUrl)
+  ) ?? null;
 }
 
 export function hasApprovedNetworkCaptureRoute(platform: SupportedPlatform): boolean {
@@ -232,7 +298,8 @@ function baseObservation(input: ObservationInput): Omit<NetworkCaptureObservatio
     responseUrl,
     contentType: safeContentType(input.contentType),
     httpStatus: safeHttpStatus(input.httpStatus),
-    capturedAt: Date.now()
+    capturedAt: Date.now(),
+    admission: input.route.admission
   };
 }
 
@@ -249,7 +316,7 @@ export function createNetworkCaptureFromText(
   responseText: string
 ): NetworkCaptureObservation | null {
   if (!isJsonContentType(input.contentType)) return createNetworkCaptureRejection(input, 'mime_not_allowed');
-  if (new TextEncoder().encode(responseText).byteLength > NETWORK_CAPTURE_MAX_BODY_BYTES) {
+  if (new TextEncoder().encode(responseText).byteLength > input.route.maximumBodyBytes) {
     return createNetworkCaptureRejection(input, 'payload_too_large');
   }
 
@@ -260,7 +327,9 @@ export function createNetworkCaptureFromText(
     return createNetworkCaptureRejection(input, 'invalid_json');
   }
 
-  const body = sanitiseNetworkJson(parsed);
+  const body = input.route.projector === 'bilibili_transcript'
+    ? projectBilibiliTranscriptRouteBody(input.route.id, parsed) as unknown as JsonValue | null
+    : sanitiseNetworkJson(parsed);
   const base = baseObservation(input);
   if (!base || body === undefined) return base ? { ...base, status: 'payload_rejected', rejectionReason: 'payload_rejected' } : null;
   return { ...base, status: 'captured', body };
@@ -283,13 +352,16 @@ function isRejectionReason(value: unknown): value is NetworkCaptureRejectionReas
  * anything.  A forged page message can at most add bounded, de-sensitised
  * evidence; it cannot invoke a privileged browser action.
  */
-export function sanitiseNetworkCaptureObservation(value: unknown): NetworkCaptureObservation | null {
+export function sanitiseNetworkCaptureObservation(
+  value: unknown,
+  allowedRouteIds: readonly string[] = []
+): NetworkCaptureObservation | null {
   if (!isRecord(value) || value.schemaVersion !== 1 || !isSupportedPlatform(value.platform)) return null;
   if (typeof value.responseUrl !== 'string' || typeof value.routeId !== 'string') return null;
 
   const responseUrl = sanitiseCaptureUrl(value.responseUrl);
   if (!responseUrl) return null;
-  const route = findNetworkCaptureRoute(value.platform, responseUrl);
+  const route = findNetworkCaptureRoute(value.platform, responseUrl, allowedRouteIds);
   if (!route || route.id !== value.routeId) return null;
   if (value.status !== 'captured' && value.status !== 'payload_rejected') return null;
 
@@ -302,7 +374,8 @@ export function sanitiseNetworkCaptureObservation(value: unknown): NetworkCaptur
     responseUrl,
     contentType: safeContentType(typeof value.contentType === 'string' ? value.contentType : undefined),
     httpStatus: safeHttpStatus(typeof value.httpStatus === 'number' ? value.httpStatus : 0),
-    capturedAt: typeof value.capturedAt === 'number' && Number.isFinite(value.capturedAt) ? Math.trunc(value.capturedAt) : Date.now()
+    capturedAt: typeof value.capturedAt === 'number' && Number.isFinite(value.capturedAt) ? Math.trunc(value.capturedAt) : Date.now(),
+    admission: route.admission
   };
 
   if (value.status === 'payload_rejected') {
@@ -310,7 +383,9 @@ export function sanitiseNetworkCaptureObservation(value: unknown): NetworkCaptur
     return { ...base, status: 'payload_rejected', rejectionReason: value.rejectionReason };
   }
 
-  const body = sanitiseNetworkJson(value.body);
+  const body = route.projector === 'bilibili_transcript'
+    ? projectBilibiliTranscriptRouteBody(route.id, value.body) as unknown as JsonValue | null
+    : sanitiseNetworkJson(value.body);
   if (body === undefined) return null;
   return { ...base, status: 'captured', body };
 }

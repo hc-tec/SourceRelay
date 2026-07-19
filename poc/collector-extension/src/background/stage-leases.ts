@@ -6,11 +6,16 @@ import type {
   StageLeaseStatus
 } from '../shared/control-plane';
 import { buildNativeSearchUrl } from '../shared/native-search';
+import { PROBE_CONTENT_INSTALLATION } from '../shared/protocol';
 import { strategiesFor } from '../shared/strategy-registry';
 
 const RUNTIME_SESSION_ID_KEY = 'collector.runtime-session-id';
 const STAGE_LEASE_KEY_PREFIX = 'collector.stage-lease.';
 const MAX_STAGE_LEASE_MS = 30 * 60 * 1000;
+const CONTENT_INJECTION_ATTEMPTS = 20;
+const CONTENT_INJECTION_RETRY_MS = 500;
+const CONTENT_INJECTION_ATTEMPT_TIMEOUT_MS = 2_000;
+const contentInjectionFlights = new Map<string, Promise<void>>();
 
 function stageLeaseKey(tabId: number): string {
   return `${STAGE_LEASE_KEY_PREFIX}${tabId}`;
@@ -61,7 +66,110 @@ function navigationUrlForStage(stage: EvidencePlanStage): URL {
   ) {
     return buildNativeSearchUrl(stage.platform, stage.target.query);
   }
+  if (
+    stage.target.type === 'known_url' &&
+    stage.platform === 'bilibili' &&
+    stage.evidenceObjective === 'detail_read' &&
+    stage.strategy &&
+    /^https:\/\/www\.bilibili\.com\/video\/BV[0-9A-Za-z]{10}$/.test(stage.target.url)
+  ) return new URL(stage.target.url);
   throw new Error('The selected strategy does not yet define a safe native navigation for this target.');
+}
+
+function normaliseLeaseNavigationUrl(value: string, lease: StageLease): string | null {
+  try {
+    const url = new URL(value);
+    if (lease.platform === 'bilibili' && lease.evidenceObjective === 'detail_read') {
+      const match = url.hostname === 'www.bilibili.com' && url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/);
+      if (url.protocol !== 'https:' || !match || url.username || url.password) return null;
+      return `https://www.bilibili.com/video/${match[1]}`;
+    }
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+function delay(durationMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, durationMs));
+}
+
+function withTimeout<T>(operation: Promise<T>, durationMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('chrome_operation_timeout')), durationMs);
+    operation.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    );
+  });
+}
+
+async function tabHasExpectedLeaseUrl(tab: chrome.tabs.Tab, lease: StageLease): Promise<boolean> {
+  if (!tab.url) return false;
+  const normalised = normaliseLeaseNavigationUrl(tab.url, lease);
+  return Boolean(normalised && (await sha256(normalised)) === lease.navigationUrlDigest);
+}
+
+async function performTaskContentInjection(lease: StageLease): Promise<void> {
+  for (let attempt = 1; attempt <= CONTENT_INJECTION_ATTEMPTS; attempt += 1) {
+    const currentLease = await stageLeaseForTab(lease.tabId);
+    if (!currentLease || currentLease.leaseId !== lease.leaseId || currentLease.status !== 'active') {
+      throw new Error('gateway_stage_lease_inactive');
+    }
+    try {
+      const tab = await withTimeout(
+        chrome.tabs.get(lease.tabId),
+        CONTENT_INJECTION_ATTEMPT_TIMEOUT_MS
+      );
+      if (await tabHasExpectedLeaseUrl(tab, lease)) {
+        await withTimeout(
+          chrome.scripting.executeScript({
+            target: { tabId: lease.tabId },
+            files: ['content.js']
+          }),
+          CONTENT_INJECTION_ATTEMPT_TIMEOUT_MS
+        );
+        const receipt = await withTimeout(
+          chrome.tabs.sendMessage(lease.tabId, { type: PROBE_CONTENT_INSTALLATION }),
+          CONTENT_INJECTION_ATTEMPT_TIMEOUT_MS
+        );
+        const receiptUrl = typeof receipt?.pageUrl === 'string'
+          ? normaliseLeaseNavigationUrl(receipt.pageUrl, lease)
+          : null;
+        if (
+          receipt?.ok === true &&
+          receipt.installed === true &&
+          receiptUrl &&
+          (await sha256(receiptUrl)) === lease.navigationUrlDigest
+        ) return;
+      }
+    } catch {
+      // Navigation commit and renderer creation are asynchronous. A bounded
+      // retry is expected here; no arbitrary script or additional origin is used.
+    }
+    if (attempt < CONTENT_INJECTION_ATTEMPTS) await delay(CONTENT_INJECTION_RETRY_MS);
+  }
+  await updateStageLeaseStatus(lease.tabId, 'cancelled');
+  await chrome.windows.remove(lease.windowId).catch(() => undefined);
+  throw new Error('gateway_content_injection_failed');
+}
+
+export function ensureTaskContentInjected(lease: StageLease): Promise<void> {
+  const existing = contentInjectionFlights.get(lease.leaseId);
+  if (existing) return existing;
+  const pending = performTaskContentInjection(lease).finally(() => {
+    if (contentInjectionFlights.get(lease.leaseId) === pending) {
+      contentInjectionFlights.delete(lease.leaseId);
+    }
+  });
+  contentInjectionFlights.set(lease.leaseId, pending);
+  return pending;
 }
 
 export async function createCollectionWindowLease(input: {
@@ -132,6 +240,7 @@ export async function createCollectionWindowLease(input: {
   await chrome.storage.session.set({ [stageLeaseKey(tab.id)]: lease });
   try {
     await chrome.tabs.update(tab.id, { url: navigationUrl.href, active: true });
+    await ensureTaskContentInjected(lease);
   } catch (error) {
     await updateStageLeaseStatus(tab.id, 'cancelled');
     await chrome.windows.remove(createdWindow.id).catch(() => undefined);
@@ -160,9 +269,12 @@ export async function activeStageLeaseForSender(
   if (!senderUrl || !documentId) return null;
   const lease = await stageLeaseForTab(tabId);
   if (!lease || lease.status !== 'active') return null;
-  if ((await sha256(senderUrl)) !== lease.navigationUrlDigest) return null;
-  if (lease.documentId && lease.documentId !== documentId) return null;
-  if (!lease.documentId) {
+  const normalisedSenderUrl = normaliseLeaseNavigationUrl(senderUrl, lease);
+  if (!normalisedSenderUrl || (await sha256(normalisedSenderUrl)) !== lease.navigationUrlDigest) return null;
+  if (!lease.documentId || lease.documentId !== documentId) {
+    // Some platform pages replace the top-level document while keeping the
+    // same canonical URL. The exact leased tab + URL digest remains the trust
+    // boundary; the newest matching extension document may take over.
     const bound = { ...lease, documentId };
     await chrome.storage.session.set({ [stageLeaseKey(tabId)]: bound });
     return bound;
@@ -179,7 +291,11 @@ export async function updateStageLeaseStatus(tabId: number, status: StageLeaseSt
 export async function markTaskContextChanged(tabId: number, changedUrl: string): Promise<void> {
   const lease = await stageLeaseForTab(tabId);
   if (!lease || lease.status !== 'active') return;
-  if ((await sha256(changedUrl)) !== lease.navigationUrlDigest) {
+  // The dedicated window is intentionally created on about:blank before its
+  // leased navigation. Chrome may deliver that scaffolding update late.
+  if (changedUrl === 'about:blank') return;
+  const normalisedChangedUrl = normaliseLeaseNavigationUrl(changedUrl, lease);
+  if (!normalisedChangedUrl || (await sha256(normalisedChangedUrl)) !== lease.navigationUrlDigest) {
     await updateStageLeaseStatus(tabId, 'task_context_changed');
   }
 }

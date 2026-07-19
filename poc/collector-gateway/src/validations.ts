@@ -266,6 +266,10 @@ export class CapabilityValidationRegistry {
     return this.#records.map((record) => structuredClone(record));
   }
 
+  has(recordId: string): boolean {
+    return this.#records.some((record) => record.recordId === recordId);
+  }
+
   async record(run: CapabilityValidationRunSnapshot): Promise<CapabilityValidationRecord> {
     const existing = this.#records.find((record) => record.runId === run.runId);
     if (existing) return structuredClone(existing);

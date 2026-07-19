@@ -27,6 +27,7 @@ import { buildNativeSearchUrl } from '../../collector-extension/src/shared/nativ
 import { COLLECTOR_CORE_VERSION } from '../../collector-extension/src/shared/protocol';
 import type { GatewayEvidenceRegistry } from './evidence';
 import type { LoadedGatewayIdentity } from './identity';
+import type { AccountSafetyRegistry } from './account-safety';
 
 const WORK_ITEM_TTL_MS = 2 * 60 * 1000;
 const PREFLIGHT_REDELIVERY_MS = 30_000;
@@ -38,6 +39,8 @@ type TaskState =
   | 'approved'
   | 'stage_dispatched'
   | 'stage_active'
+  | 'stage_completed'
+  | 'waiting_for_account_safety'
   | 'evidence_received'
   | 'completed'
   | 'blocked';
@@ -50,12 +53,19 @@ interface TaskRecord {
   plan?: EvidencePlan;
   approvedPlan?: ApprovedEvidencePlan;
   assignedExtensionInstanceId?: string;
-  activeStage?: {
-    stageId: string;
-    leaseId: string;
-  };
-  evidence?: GatewayEvidenceBatchSummary;
+  stageProgress: TaskStageProgress[];
+  evidence: GatewayEvidenceBatchSummary[];
   statusMessage?: string;
+}
+
+export interface TaskStageProgress {
+  stageId: string;
+  state: 'pending' | 'dispatched' | 'active' | 'completed' | 'blocked';
+  leaseId?: string;
+  evidence?: GatewayEvidenceBatchSummary;
+  errorCode?: string;
+  activatedAt?: string;
+  safetyRunId?: string;
 }
 
 export interface ScoutTaskInput {
@@ -66,6 +76,15 @@ export interface ScoutTaskInput {
   profileIds: Partial<Record<SupportedPlatform, string>>;
 }
 
+export interface BilibiliDetailTaskInput {
+  researchQuestion: string;
+  decisionContext: string;
+  sourceTaskId: string;
+  sourceEvidenceBatchId: string;
+  selectedRanks: number[];
+  profileId: string;
+}
+
 export interface ConsoleTaskSummary {
   taskId: string;
   researchQuestion: string;
@@ -73,8 +92,11 @@ export interface ConsoleTaskSummary {
   state: TaskState;
   createdAt: string;
   profileBindings: Partial<Record<SupportedPlatform, BrowserProfileBinding>>;
+  profile: ResearchTaskContract['profile'];
+  lineage: ResearchTaskContract['lineage'];
   plan?: EvidencePlan | ApprovedEvidencePlan;
-  evidence?: GatewayEvidenceBatchSummary;
+  stageProgress: readonly TaskStageProgress[];
+  evidence: readonly GatewayEvidenceBatchSummary[];
   statusMessage?: string;
 }
 
@@ -126,14 +148,46 @@ export function scoutTaskInput(value: unknown): ScoutTaskInput {
   };
 }
 
+export function bilibiliDetailTaskInput(value: unknown): BilibiliDetailTaskInput {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('task_detail_input_invalid');
+  const candidate = value as Partial<BilibiliDetailTaskInput>;
+  if (Object.keys(candidate).some((key) => ![
+    'researchQuestion', 'decisionContext', 'sourceTaskId', 'sourceEvidenceBatchId',
+    'selectedRanks', 'profileId'
+  ].includes(key))) throw new Error('task_detail_input_invalid');
+  if (
+    typeof candidate.sourceTaskId !== 'string' || !/^[0-9a-f-]{36}$/i.test(candidate.sourceTaskId) ||
+    typeof candidate.sourceEvidenceBatchId !== 'string' || !/^[0-9a-f-]{36}$/i.test(candidate.sourceEvidenceBatchId) ||
+    typeof candidate.profileId !== 'string' || !/^[0-9a-f-]{36}$/i.test(candidate.profileId) ||
+    !Array.isArray(candidate.selectedRanks) || candidate.selectedRanks.length === 0 ||
+    candidate.selectedRanks.length > 3 ||
+    candidate.selectedRanks.some((rank) => !Number.isSafeInteger(rank) || rank < 1 || rank > 20) ||
+    new Set(candidate.selectedRanks).size !== candidate.selectedRanks.length
+  ) throw new Error('task_detail_selection_invalid');
+  return {
+    researchQuestion: boundedText(candidate.researchQuestion, 'research_question', 500),
+    decisionContext: boundedText(candidate.decisionContext, 'decision_context', 1_000),
+    sourceTaskId: candidate.sourceTaskId,
+    sourceEvidenceBatchId: candidate.sourceEvidenceBatchId,
+    selectedRanks: [...candidate.selectedRanks].sort((left, right) => left - right),
+    profileId: candidate.profileId
+  };
+}
+
 export class GatewayTaskQueue {
   readonly #identity: LoadedGatewayIdentity;
   readonly #evidenceRegistry: GatewayEvidenceRegistry;
+  readonly #accountSafety: AccountSafetyRegistry;
   readonly #tasks = new Map<string, TaskRecord>();
 
-  constructor(identity: LoadedGatewayIdentity, evidenceRegistry: GatewayEvidenceRegistry) {
+  constructor(
+    identity: LoadedGatewayIdentity,
+    evidenceRegistry: GatewayEvidenceRegistry,
+    accountSafety: AccountSafetyRegistry
+  ) {
     this.#identity = identity;
     this.#evidenceRegistry = evidenceRegistry;
+    this.#accountSafety = accountSafety;
   }
 
   createScoutTask(
@@ -151,6 +205,7 @@ export class GatewayTaskQueue {
       researchQuestion: input.researchQuestion,
       decisionContext: input.decisionContext,
       profile: 'scout',
+      lineage: null,
       targets: [{ type: 'keyword_query', query: input.query }],
       platforms: input.platforms,
       profileBindings,
@@ -176,17 +231,102 @@ export class GatewayTaskQueue {
     const record: TaskRecord = {
       task,
       state: 'queued_for_preflight',
-      createdAt: now.toISOString()
+      createdAt: now.toISOString(),
+      stageProgress: [],
+      evidence: []
     };
     this.#tasks.set(taskId, record);
     return this.#summary(record);
   }
 
-  list(): ConsoleTaskSummary[] {
+  createBilibiliDetailTask(
+    input: BilibiliDetailTaskInput,
+    profileBinding: BrowserProfileBinding,
+    now = new Date()
+  ): ConsoleTaskSummary {
+    if (
+      profileBinding.kind !== 'collection' ||
+      profileBinding.platform !== 'bilibili' ||
+      profileBinding.account.category !== 'user_managed' ||
+      profileBinding.profileId !== input.profileId
+    ) throw new Error('task_detail_profile_invalid');
+    const sourceBatch = this.#evidenceRegistry.getBatch(
+      input.sourceEvidenceBatchId,
+      input.sourceTaskId
+    );
+    const sourceResult = sourceBatch?.result;
+    if (
+      !sourceBatch ||
+      sourceBatch.platform !== 'bilibili' ||
+      !sourceResult ||
+      sourceResult.operation !== 'breadth_search' ||
+      sourceResult.pageState !== 'results_visible'
+    ) throw new Error('task_detail_source_evidence_invalid');
+    const selectedItems = input.selectedRanks.map((rank) => {
+      const item = sourceResult.items.find((candidate) => candidate.rank === rank);
+      if (!item || item.contentType !== 'video') throw new Error('task_detail_selection_invalid');
+      return { sourceRank: rank, canonicalUrl: item.url };
+    });
+    const taskId = randomUUID();
+    const platformBudget = budgetLimits({
+      maxRecords: 1,
+      maxPages: 1,
+      maxReadOnlyActions: 0,
+      maxDetails: selectedItems.length
+    });
+    const task: ResearchTaskContract = {
+      schemaVersion: 1,
+      taskId,
+      researchQuestion: input.researchQuestion,
+      decisionContext: input.decisionContext,
+      profile: 'deep_dive',
+      lineage: {
+        parentTaskId: input.sourceTaskId,
+        sourceEvidenceBatchId: input.sourceEvidenceBatchId,
+        selectionPolicy: 'explicit_user_selected_ranks',
+        selectedItems
+      },
+      targets: selectedItems.map((item) => ({ type: 'known_url' as const, url: item.canonicalUrl })),
+      platforms: ['bilibili'],
+      profileBindings: { bilibili: profileBinding },
+      evidenceObjectives: ['detail_read'],
+      budget: {
+        total: budgetLimits({
+          maxDurationMs: selectedItems.length * 2 * 60 * 1000,
+          maxRecords: selectedItems.length,
+          maxPages: selectedItems.length,
+          maxReadOnlyActions: 0,
+          maxDetails: selectedItems.length
+        }),
+        perPlatform: { bilibili: platformBudget },
+        unusedBudgetTransfer: 'explicit_approval_required'
+      },
+      consent: {
+        approvedBy: 'user',
+        approvedAt: now.toISOString(),
+        approvedActions: ['detail_navigation', 'visible_dom'],
+        approvedObjectives: ['detail_read'],
+        escalationPolicy: 'explicit_approval_required'
+      }
+    };
+    const record: TaskRecord = {
+      task,
+      state: 'queued_for_preflight',
+      createdAt: now.toISOString(),
+      stageProgress: [],
+      evidence: []
+    };
+    this.#tasks.set(taskId, record);
+    return this.#summary(record);
+  }
+
+  async list(now = Date.now()): Promise<ConsoleTaskSummary[]> {
+    await this.#expireActiveStages(now);
     return [...this.#tasks.values()].map((record) => this.#summary(record));
   }
 
   async nextWork(extensionInstanceId: string, now = Date.now()): Promise<GatewayWorkItem | null> {
+    await this.#expireActiveStages(now);
     const preflight = [...this.#tasks.values()].find((record) =>
       (!record.assignedExtensionInstanceId || record.assignedExtensionInstanceId === extensionInstanceId) &&
       (
@@ -218,17 +358,60 @@ export class GatewayTaskQueue {
     }
 
     const approved = [...this.#tasks.values()].find((record) =>
-      (record.state === 'approved' ||
-        (record.state === 'stage_dispatched' && now - (record.lastDispatchedAt ?? 0) >= PREFLIGHT_REDELIVERY_MS)) &&
       record.approvedPlan &&
-      record.assignedExtensionInstanceId === extensionInstanceId
+      record.assignedExtensionInstanceId === extensionInstanceId &&
+      (
+        ((record.state === 'approved' || record.state === 'stage_completed') &&
+          record.stageProgress.some((stage) => stage.state === 'pending')) ||
+        (record.state === 'stage_dispatched' &&
+          now - (record.lastDispatchedAt ?? 0) >= PREFLIGHT_REDELIVERY_MS &&
+          record.stageProgress.some((stage) => stage.state === 'dispatched'))
+      )
     );
     if (!approved?.approvedPlan) return null;
-    const stage = approved.approvedPlan.stages.find((candidate) => candidate.preflight.status === 'ready');
-    if (!stage) {
+    const progress = approved.state === 'stage_dispatched'
+      ? approved.stageProgress.find((candidate) => candidate.state === 'dispatched')
+      : approved.stageProgress.find((candidate) => candidate.state === 'pending');
+    const stage = progress
+      ? approved.approvedPlan.stages.find((candidate) => candidate.stageId === progress.stageId)
+      : undefined;
+    if (!stage || !progress || stage.preflight.status !== 'ready') {
       approved.state = 'blocked';
       approved.statusMessage = 'approved_plan_has_no_ready_stage';
       return null;
+    }
+    const profileBinding = approved.task.profileBindings[stage.platform];
+    if (!profileBinding) {
+      approved.state = 'blocked';
+      approved.statusMessage = 'approved_stage_profile_binding_missing';
+      return null;
+    }
+    if (!progress.safetyRunId) {
+      const safety = this.#accountSafety.get(profileBinding.profileId, stage.platform);
+      if (safety.state !== 'ready') {
+        approved.state = 'waiting_for_account_safety';
+        approved.statusMessage = this.#accountSafetyStatus(profileBinding.profileId, stage.platform);
+        return null;
+      }
+      try {
+        const permit = await this.#accountSafety.beginAuthenticatedRun(
+          profileBinding.profileId,
+          stage.platform,
+          'formal_collection_stage'
+        );
+        progress.safetyRunId = permit.runId;
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.startsWith('account_safety_')) throw error;
+        approved.state = 'waiting_for_account_safety';
+        approved.statusMessage = this.#accountSafetyStatus(profileBinding.profileId, stage.platform);
+        return null;
+      }
+    } else {
+      const safety = this.#accountSafety.get(profileBinding.profileId, stage.platform);
+      if (safety.state !== 'running' || safety.activeRun?.runId !== progress.safetyRunId) {
+        approved.statusMessage = 'account_safety_dispatch_run_not_active';
+        return null;
+      }
     }
     const nowDate = new Date(now);
     const unsignedDispatch: Omit<GatewayTaskDispatchEnvelope, 'signature'> = {
@@ -255,6 +438,7 @@ export class GatewayTaskQueue {
       dispatch
     };
     approved.state = 'stage_dispatched';
+    progress.state = 'dispatched';
     approved.lastDispatchedAt = now;
     return work;
   }
@@ -280,18 +464,22 @@ export class GatewayTaskQueue {
     return this.#summary(record);
   }
 
-  submitStageReceipt(receipt: GatewayStageReceipt, extensionInstanceId: string): ConsoleTaskSummary {
+  async submitStageReceipt(
+    receipt: GatewayStageReceipt,
+    extensionInstanceId: string
+  ): Promise<ConsoleTaskSummary> {
     const record = this.#tasks.get(receipt.taskId);
     if (!record?.approvedPlan) throw new Error('task_not_found');
     if (record.assignedExtensionInstanceId !== extensionInstanceId) throw new Error('task_extension_mismatch');
     if (!record.approvedPlan.stages.some((stage) => stage.stageId === receipt.stageId)) {
       throw new Error('task_stage_mismatch');
     }
-    if (record.state === 'completed') {
+    const progress = record.stageProgress.find((stage) => stage.stageId === receipt.stageId);
+    if (!progress) throw new Error('task_stage_progress_missing');
+    if (progress.state === 'completed') {
       if (
         receipt.status === 'accepted' &&
-        record.activeStage?.stageId === receipt.stageId &&
-        record.activeStage.leaseId === receipt.leaseId
+        progress.leaseId === receipt.leaseId
       ) return this.#summary(record);
       throw new Error('task_already_completed');
     }
@@ -301,16 +489,32 @@ export class GatewayTaskQueue {
     if (receipt.status === 'accepted') {
       if (!receipt.leaseId || !/^[0-9a-f-]{36}$/i.test(receipt.leaseId)) throw new Error('task_lease_invalid');
       if (
-        record.activeStage &&
-        (record.activeStage.stageId !== receipt.stageId || record.activeStage.leaseId !== receipt.leaseId)
+        progress.leaseId && progress.leaseId !== receipt.leaseId
       ) throw new Error('task_lease_mismatch');
-      record.activeStage = { stageId: receipt.stageId, leaseId: receipt.leaseId };
+      progress.leaseId = receipt.leaseId;
+      progress.state = 'active';
+      progress.activatedAt = receipt.recordedAt;
       record.state = 'stage_active';
       record.statusMessage = `stage_accepted:${receipt.stageId}`;
     } else {
       if (!receipt.errorCode || !/^[a-z0-9_]{1,80}$/.test(receipt.errorCode)) {
         throw new Error('task_block_reason_invalid');
       }
+      const stage = record.approvedPlan.stages.find((candidate) => candidate.stageId === receipt.stageId);
+      const binding = stage ? record.task.profileBindings[stage.platform] : undefined;
+      if (binding && stage && progress.safetyRunId) {
+        const safety = this.#accountSafety.get(binding.profileId, stage.platform);
+        if (safety.state === 'running' && safety.activeRun?.runId === progress.safetyRunId) {
+          await this.#accountSafety.finishAuthenticatedRun(
+            binding.profileId,
+            stage.platform,
+            progress.safetyRunId,
+            receipt.errorCode
+          );
+        }
+      }
+      progress.state = 'blocked';
+      progress.errorCode = receipt.errorCode;
       record.state = 'blocked';
       record.statusMessage = receipt.errorCode;
     }
@@ -323,15 +527,13 @@ export class GatewayTaskQueue {
     now = new Date()
   ): Promise<ConsoleTaskSummary> {
     const record = this.#tasks.get(submission.taskId);
-    if (!record?.approvedPlan || !record.activeStage) throw new Error('task_not_found');
+    if (!record?.approvedPlan) throw new Error('task_not_found');
     if (record.assignedExtensionInstanceId !== extensionInstanceId) throw new Error('task_extension_mismatch');
-    if (record.state !== 'stage_active' && record.state !== 'completed') {
+    const progress = record.stageProgress.find((stage) => stage.stageId === submission.stageId);
+    if (!progress || (progress.state !== 'active' && progress.state !== 'completed')) {
       throw new Error('task_stage_not_active');
     }
-    if (
-      record.activeStage.stageId !== submission.stageId ||
-      record.activeStage.leaseId !== submission.leaseId
-    ) throw new Error('task_lease_mismatch');
+    if (progress.leaseId !== submission.leaseId) throw new Error('task_lease_mismatch');
     if (submission.collectorVersion !== COLLECTOR_CORE_VERSION) throw new Error('task_collector_version_mismatch');
 
     const stage = record.approvedPlan.stages.find((candidate) => candidate.stageId === submission.stageId);
@@ -344,7 +546,10 @@ export class GatewayTaskQueue {
     ) throw new Error('task_strategy_mismatch');
     if (
       submission.result.itemCount > stage.budget.maxRecords ||
-      submission.result.items.length !== submission.result.itemCount
+      (submission.result.operation === 'breadth_search' &&
+        submission.result.items.length !== submission.result.itemCount) ||
+      (submission.result.operation === 'detail_read' &&
+        submission.result.itemCount > stage.budget.maxDetails)
     ) throw new Error('task_evidence_budget_exceeded');
     const capturedAt = Date.parse(submission.capturedAt);
     if (
@@ -355,17 +560,53 @@ export class GatewayTaskQueue {
     this.#validateStageResult(stage.target, submission);
 
     const submittedDigest = await sha256Hex(canonicalJson(submission.result));
-    if (record.state === 'completed' && record.evidence?.digest !== submittedDigest) {
-      throw new Error('task_evidence_already_completed');
+    if (progress.state === 'completed') {
+      if (progress.evidence?.digest !== submittedDigest) {
+        throw new Error('task_evidence_already_completed');
+      }
+      // An idempotent retry for an earlier stage must not overwrite a newer
+      // stage_active / stage_dispatched task state.
+      if (progress.safetyRunId) {
+        const binding = record.task.profileBindings[stage.platform];
+        const safety = binding ? this.#accountSafety.get(binding.profileId, stage.platform) : null;
+        if (binding && safety?.state === 'running' && safety.activeRun?.runId === progress.safetyRunId) {
+          await this.#accountSafety.finishAuthenticatedRun(
+            binding.profileId,
+            stage.platform,
+            progress.safetyRunId,
+            'formal_collection_stage_completed_cooldown',
+            now
+          );
+        }
+      }
+      return this.#summary(record);
     }
 
     const evidence = await this.#evidenceRegistry.record(submission, extensionInstanceId, now);
     if (evidence.digest !== submittedDigest) throw new Error('task_evidence_digest_mismatch');
-    record.evidence = evidence;
+    const binding = record.task.profileBindings[stage.platform];
+    if (!binding || !progress.safetyRunId) throw new Error('account_safety_stage_run_missing');
+    await this.#accountSafety.finishAuthenticatedRun(
+      binding.profileId,
+      stage.platform,
+      progress.safetyRunId,
+      'formal_collection_stage_completed_cooldown',
+      now
+    );
+    progress.evidence = evidence;
+    progress.state = 'completed';
+    if (!record.evidence.some((candidate) => candidate.batchId === evidence.batchId)) {
+      record.evidence.push(evidence);
+    }
     record.state = 'evidence_received';
     record.statusMessage = `evidence_received:${evidence.batchId}`;
-    record.state = 'completed';
-    record.statusMessage = `completed:${submission.stageId}`;
+    if (record.stageProgress.every((stageProgress) => stageProgress.state === 'completed')) {
+      record.state = 'completed';
+      record.statusMessage = `completed:${submission.stageId}`;
+    } else {
+      record.state = 'waiting_for_account_safety';
+      record.statusMessage = this.#accountSafetyStatus(binding.profileId, stage.platform);
+    }
     return this.#summary(record);
   }
 
@@ -391,9 +632,81 @@ export class GatewayTaskQueue {
         planDigest
       }
     };
-    record.state = 'approved';
-    record.statusMessage = undefined;
+    record.stageProgress = record.approvedPlan.stages.map((stage) => ({
+      stageId: stage.stageId,
+      state: 'pending'
+    }));
+    const next = this.#nextPendingStage(record);
+    if (!next) {
+      record.state = 'blocked';
+      record.statusMessage = 'approved_plan_has_no_pending_stage';
+      throw new Error(record.statusMessage);
+    }
+    if (!next.profileBinding) {
+      record.state = 'blocked';
+      record.statusMessage = 'approved_stage_profile_binding_missing';
+      throw new Error(record.statusMessage);
+    }
+    try {
+      await this.#accountSafety.assertPlatformNavigationAllowed(
+        next.profileBinding.profileId,
+        next.stage.platform,
+        now
+      );
+      record.state = 'approved';
+      record.statusMessage = undefined;
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.startsWith('account_safety_')) throw error;
+      record.state = 'waiting_for_account_safety';
+      record.statusMessage = this.#accountSafetyStatus(next.profileBinding.profileId, next.stage.platform);
+    }
     return this.#summary(record);
+  }
+
+  async resumeAfterAccountSafety(taskId: string, now = new Date()): Promise<ConsoleTaskSummary> {
+    const record = this.#tasks.get(taskId);
+    if (!record?.approvedPlan) throw new Error('task_plan_not_approved');
+    if (record.state !== 'waiting_for_account_safety') {
+      throw new Error('task_account_safety_resume_state_invalid');
+    }
+    const next = this.#nextPendingStage(record);
+    if (!next) throw new Error('task_account_safety_pending_stage_missing');
+    if (!next.profileBinding) throw new Error('task_account_safety_profile_binding_missing');
+    try {
+      await this.#accountSafety.assertPlatformNavigationAllowed(
+        next.profileBinding.profileId,
+        next.stage.platform,
+        now
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('account_safety_')) {
+        record.statusMessage = this.#accountSafetyStatus(next.profileBinding.profileId, next.stage.platform);
+      }
+      throw error;
+    }
+    record.state = record.stageProgress.some((stage) => stage.state === 'completed')
+      ? 'stage_completed'
+      : 'approved';
+    record.statusMessage = `account_safety_user_resumed:${next.stage.stageId}`;
+    return this.#summary(record);
+  }
+
+  #nextPendingStage(record: TaskRecord) {
+    if (!record.approvedPlan) return null;
+    const progress = record.stageProgress.find((candidate) => candidate.state === 'pending');
+    if (!progress) return null;
+    const stage = record.approvedPlan.stages.find((candidate) => candidate.stageId === progress.stageId);
+    if (!stage) return null;
+    return {
+      progress,
+      stage,
+      profileBinding: record.task.profileBindings[stage.platform]
+    };
+  }
+
+  #accountSafetyStatus(profileId: string, platform: SupportedPlatform): string {
+    const safety = this.#accountSafety.get(profileId, platform);
+    return `account_safety_${safety.state}:${safety.reasonCode ?? 'not_ready'}`;
   }
 
   #summary(record: TaskRecord): ConsoleTaskSummary {
@@ -404,34 +717,78 @@ export class GatewayTaskQueue {
       state: record.state,
       createdAt: record.createdAt,
       profileBindings: structuredClone(record.task.profileBindings),
+      profile: record.task.profile,
+      lineage: structuredClone(record.task.lineage),
+      stageProgress: structuredClone(record.stageProgress),
+      evidence: structuredClone(record.evidence),
       ...(record.approvedPlan
         ? { plan: structuredClone(record.approvedPlan) }
         : record.plan
           ? { plan: structuredClone(record.plan) }
           : {}),
-      ...(record.evidence ? { evidence: structuredClone(record.evidence) } : {}),
       ...(record.statusMessage ? { statusMessage: record.statusMessage } : {})
     };
   }
 
+  async #expireActiveStages(now: number): Promise<void> {
+    for (const record of this.#tasks.values()) {
+      if (record.state !== 'stage_active' || !record.approvedPlan) continue;
+      const progress = record.stageProgress.find((candidate) => candidate.state === 'active');
+      if (!progress?.activatedAt) continue;
+      const stage = record.approvedPlan.stages.find((candidate) => candidate.stageId === progress.stageId);
+      const activatedAt = Date.parse(progress.activatedAt);
+      if (!stage?.budget || !Number.isFinite(activatedAt)) continue;
+      if (activatedAt + stage.budget.maxDurationMs > now) continue;
+      const binding = record.task.profileBindings[stage.platform];
+      if (binding && progress.safetyRunId) {
+        const safety = this.#accountSafety.get(binding.profileId, stage.platform);
+        if (safety.state === 'running' && safety.activeRun?.runId === progress.safetyRunId) {
+          await this.#accountSafety.finishAuthenticatedRun(
+            binding.profileId,
+            stage.platform,
+            progress.safetyRunId,
+            'gateway_stage_budget_expired',
+            new Date(now)
+          );
+        }
+      }
+      progress.state = 'blocked';
+      progress.errorCode = 'gateway_stage_budget_expired';
+      record.state = 'blocked';
+      record.statusMessage = progress.errorCode;
+    }
+  }
+
   #validateStageResult(target: CollectionTaskTarget, submission: GatewayEvidenceSubmission): void {
-    if (target.type !== 'keyword_query' || submission.result.operation !== 'breadth_search') {
+    if (submission.platform !== 'bilibili') throw new Error('task_evidence_platform_not_admitted');
+    if (target.type === 'keyword_query' && submission.result.operation === 'breadth_search') {
+      const expectedSource = buildNativeSearchUrl(submission.platform, target.query);
+      expectedSource.search = '';
+      expectedSource.hash = '';
+      if (submission.result.sourceUrl !== expectedSource.href) throw new Error('task_evidence_source_mismatch');
+      for (const item of submission.result.items) {
+        if (
+          item.contentType !== 'video' ||
+          !/^https:\/\/www\.bilibili\.com\/video\/BV[0-9A-Za-z]{10}$/.test(item.url)
+        ) throw new Error('task_evidence_item_invalid');
+      }
+      return;
+    }
+    if (target.type !== 'known_url' || submission.result.operation !== 'detail_read') {
       throw new Error('task_evidence_operation_mismatch');
     }
-    const expectedSource = buildNativeSearchUrl(submission.platform, target.query);
-    expectedSource.search = '';
-    expectedSource.hash = '';
-    if (submission.result.sourceUrl !== expectedSource.href) throw new Error('task_evidence_source_mismatch');
-
-    // Bilibili breadth search is the only formal live-admitted collection
-    // strategy today. Its result URLs are rebuilt into the reviewed canonical
-    // BV form; accepting other domains here would silently expand admission.
-    if (submission.platform !== 'bilibili') throw new Error('task_evidence_platform_not_admitted');
-    for (const item of submission.result.items) {
-      if (
-        item.contentType !== 'video' ||
-        !/^https:\/\/www\.bilibili\.com\/video\/BV[0-9A-Za-z]{10}$/.test(item.url)
-      ) throw new Error('task_evidence_item_invalid');
-    }
+    if (
+      !/^https:\/\/www\.bilibili\.com\/video\/BV[0-9A-Za-z]{10}$/.test(target.url) ||
+      submission.result.sourceUrl !== target.url
+    ) throw new Error('task_evidence_source_mismatch');
+    const detail = submission.result.detail;
+    if (!detail) return;
+    if (
+      detail.canonicalUrl !== target.url ||
+      detail.contentType !== 'video' ||
+      !detail.publishedText ||
+      detail.visibleMetrics.length < 2 ||
+      (!detail.description && !detail.creator)
+    ) throw new Error('task_evidence_detail_invalid');
   }
 }

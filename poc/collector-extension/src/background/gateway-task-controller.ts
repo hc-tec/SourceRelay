@@ -4,6 +4,7 @@ import type {
   GatewayRuntimeStatus,
   GatewayStageReceipt,
   GatewayTaskDispatchEnvelope,
+  StageLease,
   GatewayWorkItem
 } from '../shared/control-plane';
 import {
@@ -21,18 +22,178 @@ import {
   sha256Hex,
   verifyGatewaySignature
 } from '../shared/cryptography';
+import { COLLECT_VISIBLE_RESULTS, type VisibleCollectionResult } from '../shared/protocol';
 import { buildEvidencePlan } from '../shared/control-plane';
 import { authenticatedGatewayRequest } from './gateway-client';
-import { flushPendingEvidenceSubmissions } from './evidence-submission';
+import { flushPendingEvidenceSubmissions, submitStageEvidence } from './evidence-submission';
 import { getGatewayPairing } from './pairing-store';
-import { createCollectionWindowLease, listStageLeases } from './stage-leases';
+import {
+  createCollectionWindowLease,
+  ensureTaskContentInjected,
+  listStageLeases,
+  stageLeaseForTab,
+  updateStageLeaseStatus
+} from './stage-leases';
 
 export const GATEWAY_POLL_ALARM = 'collector.gateway.poll.v1';
+export const GATEWAY_CONTINUE_ALARM = 'collector.gateway.continue.v1';
+export const STAGE_WATCHDOG_ALARM_PREFIX = 'collector.stage-watchdog.v1.';
 const GATEWAY_RUNTIME_STATUS_KEY = 'collector.gateway-runtime-status.v1';
 const ACCEPTED_GATEWAY_NONCES_KEY = 'collector.gateway-accepted-nonces.v1';
+const STAGE_WATCHDOG_KEY_PREFIX = 'collector.stage-watchdog-record.v1.';
 const MAX_ACCEPTED_NONCES = 128;
+const STAGE_COLLECTION_WINDOW_MS = 30_000;
+const STAGE_COLLECTION_POLL_MS = 500;
+const STAGE_MESSAGE_TIMEOUT_MS = 1_500;
+const STAGE_WATCHDOG_MS = 45_000;
+const MAX_CONTENT_RECOVERIES = 3;
+const LOCAL_EVIDENCE_FLUSH_ATTEMPTS = 3;
+const LOCAL_EVIDENCE_FLUSH_RETRY_MS = 100;
 
 let activePoll: Promise<void> | null = null;
+
+function delay(durationMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, durationMs));
+}
+
+function withTimeout<T>(operation: Promise<T>, durationMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('chrome_operation_timeout')), durationMs);
+    operation.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    );
+  });
+}
+
+export async function retryLocalEvidenceFlush(
+  operation: () => Promise<void>,
+  wait: (durationMs: number) => Promise<void> = delay
+): Promise<void> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < LOCAL_EVIDENCE_FLUSH_ATTEMPTS; attempt += 1) {
+    try {
+      await operation();
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 < LOCAL_EVIDENCE_FLUSH_ATTEMPTS) {
+        await wait(LOCAL_EVIDENCE_FLUSH_RETRY_MS);
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function flushPendingEvidenceWithReceiptBarrier(): Promise<void> {
+  await retryLocalEvidenceFlush(() => flushPendingEvidenceSubmissions());
+}
+
+interface StageWatchdogRecord {
+  schemaVersion: 1;
+  alarmName: string;
+  taskId: string;
+  stageId: string;
+  leaseId: string;
+  tabId: number;
+}
+
+function stageWatchdogKey(leaseId: string): string {
+  return `${STAGE_WATCHDOG_KEY_PREFIX}${leaseId}`;
+}
+
+function isStageWatchdogRecord(value: unknown): value is StageWatchdogRecord {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<StageWatchdogRecord>;
+  return (
+    candidate.schemaVersion === 1 &&
+    typeof candidate.alarmName === 'string' &&
+    typeof candidate.taskId === 'string' &&
+    typeof candidate.stageId === 'string' &&
+    typeof candidate.leaseId === 'string' &&
+    typeof candidate.tabId === 'number'
+  );
+}
+
+async function armStageWatchdog(lease: StageLease): Promise<void> {
+  const alarmName = `${STAGE_WATCHDOG_ALARM_PREFIX}${lease.leaseId}`;
+  const record: StageWatchdogRecord = {
+    schemaVersion: 1,
+    alarmName,
+    taskId: lease.taskId,
+    stageId: lease.stageId,
+    leaseId: lease.leaseId,
+    tabId: lease.tabId
+  };
+  await chrome.storage.session.set({ [stageWatchdogKey(lease.leaseId)]: record });
+  await chrome.alarms.create(alarmName, { when: Date.now() + STAGE_WATCHDOG_MS });
+}
+
+export async function clearStageWatchdog(leaseId: string): Promise<void> {
+  await chrome.alarms.clear(`${STAGE_WATCHDOG_ALARM_PREFIX}${leaseId}`);
+  await chrome.storage.session.remove(stageWatchdogKey(leaseId));
+}
+
+function isSubmissionReady(result: VisibleCollectionResult): boolean {
+  if (result.pageState !== 'layout_unrecognized' && result.pageState !== 'results_visible') return true;
+  if (result.operation === 'breadth_search') return result.pageState === 'results_visible';
+  return Boolean(
+    result.detail?.publishedText &&
+    result.detail.visibleMetrics.length >= 2 &&
+    (result.detail.description || result.detail.creator)
+  );
+}
+
+async function collectApprovedStage(lease: StageLease): Promise<void> {
+  const deadline = Math.min(Date.parse(lease.expiresAt), Date.now() + STAGE_COLLECTION_WINDOW_MS);
+  let contentRecoveries = 0;
+  while (Date.now() < deadline) {
+    const currentLease = await stageLeaseForTab(lease.tabId);
+    if (!currentLease || currentLease.leaseId !== lease.leaseId) throw new Error('gateway_stage_lease_inactive');
+    if (currentLease.status === 'completed') return;
+    if (currentLease.status === 'awaiting_evidence') {
+      await flushPendingEvidenceWithReceiptBarrier();
+      return;
+    }
+    if (currentLease.status !== 'active') throw new Error('gateway_stage_lease_inactive');
+    let response: { ok?: unknown; result?: unknown } | null = null;
+    try {
+      response = await withTimeout(
+        chrome.tabs.sendMessage(lease.tabId, { type: COLLECT_VISIBLE_RESULTS }),
+        STAGE_MESSAGE_TIMEOUT_MS
+      ) as { ok?: unknown; result?: unknown };
+    } catch {
+      if (contentRecoveries < MAX_CONTENT_RECOVERIES) {
+        contentRecoveries += 1;
+        await ensureTaskContentInjected(currentLease);
+      }
+      await delay(STAGE_COLLECTION_POLL_MS);
+      continue;
+    }
+    const result = response?.result as VisibleCollectionResult | undefined;
+    if (response?.ok === true && result?.schemaVersion === 1 && isSubmissionReady(result)) {
+      // Revalidate the exact target URL after reading the DOM. A player-driven
+      // recommendation navigation must never be admitted as the selected item.
+      await ensureTaskContentInjected(currentLease);
+      const verifiedLease = await stageLeaseForTab(lease.tabId);
+      if (!verifiedLease || verifiedLease.leaseId !== lease.leaseId || verifiedLease.status !== 'active') {
+        throw new Error('gateway_stage_lease_inactive');
+      }
+      await submitStageEvidence(verifiedLease, result);
+      await clearStageWatchdog(lease.leaseId);
+      await scheduleGatewayContinuation();
+      return;
+    }
+    await delay(STAGE_COLLECTION_POLL_MS);
+  }
+  throw new Error('gateway_stage_render_timeout');
+}
 
 function isCollectionProfileBinding(value: unknown, platform: SupportedPlatform): value is BrowserProfileBinding {
   if (!value || typeof value !== 'object') return false;
@@ -66,6 +227,24 @@ function hasValidProfileBindings(task: Partial<ResearchTaskContract>): boolean {
   );
 }
 
+function hasValidLineage(task: Partial<ResearchTaskContract>): boolean {
+  if (task.lineage === null) return true;
+  const lineage = task.lineage;
+  return Boolean(
+    lineage &&
+    typeof lineage === 'object' &&
+    /^[0-9a-f-]{36}$/i.test(lineage.parentTaskId) &&
+    /^[0-9a-f-]{36}$/i.test(lineage.sourceEvidenceBatchId) &&
+    lineage.selectionPolicy === 'explicit_user_selected_ranks' &&
+    Array.isArray(lineage.selectedItems) &&
+    lineage.selectedItems.length > 0 && lineage.selectedItems.length <= 3 &&
+    lineage.selectedItems.every((item) =>
+      Number.isSafeInteger(item.sourceRank) && item.sourceRank >= 1 && item.sourceRank <= 20 &&
+      /^https:\/\/www\.bilibili\.com\/video\/BV[0-9A-Za-z]{10}$/.test(item.canonicalUrl)
+    )
+  );
+}
+
 function isResearchTask(value: unknown): value is ResearchTaskContract {
   if (!value || typeof value !== 'object') return false;
   const task = value as Partial<ResearchTaskContract>;
@@ -81,6 +260,7 @@ function isResearchTask(value: unknown): value is ResearchTaskContract {
     Array.isArray(task.platforms) && task.platforms.length > 0 && task.platforms.length <= 4 &&
     task.platforms.every(isSupportedPlatform) &&
     hasValidProfileBindings(task) &&
+    hasValidLineage(task) &&
     Array.isArray(task.evidenceObjectives) && task.evidenceObjectives.length > 0 && task.evidenceObjectives.length <= 6 &&
     Boolean(task.budget) &&
     Boolean(task.consent)
@@ -213,6 +393,7 @@ async function processDispatch(
 ): Promise<void> {
   await verifyEnvelope(pairing, dispatch);
   let receipt: GatewayStageReceipt;
+  let acceptedLease: StageLease | null = null;
   try {
     const digest = await sha256Hex(canonicalJson(evidencePlanDigestPayload(dispatch.plan)));
     if (digest !== dispatch.planDigest || digest !== dispatch.plan.approval.planDigest) {
@@ -245,6 +426,8 @@ async function processDispatch(
       plan: dispatch.plan,
       stageId: dispatch.stageId
     });
+    if (existingLease) await ensureTaskContentInjected(lease);
+    acceptedLease = lease;
     receipt = {
       schemaVersion: 1,
       taskId: dispatch.taskId,
@@ -272,10 +455,67 @@ async function processDispatch(
     body: receipt
   });
   if (receipt.status === 'blocked') throw new Error(receipt.errorCode ?? 'gateway_stage_rejected');
+  if (!acceptedLease) throw new Error('gateway_stage_lease_missing');
+  await armStageWatchdog(acceptedLease);
   // Navigation can render quickly enough for the content script to queue its
   // result before the accepted lease receipt reaches the Gateway. Retrying
   // here closes that race without weakening the Gateway's stage-active check.
-  await flushPendingEvidenceSubmissions();
+  await flushPendingEvidenceWithReceiptBarrier();
+  try {
+    await collectApprovedStage(acceptedLease);
+  } catch (error) {
+    const candidate = error instanceof Error ? error.message : '';
+    const errorCode = /^[a-z0-9_]{1,80}$/.test(candidate) ? candidate : 'gateway_stage_collection_failed';
+    const blockedReceipt: GatewayStageReceipt = {
+      schemaVersion: 1,
+      taskId: dispatch.taskId,
+      stageId: dispatch.stageId,
+      status: 'blocked',
+      errorCode,
+      recordedAt: new Date().toISOString()
+    };
+    await authenticatedGatewayRequest({
+      pairing,
+      method: 'POST',
+      pathname: '/v1/extension/stage-receipt',
+      body: blockedReceipt
+    });
+    await clearStageWatchdog(acceptedLease.leaseId);
+    await chrome.windows.remove(acceptedLease.windowId).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function handleStageWatchdogAlarm(alarmName: string): Promise<void> {
+  if (!alarmName.startsWith(STAGE_WATCHDOG_ALARM_PREFIX)) return;
+  const leaseId = alarmName.slice(STAGE_WATCHDOG_ALARM_PREFIX.length);
+  const key = stageWatchdogKey(leaseId);
+  const record = (await chrome.storage.session.get(key))[key];
+  if (!isStageWatchdogRecord(record) || record.alarmName !== alarmName) return;
+  const lease = await stageLeaseForTab(record.tabId);
+  if (!lease || lease.leaseId !== record.leaseId || lease.status === 'completed') {
+    await clearStageWatchdog(record.leaseId);
+    return;
+  }
+  const pairing = await getGatewayPairing();
+  if (!pairing) return;
+  const receipt: GatewayStageReceipt = {
+    schemaVersion: 1,
+    taskId: record.taskId,
+    stageId: record.stageId,
+    status: 'blocked',
+    errorCode: 'gateway_stage_watchdog_expired',
+    recordedAt: new Date().toISOString()
+  };
+  await authenticatedGatewayRequest({
+    pairing,
+    method: 'POST',
+    pathname: '/v1/extension/stage-receipt',
+    body: receipt
+  });
+  await updateStageLeaseStatus(record.tabId, 'cancelled');
+  await chrome.windows.remove(lease.windowId).catch(() => undefined);
+  await clearStageWatchdog(record.leaseId);
 }
 
 async function performPoll(): Promise<void> {
@@ -287,6 +527,10 @@ async function performPoll(): Promise<void> {
   const pollAt = new Date().toISOString();
   await setRuntimeStatus({ state: 'polling', lastPollAt: pollAt, lastErrorCode: null });
   try {
+    // Pending Evidence is loopback-only and idempotent. Recover it before
+    // asking for new work so a content-driven result that raced the accepted
+    // receipt cannot remain stranded until the stage watchdog fires.
+    await flushPendingEvidenceWithReceiptBarrier();
     const value = await authenticatedGatewayRequest({
       pairing,
       method: 'GET',
@@ -312,6 +556,15 @@ export function pollGatewayTasks(): Promise<void> {
     });
   }
   return activePoll;
+}
+
+export async function scheduleGatewayContinuation(): Promise<void> {
+  if (!(await getGatewayPairing())) return;
+  setTimeout(() => void pollGatewayTasks(), 1_000);
+  // Chromium clamps short extension alarms. Keep a 30-second alarm as a
+  // durable fallback if the MV3 worker is suspended before the in-memory
+  // continuation fires.
+  await chrome.alarms.create(GATEWAY_CONTINUE_ALARM, { when: Date.now() + 30_000 });
 }
 
 export async function synchroniseGatewayPolling(): Promise<void> {

@@ -34,6 +34,11 @@ const bundles = [
     format: 'iife'
   },
   {
+    input: resolve(root, 'src', 'content', 'transcript-validation.ts'),
+    output: resolve(outputDirectory, 'transcript-validation.js'),
+    format: 'iife'
+  },
+  {
     input: resolve(root, 'src', 'content', 'index.ts'),
     output: resolve(outputDirectory, 'content.js'),
     format: 'iife'

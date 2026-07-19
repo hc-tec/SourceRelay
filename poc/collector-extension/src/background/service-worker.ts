@@ -3,6 +3,8 @@ import {
   COLLECTOR_CORE_VERSION,
   CONTENT_READY,
   GET_CAPABILITY_VALIDATION,
+  GET_DETAIL_CAPABILITY_VALIDATION,
+  GET_TRANSCRIPT_CAPABILITY_VALIDATION,
   GET_CONTROL_SNAPSHOT,
   NETWORK_CAPTURE_BRIDGE_READY_MESSAGE,
   NETWORK_CAPTURE_OBSERVED,
@@ -10,8 +12,16 @@ import {
   POLL_GATEWAY_TASKS,
   REVOKE_GATEWAY_PAIRING,
   START_CAPABILITY_VALIDATION,
+  START_DETAIL_CAPABILITY_VALIDATION,
+  START_TRANSCRIPT_CAPABILITY_VALIDATION,
   isGetCapabilityValidationMessage,
+  isGetDetailCapabilityValidationMessage,
+  isGetTranscriptCapabilityValidationMessage,
   isStartCapabilityValidationMessage,
+  isStartDetailCapabilityValidationMessage,
+  isStartTranscriptCapabilityValidationMessage,
+  isTranscriptContentReadyMessage,
+  isTranscriptInteractionResultMessage,
   isPairGatewayMessage,
   isRevokeGatewayPairingMessage,
   isCollectionResultMessage,
@@ -22,26 +32,44 @@ import {
   isSyncStrategyPermissionsMessage,
   type VisibleCollectionResult
 } from '../shared/protocol';
-import { nativeSearchPlatform } from '../shared/native-search';
 import {
-  NETWORK_CAPTURE_MAX_PER_PAGE,
-  hasApprovedNetworkCaptureRoute,
-  sanitiseNetworkCaptureObservation,
-  type NetworkCaptureObservation
-} from '../shared/network-capture';
-import { isSupportedPlatform, type SupportedPlatform } from '../shared/collection-contracts';
-import type { CollectorControlSnapshot } from '../shared/control-plane';
+  activeBoundNetworkCaptureArmForSender,
+  bindNetworkCaptureArmToDocument,
+  clearNetworkCaptureState,
+  storeNetworkCapture
+} from './network-capture-runtime';
+import {
+  COLLECTOR_CONTROL_SURFACE_REVISION,
+  type CollectorControlSnapshot
+} from '../shared/control-plane';
 import { flushPendingEvidenceSubmissions, submitStageEvidence } from './evidence-submission';
 import { pairGateway } from './gateway-pairing';
 import {
+  activeDetailCapabilityValidationRunForSender,
+  completeDetailCapabilityValidationRun,
+  createDetailCapabilityValidationRun,
+  detailCapabilityValidationRunForTab,
+  getDetailCapabilityValidationRun,
+  invalidateDetailValidationsWithoutPermissions,
+  markDetailValidationTabChanged,
+  markDetailValidationTabClosed,
+  markDetailValidationWindowClosed
+} from './detail-validation-runs';
+import {
   GATEWAY_POLL_ALARM,
+  GATEWAY_CONTINUE_ALARM,
+  STAGE_WATCHDOG_ALARM_PREFIX,
+  clearStageWatchdog,
   gatewayRuntimeStatus,
+  handleStageWatchdogAlarm,
   pollGatewayTasks,
+  scheduleGatewayContinuation,
   synchroniseGatewayPolling
 } from './gateway-task-controller';
 import { gatewayPairingSummary, revokeGatewayPairing } from './pairing-store';
 import {
   activeStageLeaseForSender,
+  ensureTaskContentInjected,
   invalidateLeasesWithoutPermissions,
   listStageLeases,
   markTaskContextChanged,
@@ -64,119 +92,19 @@ import {
   markCapabilityValidationTabClosed,
   markCapabilityValidationWindowClosed
 } from './validation-runs';
-
-function networkCaptureStorageKey(tabId: number): string {
-  return `collector.network-captures.${tabId}`;
-}
-
-function networkCaptureArmStorageKey(tabId: number): string {
-  return `collector.network-capture-arm.${tabId}`;
-}
-
-interface NetworkCaptureArm {
-  platform: SupportedPlatform;
-  navigationUrlDigest: string;
-  documentId?: string;
-  expiresAt: number;
-}
-
-interface BoundNetworkCaptureArm extends NetworkCaptureArm {
-  documentId: string;
-}
-
-async function navigationUrlDigest(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-async function getActiveNetworkCaptureArm(tabId: number): Promise<NetworkCaptureArm | null> {
-  const key = networkCaptureArmStorageKey(tabId);
-  const candidate = (await chrome.storage.session.get(key))[key] as Partial<NetworkCaptureArm> | undefined;
-  const documentId =
-    candidate?.documentId === undefined
-      ? undefined
-      : typeof candidate.documentId === 'string' && candidate.documentId.length > 0
-        ? candidate.documentId
-        : null;
-  if (
-    candidate &&
-    isSupportedPlatform(candidate.platform) &&
-    typeof candidate.navigationUrlDigest === 'string' &&
-    /^[0-9a-f]{64}$/.test(candidate.navigationUrlDigest) &&
-    typeof candidate.expiresAt === 'number' &&
-    Number.isFinite(candidate.expiresAt) &&
-    candidate.expiresAt > Date.now() &&
-    documentId !== null
-  ) {
-    return {
-      platform: candidate.platform,
-      navigationUrlDigest: candidate.navigationUrlDigest,
-      expiresAt: candidate.expiresAt,
-      ...(documentId === undefined ? {} : { documentId })
-    };
-  }
-  await chrome.storage.session.remove(key);
-  return null;
-}
-
-function senderUrlMatchesArmPlatform(senderUrl: string, arm: NetworkCaptureArm): boolean {
-  try {
-    const url = new URL(senderUrl);
-    return nativeSearchPlatform(url) === arm.platform;
-  } catch {
-    return false;
-  }
-}
-
-async function activeArmForNavigation(tabId: number, senderUrl: string | undefined): Promise<NetworkCaptureArm | null> {
-  if (!senderUrl) return null;
-  const arm = await getActiveNetworkCaptureArm(tabId);
-  if (!arm || !senderUrlMatchesArmPlatform(senderUrl, arm)) return null;
-  return (await navigationUrlDigest(senderUrl)) === arm.navigationUrlDigest ? arm : null;
-}
-
-async function bindArmToDocument(
-  tabId: number,
-  senderUrl: string | undefined,
-  documentId: string | undefined
-): Promise<BoundNetworkCaptureArm | null> {
-  if (!documentId) return null;
-  const arm = await activeArmForNavigation(tabId, senderUrl);
-  if (!arm || (arm.documentId !== undefined && arm.documentId !== documentId)) return null;
-  const bound: BoundNetworkCaptureArm = { ...arm, documentId };
-  await chrome.storage.session.set({ [networkCaptureArmStorageKey(tabId)]: bound });
-  return bound;
-}
-
-async function activeBoundArmForSender(
-  tabId: number,
-  senderUrl: string | undefined,
-  documentId: string | undefined
-): Promise<BoundNetworkCaptureArm | null> {
-  if (!documentId) return null;
-  const arm = await activeArmForNavigation(tabId, senderUrl);
-  return arm?.documentId === documentId ? { ...arm, documentId } : null;
-}
-
-async function storeNetworkCapture(tabId: number, candidate: unknown): Promise<{ stored: boolean }> {
-  const observation = sanitiseNetworkCaptureObservation(candidate);
-  if (!observation) return { stored: false };
-
-  const key = networkCaptureStorageKey(tabId);
-  const current = (await chrome.storage.session.get(key))[key];
-  const captures = Array.isArray(current)
-    ? current
-        .map((value) => sanitiseNetworkCaptureObservation(value))
-        .filter((value): value is NetworkCaptureObservation => value !== null)
-        .slice(0, NETWORK_CAPTURE_MAX_PER_PAGE)
-    : [];
-  if (captures.length >= NETWORK_CAPTURE_MAX_PER_PAGE) return { stored: false };
-
-  captures.push(observation);
-  await chrome.storage.session.set({ [key]: captures });
-  return { stored: true };
-}
+import {
+  TRANSCRIPT_VALIDATION_ALARM_PREFIX,
+  activeTranscriptValidationForSender,
+  completeTranscriptValidation,
+  createTranscriptCapabilityValidationRun,
+  expireTranscriptValidationRun,
+  expireTranscriptValidationRuns,
+  getTranscriptCapabilityValidationRun,
+  invalidateTranscriptValidationsWithoutPermissions,
+  markTranscriptValidationTabChanged,
+  markTranscriptValidationTabClosed,
+  markTranscriptValidationWindowClosed
+} from './transcript-validation-runs';
 
 async function collectTab(tabId: number): Promise<VisibleCollectionResult> {
   const response = await chrome.tabs.sendMessage(tabId, { type: COLLECT_VISIBLE_RESULTS });
@@ -199,6 +127,7 @@ async function controlSnapshot(): Promise<CollectorControlSnapshot> {
   return {
     schemaVersion: 1,
     protocolVersion: 1,
+    controlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION,
     collectorVersion: COLLECTOR_CORE_VERSION,
     pairing: await gatewayPairingSummary(),
     gatewayRuntime: await gatewayRuntimeStatus(),
@@ -217,14 +146,9 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       sendResponse({ ok: true, armed: false });
       return false;
     }
-    void bindArmToDocument(tabId, sender.url, sender.documentId).then(
+    void bindNetworkCaptureArmToDocument(tabId, sender.url, sender.documentId).then(
       async (arm) => {
         if (!arm) {
-          sendResponse({ ok: true, armed: false });
-          return;
-        }
-        if (!hasApprovedNetworkCaptureRoute(arm.platform)) {
-          await chrome.storage.session.remove(networkCaptureArmStorageKey(tabId));
           sendResponse({ ok: true, armed: false });
           return;
         }
@@ -235,14 +159,24 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
           await chrome.scripting.executeScript({
             target: { tabId, documentIds: [arm.documentId] },
             world: 'MAIN',
-            func: (expiresAt: number) => {
+            func: (expiresAt: number, platform: string, routeIds: readonly string[]) => {
               Object.defineProperty(window, '__personalIntelligenceNetworkCaptureExpiresAt', {
                 value: expiresAt,
                 writable: false,
                 configurable: true
               });
+              Object.defineProperty(window, '__personalIntelligenceNetworkCapturePlatform', {
+                value: platform,
+                writable: false,
+                configurable: true
+              });
+              Object.defineProperty(window, '__personalIntelligenceNetworkCaptureRouteIds', {
+                value: [...routeIds],
+                writable: false,
+                configurable: true
+              });
             },
-            args: [arm.expiresAt],
+            args: [arm.expiresAt, arm.platform, arm.routeIds],
             injectImmediately: true
           });
           await chrome.scripting.executeScript({
@@ -251,7 +185,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
             files: ['main-world-network-observer.js'],
             injectImmediately: true
           });
-          sendResponse({ ok: true, armed: true, expiresAt: arm.expiresAt });
+          sendResponse({ ok: true, armed: true, expiresAt: arm.expiresAt, routeIds: arm.routeIds });
         } catch {
           sendResponse({ ok: true, armed: false });
         }
@@ -271,12 +205,48 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       sendResponse({ ok: false, error: 'network_capture_source_rejected' });
       return false;
     }
-    void activeBoundArmForSender(tabId, sender.url, sender.documentId).then(
-      (arm) => arm?.platform === message.observation.platform ? storeNetworkCapture(tabId, message.observation) : { stored: false },
+    void activeBoundNetworkCaptureArmForSender(tabId, sender.url, sender.documentId).then(
+      (arm) => arm?.platform === message.observation.platform
+        ? storeNetworkCapture(tabId, message.observation, arm)
+        : { stored: false },
       () => ({ stored: false })
     ).then(
       (result) => sendResponse({ ok: true, ...result }),
       () => sendResponse({ ok: false, error: 'network_capture_storage_failed' })
+    );
+    return true;
+  }
+
+  if (isTranscriptContentReadyMessage(message)) {
+    const tabId = sender.tab?.id;
+    if (typeof tabId !== 'number' || sender.frameId !== 0) {
+      sendResponse({ ok: false, armed: false, error: 'transcript_validation_source_rejected' });
+      return false;
+    }
+    void activeTranscriptValidationForSender(tabId, sender.url, sender.documentId).then(
+      (run) => sendResponse(run
+        ? { ok: true, armed: true, runId: run.runId }
+        : { ok: true, armed: false }),
+      () => sendResponse({ ok: false, armed: false, error: 'transcript_validation_state_unavailable' })
+    );
+    return true;
+  }
+
+  if (isTranscriptInteractionResultMessage(message)) {
+    const tabId = sender.tab?.id;
+    if (typeof tabId !== 'number' || sender.frameId !== 0) {
+      sendResponse({ ok: false, error: 'transcript_validation_source_rejected' });
+      return false;
+    }
+    void activeTranscriptValidationForSender(tabId, sender.url, sender.documentId).then(
+      async (run) => {
+        if (!run) return { ok: false, error: 'transcript_validation_without_active_run' };
+        const completed = await completeTranscriptValidation(run.runId, message.result);
+        return { ok: true, validationRunId: completed.runId, validationState: completed.state };
+      }
+    ).then(
+      (result) => sendResponse(result),
+      () => sendResponse({ ok: false, error: 'transcript_validation_completion_failed' })
     );
     return true;
   }
@@ -291,6 +261,8 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       async (lease) => {
         if (lease) {
           const evidence = await submitStageEvidence(lease, message.result);
+          await clearStageWatchdog(lease.leaseId);
+          await scheduleGatewayContinuation();
           return {
             ok: true,
             taskId: lease.taskId,
@@ -299,13 +271,33 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
           };
         }
         const validation = await activeCapabilityValidationRunForSender(tabId, sender.url, sender.documentId);
-        if (!validation) return { ok: false, error: 'collection_result_without_active_lease' };
-        const completed = await completeCapabilityValidationRun(validation.runId, message.result);
+        if (validation) {
+          const completed = await completeCapabilityValidationRun(validation.runId, message.result);
+          return { ok: true, validationRunId: completed.runId, validationState: completed.state };
+        }
+        const detailValidation = await activeDetailCapabilityValidationRunForSender(
+          tabId,
+          sender.url,
+          sender.documentId
+        );
+        if (!detailValidation || message.result.operation !== 'detail_read') {
+          return { ok: false, error: 'collection_result_without_active_lease' };
+        }
+        const completed = await completeDetailCapabilityValidationRun(detailValidation.runId, message.result);
         return { ok: true, validationRunId: completed.runId, validationState: completed.state };
       }
     ).then(
       (result) => sendResponse(result),
-      () => sendResponse({ ok: false, error: 'collection_result_storage_failed' })
+      async () => {
+        // A result may be queued before the Gateway has processed the accepted
+        // stage receipt. Schedule only loopback recovery; do not re-inject,
+        // navigate, refresh or repeat any platform action.
+        const lease = await stageLeaseForTab(tabId).catch(() => null);
+        if (lease?.status === 'active' || lease?.status === 'awaiting_evidence') {
+          await scheduleGatewayContinuation().catch(() => undefined);
+        }
+        sendResponse({ ok: false, error: 'collection_result_storage_failed' });
+      }
     );
     return true;
   }
@@ -369,6 +361,72 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
         ? { ok: true, validation }
         : { ok: false, error: 'validation_run_not_found' }),
       () => sendResponse({ ok: false, error: 'validation_state_unavailable' })
+    );
+    return true;
+  }
+
+  if (isStartDetailCapabilityValidationMessage(message)) {
+    if (!isExtensionControlSender(sender)) {
+      sendResponse({ ok: false, error: 'control_sender_rejected' });
+      return false;
+    }
+    void createDetailCapabilityValidationRun({
+      runId: message.runId,
+      profileId: message.profileId,
+      canonicalUrl: message.canonicalUrl
+    }).then(
+      (validation) => sendResponse({ ok: true, validation }),
+      (error: unknown) => sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : 'detail_validation_start_failed'
+      })
+    );
+    return true;
+  }
+
+  if (isGetDetailCapabilityValidationMessage(message)) {
+    if (!isExtensionControlSender(sender)) {
+      sendResponse({ ok: false, error: 'control_sender_rejected' });
+      return false;
+    }
+    void getDetailCapabilityValidationRun(message.runId).then(
+      (validation) => sendResponse(validation
+        ? { ok: true, validation }
+        : { ok: false, error: 'detail_validation_run_not_found' }),
+      () => sendResponse({ ok: false, error: 'detail_validation_state_unavailable' })
+    );
+    return true;
+  }
+
+  if (isStartTranscriptCapabilityValidationMessage(message)) {
+    if (!isExtensionControlSender(sender)) {
+      sendResponse({ ok: false, error: 'control_sender_rejected' });
+      return false;
+    }
+    void createTranscriptCapabilityValidationRun({
+      runId: message.runId,
+      profileId: message.profileId,
+      canonicalUrl: message.canonicalUrl
+    }).then(
+      (validation) => sendResponse({ ok: true, validation }),
+      (error: unknown) => sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : 'transcript_validation_start_failed'
+      })
+    );
+    return true;
+  }
+
+  if (isGetTranscriptCapabilityValidationMessage(message)) {
+    if (!isExtensionControlSender(sender)) {
+      sendResponse({ ok: false, error: 'control_sender_rejected' });
+      return false;
+    }
+    void getTranscriptCapabilityValidationRun(message.runId).then(
+      (validation) => sendResponse(validation
+        ? { ok: true, validation }
+        : { ok: false, error: 'transcript_validation_run_not_found' }),
+      () => sendResponse({ ok: false, error: 'transcript_validation_state_unavailable' })
     );
     return true;
   }
@@ -443,14 +501,37 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     }
     void activeStageLeaseForSender(tabId, sender.url, sender.documentId).then(
       async (lease) => {
+        // READY is content-driven so the MV3 worker is held alive by this exact
+        // message event while Evidence is submitted. The dispatch loop and its
+        // durable watchdog remain independent recovery and terminal paths.
         if (lease) {
-          await collectTab(tabId);
-          return { ok: true };
+          const result = await collectTab(tabId);
+          const evidence = await submitStageEvidence(lease, result);
+          await clearStageWatchdog(lease.leaseId);
+          await scheduleGatewayContinuation();
+          return { ok: true, evidenceBatchId: evidence.batchId };
         }
+        const knownLease = await stageLeaseForTab(tabId);
+        if (
+          knownLease &&
+          (knownLease.status === 'awaiting_evidence' ||
+            knownLease.status === 'completed')
+        ) return { ok: true };
         const validation = await activeCapabilityValidationRunForSender(tabId, sender.url, sender.documentId);
-        if (!validation) return { ok: false, error: 'content_ready_without_active_lease' };
+        if (validation) {
+          const result = await collectTab(tabId);
+          const completed = await completeCapabilityValidationRun(validation.runId, result);
+          return { ok: true, validationRunId: completed.runId, validationState: completed.state };
+        }
+        const detailValidation = await activeDetailCapabilityValidationRunForSender(
+          tabId,
+          sender.url,
+          sender.documentId
+        );
+        if (!detailValidation) return { ok: false, error: 'content_ready_without_active_lease' };
         const result = await collectTab(tabId);
-        const completed = await completeCapabilityValidationRun(validation.runId, result);
+        if (result.operation !== 'detail_read') return { ok: false, error: 'detail_validation_result_invalid' };
+        const completed = await completeDetailCapabilityValidationRun(detailValidation.runId, result);
         return { ok: true, validationRunId: completed.runId, validationState: completed.state };
       }
     ).then(
@@ -473,35 +554,55 @@ void PAIR_GATEWAY;
 void REVOKE_GATEWAY_PAIRING;
 void START_CAPABILITY_VALIDATION;
 void GET_CAPABILITY_VALIDATION;
+void START_DETAIL_CAPABILITY_VALIDATION;
+void GET_DETAIL_CAPABILITY_VALIDATION;
+void START_TRANSCRIPT_CAPABILITY_VALIDATION;
+void GET_TRANSCRIPT_CAPABILITY_VALIDATION;
 void NETWORK_CAPTURE_OBSERVED;
 void NETWORK_CAPTURE_BRIDGE_READY_MESSAGE;
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  void updateStageLeaseStatus(tabId, 'window_closed');
+  void stageLeaseForTab(tabId).then((lease) => {
+    if (lease?.status === 'active' || lease?.status === 'awaiting_evidence') {
+      return updateStageLeaseStatus(tabId, 'window_closed');
+    }
+    return undefined;
+  });
   void markCapabilityValidationTabClosed(tabId);
-  void chrome.storage.session.remove([networkCaptureStorageKey(tabId), networkCaptureArmStorageKey(tabId)]);
+  void markDetailValidationTabClosed(tabId);
+  void markTranscriptValidationTabClosed(tabId);
+  void clearNetworkCaptureState(tabId);
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.url) {
     void markTaskContextChanged(tabId, changeInfo.url);
     void markCapabilityValidationTabChanged(tabId, changeInfo.url);
+    void markDetailValidationTabChanged(tabId, changeInfo.url);
+    void markTranscriptValidationTabChanged(tabId, changeInfo.url);
   }
-  if (changeInfo.status !== 'complete') return;
+  if (changeInfo.status !== 'loading' && changeInfo.status !== 'complete') return;
   void chrome.tabs.get(tabId).then(async (tab) => {
     if (!tab.url) return;
     await markTaskContextChanged(tabId, tab.url);
     await markCapabilityValidationTabChanged(tabId, tab.url);
+    await markDetailValidationTabChanged(tabId, tab.url);
+    await markTranscriptValidationTabChanged(tabId, tab.url);
     const lease = await stageLeaseForTab(tabId);
     if (lease?.status === 'active') {
+      await ensureTaskContentInjected(lease);
+      return;
+    }
+    const validation = await capabilityValidationRunForTab(tabId);
+    if (validation && (validation.state === 'navigating' || validation.state === 'collecting')) {
       await chrome.scripting.executeScript({
         target: { tabId },
         files: ['content.js']
       });
       return;
     }
-    const validation = await capabilityValidationRunForTab(tabId);
-    if (validation && (validation.state === 'navigating' || validation.state === 'collecting')) {
+    const detailValidation = await detailCapabilityValidationRunForTab(tabId);
+    if (detailValidation && (detailValidation.state === 'navigating' || detailValidation.state === 'collecting')) {
       await chrome.scripting.executeScript({
         target: { tabId },
         files: ['content.js']
@@ -513,6 +614,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 chrome.windows.onRemoved.addListener((windowId) => {
   void markWindowClosed(windowId);
   void markCapabilityValidationWindowClosed(windowId);
+  void markDetailValidationWindowClosed(windowId);
+  void markTranscriptValidationWindowClosed(windowId);
 });
 
 chrome.permissions.onAdded.addListener(() => {
@@ -523,6 +626,8 @@ chrome.permissions.onRemoved.addListener(() => {
   void synchroniseStrategyContentScripts();
   void invalidateLeasesWithoutPermissions();
   void invalidateCapabilityValidationsWithoutPermissions();
+  void invalidateDetailValidationsWithoutPermissions();
+  void invalidateTranscriptValidationsWithoutPermissions();
 });
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -533,6 +638,7 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => {
   void synchroniseStrategyContentScripts();
   void synchroniseGatewayPolling().then(() => pollGatewayTasks());
+  void expireTranscriptValidationRuns();
 });
 
 void synchroniseStrategyContentScripts();
@@ -540,5 +646,15 @@ void synchroniseGatewayPolling();
 void flushPendingEvidenceSubmissions().catch(() => undefined);
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === GATEWAY_POLL_ALARM) void pollGatewayTasks();
+  if (alarm.name.startsWith(STAGE_WATCHDOG_ALARM_PREFIX)) {
+    void handleStageWatchdogAlarm(alarm.name);
+    return;
+  }
+  if (alarm.name.startsWith(TRANSCRIPT_VALIDATION_ALARM_PREFIX)) {
+    void expireTranscriptValidationRun(alarm.name.slice(TRANSCRIPT_VALIDATION_ALARM_PREFIX.length));
+    return;
+  }
+  if (alarm.name === GATEWAY_POLL_ALARM || alarm.name === GATEWAY_CONTINUE_ALARM) {
+    void pollGatewayTasks();
+  }
 });

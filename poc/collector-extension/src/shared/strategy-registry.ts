@@ -24,11 +24,17 @@ export type StrategySurface =
   | 'native_search'
   | 'account_listing'
   | 'content_detail'
+  | 'transcript'
   | 'comment_thread';
 
 export type StrategyEntryKind = 'native_search_url' | 'canonical_url' | 'profile_url';
 
-export type StrategyOutputKind = 'search_card' | 'content_detail' | 'comment' | 'collection_state';
+export type StrategyOutputKind =
+  | 'search_card'
+  | 'content_detail'
+  | 'transcript_document'
+  | 'comment'
+  | 'collection_state';
 
 export interface StaticPlatformStrategy {
   strategyId: string;
@@ -158,11 +164,100 @@ function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStr
   };
 }
 
+function bilibiliVideoDetailDomStrategy(): StaticPlatformStrategy {
+  const admittedValidation: LiveValidationReference = {
+    category: 'anonymous',
+    recordId: '2a5008a7-97ab-488c-b0bd-25b98e277093',
+    verifiedAt: '2026-07-18T13:05:01.696Z',
+    environment: 'local_user_controlled_validation_profile'
+  };
+  return {
+    strategyId: 'bilibili.video.detail.dom.v1',
+    version: '1.4.0',
+    platform: 'bilibili',
+    evidenceObjectives: ['detail_read'],
+    acquisition: ['detail_navigation', 'visible_dom'],
+    maturity: 'suspended',
+    surface: 'content_detail',
+    nativeEntry: { kind: 'canonical_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['detail_navigation', 'visible_dom']
+    },
+    bounds: {
+      maxRecords: 1,
+      maxReadOnlyActions: 0,
+      firstRenderedPageOnly: true,
+      allowsDetailNavigation: true,
+      allowsCommentNavigation: false,
+      allowsReadOnlyInteraction: false
+    },
+    output: {
+      kind: 'content_detail',
+      partialByDefault: true
+    },
+    browser: {
+      optionalHostPermissions: ['https://www.bilibili.com/*'],
+      domContentMatches: ['https://www.bilibili.com/video/*'],
+      responseBridgeMatches: []
+    },
+    approvedResponseRouteIds: [],
+    validation: {
+      mode: 'local_live_platform_only',
+      liveRecord: admittedValidation
+    }
+  };
+}
+
+function bilibiliVideoTranscriptResponseStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'bilibili.video.transcript.response.v1',
+    version: '1.0.0',
+    platform: 'bilibili',
+    evidenceObjectives: ['transcript_read'],
+    acquisition: ['detail_navigation', 'visible_dom', 'bounded_interaction', 'approved_response'],
+    maturity: 'suspended',
+    surface: 'transcript',
+    nativeEntry: { kind: 'canonical_url' },
+    preconditions: {
+      authentication: 'required',
+      requiredConsent: ['detail_navigation', 'visible_dom', 'bounded_interaction', 'approved_response']
+    },
+    bounds: {
+      maxRecords: 1,
+      maxReadOnlyActions: 2,
+      firstRenderedPageOnly: true,
+      allowsDetailNavigation: true,
+      allowsCommentNavigation: false,
+      allowsReadOnlyInteraction: true
+    },
+    output: {
+      kind: 'transcript_document',
+      partialByDefault: true
+    },
+    browser: {
+      optionalHostPermissions: ['https://www.bilibili.com/*'],
+      domContentMatches: ['https://www.bilibili.com/video/*'],
+      // The research arm supplies its two route IDs explicitly. Keeping this
+      // empty prevents the strategy from becoming production response
+      // observation before a separate authenticated admission decision.
+      responseBridgeMatches: []
+    },
+    approvedResponseRouteIds: [],
+    validation: {
+      mode: 'local_live_platform_only',
+      liveRecord: null
+    }
+  };
+}
+
 // This is a compiled, repository-local registry.  It is not a mechanism for
 // downloading plugins, evaluating remote code, or granting a strategy browser
 // privileges.  The Collector Core owns all privileged APIs.
 export const STATIC_PLATFORM_STRATEGIES: readonly StaticPlatformStrategy[] = [
   nativeSearchDomStrategy('bilibili'),
+  bilibiliVideoDetailDomStrategy(),
+  bilibiliVideoTranscriptResponseStrategy(),
   nativeSearchDomStrategy('zhihu'),
   nativeSearchDomStrategy('weibo'),
   nativeSearchDomStrategy('xiaohongshu')
@@ -184,6 +279,22 @@ export function resolveNativeSearchStrategy(platform: SupportedPlatform): Static
   if (!strategy) {
     throw new Error(`No static native-search strategy is registered for ${platform}.`);
   }
+  return strategy;
+}
+
+export function resolveDetailStrategy(platform: SupportedPlatform): StaticPlatformStrategy {
+  const strategy = strategiesFor(platform, 'detail_read').find(
+    (candidate) => candidate.surface === 'content_detail'
+  );
+  if (!strategy) throw new Error(`No static detail strategy is registered for ${platform}.`);
+  return strategy;
+}
+
+export function resolveTranscriptStrategy(platform: SupportedPlatform): StaticPlatformStrategy {
+  const strategy = strategiesFor(platform, 'transcript_read').find(
+    (candidate) => candidate.surface === 'transcript'
+  );
+  if (!strategy) throw new Error(`No static transcript strategy is registered for ${platform}.`);
   return strategy;
 }
 

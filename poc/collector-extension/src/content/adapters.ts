@@ -1,11 +1,17 @@
 import type {
   SupportedPlatform,
   VisibleCollectionResult,
+  VisibleDetailCollectionResult,
   VisiblePageState,
+  VisibleSearchCollectionResult,
   VisibleSearchItem
 } from '../shared/protocol';
 import { nativeSearchPlatform } from '../shared/native-search';
-import { resolveNativeSearchStrategy, strategyProvenance } from '../shared/strategy-registry';
+import {
+  resolveDetailStrategy,
+  resolveNativeSearchStrategy,
+  strategyProvenance
+} from '../shared/strategy-registry';
 
 const MAX_ITEMS = 20;
 
@@ -44,8 +50,8 @@ function anchors(document: Document): HTMLAnchorElement[] {
   });
 }
 
-function pageState(document: Document, items: readonly VisibleSearchItem[]): VisiblePageState {
-  if (items.length > 0) return 'results_visible';
+function pageState(document: Document, contentVisible: boolean): VisiblePageState {
+  if (contentVisible) return 'results_visible';
   const visibleText = cleanText(document.body?.innerText, 20_000);
   if (/验证码|安全验证|完成验证|请进行验证|异常访问/.test(visibleText)) return 'verification_required';
   if (/请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(visibleText)) return 'rate_limited';
@@ -53,6 +59,114 @@ function pageState(document: Document, items: readonly VisibleSearchItem[]): Vis
   if (/没有找到|暂无相关|未找到相关|搜索结果为空/.test(visibleText)) return 'no_results_visible';
   if (/页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(visibleText)) return 'source_unavailable';
   return 'layout_unrecognized';
+}
+
+function visibleElement(element: Element | null): element is HTMLElement {
+  if (!(element instanceof HTMLElement)) return false;
+  const style = getComputedStyle(element);
+  return style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
+}
+
+function visibleText(document: Document, selectors: readonly string[], maximum: number): string {
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (!visibleElement(element)) continue;
+    const text = cleanText(element.getAttribute('title') || element.innerText, maximum);
+    if (text) return text;
+  }
+  return '';
+}
+
+function canonicalBilibiliVideo(location: Location): { contentId: string; url: string } | null {
+  if (location.hostname !== 'www.bilibili.com') return null;
+  const match = location.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/);
+  return match
+    ? { contentId: match[1], url: `https://www.bilibili.com/video/${match[1]}` }
+    : null;
+}
+
+function collectBilibiliVideoDetail(
+  document: Document,
+  location: Location
+): VisibleDetailCollectionResult {
+  const canonical = canonicalBilibiliVideo(location);
+  const strategy = strategyProvenance(resolveDetailStrategy('bilibili'));
+  const title = visibleText(document, [
+    'h1.video-title[title]',
+    'h1.video-title',
+    '.video-info-title-inner[title]',
+    '.video-info-title-inner'
+  ], 500);
+  const creatorLink = Array.from(document.querySelectorAll<HTMLAnchorElement>(
+    '.up-info-container a.up-name[href], .up-info-container a[href*="space.bilibili.com/"]'
+  )).find((anchor) => visibleElement(anchor) && /space\.bilibili\.com\/\d+/.test(anchor.href));
+  const creatorMatch = creatorLink?.href.match(/^https:\/\/space\.bilibili\.com\/(\d+)/);
+  const creatorName = cleanText(creatorLink?.innerText, 200);
+  const description = visibleText(document, [
+    '.video-desc-container .desc-info-text',
+    '.video-desc-container .basic-desc-info',
+    '.video-desc-container'
+  ], 5_000);
+  const publishedText = visibleText(document, [
+    '.video-info-meta .pubdate-ip-text',
+    '.video-info-detail-list .pubdate-ip-text'
+  ], 200);
+  const metricSelectors: readonly [string, string][] = [
+    ['views', '.video-info-meta .view-text'],
+    ['danmaku', '.video-info-meta .dm-text'],
+    ['likes', '.video-toolbar-left .video-like-info'],
+    ['coins', '.video-toolbar-left .video-coin-info'],
+    ['favorites', '.video-toolbar-left .video-fav-info'],
+    ['shares', '.video-toolbar-left .video-share-wrap > span']
+  ];
+  const visibleMetrics = metricSelectors.flatMap(([label, selector]) => {
+    const value = visibleText(document, [selector], 100);
+    return value ? [{ label, value }] : [];
+  });
+  const tags = [...new Set(Array.from(document.querySelectorAll<HTMLAnchorElement>('.tag-link[href]'))
+    .filter(visibleElement)
+    .map((anchor) => cleanText(anchor.innerText, 100))
+    .filter(Boolean))].slice(0, 20);
+  const detail = canonical && title
+    ? {
+        contentId: canonical.contentId,
+        contentType: 'video' as const,
+        canonicalUrl: canonical.url,
+        title,
+        creator: creatorMatch && creatorName
+          ? {
+              displayName: creatorName,
+              canonicalProfileUrl: `https://space.bilibili.com/${creatorMatch[1]}/`,
+              visibleDescription: visibleText(document, ['.up-info-container .up-description'], 1_000) || null
+            }
+          : null,
+        description: description || null,
+        publishedText: publishedText || null,
+        visibleMetrics,
+        tags
+      }
+    : null;
+
+  return {
+    schemaVersion: 1,
+    platform: 'bilibili',
+    operation: 'detail_read',
+    strategy,
+    sourceUrl: canonical?.url ?? safePageUrl(location),
+    pageState: detail
+      ? 'results_visible'
+      : canonical && title
+        ? 'layout_unrecognized'
+        : pageState(document, false),
+    partial: true,
+    itemCount: detail ? 1 : 0,
+    detail,
+    warnings: [
+      'Visible detail DOM only; no comment text, recommendation card, browser credential, storage, request, or response data is read.',
+      'No page interaction is performed; metrics are stored as the labels and values visibly rendered at capture time.',
+      'Creator and description fields reflect only what this page variant visibly rendered; either field may be absent.'
+    ]
+  };
 }
 
 function uniqueItems(candidates: Array<Omit<VisibleSearchItem, 'rank'>>): VisibleSearchItem[] {
@@ -152,7 +266,7 @@ function collectXiaohongshu(document: Document, location: Location): VisibleSear
 export function collectVisibleSearchResults(
   document: Document,
   location: Location
-): VisibleCollectionResult {
+): VisibleSearchCollectionResult {
   const platform = platformFromPage(location);
   const collectors: Record<SupportedPlatform, () => VisibleSearchItem[]> = {
     bilibili: () => collectBilibili(document, location),
@@ -171,7 +285,7 @@ export function collectVisibleSearchResults(
     operation: 'breadth_search',
     strategy,
     sourceUrl: safePageUrl(location),
-    pageState: pageState(document, items),
+    pageState: pageState(document, items.length > 0),
     partial: true,
     itemCount: items.length,
     items,
@@ -181,4 +295,12 @@ export function collectVisibleSearchResults(
       ...(platform === 'unsupported' ? ['This page is not a recognized platform-native keyword-search route.'] : [])
     ]
   };
+}
+
+export function collectVisiblePageResult(
+  document: Document,
+  location: Location
+): VisibleCollectionResult {
+  if (canonicalBilibiliVideo(location)) return collectBilibiliVideoDetail(document, location);
+  return collectVisibleSearchResults(document, location);
 }

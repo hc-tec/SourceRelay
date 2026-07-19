@@ -18,6 +18,11 @@ import {
 import type { VisibleCollectionResult } from './protocol';
 
 export const COLLECTOR_CONTROL_PROTOCOL_VERSION = 1 as const;
+// Bump this whenever the extension-owned control message surface changes.
+// It is intentionally separate from the signed Gateway task protocol so a
+// stale persistent MV3 service worker can be detected and reloaded without
+// invalidating existing pairing records.
+export const COLLECTOR_CONTROL_SURFACE_REVISION = 2 as const;
 export const STAGE_LEASE_SCHEMA_VERSION = 1 as const;
 
 export interface GatewayIdentity {
@@ -192,6 +197,7 @@ export function evidencePlanDigestPayload(plan: EvidencePlan | ApprovedEvidenceP
 export interface StrategyPermissionSnapshot {
   platform: SupportedPlatform;
   strategy: StrategyProvenance;
+  capabilities: readonly StrategyProvenance[];
   requiredOrigins: readonly string[];
   granted: boolean;
   domExecution: 'task_document_only';
@@ -201,6 +207,7 @@ export interface StrategyPermissionSnapshot {
 export interface CollectorControlSnapshot {
   schemaVersion: 1;
   protocolVersion: typeof COLLECTOR_CONTROL_PROTOCOL_VERSION;
+  controlSurfaceRevision: typeof COLLECTOR_CONTROL_SURFACE_REVISION;
   collectorVersion: string;
   pairing: GatewayPairingSummary | null;
   gatewayRuntime: GatewayRuntimeStatus;

@@ -1,6 +1,5 @@
 import { nativeSearchPlatform } from '../shared/native-search';
 import {
-  NETWORK_CAPTURE_MAX_BODY_BYTES,
   NETWORK_CAPTURE_MAX_PER_PAGE,
   NETWORK_CAPTURE_OBSERVER_READY,
   NETWORK_CAPTURE_WINDOW_CHANNEL,
@@ -15,6 +14,8 @@ import type { SupportedPlatform } from '../shared/protocol';
 
 const observerInstalledAttribute = 'collectorNetworkCaptureObserverInstalled';
 const observerExpiryProperty = '__personalIntelligenceNetworkCaptureExpiresAt';
+const observerPlatformProperty = '__personalIntelligenceNetworkCapturePlatform';
+const observerRouteIdsProperty = '__personalIntelligenceNetworkCaptureRouteIds';
 
 interface RequestMetadata {
   url: string;
@@ -22,17 +23,31 @@ interface RequestMetadata {
 }
 
 function platformForCurrentPage(): SupportedPlatform | null {
-  const platform = nativeSearchPlatform(new URL(window.location.href));
-  return platform === 'unsupported' ? null : platform;
+  const url = new URL(window.location.href);
+  const nativePlatform = nativeSearchPlatform(url);
+  if (nativePlatform !== 'unsupported') return nativePlatform;
+  const platform = (window as Window & { [observerPlatformProperty]?: unknown })[observerPlatformProperty];
+  if (
+    platform === 'bilibili' &&
+    url.protocol === 'https:' &&
+    url.hostname === 'www.bilibili.com' &&
+    /^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname)
+  ) return 'bilibili';
+  return null;
 }
 
-function isPotentialSearchPage(): boolean {
-  return nativeSearchPlatform(new URL(window.location.href)) !== 'unsupported';
+function isPotentialCapturePage(): boolean {
+  return platformForCurrentPage() !== null;
 }
 
 function isCaptureWindowActive(): boolean {
   const expiry = (window as Window & { [observerExpiryProperty]?: unknown })[observerExpiryProperty];
   return typeof expiry === 'number' && Number.isFinite(expiry) && Date.now() < expiry;
+}
+
+function activeRouteIds(): readonly string[] {
+  const value = (window as Window & { [observerRouteIdsProperty]?: unknown })[observerRouteIdsProperty];
+  return Array.isArray(value) && value.every((routeId) => typeof routeId === 'string') ? value : [];
 }
 
 function requestUrl(input: RequestInfo | URL): string | null {
@@ -56,9 +71,9 @@ function parseDeclaredLength(value: string | null): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
-async function readResponseTextWithinLimit(response: Response): Promise<string | null> {
+async function readResponseTextWithinLimit(response: Response, maximumBodyBytes: number): Promise<string | null> {
   const declaredLength = parseDeclaredLength(response.headers.get('content-length'));
-  if (declaredLength !== null && declaredLength > NETWORK_CAPTURE_MAX_BODY_BYTES) return null;
+  if (declaredLength !== null && declaredLength > maximumBodyBytes) return null;
 
   const clone = response.clone();
   if (!clone.body) return null;
@@ -70,7 +85,7 @@ async function readResponseTextWithinLimit(response: Response): Promise<string |
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > NETWORK_CAPTURE_MAX_BODY_BYTES) {
+      if (total > maximumBodyBytes) {
         await reader.cancel();
         return null;
       }
@@ -92,7 +107,7 @@ async function readResponseTextWithinLimit(response: Response): Promise<string |
 }
 
 function installObserver(): void {
-  if (!isCaptureWindowActive() || !isPotentialSearchPage() || document.documentElement.dataset[observerInstalledAttribute] === 'true') return;
+  if (!isCaptureWindowActive() || !isPotentialCapturePage() || document.documentElement.dataset[observerInstalledAttribute] === 'true') return;
   document.documentElement.dataset[observerInstalledAttribute] = 'true';
 
   const postMessage = window.postMessage.bind(window);
@@ -114,7 +129,7 @@ function installObserver(): void {
     const platform = platformForCurrentPage();
     const responseUrl = response.url || metadata.url;
     if (!isCaptureWindowActive() || !platform || !responseUrl || emittedCount >= NETWORK_CAPTURE_MAX_PER_PAGE) return;
-    const route = findNetworkCaptureRoute(platform, responseUrl);
+    const route = findNetworkCaptureRoute(platform, responseUrl, activeRouteIds());
     if (!route) return;
     emittedCount += 1;
 
@@ -134,7 +149,7 @@ function installObserver(): void {
       emit(createNetworkCaptureRejection(input, 'mime_not_allowed'));
       return;
     }
-    const text = await readResponseTextWithinLimit(response);
+    const text = await readResponseTextWithinLimit(response, route.maximumBodyBytes);
     emit(text === null ? createNetworkCaptureRejection(input, 'payload_too_large') : createNetworkCaptureFromText(input, text));
   }
 
@@ -199,7 +214,7 @@ function installObserver(): void {
         const platform = platformForCurrentPage();
         const responseUrl = this.responseURL || metadata.url;
         if (!platform || emittedCount >= NETWORK_CAPTURE_MAX_PER_PAGE) return;
-        const route = findNetworkCaptureRoute(platform, responseUrl);
+        const route = findNetworkCaptureRoute(platform, responseUrl, activeRouteIds());
         if (!route) return;
         emittedCount += 1;
 
@@ -222,7 +237,7 @@ function installObserver(): void {
         try {
           const text = this.responseType === 'json' ? JSON.stringify(this.response) : this.responseText;
           emit(
-            typeof text === 'string' && new TextEncoder().encode(text).byteLength <= NETWORK_CAPTURE_MAX_BODY_BYTES
+            typeof text === 'string' && new TextEncoder().encode(text).byteLength <= route.maximumBodyBytes
               ? createNetworkCaptureFromText(input, text)
               : createNetworkCaptureRejection(input, 'payload_too_large')
           );

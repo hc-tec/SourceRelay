@@ -10,8 +10,13 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
+    "verify:safety": "node scripts/verify-account-safety.mjs",
+    "verify:task-resume": "node scripts/verify-task-account-safety-resume.mjs",
+    "verify:transcript-artifacts": "node scripts/verify-transcript-artifacts.mjs",
+    "verify:transcript-control": "node scripts/verify-transcript-control-loop.mjs",
+    "verify:reconnaissance": "node scripts/verify-interaction-reconnaissance.mjs",
     "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
-    "verify:build": "npm run typecheck && npm run build && npm run verify:artifacts",
+    "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:task-resume && npm run verify:transcript-artifacts && npm run verify:transcript-control && npm run verify:reconnaissance && npm run build && npm run verify:artifacts",
     "setup:browser": "playwright install chromium",
     "start": "node dist/server.js"
   },

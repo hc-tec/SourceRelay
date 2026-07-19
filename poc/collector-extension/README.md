@@ -2,7 +2,7 @@
 
 这是个人情报产品的浏览器内采集底座。一个 Manifest V3 Collector Core 运行在用户自己的 Collection Browser Profile 中，根据已批准的研究计划进入平台页面、读取公开可见内容，并在后续阶段把证据交给本地 Gateway / Evidence Vault。
 
-当前实现已完成 P0 / P1 控制面、受管 Profile、B站匿名 breadth 策略 admission，以及一次正式 B站 Research Task 的 dispatch → visible DOM → 认证 Evidence 回传 → 本地 batch → completed 闭环。加密 Vault、DeepResearch 和 B站详情 / 评论等独立深度策略尚未接入。
+当前实现已完成 P0 / P1 控制面、受管 Profile、B站匿名 breadth 策略 admission，以及一次正式 B站 Research Task 的 dispatch → visible DOM → 认证 Evidence 回传 → 本地 batch → completed 闭环。B站视频详情字段已完成独立 Validation Run，但正式多阶段 Task 的 document / content-script 生命周期仍不稳定，因此详情策略当前为 `suspended`；评论、加密 Vault 和 DeepResearch 尚未接入。
 
 ## 产品边界
 
@@ -53,13 +53,15 @@ draft
 
 当前注册表包含四个 `breadth_search + visible_dom` 静态策略。B站 `bilibili.search.breadth.dom.v1 @ 1.1.0` 已在匿名、可见、用户控制的 Validation Profile 中验证首屏可见标题和规范 BV URL，成熟度为 `live_anonymous_verified`；知乎、微博和小红书仍是 `build_ready / liveValidation = null`。
 
+B站 `bilibili.video.detail.dom.v1 @ 1.4.0` 保留历史字段 validation record，但因正式多阶段 Task 的页面 document 替换与结果交付尚未完成真实实站复验，registry 已降为 `suspended`，不得用旧 record 批准新详情任务。
+
 `build_ready` 只表示源码能够编译、生成 MV3 bundle、通过批准的 Manifest 权限清单并由受管理 Chromium 自动加载。它不表示平台页面可访问，不表示选择器仍有效，也不表示登录、翻页、详情、评论、账号归档或 response route 已经验证。
 
 生产 response route 当前刻意为空，因此任务不会 arm 或注入 MAIN-world observer。在完成精确 route、页面可见字段投影、安全生命周期和用户控制环境中的真实验证前，不得加入任何生产 route。
 
 ## 构建门禁，不是平台测试
 
-本项目不保留 fixture、离线平台样本、单元测试或 fixture E2E，也没有 test-branded 扩展。远程 CI 只能运行构建门禁，不得访问真实平台或任何登录状态。
+生产制品和 `verify:build` 不包含 fixture、离线平台样本或伪响应 E2E，也没有 test-branded 扩展。构建门禁可以运行纯函数和状态机单元测试；任何宣称平台能力的集成或端到端验证必须访问真实平台。远程 CI 不得访问真实平台或任何登录状态。
 
 `npm run verify:build` 只证明以下事实：
 
@@ -72,6 +74,8 @@ draft
 7. 新 Profile 没有任何已授予 optional host permission，也没有持久平台注册脚本。
 
 自动加载门禁不会打开任何平台页面，不会使用 Chrome / Edge 日常 Profile，也不需要人工进入 `chrome://extensions`、扫码、登录或点击扩展。它使用临时目录，结束后自动删除。
+
+仓库不再保留把平台域名拦截到本地 HTML、假响应或 fake Gateway 的平台集成诊断。真实 selector、登录、DOM/XHR、交付竞态和页面状态都必须在用户明确授权的专用 Profile 中通过真实网站验证；单元测试只能证明纯逻辑，不得生成 admission。
 
 前置条件是 Node.js 22+。首次使用先安装依赖和构建门禁专用 Chromium：
 
@@ -128,10 +132,11 @@ Gateway 已建立 Collection / Validation Profile 生命周期：它从内部逻
 
 B站 `breadth_search + visible_dom` 的精确 `v1.1.0` 现在可以在 Profile、同意和精确 host permission 都满足时进入 `ready / formal`；其他三平台仍是 `live_validation_required / experimental`。正式结果先进入 `chrome.storage.local` 的待提交队列，只有通过配对 HMAC 提交、Gateway 校验租约 / 策略 / 来源 / 预算并确认本地 batch 后，lease 才标记 completed；相同 task / stage / result digest 重投不会生成第二个 batch。
 
-该 admission 仍只覆盖匿名首屏搜索卡标题与 BV URL，不覆盖登录、翻页、详情或评论。下一检查点是为 B站 detail 和 bounded discussion 分别建立新策略、预算、页面动作与真实 admission，而不是扩大 breadth 策略的解释范围。
+该 breadth admission 仍只覆盖匿名首屏搜索卡标题与 BV URL，不覆盖登录、翻页、详情或评论。下一检查点先按 Source Reconnaissance Dossier 研究 B站详情正式 Task 的 document 生命周期，再以新版本重新验证；bounded discussion 仍必须是另一独立策略。
 
 完整产品决策见：
 
 - [Collector 决策审计](../../docs/design/collector-decision-audit.md)
 - [平台采集策略产品规格](../../docs/design/platform-strategy-product-spec.md)
+- [数据源勘察工作流](../../docs/design/source-reconnaissance-workflow.md)
 - [1–100 题决策账本](../../docs/design/collector-grilling-decision-log.md)

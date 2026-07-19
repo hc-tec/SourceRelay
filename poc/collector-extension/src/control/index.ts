@@ -92,7 +92,9 @@ function renderStrategy(snapshot: StrategyPermissionSnapshot): HTMLElement {
 
   const meta = document.createElement('p');
   meta.className = 'strategy-meta';
-  meta.textContent = `${snapshot.strategy.strategyId} · ${snapshot.strategy.version}`;
+  meta.textContent = snapshot.capabilities
+    .map((capability) => `${capability.strategyId} · ${capability.version} · ${capability.maturity}`)
+    .join(' | ');
 
   const origins = document.createElement('p');
   origins.className = 'origins';

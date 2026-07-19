@@ -1,12 +1,27 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { CollectionBrowserManager } from './browser-manager';
+import { AccountSafetyRegistry, accountSafetyUnlockInput } from './account-safety';
 import { loadGatewayConfig } from './config';
 import { consoleHtml, consoleScript, consoleStyles } from './console-assets';
+import {
+  DetailCapabilityValidationRegistry,
+  detailCapabilityValidationInput
+} from './detail-validations';
 import { GatewayEvidenceRegistry, gatewayEvidenceSubmission } from './evidence';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker, type PairingClaimInput } from './pairing';
 import { BrowserProfileRegistry, createBrowserProfileInput } from './profiles';
-import { GatewayTaskQueue, scoutTaskInput } from './tasks';
+import {
+  SourceReconnaissanceRegistry,
+  sourceReconnaissanceInput
+} from './source-reconnaissance';
+import { bilibiliInteractionReconnaissanceInput } from './interaction-reconnaissance';
+import { InteractionReconnaissanceRegistry } from './interaction-reconnaissance-registry';
+import {
+  TranscriptArtifactRegistry,
+  bilibiliTranscriptValidationInput
+} from './transcript-artifacts';
+import { GatewayTaskQueue, bilibiliDetailTaskInput, scoutTaskInput } from './tasks';
 import {
   CapabilityValidationRegistry,
   capabilityValidationInput,
@@ -147,10 +162,15 @@ const config = loadGatewayConfig();
 const identity = await loadGatewayIdentity(config);
 const pairingBroker = await PairingBroker.create(identity, config.stateDirectory);
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
-const browserManager = new CollectionBrowserManager(config, profileRegistry);
+const accountSafetyRegistry = await AccountSafetyRegistry.create(config.stateDirectory);
+const browserManager = new CollectionBrowserManager(config, profileRegistry, accountSafetyRegistry);
 const validationRegistry = await CapabilityValidationRegistry.create(config.stateDirectory);
+const detailValidationRegistry = await DetailCapabilityValidationRegistry.create(config.stateDirectory);
+const sourceReconnaissanceRegistry = await SourceReconnaissanceRegistry.create(config.stateDirectory);
+const interactionReconnaissanceRegistry = await InteractionReconnaissanceRegistry.create(config.stateDirectory);
+const transcriptArtifactRegistry = await TranscriptArtifactRegistry.create(config.stateDirectory);
 const evidenceRegistry = await GatewayEvidenceRegistry.create(config.stateDirectory);
-const taskQueue = new GatewayTaskQueue(identity, evidenceRegistry);
+const taskQueue = new GatewayTaskQueue(identity, evidenceRegistry, accountSafetyRegistry);
 const expectedHost = `${config.host}:${config.port}`;
 
 const server = createServer(async (request, response) => {
@@ -192,8 +212,52 @@ const server = createServer(async (request, response) => {
       sendJson(response, 200, { schemaVersion: 1, profiles: await browserManager.list() });
       return;
     }
+    if (request.method === 'GET' && url.pathname === '/v1/account-safety') {
+      sendJson(response, 200, { schemaVersion: 1, records: accountSafetyRegistry.list() });
+      return;
+    }
     if (request.method === 'GET' && url.pathname === '/v1/validations') {
-      sendJson(response, 200, { schemaVersion: 1, validations: validationRegistry.list() });
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        validations: [...validationRegistry.list(), ...detailValidationRegistry.list()]
+          .sort((left, right) => Date.parse(right.recordedAt) - Date.parse(left.recordedAt))
+      });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/reconnaissance') {
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        runs: sourceReconnaissanceRegistry.list()
+          .sort((left, right) => Date.parse(right.completedAt) - Date.parse(left.completedAt))
+      });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/reconnaissance/interactions') {
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        runs: interactionReconnaissanceRegistry.list()
+          .sort((left, right) => Date.parse(right.completedAt) - Date.parse(left.completedAt))
+      });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/transcripts') {
+      sendJson(response, 200, { schemaVersion: 1, artifacts: transcriptArtifactRegistry.list() });
+      return;
+    }
+    const transcriptArtifactMatch = url.pathname.match(/^\/v1\/transcripts\/([0-9a-f-]{36})$/i);
+    if (request.method === 'GET' && transcriptArtifactMatch) {
+      const artifact = await transcriptArtifactRegistry.get(transcriptArtifactMatch[1]);
+      if (!artifact) throw new Error('transcript_artifact_not_found');
+      sendJson(response, 200, { schemaVersion: 1, artifact });
+      return;
+    }
+    const interactionReconnaissanceRecordMatch = url.pathname.match(
+      /^\/v1\/reconnaissance\/interactions\/([0-9a-f-]{36})$/i
+    );
+    if (request.method === 'GET' && interactionReconnaissanceRecordMatch) {
+      const run = interactionReconnaissanceRegistry.get(interactionReconnaissanceRecordMatch[1]);
+      if (!run) throw new Error('interaction_reconnaissance_record_not_found');
+      sendJson(response, 200, { schemaVersion: 1, run });
       return;
     }
     const validationReviewMatch = url.pathname.match(/^\/v1\/validations\/([0-9a-f-]{36})\/review$/i);
@@ -201,10 +265,15 @@ const server = createServer(async (request, response) => {
       if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
       sendJson(response, 200, {
         schemaVersion: 1,
-        validation: await validationRegistry.review(
-          validationReviewMatch[1],
-          capabilityValidationReviewInput(await readJsonBody(request))
-        )
+        validation: validationRegistry.has(validationReviewMatch[1])
+          ? await validationRegistry.review(
+              validationReviewMatch[1],
+              capabilityValidationReviewInput(await readJsonBody(request))
+            )
+          : await detailValidationRegistry.review(
+              validationReviewMatch[1],
+              capabilityValidationReviewInput(await readJsonBody(request))
+            )
       });
       return;
     }
@@ -221,6 +290,57 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST' && profileLaunchMatch) {
       if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
       sendJson(response, 200, { schemaVersion: 1, profile: await browserManager.launch(profileLaunchMatch[1]) });
+      return;
+    }
+    const profileSafetyPauseMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/account-safety\/pause$/i
+    );
+    if (request.method === 'POST' && profileSafetyPauseMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const profile = profileRegistry.get(profileSafetyPauseMatch[1]);
+      await browserManager.close(profile.profileId);
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        accountSafety: await accountSafetyRegistry.pause(
+          profile.profileId,
+          profile.platform,
+          'user_safety_pause'
+        )
+      });
+      return;
+    }
+    const profileSafetyUnlockMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/account-safety\/unlock$/i
+    );
+    if (request.method === 'POST' && profileSafetyUnlockMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const profile = profileRegistry.get(profileSafetyUnlockMatch[1]);
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        accountSafety: await accountSafetyRegistry.unlock(
+          profile.profileId,
+          profile.platform,
+          accountSafetyUnlockInput(await readJsonBody(request))
+        )
+      });
+      return;
+    }
+    const profileLoginPageMatch = url.pathname.match(/^\/v1\/profiles\/([0-9a-f-]{36})\/login-page$/i);
+    if (request.method === 'POST' && profileLoginPageMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        profile: await browserManager.openPlatformLoginPage(profileLoginPageMatch[1])
+      });
+      return;
+    }
+    const profileLoginStatusMatch = url.pathname.match(/^\/v1\/profiles\/([0-9a-f-]{36})\/login-status$/i);
+    if (request.method === 'POST' && profileLoginStatusMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        loginStatus: await browserManager.inspectPlatformLoginStatus(profileLoginStatusMatch[1])
+      });
       return;
     }
     const profileCloseMatch = url.pathname.match(/^\/v1\/profiles\/([0-9a-f-]{36})\/close$/i);
@@ -284,14 +404,99 @@ const server = createServer(async (request, response) => {
       sendJson(response, 201, { schemaVersion: 1, validation: await validationRegistry.record(run) });
       return;
     }
+    const bilibiliDetailValidationMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/validations\/bilibili-detail$/i
+    );
+    if (request.method === 'POST' && bilibiliDetailValidationMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const input = detailCapabilityValidationInput(await readJsonBody(request));
+      const run = await browserManager.runBilibiliAnonymousDetailValidation(
+        bilibiliDetailValidationMatch[1],
+        input.canonicalUrl,
+        new Set(detailValidationRegistry.list().map((validation) => validation.runId))
+      );
+      sendJson(response, 201, {
+        schemaVersion: 1,
+        validation: await detailValidationRegistry.record(run)
+      });
+      return;
+    }
+    const bilibiliDetailReconnaissanceMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/reconnaissance\/bilibili-detail$/i
+    );
+    if (request.method === 'POST' && bilibiliDetailReconnaissanceMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const input = sourceReconnaissanceInput(await readJsonBody(request));
+      const run = await browserManager.runBilibiliAnonymousDetailReconnaissance(
+        bilibiliDetailReconnaissanceMatch[1],
+        input.canonicalUrl
+      );
+      sendJson(response, 201, {
+        schemaVersion: 1,
+        run: await sourceReconnaissanceRegistry.record(run)
+      });
+      return;
+    }
+    const bilibiliInteractionReconnaissanceMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/reconnaissance\/bilibili-interactions$/i
+    );
+    if (request.method === 'POST' && bilibiliInteractionReconnaissanceMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const input = bilibiliInteractionReconnaissanceInput(await readJsonBody(request));
+      const run = await browserManager.runBilibiliAuthenticatedInteractionReconnaissance(
+        bilibiliInteractionReconnaissanceMatch[1],
+        input.canonicalUrl,
+        input.actionScope,
+        input.responseBodyMapping
+      );
+      sendJson(response, 201, {
+        schemaVersion: 1,
+        run: await interactionReconnaissanceRegistry.record(run)
+      });
+      return;
+    }
+    const bilibiliTranscriptValidationMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/validations\/bilibili-transcript$/i
+    );
+    if (request.method === 'POST' && bilibiliTranscriptValidationMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const input = bilibiliTranscriptValidationInput(await readJsonBody(request));
+      const validation = await browserManager.runBilibiliAuthenticatedTranscriptValidation(
+        bilibiliTranscriptValidationMatch[1],
+        input.canonicalUrl
+      );
+      const hasPublicContent = validation.captures.some((capture) => capture.status === 'captured');
+      const artifact = hasPublicContent ? await transcriptArtifactRegistry.record(validation) : null;
+      sendJson(response, 201, {
+        schemaVersion: 1,
+        validation: {
+          runId: validation.runId,
+          state: validation.state,
+          terminalStatus: validation.terminalStatus,
+          errorCode: validation.errorCode,
+          objectiveStatus: validation.interaction?.objective.status ?? 'unavailable',
+          captureCount: validation.captures.length,
+          admissionEligible: false
+        },
+        artifact
+      });
+      return;
+    }
     if (request.method === 'GET' && url.pathname === '/v1/tasks') {
-      sendJson(response, 200, { schemaVersion: 1, tasks: taskQueue.list() });
+      sendJson(response, 200, { schemaVersion: 1, tasks: await taskQueue.list() });
       return;
     }
     if (request.method === 'GET' && url.pathname === '/v1/evidence') {
       const taskId = url.searchParams.get('taskId') ?? undefined;
       if (taskId && !/^[0-9a-f-]{36}$/i.test(taskId)) throw new Error('evidence_task_id_invalid');
       sendJson(response, 200, { schemaVersion: 1, batches: evidenceRegistry.list(taskId) });
+      return;
+    }
+    const evidenceBatchMatch = url.pathname.match(/^\/v1\/evidence\/batches\/([0-9a-f-]{36})$/i);
+    if (request.method === 'GET' && evidenceBatchMatch) {
+      const batch = evidenceRegistry.getBatch(evidenceBatchMatch[1]);
+      if (!batch) throw new Error('evidence_batch_not_found');
+      sendJson(response, 200, { schemaVersion: 1, batch });
       return;
     }
     if (request.method === 'POST' && url.pathname === '/v1/tasks') {
@@ -301,10 +506,29 @@ const server = createServer(async (request, response) => {
       sendJson(response, 201, taskQueue.createScoutTask(input, bindings));
       return;
     }
+    if (request.method === 'POST' && url.pathname === '/v1/tasks/detail') {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const input = bilibiliDetailTaskInput(await readJsonBody(request));
+      const binding = profileRegistry.collectionBindings(
+        ['bilibili'],
+        { bilibili: input.profileId }
+      ).bilibili;
+      if (!binding) throw new Error('task_detail_profile_invalid');
+      sendJson(response, 201, taskQueue.createBilibiliDetailTask(input, binding));
+      return;
+    }
     const approvalMatch = url.pathname.match(/^\/v1\/tasks\/([0-9a-f-]{36})\/approve$/i);
     if (request.method === 'POST' && approvalMatch) {
       if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
       sendJson(response, 200, await taskQueue.approve(approvalMatch[1]));
+      return;
+    }
+    const accountSafetyResumeMatch = url.pathname.match(
+      /^\/v1\/tasks\/([0-9a-f-]{36})\/resume-after-account-safety$/i
+    );
+    if (request.method === 'POST' && accountSafetyResumeMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      sendJson(response, 200, await taskQueue.resumeAfterAccountSafety(accountSafetyResumeMatch[1]));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/v1/pairing/sessions') {
@@ -411,7 +635,10 @@ const server = createServer(async (request, response) => {
       sendJson(
         response,
         200,
-        taskQueue.submitStageReceipt(stageReceipt(JSON.parse(body) as unknown), extension.extensionInstanceId)
+        await taskQueue.submitStageReceipt(
+          stageReceipt(JSON.parse(body) as unknown),
+          extension.extensionInstanceId
+        )
       );
       return;
     }
@@ -451,7 +678,11 @@ const server = createServer(async (request, response) => {
       code.startsWith('request_') ||
       code.startsWith('task_') ||
       code.startsWith('profile_') ||
+      code.startsWith('account_safety_') ||
       code.startsWith('validation_') ||
+      code.startsWith('source_reconnaissance_') ||
+      code.startsWith('interaction_reconnaissance_') ||
+      code.startsWith('transcript_') ||
       code.startsWith('evidence_') ||
       code.startsWith('preflight_') ||
       code.endsWith('_invalid') ||

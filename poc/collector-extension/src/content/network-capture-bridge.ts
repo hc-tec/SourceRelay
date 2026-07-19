@@ -12,6 +12,7 @@ const observerReadyAttribute = 'collectorNetworkCaptureObserver';
 let forwardQueue = Promise.resolve();
 let armedUntil = 0;
 let observerReady = false;
+let armedRouteIds: string[] = [];
 
 function publishObserverReadyIfArmed(): void {
   if (observerReady && Date.now() < armedUntil) {
@@ -41,7 +42,7 @@ window.addEventListener('message', (event) => {
   }
   if (event.data.type !== NETWORK_CAPTURE_WINDOW_OBSERVED || Date.now() >= armedUntil) return;
 
-  const observation = sanitiseNetworkCaptureObservation(event.data.observation);
+  const observation = sanitiseNetworkCaptureObservation(event.data.observation, armedRouteIds);
   if (!observation) return;
 
   forwardQueue = forwardQueue
@@ -52,11 +53,19 @@ window.addEventListener('message', (event) => {
 
 async function armNetworkCaptureIfAuthorised(): Promise<void> {
   const response = await chrome.runtime.sendMessage({ type: NETWORK_CAPTURE_BRIDGE_READY_MESSAGE });
-  if (!response?.ok || response.armed !== true || typeof response.expiresAt !== 'number' || response.expiresAt <= Date.now()) return;
+  if (
+    !response?.ok ||
+    response.armed !== true ||
+    typeof response.expiresAt !== 'number' ||
+    response.expiresAt <= Date.now() ||
+    !Array.isArray(response.routeIds) ||
+    !response.routeIds.every((routeId: unknown) => typeof routeId === 'string')
+  ) return;
   // The Worker only returns armed after chrome.scripting has injected the
   // fixed observer into this exact tab/document.  Keep an isolated-world TTL
   // gate as well, so queued page messages stop before reaching the Worker.
   armedUntil = response.expiresAt;
+  armedRouteIds = [...response.routeIds];
   publishObserverReadyIfArmed();
 }
 

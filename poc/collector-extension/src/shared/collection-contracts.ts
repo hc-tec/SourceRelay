@@ -61,6 +61,7 @@ export type ResearchProfile = (typeof RESEARCH_PROFILES)[number];
 export const EVIDENCE_OBJECTIVES = [
   'breadth_search',
   'detail_read',
+  'transcript_read',
   'discussion_sample',
   'account_context',
   'account_archive',
@@ -153,6 +154,16 @@ export interface TaskConsent {
   escalationPolicy: 'explicit_approval_required';
 }
 
+export interface ResearchTaskLineage {
+  parentTaskId: string;
+  sourceEvidenceBatchId: string;
+  selectionPolicy: 'explicit_user_selected_ranks';
+  selectedItems: readonly {
+    sourceRank: number;
+    canonicalUrl: string;
+  }[];
+}
+
 export interface LiveValidationReference {
   category: 'anonymous' | 'authenticated';
   recordId: string;
@@ -219,6 +230,7 @@ export interface ResearchTaskContract {
   researchQuestion: string;
   decisionContext: string;
   profile: ResearchProfile;
+  lineage: ResearchTaskLineage | null;
   targets: readonly CollectionTaskTarget[];
   platforms: readonly SupportedPlatform[];
   profileBindings: Partial<Record<SupportedPlatform, BrowserProfileBinding>>;

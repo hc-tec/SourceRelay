@@ -30,10 +30,10 @@ button:disabled { cursor: wait; opacity: .6; }
 .span-2 { grid-column: 1 / -1; }
 input, textarea, select { width: 100%; padding: 9px 11px; border: 1px solid #cfd7df; border-radius: 9px; background: white; color: #17202a; font: inherit; }
 textarea { min-height: 76px; resize: vertical; }
-.profile-list, .validation-list, .task-list { display: grid; gap: 10px; margin-top: 16px; }
+.profile-list, .validation-list, .recon-list, .task-list { display: grid; gap: 10px; margin-top: 16px; }
 .profile, .task { padding: 14px; border: 1px solid #dde4eb; border-radius: 12px; background: #f9fbfc; }
-.validation { padding: 14px; border: 1px solid #dde4eb; border-radius: 12px; background: #f9fbfc; }
-.validation h3 { margin: 0 0 5px; font-size: 14px; }
+.validation, .reconnaissance { padding: 14px; border: 1px solid #dde4eb; border-radius: 12px; background: #f9fbfc; }
+.validation h3, .reconnaissance h3 { margin: 0 0 5px; font-size: 14px; }
 .validation-items { display: grid; gap: 5px; margin: 10px 0 0; padding-left: 20px; color: #4c5967; font-size: 12px; }
 .profile h3, .task h3 { margin: 0 0 5px; font-size: 14px; }
 .profile-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
@@ -73,12 +73,21 @@ const accountCategory = document.querySelector('#account-category');
 const profileList = document.querySelector('#profile-list');
 const validationForm = document.querySelector('#validation-form');
 const validationProfile = document.querySelector('#validation-profile');
+const detailValidationForm = document.querySelector('#detail-validation-form');
+const detailValidationProfile = document.querySelector('#detail-validation-profile');
 const validationList = document.querySelector('#validation-list');
+const reconnaissanceForm = document.querySelector('#reconnaissance-form');
+const reconnaissanceProfile = document.querySelector('#reconnaissance-profile');
+const reconnaissanceList = document.querySelector('#reconnaissance-list');
 const taskForm = document.querySelector('#task-form');
 const taskList = document.querySelector('#task-list');
 let profiles = [];
 let profilesSignature = '';
+const profileLoginStates = new Map();
+const accountSafetyByProfile = new Map();
+let accountSafetySignature = '';
 let validationsSignature = '';
+let reconnaissanceSignature = '';
 let tasksSignature = '';
 
 async function json(url, options) {
@@ -130,6 +139,8 @@ function updateTaskProfileSelectors() {
 
 function updateValidationProfileSelector() {
   const previous = validationProfile.value;
+  const detailPrevious = detailValidationProfile.value;
+  const reconnaissancePrevious = reconnaissanceProfile.value;
   const eligible = profiles.filter((summary) =>
     summary.profile.kind === 'validation' &&
     summary.profile.platform === 'bilibili' &&
@@ -147,6 +158,22 @@ function updateValidationProfileSelector() {
   validationProfile.replaceChildren(placeholder, ...options);
   if (eligible.some((summary) => summary.profile.profileId === previous)) validationProfile.value = previous;
   else if (eligible.length === 1) validationProfile.value = eligible[0].profile.profileId;
+  const detailPlaceholder = placeholder.cloneNode(true);
+  const detailOptions = options.map((option) => option.cloneNode(true));
+  detailValidationProfile.replaceChildren(detailPlaceholder, ...detailOptions);
+  if (eligible.some((summary) => summary.profile.profileId === detailPrevious)) {
+    detailValidationProfile.value = detailPrevious;
+  } else if (eligible.length === 1) {
+    detailValidationProfile.value = eligible[0].profile.profileId;
+  }
+  const reconnaissancePlaceholder = placeholder.cloneNode(true);
+  const reconnaissanceOptions = options.map((option) => option.cloneNode(true));
+  reconnaissanceProfile.replaceChildren(reconnaissancePlaceholder, ...reconnaissanceOptions);
+  if (eligible.some((summary) => summary.profile.profileId === reconnaissancePrevious)) {
+    reconnaissanceProfile.value = reconnaissancePrevious;
+  } else if (eligible.length === 1) {
+    reconnaissanceProfile.value = eligible[0].profile.profileId;
+  }
 }
 
 function profileElement(summary) {
@@ -182,7 +209,26 @@ function profileElement(summary) {
   });
   actions.append(action);
   if (summary.profile.kind === 'collection') {
+    const accountSafety = accountSafetyByProfile.get(summary.profile.profileId);
+    const platformAutomationAllowed = !accountSafety || accountSafety.state === 'ready';
     const managedActions = [];
+    if (accountSafety?.state !== 'locked') {
+      managedActions.push({
+        label: '暂停账号自动化',
+        path: '/account-safety/pause',
+        tone: 'secondary',
+        capturesAccountSafety: true
+      });
+    }
+    if (summary.profile.platform === 'bilibili' && platformAutomationAllowed) {
+      managedActions.push({ label: '打开B站登录页', path: '/login-page', tone: 'secondary' });
+      managedActions.push({
+        label: '核对B站登录状态',
+        path: '/login-status',
+        tone: 'secondary',
+        capturesLoginStatus: true
+      });
+    }
     if (!summary.extensionPaired) {
       managedActions.push({ label: '配对 Gateway', path: '/pair', tone: '' });
     }
@@ -193,7 +239,10 @@ function profileElement(summary) {
         tone: ''
       });
     }
-    if (summary.running && summary.extensionPaired && summary.strategyPermission === 'granted') {
+    if (
+      platformAutomationAllowed && summary.running &&
+      summary.extensionPaired && summary.strategyPermission === 'granted'
+    ) {
       managedActions.push({ label: '立即轮询任务', path: '/poll', tone: 'secondary' });
     }
     for (const managedAction of managedActions) {
@@ -205,10 +254,18 @@ function profileElement(summary) {
         button.disabled = true;
         clearError();
         try {
-          await json(
+          const result = await json(
             '/v1/profiles/' + encodeURIComponent(summary.profile.profileId) + managedAction.path,
             { method: 'POST' }
           );
+          if (managedAction.capturesLoginStatus && result.loginStatus) {
+            profileLoginStates.set(summary.profile.profileId, result.loginStatus);
+            profilesSignature = '';
+          }
+          if (managedAction.capturesAccountSafety) {
+            await refreshAccountSafety();
+            profilesSignature = '';
+          }
           await refreshWorkspace();
         } catch (reason) {
           showError(reason);
@@ -239,6 +296,31 @@ function profileElement(summary) {
   if (summary.profile.account.expectedVisibleIdentity) {
     metaRow.append(runtimePill('Expected: ' + summary.profile.account.expectedVisibleIdentity));
   }
+  const loginStatus = profileLoginStates.get(summary.profile.profileId);
+  if (loginStatus) {
+    metaRow.append(runtimePill(
+      loginStatus.state === 'authenticated'
+        ? '上次核对：已登录'
+        : loginStatus.state === 'anonymous'
+          ? '上次核对：未登录'
+          : '上次核对：无法判断',
+      loginStatus.state === 'authenticated' ? 'good' : 'warn'
+    ));
+  }
+  const accountSafety = accountSafetyByProfile.get(summary.profile.profileId);
+  if (accountSafety) {
+    const safetyLabel = accountSafety.state === 'ready'
+      ? '账号自动化：可显式启动'
+      : accountSafety.state === 'running'
+        ? '账号自动化：运行中'
+        : accountSafety.state === 'cooldown'
+          ? '账号自动化：冷却中'
+          : '账号自动化：已锁定';
+    metaRow.append(runtimePill(
+      safetyLabel + (accountSafety.reasonCode ? ' · ' + accountSafety.reasonCode : ''),
+      accountSafety.state === 'ready' ? 'good' : 'warn'
+    ));
+  }
   if (summary.profile.lastLaunchedAt) {
     metaRow.append(runtimePill('Last launch: ' + new Date(summary.profile.lastLaunchedAt).toLocaleString()));
   }
@@ -264,11 +346,22 @@ async function refreshProfiles() {
   updateTaskProfileSelectors();
 }
 
+async function refreshAccountSafety() {
+  const response = await json('/v1/account-safety');
+  const signature = JSON.stringify(response.records);
+  if (signature === accountSafetySignature) return;
+  accountSafetySignature = signature;
+  accountSafetyByProfile.clear();
+  for (const record of response.records) accountSafetyByProfile.set(record.profileId, record);
+  profilesSignature = '';
+  tasksSignature = '';
+}
+
 function validationElement(validation) {
   const card = document.createElement('article');
   card.className = 'validation';
   const title = document.createElement('h3');
-  title.textContent = 'B站 breadth_search · ' + validation.state;
+  title.textContent = 'B站 ' + validation.evidenceObjective + ' · ' + validation.state;
   const meta = document.createElement('p');
   meta.textContent = validation.terminalStatus + ' · ' + validation.strategy.strategyId + ' ' + validation.strategy.version;
   const badges = document.createElement('div');
@@ -289,7 +382,7 @@ function validationElement(validation) {
     issue.textContent = validation.errorCode;
     card.append(issue);
   }
-  if (validation.result && validation.result.items.length) {
+  if (validation.result && validation.result.operation === 'breadth_search' && validation.result.items.length) {
     const items = document.createElement('ol');
     items.className = 'validation-items';
     for (const item of validation.result.items.slice(0, 5)) {
@@ -298,6 +391,18 @@ function validationElement(validation) {
       items.append(row);
     }
     card.append(items);
+  }
+  if (validation.result && validation.result.operation === 'detail_read' && validation.result.detail) {
+    const detail = document.createElement('div');
+    detail.className = 'task-stage';
+    const creator = validation.result.detail.creator
+      ? ' · UP ' + validation.result.detail.creator.displayName
+      : '';
+    const description = validation.result.detail.description
+      ? ' · 简介 ' + validation.result.detail.description.slice(0, 240)
+      : ' · 无可见简介';
+    detail.textContent = validation.result.detail.title + creator + description;
+    card.append(detail);
   }
   if (validation.review.status === 'pending') {
     const actions = document.createElement('div');
@@ -350,14 +455,104 @@ async function refreshValidations() {
   }
 }
 
+function reconnaissanceElement(run) {
+  const card = document.createElement('article');
+  card.className = 'reconnaissance';
+  const title = document.createElement('h3');
+  title.textContent = 'B站 video_detail Source Reconnaissance · ' + run.state;
+  const meta = document.createElement('p');
+  meta.textContent = new Date(run.completedAt).toLocaleString() + ' · Run ' + run.runId;
+  const pills = document.createElement('div');
+  pills.className = 'profile-meta';
+  pills.append(
+    runtimePill(run.domObservations.length + ' DOM checkpoints', run.domObservations.length ? 'good' : 'warn'),
+    runtimePill(run.networkObservations.length + ' XHR/fetch metadata'),
+    runtimePill(run.routeSummary.length + ' sanitised routes'),
+    runtimePill('Validation ' + (run.validation.state || 'not started'), run.validation.state === 'completed' ? 'good' : 'warn')
+  );
+  card.append(title, meta, pills);
+  if (run.errorCode) {
+    const issue = document.createElement('p');
+    issue.className = 'notice blocked';
+    issue.textContent = run.errorCode;
+    card.append(issue);
+  }
+  const safeguards = document.createElement('p');
+  safeguards.className = 'notice';
+  safeguards.textContent = '并行 DOM + network metadata；query/hash、header、request body、response body、Cookie/Token 均不保存；该记录不能准入生产 route。';
+  card.append(safeguards);
+  if (run.routeSummary.length) {
+    const routes = document.createElement('ul');
+    routes.className = 'validation-items';
+    for (const route of run.routeSummary.slice(0, 12)) {
+      const item = document.createElement('li');
+      item.textContent = route.resourceType + ' · ' + route.method + ' ' + route.origin + route.pathname +
+        ' · ' + route.count + ' 次 · HTTP ' + (route.statusCodes.join('/') || 'failed');
+      routes.append(item);
+    }
+    card.append(routes);
+  }
+  return card;
+}
+
+async function refreshReconnaissance() {
+  const response = await json('/v1/reconnaissance');
+  const signature = JSON.stringify(response.runs);
+  if (signature === reconnaissanceSignature) return;
+  reconnaissanceSignature = signature;
+  if (response.runs.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.textContent = '尚无 Source Reconnaissance。运行记录只用于理解页面与数据流，不能自动加入 production response route。';
+    reconnaissanceList.replaceChildren(empty);
+  } else {
+    reconnaissanceList.replaceChildren(...response.runs.map(reconnaissanceElement));
+  }
+}
+
+function nextTaskAccountSafety(task) {
+  if (!task.plan || !Array.isArray(task.plan.stages)) return null;
+  const progress = (task.stageProgress || []).find((candidate) => candidate.state === 'pending');
+  const stage = progress && task.plan.stages.find((candidate) => candidate.stageId === progress.stageId);
+  const binding = stage && task.profileBindings && task.profileBindings[stage.platform];
+  if (!progress || !stage || !binding) return null;
+  return { progress, stage, binding, safety: accountSafetyByProfile.get(binding.profileId) || null };
+}
+
+function accountSafetyTaskNotice(context) {
+  if (!context) return '下一阶段或其 Collection Profile 绑定缺失，任务不能继续。';
+  const safety = context.safety;
+  if (!safety || safety.state === 'ready') return '账号安全门禁已就绪，仍需你显式确认后才会把下一阶段放回调度队列。';
+  if (safety.state === 'locked' || safety.manualUnlockRequired) {
+    return '账号安全门禁已锁定；请先在账号安全区域人工解锁。任务继续按钮不会代替解锁。';
+  }
+  if (safety.state === 'running') return '该 Collection Profile 当前有另一个 run，当前任务不能继续。';
+  const cooldownUntil = Date.parse(safety.cooldownUntil || '');
+  if (Number.isFinite(cooldownUntil) && cooldownUntil > Date.now()) {
+    return '账号仍在冷却，最早可在 ' + new Date(cooldownUntil).toLocaleString() +
+      ' 后继续；到时仍须你显式点击，系统不会后台恢复。';
+  }
+  return '冷却时间已经结束，但任务仍保持暂停；只有你显式点击后才会继续下一阶段。';
+}
+
 function taskElement(task) {
   const card = document.createElement('article');
   card.className = 'task';
   const title = document.createElement('h3');
   title.textContent = task.researchQuestion;
   const meta = document.createElement('p');
-  meta.textContent = task.platforms.map((platform) => platformLabels[platform] || platform).join(' · ') + ' · ' + task.state;
+  meta.textContent = task.profile + ' · ' + task.platforms.map(
+    (platform) => platformLabels[platform] || platform
+  ).join(' · ') + ' · ' + task.state;
   card.append(title, meta);
+
+  if (task.lineage) {
+    const lineage = document.createElement('p');
+    lineage.className = 'notice';
+    lineage.textContent = '详情来源 Evidence ' + task.lineage.sourceEvidenceBatchId +
+      ' · 用户显式选择排名 ' + task.lineage.selectedItems.map((item) => item.sourceRank).join(', ');
+    card.append(lineage);
+  }
 
   const bindings = Object.values(task.profileBindings || {});
   if (bindings.length) {
@@ -373,7 +568,10 @@ function taskElement(task) {
     for (const stage of task.plan.stages) {
       const row = document.createElement('div');
       row.className = 'task-stage';
-      row.textContent = (platformLabels[stage.platform] || stage.platform) + ' / ' + stage.evidenceObjective + ' — ' + stage.preflight.status + ' (' + stage.preflight.releaseTrack + ')';
+      const progress = (task.stageProgress || []).find((item) => item.stageId === stage.stageId);
+      row.textContent = (platformLabels[stage.platform] || stage.platform) + ' / ' +
+        stage.evidenceObjective + ' — ' + stage.preflight.status + ' (' +
+        stage.preflight.releaseTrack + ') · ' + (progress ? progress.state : 'not approved');
       card.append(row);
     }
     const ready = task.plan.stages.length > 0 && task.plan.stages.every((stage) =>
@@ -403,12 +601,112 @@ function taskElement(task) {
     status.textContent = task.statusMessage;
     card.append(status);
   }
-  if (task.evidence) {
+  if (task.state === 'waiting_for_account_safety') {
+    const context = nextTaskAccountSafety(task);
+    const safetyNotice = document.createElement('p');
+    safetyNotice.className = 'notice blocked';
+    safetyNotice.textContent = accountSafetyTaskNotice(context);
+    const resume = document.createElement('button');
+    resume.type = 'button';
+    resume.className = 'secondary';
+    resume.textContent = '账号冷却结束后继续下一阶段';
+    resume.disabled = !context || context.safety?.state === 'locked' || context.safety?.state === 'running';
+    resume.addEventListener('click', async () => {
+      resume.disabled = true;
+      clearError();
+      try {
+        await json('/v1/tasks/' + encodeURIComponent(task.taskId) + '/resume-after-account-safety', {
+          method: 'POST'
+        });
+        await refreshAccountSafety();
+        await refreshTasks();
+      } catch (reason) {
+        showError(reason);
+        resume.disabled = false;
+      }
+    });
+    card.append(safetyNotice, resume);
+  }
+  for (const item of task.evidence || []) {
     const evidence = document.createElement('div');
     evidence.className = 'task-stage';
-    evidence.textContent = 'Evidence ' + task.evidence.batchId + ' · ' + task.evidence.itemCount +
-      ' items · SHA-256 ' + task.evidence.digest;
+    evidence.textContent = 'Evidence ' + item.batchId + ' · ' + item.itemCount +
+      ' items · SHA-256 ' + item.digest;
     card.append(evidence);
+  }
+  if (
+    task.profile === 'scout' && task.state === 'completed' &&
+    Array.isArray(task.evidence) && task.evidence.length > 0 && task.profileBindings.bilibili
+  ) {
+    const openSelection = document.createElement('button');
+    openSelection.type = 'button';
+    openSelection.className = 'secondary';
+    openSelection.textContent = '从该 Evidence 选择视频详情（最多 3 条）';
+    openSelection.addEventListener('click', async () => {
+      openSelection.disabled = true;
+      clearError();
+      try {
+        const response = await json('/v1/evidence/batches/' + encodeURIComponent(task.evidence[0].batchId));
+        if (!response.batch.result || response.batch.result.operation !== 'breadth_search') {
+          throw new Error('该 Evidence 不是可深化的 breadth_search 结果。');
+        }
+        const form = document.createElement('form');
+        form.className = 'form';
+        const choices = document.createElement('div');
+        choices.className = 'platforms';
+        for (const resultItem of response.batch.result.items) {
+          const label = document.createElement('label');
+          label.className = 'platform-row';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.name = 'detail-rank';
+          checkbox.value = String(resultItem.rank);
+          checkbox.style.width = 'auto';
+          const text = document.createElement('span');
+          text.textContent = '#' + resultItem.rank + ' ' + resultItem.title;
+          label.append(checkbox, text);
+          choices.append(label);
+        }
+        const submit = document.createElement('button');
+        submit.type = 'submit';
+        submit.textContent = '生成独立 detail_read 计划';
+        form.append(choices, submit);
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const selectedRanks = [...form.querySelectorAll('input[name="detail-rank"]:checked')]
+            .map((input) => Number(input.value));
+          if (selectedRanks.length === 0 || selectedRanks.length > 3) {
+            showError(new Error('请选择 1–3 条视频。'));
+            return;
+          }
+          submit.disabled = true;
+          clearError();
+          try {
+            await json('/v1/tasks/detail', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                researchQuestion: task.researchQuestion + '：读取用户选中视频的公开详情',
+                decisionContext: '从已完成的 breadth Evidence 中由用户显式选择条目，按独立详情预算读取公开可见字段。',
+                sourceTaskId: task.taskId,
+                sourceEvidenceBatchId: task.evidence[0].batchId,
+                selectedRanks,
+                profileId: task.profileBindings.bilibili.profileId
+              })
+            });
+            await refreshTasks();
+          } catch (reason) {
+            showError(reason);
+            submit.disabled = false;
+          }
+        });
+        openSelection.replaceWith(form);
+      } catch (reason) {
+        showError(reason);
+        openSelection.disabled = false;
+      }
+    });
+    card.append(openSelection);
   }
   return card;
 }
@@ -429,10 +727,12 @@ async function refreshTasks() {
 }
 
 async function refreshWorkspace() {
+  await refreshAccountSafety();
   const [status] = await Promise.all([
     json('/v1/status'),
     refreshProfiles(),
     refreshValidations(),
+    refreshReconnaissance(),
     refreshTasks()
   ]);
   identity.textContent = status.identity.identityFingerprint;
@@ -495,6 +795,53 @@ validationForm.addEventListener('submit', async (event) => {
       body: JSON.stringify({ query: validationForm.elements.query.value })
     });
     await refreshWorkspace();
+  } catch (reason) {
+    showError(reason);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+detailValidationForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  clearError();
+  const submit = detailValidationForm.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  try {
+    if (!detailValidationProfile.value) throw new Error('请先创建并选择 B站匿名 Validation Profile。');
+    await json(
+      '/v1/profiles/' + encodeURIComponent(detailValidationProfile.value) + '/validations/bilibili-detail',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ canonicalUrl: detailValidationForm.elements.canonicalUrl.value })
+      }
+    );
+    await refreshWorkspace();
+  } catch (reason) {
+    showError(reason);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+reconnaissanceForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  clearError();
+  const submit = reconnaissanceForm.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  try {
+    if (!reconnaissanceProfile.value) throw new Error('请先创建并选择 B站匿名 Validation Profile。');
+    await json(
+      '/v1/profiles/' + encodeURIComponent(reconnaissanceProfile.value) + '/reconnaissance/bilibili-detail',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ canonicalUrl: reconnaissanceForm.elements.canonicalUrl.value })
+      }
+    );
+    await refreshReconnaissance();
+    await refreshValidations();
   } catch (reason) {
     showError(reason);
   } finally {
@@ -613,7 +960,7 @@ export const consoleHtml = `<!doctype html>
           <label class="span-2">预期页面身份（可选）<input name="expectedVisibleIdentity" maxlength="160" placeholder="用于未来登录身份核对，不保存密码或 Cookie"></label>
           <div class="span-2"><button type="submit">创建受管 Profile</button></div>
         </form>
-        <p class="notice">启动后 Gateway 会自动加载生产 MV3 扩展并打开扩展控制页。关闭浏览器不会删除 Profile，后续再次启动会复用该 Profile 的浏览器状态。</p>
+        <p class="notice">启动后 Gateway 会自动加载生产 MV3 扩展并打开扩展控制页。Collection Profile 可通过严格白名单入口打开官方登录页；扫码、验证码等认证动作始终由用户完成。账号自动化出现验证码、风控或中断后会持久锁定，普通刷新和 Gateway 重启不能解锁。关闭浏览器不会删除 Profile，后续再次启动会复用该 Profile 的浏览器状态。</p>
         <div id="profile-list" class="profile-list"></div>
       </section>
 
@@ -626,6 +973,19 @@ export const consoleHtml = `<!doctype html>
         </form>
         <p class="notice">Gateway 会启动可见浏览器，并通过生产扩展的独立短时 Validation Run 注入同一个 content.js。遇到登录墙、验证码、限流、无结果或布局无法识别时会记录为 inconclusive 并停止。</p>
         <div id="validation-list" class="validation-list"></div>
+        <form id="detail-validation-form" class="form form-columns">
+          <label>Validation Profile<select id="detail-validation-profile" name="profileId"></select></label>
+          <label>公开 B站视频规范 URL<input name="canonicalUrl" required maxlength="120" placeholder="https://www.bilibili.com/video/BV..."></label>
+          <div class="span-2"><button type="submit">验证 B站可见视频详情投影</button></div>
+        </form>
+        <p class="notice">详情验证只读取标题、UP 主公开信息、简介、可见指标和标签；不采集评论、推荐卡或网络响应。</p>
+        <form id="reconnaissance-form" class="form form-columns">
+          <label>Validation Profile<select id="reconnaissance-profile" name="profileId"></select></label>
+          <label>公开 B站视频规范 URL<input name="canonicalUrl" required maxlength="120" placeholder="https://www.bilibili.com/video/BV..."></label>
+          <div class="span-2"><button type="submit">并行勘察 DOM 与 XHR/fetch</button></div>
+        </form>
+        <p class="notice">侦察只保存页面生命周期、DOM 字段信号和去 query/hash 的网络元数据；不读取请求头/体、响应正文、Cookie 或 Token，也不会改变正式策略。</p>
+        <div id="reconnaissance-list" class="recon-list"></div>
       </section>
 
       <section class="card">

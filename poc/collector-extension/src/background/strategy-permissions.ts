@@ -7,13 +7,19 @@ import {
 
 const LEGACY_DYNAMIC_SCRIPT_PREFIX = 'collector-strategy';
 
-function uniquePlatformStrategies(): StaticPlatformStrategy[] {
-  const byPlatform = new Map(STATIC_PLATFORM_STRATEGIES.map((strategy) => [strategy.platform, strategy]));
-  return [...byPlatform.values()];
+function strategiesByPlatform(): Array<{
+  platform: StaticPlatformStrategy['platform'];
+  strategies: StaticPlatformStrategy[];
+}> {
+  const grouped = new Map<StaticPlatformStrategy['platform'], StaticPlatformStrategy[]>();
+  for (const strategy of STATIC_PLATFORM_STRATEGIES) {
+    grouped.set(strategy.platform, [...(grouped.get(strategy.platform) ?? []), strategy]);
+  }
+  return [...grouped].map(([platform, strategies]) => ({ platform, strategies }));
 }
 
-async function hasRequiredOrigins(strategy: StaticPlatformStrategy): Promise<boolean> {
-  return chrome.permissions.contains({ origins: [...strategy.browser.optionalHostPermissions] });
+async function hasRequiredOrigins(origins: readonly string[]): Promise<boolean> {
+  return chrome.permissions.contains({ origins: [...origins] });
 }
 
 export async function synchroniseStrategyContentScripts(): Promise<void> {
@@ -31,14 +37,21 @@ export async function synchroniseStrategyContentScripts(): Promise<void> {
 
 export async function strategyPermissionSnapshots(): Promise<StrategyPermissionSnapshot[]> {
   const snapshots: StrategyPermissionSnapshot[] = [];
-  for (const strategy of uniquePlatformStrategies()) {
+  for (const group of strategiesByPlatform()) {
+    const strategy = group.strategies[0];
+    const requiredOrigins = [...new Set(group.strategies.flatMap(
+      (candidate) => candidate.browser.optionalHostPermissions
+    ))];
     snapshots.push({
-      platform: strategy.platform,
+      platform: group.platform,
       strategy: strategyProvenance(strategy),
-      requiredOrigins: strategy.browser.optionalHostPermissions,
-      granted: await hasRequiredOrigins(strategy),
+      capabilities: group.strategies.map(strategyProvenance),
+      requiredOrigins,
+      granted: await hasRequiredOrigins(requiredOrigins),
       domExecution: 'task_document_only',
-      responseObservation: strategy.approvedResponseRouteIds.length > 0 ? 'task_document_only' : 'disabled'
+      responseObservation: group.strategies.some((candidate) => candidate.approvedResponseRouteIds.length > 0)
+        ? 'task_document_only'
+        : 'disabled'
     });
   }
   return snapshots;

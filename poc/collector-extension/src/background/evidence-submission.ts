@@ -92,6 +92,10 @@ async function postPending(
     });
     await updateStageLeaseStatus(pending.tabId, 'completed');
     await chrome.storage.local.remove(key);
+    // Collection windows are stage-scoped product surfaces. Once the Gateway
+    // has durably acknowledged Evidence, keep the control page but close this
+    // leased window so completed tasks cannot accumulate tabs/windows.
+    await chrome.windows.remove(lease.windowId).catch(() => undefined);
     return evidence;
   })().finally(() => inFlight.delete(key));
   inFlight.set(key, operation);
