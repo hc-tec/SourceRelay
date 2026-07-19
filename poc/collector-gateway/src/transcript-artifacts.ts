@@ -97,14 +97,17 @@ function safeIso(value: unknown): string | null {
 
 function safeActions(value: unknown): TranscriptInteractionActionResult[] {
   if (!Array.isArray(value)) return [];
-  return value.slice(0, 2).flatMap((candidate) => {
+  return value.slice(0, 3).flatMap((candidate) => {
     if (!candidate || typeof candidate !== 'object') return [];
     const action = candidate as Partial<TranscriptInteractionActionResult>;
     if (
-      (action.action !== 'open_caption_menu' && action.action !== 'select_caption_language') ||
+      (action.action !== 'reveal_player_controls' &&
+        action.action !== 'open_caption_menu' &&
+        action.action !== 'select_caption_language') ||
       typeof action.attempted !== 'boolean' ||
       !['completed', 'control_missing', 'option_unavailable', 'prerequisite_unmet',
-        'postcondition_unmet', 'risk_detected'].includes(action.outcome ?? '')
+        'postcondition_unmet', 'page_unavailable', 'context_changed',
+        'network_unavailable', 'risk_detected'].includes(action.outcome ?? '')
     ) return [];
     return [{
       action: action.action,

@@ -103,10 +103,14 @@ try {
       state: 'completed',
       objective: {
         status: 'satisfied',
-        requiredActions: ['open_caption_menu', 'select_caption_language'],
-        completedActions: ['open_caption_menu', 'select_caption_language']
+        requiredActions: ['reveal_player_controls', 'open_caption_menu', 'select_caption_language'],
+        completedActions: ['reveal_player_controls', 'open_caption_menu', 'select_caption_language']
       },
       actions: [
+        {
+          action: 'reveal_player_controls', attempted: true, outcome: 'completed',
+          visibleLabels: ['字幕'], selectedLabel: null, postconditionAcknowledged: true
+        },
         {
           action: 'open_caption_menu', attempted: true, outcome: 'completed',
           visibleLabels: ['关闭', '中文'], selectedLabel: null, postconditionAcknowledged: true

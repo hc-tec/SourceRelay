@@ -58,7 +58,7 @@ export async function executeBilibiliTranscriptInteraction(input: {
     );
   }
 
-  const player = page.locator('.bpx-player-container').first();
+  const videoArea = page.locator('.bpx-player-video-area,video').first();
   const control = page.locator('.bpx-player-ctrl-subtitle[aria-label="字幕"],.bpx-player-ctrl-subtitle').first();
   let controlVisible = await control.isVisible().catch(() => false);
   if (controlVisible) {
@@ -67,17 +67,17 @@ export async function executeBilibiliTranscriptInteraction(input: {
       postconditionAcknowledged: true
     }));
   } else {
-    if (!await waitForVisible(player, PLAYER_WAIT_MS)) {
+    if (!await waitForVisible(videoArea, PLAYER_WAIT_MS)) {
       return stopTranscriptInteraction(
         canonicalUrl, actions, 'reveal_player_controls', false, 'control_missing',
-        'transcript_validation_player_missing'
+        'transcript_validation_video_area_missing'
       );
     }
-    const playerBox = await player.boundingBox();
-    if (!playerBox) {
+    const videoAreaBox = await videoArea.boundingBox();
+    if (!videoAreaBox) {
       return stopTranscriptInteraction(
         canonicalUrl, actions, 'reveal_player_controls', false, 'control_missing',
-        'transcript_validation_player_bounds_missing'
+        'transcript_validation_video_area_bounds_missing'
       );
     }
     try {
@@ -90,8 +90,8 @@ export async function executeBilibiliTranscriptInteraction(input: {
     }
     try {
       await page.mouse.move(
-        playerBox.x + playerBox.width * 0.62,
-        playerBox.y + Math.max(1, playerBox.height - 20),
+        videoAreaBox.x + videoAreaBox.width * 0.62,
+        videoAreaBox.y + Math.max(1, videoAreaBox.height - 20),
         { steps: 8 }
       );
     } catch {
