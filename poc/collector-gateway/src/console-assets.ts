@@ -313,9 +313,7 @@ function profileElement(summary) {
       ? '账号自动化：可显式启动'
       : accountSafety.state === 'running'
         ? '账号自动化：运行中'
-        : accountSafety.state === 'cooldown'
-          ? '账号自动化：冷却中'
-          : '账号自动化：已锁定';
+        : '账号自动化：已锁定';
     metaRow.append(runtimePill(
       safetyLabel + (accountSafety.reasonCode ? ' · ' + accountSafety.reasonCode : ''),
       accountSafety.state === 'ready' ? 'good' : 'warn'
@@ -527,12 +525,7 @@ function accountSafetyTaskNotice(context) {
     return '账号安全门禁已锁定；请先在账号安全区域人工解锁。任务继续按钮不会代替解锁。';
   }
   if (safety.state === 'running') return '该 Collection Profile 当前有另一个 run，当前任务不能继续。';
-  const cooldownUntil = Date.parse(safety.cooldownUntil || '');
-  if (Number.isFinite(cooldownUntil) && cooldownUntil > Date.now()) {
-    return '账号仍在冷却，最早可在 ' + new Date(cooldownUntil).toLocaleString() +
-      ' 后继续；到时仍须你显式点击，系统不会后台恢复。';
-  }
-  return '冷却时间已经结束，但任务仍保持暂停；只有你显式点击后才会继续下一阶段。';
+  return '下一阶段等待你的显式确认；系统不会后台自动推进。';
 }
 
 function taskElement(task) {
@@ -601,7 +594,7 @@ function taskElement(task) {
     status.textContent = task.statusMessage;
     card.append(status);
   }
-  if (task.state === 'waiting_for_account_safety') {
+  if (task.state === 'waiting_for_user_resume') {
     const context = nextTaskAccountSafety(task);
     const safetyNotice = document.createElement('p');
     safetyNotice.className = 'notice blocked';
@@ -609,13 +602,13 @@ function taskElement(task) {
     const resume = document.createElement('button');
     resume.type = 'button';
     resume.className = 'secondary';
-    resume.textContent = '账号冷却结束后继续下一阶段';
+    resume.textContent = '确认继续下一阶段';
     resume.disabled = !context || context.safety?.state === 'locked' || context.safety?.state === 'running';
     resume.addEventListener('click', async () => {
       resume.disabled = true;
       clearError();
       try {
-        await json('/v1/tasks/' + encodeURIComponent(task.taskId) + '/resume-after-account-safety', {
+        await json('/v1/tasks/' + encodeURIComponent(task.taskId) + '/resume', {
           method: 'POST'
         });
         await refreshAccountSafety();

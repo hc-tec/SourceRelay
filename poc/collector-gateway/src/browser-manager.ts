@@ -444,12 +444,12 @@ export class CollectionBrowserManager {
         sendMessage: (message) => extensionMessage(controlPage, message)
       });
       const finishReason = snapshot.state === 'completed'
-        ? 'authenticated_transcript_validation_completed_cooldown'
+        ? 'authenticated_transcript_validation_completed'
         : snapshot.terminalStatus === 'verification_required'
           ? 'transcript_validation_verification_required'
           : snapshot.terminalStatus === 'rate_limited'
             ? 'transcript_validation_rate_limited'
-            : snapshot.errorCode ?? 'authenticated_transcript_validation_inconclusive_cooldown';
+            : snapshot.errorCode ?? 'authenticated_transcript_validation_inconclusive';
       await this.#accountSafety.finishAuthenticatedRun(
         profileId,
         'bilibili',
@@ -467,7 +467,7 @@ export class CollectionBrowserManager {
           permit.runId,
           /^[a-z0-9_]{1,100}$/.test(candidate)
             ? candidate
-            : 'authenticated_transcript_validation_failed_cooldown'
+            : 'authenticated_transcript_validation_failed'
         );
       }
       throw error;
@@ -716,15 +716,15 @@ export class CollectionBrowserManager {
         profile.platform,
         permit.runId,
         result.errorCode ?? (result.state === 'completed'
-          ? 'authenticated_run_completed_cooldown'
-          : 'authenticated_run_inconclusive_cooldown')
+          ? 'authenticated_run_completed'
+          : 'authenticated_run_inconclusive')
       );
       return result;
     } catch (error) {
       const candidate = error instanceof Error ? error.message : '';
       const reasonCode = /^[a-z0-9_]{1,100}$/.test(candidate)
         ? candidate
-        : 'authenticated_run_failed_cooldown';
+        : 'authenticated_run_failed';
       await this.#accountSafety.finishAuthenticatedRun(
         profileId,
         profile.platform,

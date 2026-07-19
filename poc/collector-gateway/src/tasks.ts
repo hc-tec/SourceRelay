@@ -40,7 +40,7 @@ type TaskState =
   | 'stage_dispatched'
   | 'stage_active'
   | 'stage_completed'
-  | 'waiting_for_account_safety'
+  | 'waiting_for_user_resume'
   | 'evidence_received'
   | 'completed'
   | 'blocked';
@@ -389,7 +389,7 @@ export class GatewayTaskQueue {
     if (!progress.safetyRunId) {
       const safety = this.#accountSafety.get(profileBinding.profileId, stage.platform);
       if (safety.state !== 'ready') {
-        approved.state = 'waiting_for_account_safety';
+        approved.state = 'waiting_for_user_resume';
         approved.statusMessage = this.#accountSafetyStatus(profileBinding.profileId, stage.platform);
         return null;
       }
@@ -402,7 +402,7 @@ export class GatewayTaskQueue {
         progress.safetyRunId = permit.runId;
       } catch (error) {
         if (!(error instanceof Error) || !error.message.startsWith('account_safety_')) throw error;
-        approved.state = 'waiting_for_account_safety';
+        approved.state = 'waiting_for_user_resume';
         approved.statusMessage = this.#accountSafetyStatus(profileBinding.profileId, stage.platform);
         return null;
       }
@@ -574,7 +574,7 @@ export class GatewayTaskQueue {
             binding.profileId,
             stage.platform,
             progress.safetyRunId,
-            'formal_collection_stage_completed_cooldown',
+            'formal_collection_stage_completed',
             now
           );
         }
@@ -590,7 +590,7 @@ export class GatewayTaskQueue {
       binding.profileId,
       stage.platform,
       progress.safetyRunId,
-      'formal_collection_stage_completed_cooldown',
+      'formal_collection_stage_completed',
       now
     );
     progress.evidence = evidence;
@@ -604,8 +604,9 @@ export class GatewayTaskQueue {
       record.state = 'completed';
       record.statusMessage = `completed:${submission.stageId}`;
     } else {
-      record.state = 'waiting_for_account_safety';
-      record.statusMessage = this.#accountSafetyStatus(binding.profileId, stage.platform);
+      const next = this.#nextPendingStage(record);
+      record.state = 'waiting_for_user_resume';
+      record.statusMessage = `user_resume_required:${next?.stage.stageId ?? 'pending_stage'}`;
     }
     return this.#summary(record);
   }
@@ -657,21 +658,21 @@ export class GatewayTaskQueue {
       record.statusMessage = undefined;
     } catch (error) {
       if (!(error instanceof Error) || !error.message.startsWith('account_safety_')) throw error;
-      record.state = 'waiting_for_account_safety';
+      record.state = 'waiting_for_user_resume';
       record.statusMessage = this.#accountSafetyStatus(next.profileBinding.profileId, next.stage.platform);
     }
     return this.#summary(record);
   }
 
-  async resumeAfterAccountSafety(taskId: string, now = new Date()): Promise<ConsoleTaskSummary> {
+  async resumeAfterUserConfirmation(taskId: string, now = new Date()): Promise<ConsoleTaskSummary> {
     const record = this.#tasks.get(taskId);
     if (!record?.approvedPlan) throw new Error('task_plan_not_approved');
-    if (record.state !== 'waiting_for_account_safety') {
-      throw new Error('task_account_safety_resume_state_invalid');
+    if (record.state !== 'waiting_for_user_resume') {
+      throw new Error('task_resume_state_invalid');
     }
     const next = this.#nextPendingStage(record);
-    if (!next) throw new Error('task_account_safety_pending_stage_missing');
-    if (!next.profileBinding) throw new Error('task_account_safety_profile_binding_missing');
+    if (!next) throw new Error('task_resume_pending_stage_missing');
+    if (!next.profileBinding) throw new Error('task_resume_profile_binding_missing');
     try {
       await this.#accountSafety.assertPlatformNavigationAllowed(
         next.profileBinding.profileId,
@@ -687,7 +688,7 @@ export class GatewayTaskQueue {
     record.state = record.stageProgress.some((stage) => stage.state === 'completed')
       ? 'stage_completed'
       : 'approved';
-    record.statusMessage = `account_safety_user_resumed:${next.stage.stageId}`;
+    record.statusMessage = `user_resumed:${next.stage.stageId}`;
     return this.#summary(record);
   }
 

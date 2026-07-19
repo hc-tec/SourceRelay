@@ -3,24 +3,22 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { SupportedPlatform } from '../../collector-extension/src/shared/collection-contracts';
 
-const AUTHENTICATED_RUN_COOLDOWN_MS = 30 * 60 * 1000;
 const MAX_ACTION_IDS_PER_RUN = 20;
 const UNLOCK_ACKNOWLEDGEMENT = 'resume_authenticated_platform_actions';
 
-export type AccountSafetyState = 'ready' | 'running' | 'cooldown' | 'locked';
+export type AccountSafetyState = 'ready' | 'running' | 'locked';
 export type AccountSafetyRunPurpose =
   | 'authenticated_interaction_reconnaissance'
   | 'authenticated_transcript_validation'
   | 'formal_collection_stage';
 
 export interface AccountSafetyRecord {
-  schemaVersion: 1;
+  schemaVersion: 2;
   profileId: string;
   platform: SupportedPlatform;
   state: AccountSafetyState;
   reasonCode: string | null;
   manualUnlockRequired: boolean;
-  cooldownUntil: string | null;
   activeRun: {
     runId: string;
     purpose: AccountSafetyRunPurpose;
@@ -29,6 +27,12 @@ export interface AccountSafetyRecord {
   } | null;
   lastRunAt: string | null;
   updatedAt: string;
+}
+
+interface PersistedAccountSafetyRecord extends Omit<AccountSafetyRecord, 'schemaVersion' | 'state'> {
+  schemaVersion: 1 | 2;
+  state: AccountSafetyState | 'cooldown';
+  cooldownUntil?: string | null;
 }
 
 export interface AccountSafetyRunPermit {
@@ -49,12 +53,12 @@ function safetyKey(profileId: string, platform: SupportedPlatform): string {
   return `${profileId}\n${platform}`;
 }
 
-function isSafetyRecord(value: unknown): value is AccountSafetyRecord {
+function isSafetyRecord(value: unknown): value is PersistedAccountSafetyRecord {
   if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<AccountSafetyRecord>;
+  const candidate = value as Partial<PersistedAccountSafetyRecord>;
   const activeRun = candidate.activeRun;
   return (
-    candidate.schemaVersion === 1 &&
+    (candidate.schemaVersion === 1 || candidate.schemaVersion === 2) &&
     typeof candidate.profileId === 'string' &&
     profileIdPattern.test(candidate.profileId) &&
     (candidate.platform === 'bilibili' || candidate.platform === 'zhihu' ||
@@ -63,7 +67,8 @@ function isSafetyRecord(value: unknown): value is AccountSafetyRecord {
       candidate.state === 'cooldown' || candidate.state === 'locked') &&
     (candidate.reasonCode === null || (typeof candidate.reasonCode === 'string' && safeCodePattern.test(candidate.reasonCode))) &&
     typeof candidate.manualUnlockRequired === 'boolean' &&
-    (candidate.cooldownUntil === null || typeof candidate.cooldownUntil === 'string') &&
+    (candidate.cooldownUntil === undefined || candidate.cooldownUntil === null ||
+      typeof candidate.cooldownUntil === 'string') &&
     (activeRun === null || Boolean(
       activeRun &&
       typeof activeRun.runId === 'string' &&
@@ -87,13 +92,12 @@ function defaultRecord(
 ): AccountSafetyRecord {
   if (!profileIdPattern.test(profileId)) throw new Error('account_safety_profile_invalid');
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     profileId,
     platform,
     state: 'ready',
     reasonCode: null,
     manualUnlockRequired: false,
-    cooldownUntil: null,
     activeRun: null,
     lastRunAt: null,
     updatedAt: now.toISOString()
@@ -126,20 +130,43 @@ export class AccountSafetyRegistry {
   static async create(stateDirectory: string, now = new Date()): Promise<AccountSafetyRegistry> {
     const registry = new AccountSafetyRegistry(stateDirectory);
     await mkdir(resolve(stateDirectory), { recursive: true });
-    let interrupted = false;
+    let changed = false;
     try {
       const parsed = JSON.parse(await readFile(registry.#registryPath, 'utf8')) as unknown;
       if (Array.isArray(parsed)) {
         for (const candidate of parsed.filter(isSafetyRecord)) {
-          const record = structuredClone(candidate);
+          const {
+            cooldownUntil: _legacyCooldownUntil,
+            schemaVersion: _persistedSchemaVersion,
+            state: persistedState,
+            ...persisted
+          } = structuredClone(candidate);
+          const record: AccountSafetyRecord = {
+            ...persisted,
+            schemaVersion: 2,
+            state: persistedState === 'cooldown' ? 'ready' : persistedState
+          };
+          if (
+            candidate.schemaVersion !== 2 ||
+            candidate.state === 'cooldown' ||
+            candidate.cooldownUntil !== undefined
+          ) {
+            record.updatedAt = now.toISOString();
+            changed = true;
+          }
           if (record.state === 'running' || record.activeRun) {
             record.state = 'locked';
             record.reasonCode = 'previous_run_interrupted_manual_review_required';
             record.manualUnlockRequired = true;
-            record.cooldownUntil = null;
             record.activeRun = null;
             record.updatedAt = now.toISOString();
-            interrupted = true;
+            changed = true;
+          } else if (record.state === 'locked') {
+            if (!record.manualUnlockRequired) changed = true;
+            record.manualUnlockRequired = true;
+          } else {
+            if (record.manualUnlockRequired) changed = true;
+            record.manualUnlockRequired = false;
           }
           registry.#records.set(safetyKey(record.profileId, record.platform), record);
         }
@@ -147,7 +174,7 @@ export class AccountSafetyRegistry {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
-    if (interrupted) await registry.#save();
+    if (changed) await registry.#save();
     return registry;
   }
 
@@ -171,7 +198,6 @@ export class AccountSafetyRegistry {
     record.state = 'locked';
     record.reasonCode = reasonCode;
     record.manualUnlockRequired = true;
-    record.cooldownUntil = null;
     record.activeRun = null;
     record.updatedAt = now.toISOString();
     await this.#save();
@@ -192,7 +218,6 @@ export class AccountSafetyRegistry {
     record.state = 'ready';
     record.reasonCode = null;
     record.manualUnlockRequired = false;
-    record.cooldownUntil = null;
     record.updatedAt = now.toISOString();
     await this.#save();
     return structuredClone(record);
@@ -205,23 +230,12 @@ export class AccountSafetyRegistry {
     now = new Date()
   ): Promise<AccountSafetyRunPermit> {
     const record = this.#record(profileId, platform, now);
-    if (record.state === 'cooldown') {
-      const cooldownUntil = Date.parse(record.cooldownUntil ?? '');
-      if (Number.isFinite(cooldownUntil) && cooldownUntil <= now.getTime()) {
-        record.state = 'ready';
-        record.reasonCode = null;
-        record.cooldownUntil = null;
-        record.updatedAt = now.toISOString();
-      }
-    }
     if (record.state === 'locked') throw new Error('account_safety_manual_unlock_required');
-    if (record.state === 'cooldown') throw new Error('account_safety_cooldown_active');
     if (record.state === 'running' || record.activeRun) throw new Error('account_safety_run_active');
     const runId = randomUUID();
     record.state = 'running';
     record.reasonCode = 'authenticated_run_in_progress';
     record.manualUnlockRequired = false;
-    record.cooldownUntil = null;
     record.activeRun = {
       runId,
       purpose,
@@ -239,18 +253,7 @@ export class AccountSafetyRegistry {
     now = new Date()
   ): Promise<void> {
     const record = this.#record(profileId, platform, now);
-    if (record.state === 'cooldown') {
-      const cooldownUntil = Date.parse(record.cooldownUntil ?? '');
-      if (Number.isFinite(cooldownUntil) && cooldownUntil <= now.getTime()) {
-        record.state = 'ready';
-        record.reasonCode = null;
-        record.cooldownUntil = null;
-        record.updatedAt = now.toISOString();
-        await this.#save();
-      }
-    }
     if (record.state === 'locked') throw new Error('account_safety_manual_unlock_required');
-    if (record.state === 'cooldown') throw new Error('account_safety_cooldown_active');
     if (record.state === 'running' || record.activeRun) throw new Error('account_safety_run_active');
   }
 
@@ -293,12 +296,9 @@ export class AccountSafetyRegistry {
     const hardLock = /verification_required|rate_limited|risk_control|captcha|authentication_lost|user_safety_pause/.test(
       reasonCode
     );
-    record.state = hardLock ? 'locked' : 'cooldown';
+    record.state = hardLock ? 'locked' : 'ready';
     record.reasonCode = reasonCode;
     record.manualUnlockRequired = hardLock;
-    record.cooldownUntil = hardLock
-      ? null
-      : new Date(now.getTime() + AUTHENTICATED_RUN_COOLDOWN_MS).toISOString();
     record.activeRun = null;
     record.lastRunAt = now.toISOString();
     record.updatedAt = now.toISOString();

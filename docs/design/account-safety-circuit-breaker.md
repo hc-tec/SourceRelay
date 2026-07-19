@@ -16,7 +16,7 @@
   -> 停止下一平台动作
   -> 保存去敏检查点
   -> 关闭自动化目标页
-  -> cooldown 或 persistent lock
+  -> ready 或 persistent lock
   -> 告知用户真实原因
   -> 只有新的显式用户授权才能开始新 run
 ```
@@ -47,12 +47,8 @@
 ```text
 ready
   -> running
-      -> cooldown       成功、普通失败、断网、超时、弱网
+      -> ready          成功、普通失败、断网、超时、弱网；本轮不重试
       -> locked         验证码、风控、限流、run 崩溃/中断、用户暂停
-
-cooldown
-  -> ready              冷却到期；仍需新的显式 run 请求，不会自动启动
-  -> locked             冷却期间再次出现高风险信号
 
 locked
   -> ready              仅用户显式确认风险并解锁
@@ -75,7 +71,7 @@ Gateway 启动时若发现上次状态仍为 `running`，必须转换为 `locked
 - 同一 Profile 已有另一个 active run；
 - Gateway 重启后发现未正常完成的 run。
 
-验证码与风控进入 `locked`，绝不自动刷新、点击验证、切换代理、重新登录或稍后自动续跑。断网/弱网进入至少 30 分钟 cooldown，本轮不重试；冷却结束也只允许新的显式请求，不会后台恢复。
+验证码、风控、限流和登录失效进入 `locked`，绝不自动刷新、点击验证、切换代理、重新登录或稍后自动续跑。断网、弱网、超时和普通失败立即结束本轮并回到 `ready`；没有计时冷却，但新的平台动作仍必须来自新的显式用户请求，不能后台恢复或重试。
 
 ## 5. At-most-once 语义动作
 
@@ -107,7 +103,7 @@ run 的 `completed` 也不能由“至少一个动作完成”推导。每个 sc
 - 每动作至多 1 个用户事件；
 - 每动作观察尾窗 3 秒；
 - 每 run 总 deadline 60 秒；
-- 完成或普通失败后至少冷却 30 分钟；
+- 完成或普通失败后立即回到 `ready`，不设置计时冷却；
 - 验证码、风控、限流、进程中断和用户暂停必须人工解锁；
 - 不进行随机化、代理轮换、指纹伪装或其他规避平台安全措施的行为。
 
@@ -118,10 +114,10 @@ run 的 `completed` 也不能由“至少一个动作完成”推导。每个 sc
 - 风险信号出现后关闭自动化创建的目标页，保留扩展 Control 页；
 - 受管 Profile 每次启动都关闭浏览器尝试恢复的 HTTP(S) 旧 tab，只保留浏览器原生登录存储与扩展 Control 页；任何平台页必须来自新的显式动作；
 - 不在风险页面上继续截图、滚动、点击或读取响应正文；
-- Console 显示 `ready / running / cooldown / locked`、原因、时间和是否需要人工解锁；
+- Console 显示 `ready / running / locked`、原因、时间和是否需要人工解锁；
 - 不显示 Cookie、Token、Profile 路径、验证码图片或账号身份；
 - 用户可以显式“暂停账号自动化”；解锁必须提交固定 acknowledgement，普通刷新/重启无效；
-- 非最终 stage 完成后，Research Task 进入 `waiting_for_account_safety`；即使 cooldown 时间已经过去，扩展轮询也拿不到下一 stage，只有 Console 上针对该 task 的显式 resume 才能重新进入调度；
+- 非最终 stage 完成后，Research Task 进入 `waiting_for_user_resume`；扩展轮询拿不到下一 stage，只有 Console 上针对该 task 的显式 resume 才能重新进入调度；该边界没有时间等待；
 - task resume 只核对已批准计划中的下一个 pending stage 与既有 Profile binding，不启动浏览器、不导航、不修改预算或计划，也不能代替 `locked` 状态的人工解锁；
 - 已采集结果按 `partial` 保存，不能因风险停止而丢弃，也不能称为完整。
 
@@ -134,12 +130,12 @@ run 的 `completed` 也不能由“至少一个动作完成”推导。每个 sc
 3. runner 在导航后、每动作前和每动作后检查风险；
 4. action ledger 能拒绝同一 action 的第二次执行；
 5. 验证码/限流信号触发 hard lock；
-6. 断网、导航失败、run deadline 和 Fetch/XHR failure 触发停止与 cooldown；
+6. 断网、导航失败、run deadline 和 Fetch/XHR failure 触发停止并立即回到 `ready`，本轮不得重试；
 7. 构建制品断言包含固定动作预算、at-most-once 和禁止自动验证码恢复；
 8. 去敏 interaction artifact 必须原子落盘，剔除 Profile ID、原始 URL、原始 response body 和未知 DOM 字段，并提供 compact summary；
 9. 安全状态机和投影器可先做单元测试；浏览器管线、DOM/XHR、弱网、验证码与页面清理必须实站验证，伪造平台 fixture 不得保留或 admission；
 10. 最终仍需用户明确批准，才可进行下一次 B站实网 run。
 
-多阶段任务的离线门禁已通过：`verify-task-account-safety-resume.mjs` 覆盖 stage 后等待、无后台恢复、冷却未到拒绝、冷却到期后的显式继续、精确下一 stage、重复/完成/locked 拒绝；`diagnose-task-account-safety-console.mjs` 用真实 Chromium 执行生产 Console 代码，确认等待按钮只向精确 task resume route 提交一次，且没有启动 Profile 或访问平台。
+多阶段任务的单元门禁已通过：`verify-task-account-safety-resume.mjs` 覆盖 stage 后等待、无后台恢复、无时间延迟的显式继续、精确下一 stage、重复/完成/locked 拒绝。平台与 Console 闭环只接受真实任务验证，不再使用 fake Gateway 或伪平台诊断。
 
-当前状态：用户先后给出两张相互独立的 subtitle-only / schema-only 单次授权票；每张票都只提交一次，结束后立即消费。第二次 run 为 `inconclusive / partial`：字幕菜单完成，精确“中文”只点击一次，但 DOM 选中后置条件未满足；runner 没有补点或重试。运行后进入 `cooldown / authenticated_run_inconclusive_cooldown`，`manualUnlockRequired=false`、无 active run。Profile 随后关闭，Gateway、43127/43128 监听器和受管 Chrome 均停止。cooldown 到期不构成新授权，后续任何认证实网动作仍须新的明确批准。
+当前实现已按用户最新决定删除 `cooldown` 状态和 `cooldownUntil` 字段；持久记录升级为 schema v2，历史 v1 JSON 中的旧 `cooldown` 会在 Gateway 启动时一次性迁移为 `ready`。最近一次字幕真实 run 捕获到真实轨道目录后因 `transcript_validation_context_changed` 停止，字幕按钮和“中文”均未点击；本轮没有重试，Profile、Gateway、43127/43128 和受管 Chrome 均已关闭。后续平台动作仍须新的明确批准，但不再等待任何计时冷却。

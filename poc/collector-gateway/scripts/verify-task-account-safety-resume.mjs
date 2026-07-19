@@ -236,24 +236,21 @@ try {
     at(2_000),
     'fixture detail 1'
   );
-  assert.equal(afterStageOne.state, 'waiting_for_account_safety');
-  assert.match(afterStageOne.statusMessage, /^account_safety_cooldown:/);
+  assert.equal(afterStageOne.state, 'waiting_for_user_resume');
+  assert.match(afterStageOne.statusMessage, /^user_resume_required:/);
   assert.equal((await queue.nextWork(extensionInstanceId, at(3_000).getTime())), null);
   assert.equal(accountSafety.get(profileId, 'bilibili').activeRun, null);
+  assert.equal(accountSafety.get(profileId, 'bilibili').state, 'ready');
 
-  await assert.rejects(
-    () => queue.resumeAfterAccountSafety(first.taskId, at(10 * 60 * 1000)),
-    (error) => error instanceof Error && error.message === 'account_safety_cooldown_active'
-  );
-  const resumed = await queue.resumeAfterAccountSafety(first.taskId, at(31 * 60 * 1000));
+  const resumed = await queue.resumeAfterUserConfirmation(first.taskId, at(4_000));
   assert.equal(resumed.state, 'stage_completed');
-  assert.match(resumed.statusMessage, /^account_safety_user_resumed:/);
+  assert.match(resumed.statusMessage, /^user_resumed:/);
   await assert.rejects(
-    () => queue.resumeAfterAccountSafety(first.taskId, at(31 * 60 * 1000 + 1)),
-    (error) => error instanceof Error && error.message === 'task_account_safety_resume_state_invalid'
+    () => queue.resumeAfterUserConfirmation(first.taskId, at(4_001)),
+    (error) => error instanceof Error && error.message === 'task_resume_state_invalid'
   );
 
-  const stageTwoDispatch = await queue.nextWork(extensionInstanceId, at(31 * 60 * 1000 + 2).getTime());
+  const stageTwoDispatch = await queue.nextWork(extensionInstanceId, at(5_000).getTime());
   assert.equal(stageTwoDispatch?.kind, 'approved_dispatch');
   assert.notEqual(stageTwoDispatch.dispatch.stageId, stageOneDispatch.dispatch.stageId);
   const running = accountSafety.get(profileId, 'bilibili');
@@ -263,46 +260,42 @@ try {
     queue,
     stageTwoDispatch,
     '66666666-6666-4666-8666-666666666666',
-    at(31 * 60 * 1000 + 3_000),
+    at(6_000),
     'fixture detail 2'
   );
   assert.equal(completed.state, 'completed');
   assert.equal(completed.stageProgress.every((stage) => stage.state === 'completed'), true);
   await assert.rejects(
-    () => queue.resumeAfterAccountSafety(first.taskId, at(32 * 60 * 1000)),
-    (error) => error instanceof Error && error.message === 'task_account_safety_resume_state_invalid'
+    () => queue.resumeAfterUserConfirmation(first.taskId, at(7_000)),
+    (error) => error instanceof Error && error.message === 'task_resume_state_invalid'
   );
 
-  const second = await createApprovedTask(queue, at(32 * 60 * 1000));
-  assert.equal(second.approved.state, 'waiting_for_account_safety');
+  await accountSafety.pause(profileId, 'bilibili', 'user_safety_pause', at(8_000));
+  const second = await createApprovedTask(queue, at(9_000));
+  assert.equal(second.approved.state, 'waiting_for_user_resume');
   assert.equal(second.approved.plan.approval.status, 'approved');
-  assert.match(second.approved.statusMessage, /^account_safety_cooldown:/);
+  assert.match(second.approved.statusMessage, /^account_safety_locked:/);
   await assert.rejects(
-    () => queue.resumeAfterAccountSafety(second.taskId, at(33 * 60 * 1000)),
-    (error) => error instanceof Error && error.message === 'account_safety_cooldown_active'
-  );
-  await accountSafety.pause(profileId, 'bilibili', 'user_safety_pause', at(34 * 60 * 1000));
-  await assert.rejects(
-    () => queue.resumeAfterAccountSafety(second.taskId, at(35 * 60 * 1000)),
+    () => queue.resumeAfterUserConfirmation(second.taskId, at(10_000)),
     (error) => error instanceof Error && error.message === 'account_safety_manual_unlock_required'
   );
-  assert.equal((await queue.nextWork(extensionInstanceId, at(35 * 60 * 1000).getTime())), null);
+  assert.equal((await queue.nextWork(extensionInstanceId, at(11_000).getTime())), null);
 
   assert.equal(batches.length, 2);
   console.log(JSON.stringify({
     ok: true,
-    gate: 'task-account-safety-explicit-resume',
+    gate: 'task-explicit-user-resume',
     platformRequests: 0,
     browserWindows: 0,
     verified: [
       'non_final_stage_waits',
       'no_background_resume',
-      'cooldown_early_resume_rejected',
-      'expired_cooldown_requires_user_resume',
+      'normal_finish_is_immediately_ready',
+      'explicit_user_resume_has_no_time_delay',
       'exact_next_stage_dispatch',
       'repeated_resume_rejected',
       'completed_task_resume_rejected',
-      'approval_preserved_while_cooldown',
+      'approval_preserved_while_locked',
       'locked_profile_resume_rejected'
     ]
   }, null, 2));

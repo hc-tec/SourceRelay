@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -74,42 +74,87 @@ try {
     'account_safety_action_already_attempted'
   );
 
-  const cooldown = await registry.finishAuthenticatedRun(
+  const readyAfterRun = await registry.finishAuthenticatedRun(
     profileId,
     'bilibili',
     permit.runId,
     'interaction_risk_network_unstable',
     new Date(baseTime.getTime() + 4_000)
   );
-  assert.equal(cooldown.state, 'cooldown');
-  assert.equal(cooldown.manualUnlockRequired, false);
-  await rejectsCode(
-    () => registry.beginAuthenticatedRun(
-      profileId,
-      'bilibili',
-      'authenticated_interaction_reconnaissance',
-      new Date(baseTime.getTime() + 5_000)
-    ),
-    'account_safety_cooldown_active'
-  );
+  assert.equal(readyAfterRun.state, 'ready');
+  assert.equal(readyAfterRun.schemaVersion, 2);
+  assert.equal(readyAfterRun.manualUnlockRequired, false);
+  assert.equal(readyAfterRun.reasonCode, 'interaction_risk_network_unstable');
+  assert.equal('cooldownUntil' in readyAfterRun, false);
+  const persistedAfterRun = await readFile(join(temporaryDirectory, 'account-safety.json'), 'utf8');
+  assert.equal(persistedAfterRun.includes('cooldownUntil'), false);
 
   const laterPermit = await registry.beginAuthenticatedRun(
     profileId,
     'bilibili',
     'authenticated_interaction_reconnaissance',
-    new Date(baseTime.getTime() + 31 * 60 * 1_000)
+    new Date(baseTime.getTime() + 5_000)
   );
   assert.match(laterPermit.runId, /^[0-9a-f-]{36}$/i);
 
   const afterInterruptedRestart = await AccountSafetyRegistry.create(
     temporaryDirectory,
-    new Date(baseTime.getTime() + 32 * 60 * 1_000)
+    new Date(baseTime.getTime() + 6_000)
   );
   const interrupted = afterInterruptedRestart.get(profileId, 'bilibili');
   assert.equal(interrupted.state, 'locked');
   assert.equal(interrupted.reasonCode, 'previous_run_interrupted_manual_review_required');
   assert.equal(interrupted.manualUnlockRequired, true);
   assert.equal(interrupted.activeRun, null);
+
+  const legacyDirectory = join(temporaryDirectory, 'legacy-cooldown');
+  await mkdir(legacyDirectory, { recursive: true });
+  await writeFile(join(legacyDirectory, 'account-safety.json'), JSON.stringify([{
+    schemaVersion: 1,
+    profileId,
+    platform: 'bilibili',
+    state: 'cooldown',
+    reasonCode: 'legacy_completed_cooldown',
+    manualUnlockRequired: false,
+    cooldownUntil: new Date(baseTime.getTime() + 30 * 60 * 1_000).toISOString(),
+    activeRun: null,
+    lastRunAt: baseTime.toISOString(),
+    updatedAt: baseTime.toISOString()
+  }]), 'utf8');
+  const migratedRegistry = await AccountSafetyRegistry.create(
+    legacyDirectory,
+    new Date(baseTime.getTime() + 7_000)
+  );
+  const migrated = migratedRegistry.get(profileId, 'bilibili');
+  assert.equal(migrated.state, 'ready');
+  assert.equal(migrated.schemaVersion, 2);
+  assert.equal('cooldownUntil' in migrated, false);
+  assert.equal((await readFile(join(legacyDirectory, 'account-safety.json'), 'utf8')).includes('cooldownUntil'), false);
+
+  const legacyLockedDirectory = join(temporaryDirectory, 'legacy-locked');
+  await mkdir(legacyLockedDirectory, { recursive: true });
+  await writeFile(join(legacyLockedDirectory, 'account-safety.json'), JSON.stringify([{
+    schemaVersion: 1,
+    profileId,
+    platform: 'bilibili',
+    state: 'locked',
+    reasonCode: 'user_safety_pause',
+    manualUnlockRequired: true,
+    cooldownUntil: null,
+    activeRun: null,
+    lastRunAt: baseTime.toISOString(),
+    updatedAt: baseTime.toISOString()
+  }]), 'utf8');
+  const migratedLockedRegistry = await AccountSafetyRegistry.create(
+    legacyLockedDirectory,
+    new Date(baseTime.getTime() + 8_000)
+  );
+  const migratedLocked = migratedLockedRegistry.get(profileId, 'bilibili');
+  assert.equal(migratedLocked.state, 'locked');
+  assert.equal(migratedLocked.schemaVersion, 2);
+  assert.equal(migratedLocked.manualUnlockRequired, true);
+  assert.equal(migratedLocked.reasonCode, 'user_safety_pause');
+  assert.equal('cooldownUntil' in migratedLocked, false);
 
   console.log(JSON.stringify({
     ok: true,
@@ -119,7 +164,9 @@ try {
       'manual_pause_lock',
       'typed_unlock_acknowledgement',
       'at_most_once_action',
-      'network_failure_cooldown',
+      'normal_finish_returns_ready_without_cooldown',
+      'legacy_cooldown_migrates_to_ready',
+      'legacy_locked_state_remains_locked',
       'interrupted_run_restart_lock'
     ]
   }, null, 2));

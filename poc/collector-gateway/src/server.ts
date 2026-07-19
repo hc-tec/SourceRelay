@@ -523,12 +523,12 @@ const server = createServer(async (request, response) => {
       sendJson(response, 200, await taskQueue.approve(approvalMatch[1]));
       return;
     }
-    const accountSafetyResumeMatch = url.pathname.match(
-      /^\/v1\/tasks\/([0-9a-f-]{36})\/resume-after-account-safety$/i
+    const taskResumeMatch = url.pathname.match(
+      /^\/v1\/tasks\/([0-9a-f-]{36})\/resume$/i
     );
-    if (request.method === 'POST' && accountSafetyResumeMatch) {
+    if (request.method === 'POST' && taskResumeMatch) {
       if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
-      sendJson(response, 200, await taskQueue.resumeAfterAccountSafety(accountSafetyResumeMatch[1]));
+      sendJson(response, 200, await taskQueue.resumeAfterUserConfirmation(taskResumeMatch[1]));
       return;
     }
     if (request.method === 'POST' && url.pathname === '/v1/pairing/sessions') {

@@ -123,19 +123,35 @@ assert.match(
 );
 assert.match(
   source,
-  /waiting_for_account_safety/,
-  'Multi-stage tasks must expose a non-dispatchable account-safety waiting state'
+  /waiting_for_user_resume/,
+  'Multi-stage tasks must expose a non-dispatchable explicit user-resume state'
 );
 assert.match(
   source,
-  /\/v1\/tasks\/.*resume-after-account-safety/,
+  /resumeAfterUserConfirmation/,
   'Gateway artifact must expose the exact Console-origin-protected task resume route'
 );
 assert.match(
   source,
-  /account_safety_user_resumed/,
+  /user_resumed/,
   'Task resumption must remain an explicit user-recorded state transition'
 );
+assert.match(
+  source,
+  /record\.state\s*=\s*hardLock\s*\?\s*["']locked["']\s*:\s*["']ready["']/,
+  'Normal run completion must return directly to ready without a timed cooldown'
+);
+for (const removedPath of [
+  ['account_safety', 'cooldown', 'active'].join('_'),
+  ['waiting', 'for', 'account_safety'].join('_'),
+  ['resume', 'after', 'account-safety'].join('-')
+]) {
+  assert.equal(
+    source.includes(removedPath),
+    false,
+    `Gateway artifact must not retain timed-cooldown runtime path: ${removedPath}`
+  );
+}
 assert.match(
   source,
   /bilibili-transcript/,

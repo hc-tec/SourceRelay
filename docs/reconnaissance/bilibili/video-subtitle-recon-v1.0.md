@@ -91,7 +91,7 @@
 
 ## F. 候选 response 映射
 
-2026-07-19，用户第一次只批准一次以下范围：`subtitle only`、打开字幕菜单一次、选择公开可见的“中文”一次、`responseBodyMapping=schema_only`。执行前 Profile 为 `ready`、`manualUnlockRequired=false`、无 active run；请求只提交一次并返回 HTTP 201。稍后用户又对相同目标和相同边界给出第二张独立的一次性授权票；第二张票同样只提交一次，并在运行结束后立即消费。两张授权互不延续，cooldown 到期也不产生新授权。
+2026-07-19，用户第一次只批准一次以下范围：`subtitle only`、打开字幕菜单一次、选择公开可见的“中文”一次、`responseBodyMapping=schema_only`。执行前 Profile 为 `ready`、`manualUnlockRequired=false`、无 active run；请求只提交一次并返回 HTTP 201。稍后用户又对相同目标和相同边界给出第二张独立的一次性授权票；第二张票同样只提交一次，并在运行结束后立即消费。两张授权互不延续，系统状态为 `ready` 也不产生新授权。
 
 研究专用 `schema_only` 的执行边界为：
 
@@ -123,11 +123,11 @@ JSON 映射只输出路径、类型和数组规模，没有保存字段值。该
 
 本轮仍未获得或确认：轨道列表、轨道类型、字幕 URL、字幕时间片、字幕正文，以及这些字段与播放器可见字幕的一致性。`/x/v2/subtitle/web/view` 的二进制内容也仍为 `inconclusive`。
 
-执行后 Profile 正常关闭，风险状态进入 `cooldown`，`manualUnlockRequired=false`、无 active run；没有出现验证码、风控或限流 hard lock。随后 Gateway 停止，43127 监听器、可见 Chrome、`chrome-devtools-mcp` 和 `collector-gateway` 进程均为 0。该一次性授权已经消费，不授权任何自动恢复或第二次实网动作。
+执行后 Profile 正常关闭；当时版本曾写入旧 `cooldown` 状态，现已从产品删除并迁移为 `ready`。`manualUnlockRequired=false`、无 active run，没有出现验证码、风控或限流 hard lock。随后 Gateway 停止，43127 监听器、可见 Chrome、`chrome-devtools-mcp` 和 `collector-gateway` 进程均为 0。该一次性授权已经消费，不授权任何自动恢复或第二次实网动作。
 
 ### F.3 第二次独立单次授权：AI 字幕正文结构候选
 
-第二次 run 开始前，旧 cooldown 已经过期，持久状态为 `manualUnlockRequired=false`、无 active run；Gateway 不曾后台恢复，只有收到本次新授权后才调用同一个认证 runner。唯一 POST 返回 HTTP 201，结果如下：
+第二次 run 开始前，持久状态为 `manualUnlockRequired=false`、无 active run；Gateway 不曾后台恢复，只有收到本次新授权后才调用同一个认证 runner。唯一 POST 返回 HTTP 201，结果如下：
 
 | 字段 | 结果 |
 |---|---|
@@ -154,7 +154,7 @@ JSON 映射只输出路径、类型和数组规模，没有保存字段值。该
 
 因此该 CDN route 只是 projector 候选，不能进入 production response routes。后续实现应采用两段显式白名单：播放器响应只投影轨道目录所需字段，字幕 CDN 响应只投影 `lang` 与 `body[].content/from/to` 等正文所需字段；不得保存通用播放器对象或样式字段。
 
-本轮安全 artifact 已核对：没有 Profile ID、原始 URL、Cookie、Authorization 或 Token 字段，只有目标 URL digest、去 query 的 route、schema path、大小和摘要。运行后状态为 `cooldown / authenticated_run_inconclusive_cooldown`，`manualUnlockRequired=false`、无 active run；受管 Profile、Gateway、43127/43128、受管 Chrome 与 DevTools MCP 均已关闭。第二张一次性授权已经消费，不授权第二次提交或任何自动恢复。
+本轮安全 artifact 已核对：没有 Profile ID、原始 URL、Cookie、Authorization 或 Token 字段，只有目标 URL digest、去 query 的 route、schema path、大小和摘要。旧实现当时记录的 `authenticated_run_inconclusive_cooldown` 现仅作为历史 reason；当前状态机正常结束直接回到 `ready`。`manualUnlockRequired=false`、无 active run；受管 Profile、Gateway、43127/43128、受管 Chrome 与 DevTools MCP 均已关闭。第二张一次性授权已经消费，不授权第二次提交或任何自动恢复。
 
 ### F.4 实网结果后的实现修正
 
@@ -202,16 +202,16 @@ bounded_interaction
 - 正文与播放器当前显示逐段映射；
 - 长视频响应尺寸与时间预算；
 - 验证码、限流、断网和布局变化；
-- 账号安全熔断与冷却。
+- 账号安全熔断、异常锁定与逐次授权。
 
 ## I. 当前停止状态
 
 - B站受管浏览器：已关闭；
-- 本轮结束时 Profile risk state：`cooldown`；
-- 当前 reason：`authenticated_run_inconclusive_cooldown`；
+- 本轮历史记录中的 Profile risk state：旧 `cooldown`，当前 schema 已删除该状态并迁移为 `ready`；
+- 历史 reason：`authenticated_run_inconclusive_cooldown`，新运行不再生成 `_cooldown` reason；
 - `manualUnlockRequired=false`，无 active run；
 - Gateway：已停止，43127 与 43128 监听器均为 0；
 - 可见 Chrome、`chrome-devtools-mcp` 与 `collector-gateway` 进程：均为 0；
 - 生产 response routes：仍为空；
 - `admissionEligible`：仍为 `false`；
-- 第二张独立的一次性授权已经消费；即使 cooldown 到期，也不得后台自动恢复，新的实网动作仍需新的明确批准。
+- 第二张独立的一次性授权已经消费；`ready` 不得触发后台自动恢复，新的实网动作仍需新的明确批准。
