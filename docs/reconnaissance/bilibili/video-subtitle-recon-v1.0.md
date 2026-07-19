@@ -181,6 +181,22 @@ JSON 映射只输出路径、类型和数组规模，没有保存字段值。该
 
 扩展 v0.4.18 据此完成三项修正：只在 observed-document 边界接受唯一且格式严格的 `vd_source`，输入 API 仍拒绝任何 query；语言选择锁定 `data-lan="ai-zh"` 容器；选中后置条件检查容器 active 状态与可见字幕面板。构建、自动扩展加载、Gateway 控制循环和真实响应 projector 门禁均已通过，但没有把这次人工 DevTools 结果冒充扩展闭环验证。
 
+### F.6 v0.4.18 第一次真实闭环提交的前置失败
+
+用户随后明确授权对同一目标执行一次 v0.4.18 生产扩展闭环。系统只提交一次 `POST /validations/bilibili-transcript`，没有重试。该请求返回 HTTP 400；持久账号记录的 `lastRunAt`、reason 和 active run 均未变化，transcript artifact 数量也没有增加，证明请求在账号 run 创建和目标视频导航之前停止。
+
+纯本地诊断确认：v0.4.18 扩展已加载并配对，但当时 `strategyPermission=missing`。这是前一轮 DevTools CLI 直接独占同一个 Collection Profile 后出现的扩展授权状态变化；以后不得再让独立 DevTools 浏览器直接拥有生产 Collection Profile。真实测试必须由 Gateway 启动 Profile，并在消费实网授权前同时检查：
+
+```text
+extensionLoaded = true
+extensionPaired = true
+strategyPermission = granted
+accountSafety.state = ready
+manifest.version = expected version
+```
+
+Gateway 的本地 Control 页权限恢复路径随后只触发一次 `chrome.permissions.request`，成功恢复精确 B站 origins。关闭 Profile 和 Gateway 后重新启动复核，v0.4.18、加载、配对和 `strategyPermission=granted` 均持久存在。该恢复过程没有打开 B站页面；原闭环授权已经按一次提交消费，不能自动补发，下一次真实闭环仍需新的明确授权。
+
 ## G. 字段—证据映射（当前）
 
 | 输出字段 | 页面可见 | 当前证据表面 | 状态 |
@@ -227,4 +243,4 @@ bounded_interaction
 - 可见 Chrome、`chrome-devtools-mcp` 与 `collector-gateway` 进程：均为 0；
 - 生产 response routes：仍为空；
 - `admissionEligible`：仍为 `false`；
-- 最新人工与 DevTools 单次授权已经消费；扩展 v0.4.18 的真实闭环仍需新的明确批准。
+- 最新 v0.4.18 闭环授权已在权限 preflight 阶段按一次提交消费；当前权限已经恢复并通过重启复核，真正的扩展实站闭环仍需新的明确批准。
