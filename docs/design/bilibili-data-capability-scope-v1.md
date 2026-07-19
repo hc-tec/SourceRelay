@@ -71,6 +71,8 @@ coverage / terminal_reason / status
 | `discussion` | 已证明排序与楼中楼动作到 route 的因果；正文 projector 尚未 admission |
 | `account_profile` | research-only Gateway runner 已投影稳定 MID、规范主页、昵称、简介、头像和页面公开字段；最新真实 run 中昵称、简介、头像均通过 DOM 互证，字段完整性和正式扩展策略仍未 admission |
 | `account_inventory` | research-only Gateway runner 已完成真实 9 页 / 330 条视频目录，逐页 DOM/response 身份摘要一致、跨页 0 重复、末页 10 条、manifest/page digest 可恢复；正式 MV3 response projector 与边缘样本仍未 admission |
-| 其余八类（含统一 coverage） | 未形成正式生产闭环 |
+| `article` | 已证明 `/upload/opus` 的全部图文/专栏分面与 `/opus/<id>` 服务端正文 DOM；目录 cursor/终点、正文 artifact 和正式策略仍未实现 |
+| `collection_series` | 已证明总览、稳定系列详情、默认/倒序和 `/x/series/archives` 分页；全系列 coordinator、artifact 和正式策略仍未实现 |
+| 其余六类（含统一 coverage） | 未形成正式生产闭环 |
 
 后续不得使用单一 `bilibili_supported=true`。Console 和 DeepResearch adapter 必须读取此矩阵中每项独立的 maturity、`last_verified_at`、登录类别、覆盖与缺口。

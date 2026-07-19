@@ -33,6 +33,7 @@ description: Investigate and prove interactions on real websites before automati
 - 确认目标 Profile 没有被另一个 Chrome、Gateway、DevTools 或 Playwright 进程占用。
 - 先区分临时侦察 context 与产品管理的 Collection Profile。临时 context 结束即关闭；产品 Profile 的浏览器会话可以跨 run 保留，不能把“run 终态”默认解释为“关闭整个浏览器”。
 - 首次侦察不要加载待验证的扩展交互代码，不要调用产品闭环接口，不要执行预先写好的平台脚本。
+- 若必须复用产品管理的持久 Profile，且生产扩展没有静态平台 content script，可让该扩展保持被动加载并明确记录 `existingPlatformRunnerUsed=false`；不要用 `--disable-extensions` 启动同一产品 Profile 目录，因为 Chromium 可能在交还后把原有 optional origins 标成缺失。需要完全无扩展的基线时使用独立 Validation Profile，不能复制产品 Profile 的认证目录。
 - 允许复用浏览器正常持久化的登录状态，但不要读取认证材料。
 - 在导航前开始 Network 观察；记录导航次数，平台导航不得因失败自动重发。
 - 导航后先截图，记录标题、规范页面身份、登录/验证码/异常访问等公开可见信号。
@@ -102,6 +103,7 @@ content script synthetic pointer events
 - 只允许本地状态读取、证据序列化和幂等 loopback 提交有界重试。
 - 结束后关闭临时页面、临时浏览器、CDP 端口和独立调试 Gateway，并核对它们为零。
 - 对产品管理的 Collection Profile，按显式生命周期处理：单个 run 终态后保留最终目标页供视觉/DOM/Network 复核；仅在用户显式关闭 Profile、暂停账号、退出 Gateway，或产品策略明确要求 stage-scoped 回收时关闭。交付时记录“有意保留”的 Profile、窗口与监听器，不能把它们误报为泄漏。
+- 临时 DevTools/侦察浏览器把产品 Profile 交还 Gateway 后，必须重新核对 worker marker、扩展配对、精确站点权限、账号安全状态和 active run。若某次权限请求已经打开原生对话框但本地回执丢失，先读取当前权限或只处理那个已经存在且 scope 唯一匹配的对话框；不得再次提交权限请求。
 - 下一独立 run 需要复用目标窗口时，只复用仍停留于上一 run 规范目标、且由当前浏览器会话管理的专用 tab；若用户已导航到别处，不得关闭或劫持该页面，应创建新的受管目标。
 - 保留必要的去敏证据；不要把 Profile、截图、原始运行材料或认证信息提交进 Git。
 
