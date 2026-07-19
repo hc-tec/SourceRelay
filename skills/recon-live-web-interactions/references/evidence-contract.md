@@ -13,6 +13,7 @@ platform: 平台
 targetRole: search | detail | account | discussion | media | other
 targetIdentity: 去敏规范标识
 browserMode: visible persistent profile
+browserLifecycle: temporary_recon | managed_profile_session
 authenticated: true | false | indeterminate
 extensionInteractionLoaded: false
 existingPlatformRunnerUsed: false
@@ -142,5 +143,5 @@ domCrossCheck: 对应的页面状态
 - Network：动作后新增 route、status、大小、公开字段映射
 - 动作预算：导航 N，hover N，click N，scroll N，均无自动重试
 - 产品含义：应由哪一层实现；哪些旧假设被否定
-- 清理：浏览器/端口/Gateway/Profile 残留
+- 清理：临时浏览器/端口/Gateway 是否归零；产品管理的 Profile 会话若有意保留，记录窗口数、所有者与显式关闭条件
 ```

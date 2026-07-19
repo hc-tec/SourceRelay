@@ -12,7 +12,9 @@
 
 Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面。B站匿名首屏关键词搜索是目前唯一获得真实平台 admission、并完成正式 Research Task 调度与本地 Evidence batch 闭环的能力；其他平台和深度能力仍未发布。
 
-2026-07-18 检查点补充：B站视频详情字段的独立 Validation Run `v1.4.0` 已 accepted，但正式多阶段 Task 在当前页面 document / content-script 生命周期中仍出现 `gateway_stage_watchdog_expired`，因此该详情策略已降为 `suspended`。启动时重复 `chrome-extension://` 控制页问题已经通过 control-page / version-recovery single-flight 和重复页清理修复；任务 stage 窗口也在 Evidence 或 blocked 后自动关闭。这些控制面修正仍须用真实单 stage 与双 stage 任务复验。
+B站字幕目前已具备“按需真实采集”的产品底层能力，但仍是 research-only validation、`admissionEligible=false`，没有进入正式 Task production routes。v0.4.23 的 Gateway + 生产 MV3 扩展已在真实登录 Profile 中完成轨道目录、中文选择、字幕正文和本地 raw-first artifact 闭环；这证明能力可用，不等于把单一样本升级为正式策略 admission。
+
+2026-07-18 检查点补充：B站视频详情字段的独立 Validation Run `v1.4.0` 已 accepted，但正式多阶段 Task 在当前页面 document / content-script 生命周期中仍出现 `gateway_stage_watchdog_expired`，因此该详情策略已降为 `suspended`。任务 stage 窗口在 Evidence 或 blocked 后自动关闭；详情控制面修正仍须用真实单 stage 与双 stage 任务复验。扩展启动阶段的重复页/闪退先在 v0.4.23 去除了 `chrome://extensions` 和可见 context 自动恢复，但仍会因历史 `lastExtensionVersion` 与实际 worker 状态分离而永久 mismatch；v0.4.24 已改为每次冷启动先 headless 读取实际 marker，不匹配才 reload 一次并跨 context 复核，复核前不打开可见窗口。
 
 同日新增隔离的 `parallel_dom_and_network_metadata` Source Reconnaissance：DOM checkpoint、页面生命周期、扩展 validation/documentId 与 B站域名 XHR/fetch metadata 使用同一 run 时间轴。该模式不读取请求头/体、响应正文、Cookie 或 Token，不改变 production response routes，也不产生可 admission 的 Evidence。Google Chrome DevTools CLI 已在独立临时 Profile 中自动安装/重载生产扩展、触发 action、识别 service worker/Control 页并完成 B站 Fetch/XHR 去 query/hash 交叉观察，不再需要用户手工加载或点击扩展完成这类测试。
 
@@ -20,7 +22,7 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 
 同一 runner 另有默认关闭的 `schema_only` 研究模式：仅允许四条精确 B站 API route 与路径含 subtitle 的平台 CDN 响应，单响应 512 KiB、总计 1 MiB；JSON 只输出过滤敏感字段后的路径、类型和数组规模，非 JSON 只输出内容类别、大小和摘要，原始正文不落盘。该模式仍不改变 production route 或策略成熟度。
 
-用户指出断网、弱网、验证码和异常恢复可能导致重复平台动作并带来封号风险后，所有 B站认证实网研究曾立即暂停并写入 `locked / user_safety_pause`。账号安全门禁完成后，用户于 2026-07-19 先后给出两张相互独立的 subtitle-only / schema-only 单次授权票；两次都只提交一次并已消费，不能解释为恢复其他认证实网研究。随后第三张字幕单次授权在平台导航前因旧 MV3 service worker 返回 `control_message_unsupported` 而终止：没有导航、点击或字幕产物，但该次授权仍按一次提交消费。根因修复为独立的 control-surface revision 握手；相同扩展版本下的旧 worker 也必须自动重载，尚未再次实站验证。
+用户指出断网、弱网、验证码和异常恢复可能导致重复平台动作并带来封号风险后，所有 B站认证实网研究曾立即暂停并写入 `locked / user_safety_pause`。账号安全门禁完成后，早期逐次授权 run 暴露了旧 MV3 service worker、权限和 synthetic interaction 问题。项目所有者随后授予仓库范围内的持续开发/验证权限；产品动作账本、预算、Profile 绑定和风险停止仍保留。v0.4.23 已用真实启动和真实字幕 run 验证 control-surface revision、运行时代码 marker、可信浏览器输入与 at-most-once 控制循环。
 
 实现已加入 `account-safety.json` 原子状态、崩溃遗留 run 启动锁定、固定 acknowledgement 解锁、同 action ID 二次拒绝、60 秒 run deadline、三次 Fetch/XHR failure 中止、正式 task dispatch 风险门禁和启动时 HTTP(S) 旧 tab 清理。按用户最新决定，正常完成、普通失败、断网和超时均由 `running` 直接回到 `ready`，不再存在计时冷却；验证码、风控、限流、登录失效、中断和用户暂停仍进入 `locked`。持久记录升级为 schema v2，旧 v1 `cooldown` JSON 会一次性迁移为 `ready`。
 
@@ -31,6 +33,12 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 v0.4.18 的第一次真实闭环提交在账号 run 和平台导航之前返回 HTTP 400：生产扩展已加载、已配对，`strategyPermission` 却为 `missing`，账号 `lastRunAt` 未变化且没有新增 artifact。纯本地 Control 页权限恢复重新获得精确 B站 origins；关闭并重启 Profile/Gateway 后复核 `extensionLoaded=true / extensionPaired=true / strategyPermission=granted / manifest=0.4.18`。
 
 第二次 v0.4.18 产品 run 只提交一次并返回 HTTP 201，但最终为 `inconclusive / partial`：轨道目录捕获到 1 条，`open_caption_menu=postcondition_unmet`，中文选择因前置条件不满足而未尝试，字幕正文和 segment 均未捕获。随后执行了一次完全绕开 Collector 扩展、Gateway 和既有字幕脚本的干净浏览器可行性研究：从视觉上先显现播放器控制栏，DOM 取得字幕按钮与中文父项的实时边界框，再用浏览器级真实 mouse move/hover 和一次 click 完成中文切换；页面出现 `bpx-state-active` 与可见字幕面板，Network 同时返回 87175 字节、`lang=zh`、509 段的真实字幕 JSON。由此已经证明网页操作可行，v0.4.18 的错误位于 content-script synthetic interaction 执行层，产品闭环仍保持 `partial`。
+
+v0.4.19 把可信 mouse move/hover/click 迁到 Gateway Playwright 控制层，并发现两个页面时序事实：字幕控件约在导航后 7.8 秒才挂载；`locator.isVisible()` 会忽略祖先 `.bpx-player-control-bottom { opacity: 0 }`，不能作为控制栏肉眼已显示的证据。实现改为等待控件挂载，基于 `.bpx-player-video-area` 而非整个 player container 计算 reveal 位置，并用祖先 `opacity > 0.5` 验证后置条件。真实 run `f659f549-aa76-47ad-b97c-195706a4d430` 随后首次得到 `completed / satisfied / captureCount=2 / segmentCount=509`。
+
+v0.4.23 修正了两个产品生命周期问题。第一，扩展 manifest 版本不再冒充运行时代码版本；service worker 发布编译期 runtime marker，版本变化时 headless context A 只 reload 一次，headless context B 精确核验，之后才打开唯一可见 Control。第二，字幕 run 终态不再关闭目标窗口；新独立 run 只复用仍停留于原规范目标的专用 tab。真实 runs `e50cf518-539d-40e3-ad30-41b44983180c` 与 `b5e46b00-eec6-4f1d-9cb0-c41fbf615e4a` 均完成 509 段闭环，OS 窗口树在两次 run 后始终只有 Control 与原 B站目标两个窗口，原目标窗口句柄不变、没有第三个窗口。
+
+v0.4.24 继续修正 v0.4.23 遗留的 worker 采纳死锁：`lastExtensionVersion` 只是历史遥测，不能作为跳过 worker probe 的依据。真实验证故意把持久记录写成 `0.4.24`，同时保留实际 runtime `0.4.23`；新启动器在 headless A 读到该差异，只 reload 一次，在 headless B 核验 `0.4.24 / revision=2` 后才打开 Control，耗时 4.276 秒。随后同版本冷启动耗时 1.857 秒，只 probe、不 reload。两次均为 `chromeUiReloadAttempted=false / contextRestarted=false`；OS 审计只有一个 Chrome 根进程、一个可见 Control 窗口、一个标签，`chrome://extensions` 标签为 0，43128/43129 无监听。错误 API 现在还会返回 phase 与 expected/observed version/revision，避免再次只看到无上下文 mismatch。
 
 该经验和项目所有者的常设实网授权已经固化为仓库内 [`recon-live-web-interactions`](../../skills/recon-live-web-interactions/SKILL.md)。今后不得让独立调试浏览器与 Gateway 同时占有生产 Collection Profile；但代理不再等待逐 run 聊天授权，而是在安全 preflight、独立 run、动作 at-most-once 和清理门禁满足后自主推进真实验证。
 
@@ -46,6 +54,7 @@ B站详情正式 Task 的 receipt / Evidence race 已加入控制面修复：acc
 已完成：P2a 受管 Collection / Validation Profile 生命周期与任务绑定
 已完成：P2b B站匿名 breadth_search / visible_dom 真实验证与显式 admission
 已完成：P2c 正式 B站 dispatch、认证 Evidence 回传、本地原始批次与 completed 闭环
+已完成：B站字幕 production-extension validation 闭环、raw-first artifact、终态窗口保留与复用（尚未 admission）
 进行中：P2d B站详情 DOM / XHR-fetch 并行 Source Reconnaissance（production route 仍为空）
 未开始：P3 加密 Evidence Vault
 未开始：P4 EvidencePackage / DeepResearch 正式接入
@@ -62,6 +71,8 @@ B站详情正式 Task 的 receipt / Evidence race 已加入控制面修复：acc
 | `6334d17` | Gateway 受管持久 Profile、可见 Chromium、扩展自动加载、Profile API / Console 与任务绑定 | 只证明本地浏览器生命周期和绑定控制面，不证明平台可用 |
 | P2b（本提交） | 独立 Validation Run、扩展版本恢复、B站 DOM v1.1、记录 review 与源码 admission | 只发布匿名 B站首屏关键词搜索标题与 BV URL |
 | P2c（本提交） | Profile 级自动配对 / 精确权限 / 轮询、正式结果 HMAC 回传、原子 JSON batch / manifest、摘要幂等与任务 completed | 已以真实 B站页面验证单阶段正式闭环；仍不是加密 Vault |
+| `5c994c0` | worker runtime marker、版本变化的 headless reload/verify、唯一可见 Control | 去除扩展页 UI 恢复与可见 context 自动重启，但历史版本提示仍可能与实际 worker 分离 |
+| `eca3208` | 每次冷启动 marker-first probe、条件式单次 reload、结构化 mismatch diagnostics、v0.4.24 | 真实 poisoned Profile 与同版本重启均通过；可见窗口只在无界面核验成功后启动 |
 
 ## 3. 控制面边界
 
@@ -231,7 +242,7 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 | Task dispatch | B站单阶段 preflight → approval → signed dispatch → lease → evidence → completed 已实测；多阶段使用无时间等待的显式 user resume，单元状态机已通过 | 详情策略重新 admission 后做真实双 stage 验证；再增加取消和加密重启恢复 |
 | Profile | 受管持久生命周期、可见 Chromium、生产扩展自动加载、关闭/重启、并发门禁、任务绑定与 B站固定官方登录页入口已实现 | 平台认证动作仍只由用户执行；完成扫码后的可见身份与关闭/重启持久性核验 |
 | B站 discovery | `v1.1.0 live_anonymous_verified`，正式闭环已验证；只覆盖首屏可见标题与规范 BV URL | 再扩展独立的 detail 策略，不复用 breadth admission |
-| B站字幕 | 第二张单次授权下，菜单完成且精确“中文”只点击一次；DOM 选中确认未满足，但动作窗首次映射到 AI 字幕 JSON 的 `body[].content/from/to` 与 `lang`，播放器响应也确认轨道目录结构 | 设计两段显式字段白名单并完成轨道 URL、语言、正文与可见 DOM 的一致性验证；production route 继续为空，后续实网仍需新授权 |
+| B站字幕 | v0.4.23 已两次完成生产扩展/Gateway 真实 validation：三个必需动作完成、轨道目录与字幕正文各捕获一次、`lang=zh`、509/509 段、raw-first artifact 完整；终态窗口保留且下一 run 复用，无窗口堆积 | 扩展人工字幕、多语言、无字幕、锁定/删除、长视频与风险样本；保持 production route 为空和 `admissionEligible=false`，直到独立策略版本完成覆盖与正式 review |
 | response observation | 生产 route 为空 | 先完成 wrapper 到期撤销、route projector 和 document race 验证 |
 | Evidence | 认证回传、待提交重试、原子原始 JSON batch、task manifest、result SHA-256 与重启摘要恢复 | 加密 Vault、不可变审计、coverage 与删除/导出边界 |
 | Gateway task persistence | 仅内存 | 与 Vault 密钥和 schema 一起设计加密恢复，不写普通明文队列 |
@@ -249,4 +260,4 @@ P2a  Collection / Validation Profile launcher（完成）
   -> P4 DeepResearch EvidencePackage adapter
 ```
 
-任何真实平台验证前，生产 response route 继续为空；任何 capability 未获得当前策略版本的真实验证记录前，Console 不得批准执行。认证 Profile 的新实网动作还必须满足账号安全状态门禁并取得新的明确、逐次授权；系统不再设置任何计时冷却。
+任何正式平台任务发布前，production response route 继续为空；任何 capability 未获得当前策略版本的真实验证记录与 review 前，Console 不得批准执行。认证 Profile 的新实网动作必须满足账号安全状态、Profile、预算、at-most-once 和风险停止门禁；项目开发/验证使用所有者已授予的常设权限，不再重复索要逐 run 聊天授权。系统不设置任何计时冷却。

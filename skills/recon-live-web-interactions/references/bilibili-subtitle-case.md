@@ -131,7 +131,43 @@ MV3 Extension
 ## 7. 状态解释
 
 - 人工式浏览器可行性：`proved`
-- v0.4.18 产品闭环：仍为 `partial`
-- 下一产品版本：应先迁移可信交互执行层，再用独立真实 run 验证
+- v0.4.18 产品闭环：历史状态为 `partial`
+- v0.4.19 首个可信交互产品闭环：`proved`
+- v0.4.23 当前产品闭环、窗口保留与复用：`proved`
+- v0.4.24 冷启动 worker marker-first 采纳与同版本重启：`proved`
+- 正式策略 admission：仍为 `false`，需要更多字幕类型、语言、空结果、长视频和风险样本
 
-不要把第一条自动升级成第二条。
+不要把单一样本的产品闭环自动升级为正式策略 admission。
+
+## 8. 延迟挂载与视觉假阳性
+
+真实页面时间线显示：video area 约在导航后 5.2 秒可见，字幕控件约到 7.8 秒才挂载。生产流程必须先等待字幕控件 attached，再执行 reveal；不能在 video area 刚出现时就开始 2.5 秒后置条件窗口。
+
+reveal 的实时坐标必须来自 `.bpx-player-video-area`。使用 `.bpx-player-container` 底部会落入弹幕输入区。
+
+字幕控件自身可能满足 Playwright `isVisible()`，但祖先 `.bpx-player-control-bottom` 仍为 `opacity:0`。正确视觉后置条件是祖先 rect 非零、display/visibility 有效且 `opacity > 0.5`。可复用顺序：
+
+```text
+attached
+  -> trusted reveal on video area
+  -> ancestor opacity proves controls visible
+  -> trusted hover on caption control
+  -> menu DOM proves Chinese option visible
+  -> trusted click once
+  -> active/panel + response prove completion
+```
+
+## 9. 产品闭环与窗口生命周期
+
+真实 v0.4.19 run `f659f549-aa76-47ad-b97c-195706a4d430`、artifact `eb365fbc-2144-4623-af1b-d0dae7eac0f0` 首次得到：三个 required actions 均 completed、两类真实响应、`lang=zh`、509/509 段、`partial=false`。
+
+字幕终态最初会调用 `cleanupRun(..., true)` 关闭目标窗口。该行为已改为只清 alarm、动态脚本和 Network arm，并保留最终目标页。下一独立 run 只在旧 tab 仍停留于原规范 URL 时复用它；用户已导航到别处时不得关闭或劫持。
+
+v0.4.23 runs：
+
+- `e50cf518-539d-40e3-ad30-41b44983180c` / artifact `7d026a9d-318a-4ea3-ab05-a0e448e99a69`：完整 509 段，run 后目标窗口仍在；
+- `b5e46b00-eec6-4f1d-9cb0-c41fbf615e4a` / artifact `503eba28-48a2-4945-8258-0a0394cb0a24`：复用同一目标窗口，OS 窗口数仍为 Control + target 两个，无第三个窗口。
+
+扩展升级侦察还证明 manifest 版本可能新于正在执行的 worker bundle。v0.4.23 首先把 reload 与复核移入 headless context，但仍错误地用持久 `lastExtensionVersion` 决定是否探测；一旦该记录已经是新版本而实际 worker 回退为旧代码，就会跳过修复、打开可见窗口后 mismatch，并在每次启动永久复发。
+
+v0.4.24 改为每次冷启动 marker-first：headless A 必定读取实际 manifest/runtime/revision，匹配时零 reload；不匹配时只 reload 一次，再由 headless B 复核。真实 poisoned-state 验证故意令持久记录为 `0.4.24`、实际 runtime 为 `0.4.23`，结果 4.276 秒内完成 `0.4.23 -> 0.4.24`，`headlessPrewarmPerformed=true / prewarmRuntimeReloadAttempted=true / chromeUiReloadAttempted=false / contextRestarted=false`；随后同版本冷启动耗时 1.857 秒，`headlessProbePerformed=true` 且两个 reload 字段均为 `false`。两次可见阶段都只有一个 Control 窗口、一个标签，`chrome://extensions` 标签为 0。不得恢复旧的 UI Reload、可见 context 自动重启或基于历史版本跳过实际探测的路径。

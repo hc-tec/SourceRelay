@@ -31,6 +31,7 @@ description: Investigate and prove interactions on real websites before automati
 ## 第 1 阶段：建立干净基线
 
 - 确认目标 Profile 没有被另一个 Chrome、Gateway、DevTools 或 Playwright 进程占用。
+- 先区分临时侦察 context 与产品管理的 Collection Profile。临时 context 结束即关闭；产品 Profile 的浏览器会话可以跨 run 保留，不能把“run 终态”默认解释为“关闭整个浏览器”。
 - 首次侦察不要加载待验证的扩展交互代码，不要调用产品闭环接口，不要执行预先写好的平台脚本。
 - 允许复用浏览器正常持久化的登录状态，但不要读取认证材料。
 - 在导航前开始 Network 观察；记录导航次数，平台导航不得因失败自动重发。
@@ -99,10 +100,27 @@ content script synthetic pointer events
 - 遇到验证码、异常访问、风控、限流或登录失效，停止新的平台动作并通知用户完成必要身份处理；不要刷新、换代理或绕过。
 - 遇到断网、导航失败、弱网或动作结果未知，结束当前动作链；不要自动重放平台动作。
 - 只允许本地状态读取、证据序列化和幂等 loopback 提交有界重试。
-- 结束后关闭临时页面、浏览器、CDP 端口和 Gateway，核对目标 Profile 进程与监听端口为零。
+- 结束后关闭临时页面、临时浏览器、CDP 端口和独立调试 Gateway，并核对它们为零。
+- 对产品管理的 Collection Profile，按显式生命周期处理：单个 run 终态后保留最终目标页供视觉/DOM/Network 复核；仅在用户显式关闭 Profile、暂停账号、退出 Gateway，或产品策略明确要求 stage-scoped 回收时关闭。交付时记录“有意保留”的 Profile、窗口与监听器，不能把它们误报为泄漏。
+- 下一独立 run 需要复用目标窗口时，只复用仍停留于上一 run 规范目标、且由当前浏览器会话管理的专用 tab；若用户已导航到别处，不得关闭或劫持该页面，应创建新的受管目标。
 - 保留必要的去敏证据；不要把 Profile、截图、原始运行材料或认证信息提交进 Git。
 
 ## 从实证迁移到产品代码
+
+### 扩展升级与可见浏览器启动
+
+不要用 `manifest.json` 的文件版本推断正在执行的 MV3 worker 代码版本。让 worker 在启动时发布由编译期常量生成的 session runtime marker，并同时核对 `collectorVersion` 与 control-surface revision。
+
+`lastExtensionVersion` 只代表上一次成功，不证明 Chromium 当前缓存并执行的 worker。每次受管 Profile 冷启动都必须先读取真实 worker marker，不能用“持久记录与 manifest 相同”跳过检查：
+
+1. 在 headless context A 中等待实际 worker，同时核对 manifest version、runtime `collectorVersion` 与 control-surface revision；
+2. 三者已经匹配时关闭 A，直接进入可见启动，不发送 reload；
+3. 任一项不匹配时只发送一次 `chrome.runtime.reload()`，关闭 A，再在独立 headless context B 中精确核验；B 不匹配就本地失败，不得打开可见浏览器；
+4. 只有无界面核验精确通过，才启动唯一可见 context 和唯一 Control 页；
+5. 不打开 `chrome://extensions`，不点击开发者 Reload，不自动重启可见 context，不累积 `chrome-extension://` tab；
+6. 持久版本只作遥测；状态面至少暴露 `headlessProbePerformed`、是否 reload、initial/final runtime version 与 control revision。失败响应必须给出 headless/visible phase 和 expected/observed 值。
+
+扩展恢复属于本地控制动作，但可见窗口闪烁仍是产品故障。必须用真实持久 Profile 验证三类状态：正常同版本、正常跨版本，以及“持久记录显示新版本但实际 worker 仍旧”的 poisoned state；不能只靠临时 Profile 的自动加载门禁。
 
 把生产职责按能力拆开：
 
@@ -130,5 +148,5 @@ Gateway
 - 视觉、DOM、Network 证据能够区分事实与推断；
 - 登录、验证码、弱网、页面漂移和空结果具有明确语义；
 - 已指出生产实现应使用 DOM、可信浏览器输入、response 投影或混合方案；
-- 没有遗留浏览器、Gateway、调试端口或未说明的平台动作；
+- 没有未解释的浏览器、Gateway、调试端口或平台动作；任何有意保留的产品 Profile 会话已经明确记录所有者和关闭条件；
 - 没有把人工可行性成功误报为产品闭环已经通过。

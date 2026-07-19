@@ -15,7 +15,7 @@
 不确定是否成功
   -> 停止下一平台动作
   -> 保存去敏检查点
-  -> 关闭自动化目标页
+  -> 冻结目标页，不再输入
   -> ready 或 persistent lock
   -> 告知用户真实原因
   -> 由代理在常设授权下创建新的独立 run；不得恢复或重放旧 run
@@ -35,7 +35,7 @@
 | Gateway preflight redelivery | 30 秒 | 否 | 签名控制消息重投 | 保留 |
 | Approved dispatch redelivery | 30 秒 | 间接相关 | 已有 `task + stage` lease 时复用窗口 | 保留，但 risk lock 必须先于首次 dispatch；不得创建第二窗口 |
 | Evidence submission retry | 有界/幂等摘要 | 否，提交 loopback Gateway | 本地证据提交 | 保留 |
-| Extension control/version recovery | 有界 | 只操作 `chrome-extension://` / `chrome://extensions` | 本地扩展恢复 | 保留；不得因此打开平台页 |
+| Extension control/version recovery | 每次冷启动一次 headless probe；仅不匹配时 reload 一次并增加第二个 headless verify context | 否，只操作本地扩展 worker 与 Control | 本地扩展恢复 | 历史版本不能跳过实际 marker 检查；禁止 `chrome://extensions`、可见恢复页和可见 context 自动重启 |
 | Authenticated interaction runner | 每动作一次 | 是 | 真实平台动作 | 必须新增持久熔断、at-most-once ledger 和弱网检查 |
 
 “有循环”不等于危险；危险边界是循环能否再次产生平台可观察的导航或用户事件。代码审查和构建门禁必须保持这个区分。
@@ -111,8 +111,10 @@ run 的 `completed` 也不能由“至少一个动作完成”推导。每个 sc
 
 ## 7. 页面关闭与用户体验
 
-- 风险信号出现后关闭自动化创建的目标页，保留扩展 Control 页；
+- 风险信号出现后冻结自动化创建的目标页并停止输入；验证码、登录失效或页面异常需要用户处理时保留原页面供人工查看，不得刷新、绕过或自动重开；
 - 受管 Profile 每次启动都关闭浏览器尝试恢复的 HTTP(S) 旧 tab，只保留浏览器原生登录存储与扩展 Control 页；任何平台页必须来自新的显式动作；
+- 平台 run 终态不等于 Profile 会话终态。字幕 validation 保留最终目标窗口以便视觉/DOM/Network 复核；下一独立 run 只复用仍停留于原规范目标的专用 tab。显式 Profile `/close`、账号暂停或 Gateway 退出才结束整个受管浏览器会话；
+- 临时 DevTools、手工侦察和 headless 版本预热 context 仍必须结束即清理。残留审计要区分“未解释的泄漏”和“产品明确保留的受管会话”；
 - 不在风险页面上继续截图、滚动、点击或读取响应正文；
 - Console 显示 `ready / running / locked`、原因、时间和是否需要人工解锁；
 - 不显示 Cookie、Token、Profile 路径、验证码图片或账号身份；
@@ -138,4 +140,4 @@ run 的 `completed` 也不能由“至少一个动作完成”推导。每个 sc
 
 多阶段任务的单元门禁已通过：`verify-task-account-safety-resume.mjs` 覆盖 stage 后等待、无后台恢复、无时间延迟的显式继续、精确下一 stage、重复/完成/locked 拒绝。平台与 Console 闭环只接受真实任务验证，不再使用 fake Gateway 或伪平台诊断。
 
-当前实现已按用户最新决定删除 `cooldown` 状态和 `cooldownUntil` 字段；持久记录升级为 schema v2，历史 v1 JSON 中的旧 `cooldown` 会在 Gateway 启动时一次性迁移为 `ready`。v0.4.18 最近一次产品字幕 run 捕获到真实轨道目录，但 content script 的合成交互没有展开字幕菜单，结果为 `partial`，本轮没有重试。随后不加载 Collector 扩展/Gateway runner 的干净浏览器侦察，以真实 mouse move/hover 和一次中文点击完整触发 87175 字节、509 段的中文字幕 JSON，证明可行性成立且错误位于交互执行层。详细方法已固化到仓库内 [`recon-live-web-interactions`](../../skills/recon-live-web-interactions/SKILL.md)。项目开发/验证后续采用常设授权，不再等待逐次聊天批准。
+当前实现已按用户最新决定删除 `cooldown` 状态和 `cooldownUntil` 字段；持久记录升级为 schema v2，历史 v1 JSON 中的旧 `cooldown` 会在 Gateway 启动时一次性迁移为 `ready`。v0.4.18 的 content-script 合成交互历史 run 为 `partial`；干净浏览器侦察随后用真实 mouse move/hover 与一次中文点击证明 509 段字幕可行。v0.4.23 已进一步完成两次相互独立的生产扩展/Gateway 真实闭环，均为 `completed / objective=satisfied / captureCount=2 / segmentCount=509`，每个语义动作在各自 run 内最多一次；第二次还证明复用原目标窗口且没有新增第三个窗口。v0.4.24 又以真实 poisoned Profile 证明：即使持久记录谎称已是新版本，启动器也会先读到旧 runtime、在无界面阶段只 reload 一次并复核成功，不再进入可见 mismatch 循环。正常结束后账号回到 `ready / activeRun=null`；run 目标页按产品生命周期保留，显式 Profile 升级重启则属于独立会话生命周期。详细方法已固化到仓库内 [`recon-live-web-interactions`](../../skills/recon-live-web-interactions/SKILL.md)。项目开发/验证采用常设授权，不再等待逐次聊天批准。

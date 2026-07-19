@@ -1,6 +1,6 @@
 # B站视频字幕 Source Reconnaissance v1.0
 
-- 状态：三次相互独立、均已消费的 subtitle-only 实网勘察已完成；最新一次以人工与 DevTools 双视角确认真实操作、选中后置条件和 509 段字幕正文，扩展 v0.4.18 已据此修正但尚未实站闭环，仍不可 admission
+- 状态：人工可行性与生产扩展/Gateway 闭环均已真实证明；v0.4.23 两次独立 run 均完成中文选择、两类响应捕获和 509 段 raw-first artifact，目标窗口终态保留并复用；v0.4.24 又完成 poisoned worker 与同版本冷启动验证；当前仍为 research-only validation、不可 admission
 - 日期：2026-07-19
 - 页面角色：公开视频详情播放器
 - Evidence objective：未来独立的 transcript / subtitle evidence，不并入视频详情 DOM 策略
@@ -166,7 +166,7 @@ JSON 映射只输出路径、类型和数组规模，没有保存字段值。该
 - 去除 Profile ID、原始 URL、正文和未知 DOM 字段的原子 runtime artifact；
 - compact 列表与完整安全 schema 详情两个读取层级。
 
-上述历史实现修正没有通过正确的人工流程验证，因此当时不能声称 B站字幕能力已完成。最新人工与 DevTools 证据见下一节；v0.4.18 的扩展闭环仍须新的单次授权实站验证。
+上述历史实现修正没有通过正确的人工流程验证，因此当时不能声称 B站字幕能力已完成。后续人工与 DevTools 证据见下一节；在该历史时间点，v0.4.18 的扩展闭环尚待新的单次授权实站验证，这一门槛后来已由 v0.4.19/v0.4.23 的独立真实 runs 取代并完成。
 
 ### F.5 人工流程与 DevTools 联合侦察
 
@@ -197,14 +197,52 @@ manifest.version = expected version
 
 Gateway 的本地 Control 页权限恢复路径随后只触发一次 `chrome.permissions.request`，成功恢复精确 B站 origins。关闭 Profile 和 Gateway 后重新启动复核，v0.4.18、加载、配对和 `strategyPermission=granted` 均持久存在。该恢复过程没有打开 B站页面；原闭环授权已经按一次提交消费，不能自动补发，下一次真实闭环仍需新的明确授权。
 
+### F.7 v0.4.19—v0.4.24 生产闭环与窗口生命周期
+
+可信交互迁移到 Gateway Playwright 层后，两个独立的真实页面事实解释了 v0.4.19 早期 `control_reveal_postcondition_unmet`：
+
+1. `.bpx-player-video-area` 约在导航后 5.2 秒已经可见，但 `.bpx-player-ctrl-subtitle` 约到 7.8 秒才挂载；看到 video area 不能立即推断字幕控件存在。
+2. `.bpx-player-ctrl-subtitle` 自身可有非零 rect、`display:block / visibility:visible / opacity:1`，但祖先 `.bpx-player-control-bottom` 仍为 `opacity:0`。Playwright `locator.isVisible()` 因此会返回视觉假阳性；控制栏真正显现必须检查祖先 rect、display、visibility 与 `opacity > 0.5`。
+3. reveal 坐标必须来自 `.bpx-player-video-area` 的实时 rect。使用整个 `.bpx-player-container` 底部会落入视频下方的弹幕输入区域。
+
+生产顺序据此固定为：
+
+```text
+等待字幕控件 attached
+  -> 等待 video area 可见
+  -> 对 video area 底部执行一次可信 mouse move
+  -> 检查 control-bottom 祖先 opacity
+  -> 对字幕控件执行一次可信 hover
+  -> 检查中文父项可见
+  -> 对 data-lan=ai-zh 父项点击一次
+  -> 检查 active/字幕面板，并读取动作后真实响应
+```
+
+v0.4.19 真实 run `f659f549-aa76-47ad-b97c-195706a4d430`、artifact `eb365fbc-2144-4623-af1b-d0dae7eac0f0` 首次完成产品闭环：`state=completed`、`objective=satisfied`、三个必需动作均为 `completed`、`captureCount=2`、`language=zh`、509/509 段、`partial=false`。轨道目录与字幕正文分别来自真实 200 JSON response；artifact 保存四个本地 UTF-8 JSON 文件，不含 Cookie、Token、请求头、Profile 路径或 query 值。
+
+该 run 还暴露出目标窗口在 `completeTranscriptValidation()` 后被自动关闭的产品缺陷。v0.4.20 起，终态清理只撤销 alarm、动态脚本和 Network arm，不再关闭目标窗口；下一独立 run 仅在旧 tab 仍停留于已记录规范目标时复用它，避免窗口堆积。Profile 浏览器生命周期与单个 run 生命周期从此分离。
+
+扩展升级又证明 manifest 文件版本不能代表正在执行的 worker bundle。v0.4.23 让 service worker 发布编译期 runtime marker，并把升级采纳移到不可见 context；但它仍用持久 `lastExtensionVersion` 决定是否 probe，一旦记录显示新版本而实际 worker 仍旧，就会跳过无界面修复、打开可见窗口后 mismatch，并在下一次继续永久复发。
+
+v0.4.24 删除了这个错误信任边界：每次冷启动必先由 headless A 读取实际 manifest/runtime/revision；已匹配则不 reload，不匹配才 reload 一次并由 headless B 复核。真实 poisoned-state 测试把记录设为 `0.4.24`、实际 runtime 保持 `0.4.23`，最终 4.276 秒完成无界面修复并启动唯一 Control；随后的 `0.4.24 -> 0.4.24` 冷启动为 1.857 秒、零 reload。两次都没有 `chrome://extensions`、可见 context restart 或额外 tab。
+
+最终两个独立产品 runs：
+
+| run | artifact | 结果 |
+|---|---|---|
+| `e50cf518-539d-40e3-ad30-41b44983180c` | `7d026a9d-318a-4ea3-ab05-a0e448e99a69` | `completed / satisfied / captureCount=2 / zh / 509`；终态后 B站窗口仍存在 |
+| `b5e46b00-eec6-4f1d-9cb0-c41fbf615e4a` | `503eba28-48a2-4945-8258-0a0394cb0a24` | 同样完整；复用原 B站窗口，OS 窗口数保持 Control + target 两个，没有第三个窗口 |
+
+两次 run 内每个真实语义动作最多一次，无动作重试；结束后账号均为 `ready / activeRun=null`，未出现验证码、风控或限流。人工可行性与产品闭环现在都为 `proved`，但样本覆盖不足，`admissionEligible` 继续为 `false`。
+
 ## G. 字段—证据映射（当前）
 
 | 输出字段 | 页面可见 | 当前证据表面 | 状态 |
 |---|---|---|---|
 | 字幕能力存在 | 是 | visible DOM 字幕控件 | 已观察 |
-| 可用语言“中文” | 是 | visible DOM 菜单与选中后置条件 | 人工 DevTools 流程只点击一次，确认 `data-lan=ai-zh`、active class、切换提示和字幕面板可见 |
+| 可用语言“中文” | 是 | visible DOM 菜单与选中后置条件 | 人工 DevTools 与 v0.4.23 产品 runs 均确认 `data-lan=ai-zh`、active/字幕面板后置条件；每 run 只点击一次 |
 | 轨道类型（人工/自动） | 可能 | player response + visible AI badge | 已确认 `ai-zh` 与 AI 标识；更多字幕类型仍需样本 |
-| 字幕时间片与正文 | 播放时可见 | `aisubtitle.hdslb.com` response + DOM cross-check | 已真实读取 509 段 `content / from / to`；只抽查当前可见字幕，尚未逐段比对、未 admission |
+| 字幕时间片与正文 | 播放时可见 | `aisubtitle.hdslb.com` response + DOM cross-check | 产品闭环已两次保存 509/509 段 `content / from / to` raw-first artifact；只抽查当前可见字幕，尚未逐段比对、未 admission |
 | 字幕来源/语言代码 | 间接 | player response + subtitle CDN response | 已确认轨道 `ai-zh`、CDN 根级 `lang=zh` 以及同一 approved CDN pathname；多语言一致性仍待验证 |
 
 ## H. 策略候选
@@ -223,7 +261,7 @@ bounded_interaction
   + visible_dom cross-check
 ```
 
-不能因为本样本菜单成功就升级为 `live_authenticated_verified`。还需验证：
+不能因为单一样本的产品闭环成功就升级为正式 `live_authenticated_verified` 策略或 admission。还需验证：
 
 - 人工字幕与 AI 自动字幕样本；
 - 多语言、无字幕、字幕锁定与字幕删除；
@@ -231,16 +269,14 @@ bounded_interaction
 - 正文与播放器当前显示逐段映射；
 - 长视频响应尺寸与时间预算；
 - 验证码、限流、断网和布局变化；
-- 账号安全熔断、异常锁定与逐次授权。
+- 账号安全熔断、异常锁定、独立 run 与动作预算。
 
-## I. 当前停止状态
+## I. 当前运行状态
 
-- B站受管浏览器：已关闭；
-- 本轮历史记录中的 Profile risk state：旧 `cooldown`，当前 schema 已删除该状态并迁移为 `ready`；
-- 历史 reason：`authenticated_run_inconclusive_cooldown`，新运行不再生成 `_cooldown` reason；
-- `manualUnlockRequired=false`，无 active run；
-- Gateway：已停止，43127 与 43128 监听器均为 0；
-- 可见 Chrome、`chrome-devtools-mcp` 与 `collector-gateway` 进程：均为 0；
+- B站受管浏览器：按产品生命周期有意保持运行，不属于残留泄漏；
+- 可见窗口：字幕 runs 完成后曾按产品规则保留 `Collector Control + 目标 B站` 两个窗口；本次显式 v0.4.24 Profile 升级结束了旧浏览器会话，当前新会话只有 1 个 `Collector Control` 窗口与 1 个标签，不应把该显式升级与 run 终态自动关窗混为一谈；
+- Profile risk state：`ready`；`manualUnlockRequired=false`；无 active run；
+- Gateway：43127 有意保持运行，以便继续管理当前 Profile；没有 43128/43129 临时监听器或独立 DevTools 浏览器；
 - 生产 response routes：仍为空；
 - `admissionEligible`：仍为 `false`；
-- 最新 v0.4.18 闭环授权已在权限 preflight 阶段按一次提交消费；当前权限已经恢复并通过重启复核，真正的扩展实站闭环仍需新的明确批准。
+- 项目开发/验证使用所有者已授予的常设权限；未来新 run 仍须独立 run ID、既定动作预算、at-most-once ledger 和风险停止，不得恢复或重放旧 run。
