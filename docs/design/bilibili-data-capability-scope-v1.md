@@ -72,7 +72,7 @@ coverage / terminal_reason / status
 | `account_profile` | research-only Gateway runner 已真实保存稳定 MID、昵称、简介、头像、横幅、公开标识、8 个统计/导航字段、公告、充电区、代表作和 7 条 route metadata；artifact digest 与敏感字段扫描通过，正式 MV3 策略和多账号覆盖仍未 admission |
 | `account_inventory` | research-only Gateway runner 已完成真实 9 页 / 330 条视频目录，逐页 DOM/response 身份摘要一致、跨页 0 重复、末页 10 条、manifest/page digest 可恢复；正式 MV3 response projector 与边缘样本仍未 admission |
 | `article` | 已证明 `/upload/opus` 的全部图文/专栏分面与 `/opus/<id>` 服务端正文 DOM；目录 cursor/终点、正文 artifact 和正式策略仍未实现 |
-| `collection_series` | research runner 已真实保存 11 个总览项和稳定 series ID，标题/声明数量/32 个 DOM 预览全部与 response 互证并覆盖 0 条系列；人工已证明详情默认/倒序和第二页，完整详情 coordinator/artifact 与正式策略仍未实现 |
+| `collection_series` | research runner 已真实保存 11 个总览项和稳定 series ID；独立单系列 runner 又完成 5 页 / 129 条默认顺序全目录，页数为 30/30/30/30/9、DOM/response 全匹配、跨页 0 重复、artifact digest 与敏感字段扫描通过；planner 全系列遍历、season/边缘样本、MV3 正式策略与 admission 仍未完成 |
 | 其余六类（含统一 coverage） | 未形成正式生产闭环 |
 
 后续不得使用单一 `bilibili_supported=true`。Console 和 DeepResearch adapter 必须读取此矩阵中每项独立的 maturity、`last_verified_at`、登录类别、覆盖与缺口。

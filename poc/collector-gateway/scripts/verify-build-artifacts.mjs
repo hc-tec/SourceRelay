@@ -374,6 +374,31 @@ assert.match(
   /bilibili_collection_series_response_evidence_digest_mismatch/,
   'Collection-series reads must verify the bounded response-schema evidence digest'
 );
+assert.match(
+  source,
+  /\/v1\/series-detail-artifacts/,
+  'Gateway artifact must expose compact series-detail artifact lookup routes'
+);
+assert.match(
+  source,
+  /authenticated_series_detail_reconnaissance/,
+  'Series-detail research must use the persistent account-safety circuit breaker'
+);
+assert.match(
+  source,
+  /bilibili\.collection-series\.series-detail\.response\.v1/,
+  'Gateway artifact must retain the independently versioned Bilibili series-detail candidate'
+);
+assert.match(
+  source,
+  /canonicalPageQuery:\s*["']stable_type_series_only["']/,
+  'Series-detail artifacts must retain only the stable semantic page query role'
+);
+assert.match(
+  source,
+  /bilibili_series_detail_page_digest_mismatch/,
+  'Series-detail reads must verify every bounded page artifact digest'
+);
 
 console.log(JSON.stringify({
   ok: true,

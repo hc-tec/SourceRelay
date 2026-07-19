@@ -43,6 +43,12 @@ import {
   type BilibiliCollectionSeriesInput,
   type BilibiliCollectionSeriesRunRecord
 } from './bilibili-collection-series';
+import {
+  BilibiliSeriesDetailRunner,
+  safeBilibiliSeriesDetailErrorCode,
+  type BilibiliSeriesDetailInput,
+  type BilibiliSeriesDetailRunRecord
+} from './bilibili-series-detail';
 import { runTranscriptValidationControlLoop } from './transcript-control-loop';
 import { executeBilibiliTranscriptInteraction } from './bilibili-transcript-interaction';
 import {
@@ -447,6 +453,74 @@ export class CollectionBrowserManager {
       return record;
     } catch (error) {
       const reason = safeBilibiliCollectionSeriesErrorCode(error);
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        profile.platform,
+        permit.runId,
+        reason
+      ).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async runBilibiliAuthenticatedSeriesDetailReconnaissance(
+    profileId: string,
+    input: BilibiliSeriesDetailInput
+  ): Promise<BilibiliSeriesDetailRunRecord> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('series_detail_collection_kind_required');
+    if (profile.platform !== 'bilibili') throw new Error('series_detail_platform_mismatch');
+    if (profile.account.category !== 'user_managed') {
+      throw new Error('series_detail_user_managed_required');
+    }
+    const permit = await this.#accountSafety.beginAuthenticatedRun(
+      profileId,
+      profile.platform,
+      'authenticated_series_detail_reconnaissance'
+    );
+    try {
+      await this.launch(profileId);
+      const running = this.#runtime.get(profileId);
+      if (!running) throw new Error('series_detail_browser_not_running');
+      const runner = new BilibiliSeriesDetailRunner({
+        context: running.context,
+        runId: permit.runId,
+        collectorVersion: running.extensionVersion,
+        canonicalProfileUrl: input.canonicalProfileUrl,
+        stableSeriesId: input.stableSeriesId,
+        maxPages: input.maxPages,
+        onActionAttempt: async (actionId) => {
+          await this.#accountSafety.recordActionAttempt(profileId, profile.platform, permit.runId, actionId);
+        }
+      });
+      const record = await runner.run();
+      const finishReasonByTerminal: Record<
+        BilibiliSeriesDetailRunRecord['coverage']['terminalReason'],
+        string
+      > = {
+        declared_terminal_reached: 'series_detail_completed',
+        budget_exhausted: 'series_detail_budget_exhausted_partial',
+        verification_required: 'series_detail_verification_required',
+        rate_limited: 'series_detail_rate_limited',
+        risk_controlled: 'series_detail_risk_control',
+        response_status_unavailable: 'series_detail_response_status_unavailable',
+        metadata_projection_failed: 'series_detail_metadata_projection_failed',
+        page_projection_failed: 'series_detail_page_projection_failed',
+        dom_response_mismatch: 'series_detail_dom_response_mismatch',
+        pagination_control_missing: 'series_detail_pagination_control_missing',
+        context_changed: 'series_detail_context_changed',
+        run_deadline_exceeded: 'series_detail_run_deadline_exceeded',
+        source_unavailable: 'series_detail_source_unavailable'
+      };
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        profile.platform,
+        permit.runId,
+        finishReasonByTerminal[record.coverage.terminalReason]
+      );
+      return record;
+    } catch (error) {
+      const reason = safeBilibiliSeriesDetailErrorCode(error);
       await this.#accountSafety.finishAuthenticatedRun(
         profileId,
         profile.platform,

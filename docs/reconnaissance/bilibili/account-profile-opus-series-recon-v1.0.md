@@ -239,11 +239,11 @@ active run = null
 
 ## H. 下一门槛
 
-1. 为 `account_profile` 定义公开字段的 raw-first DOM/response 合并契约，显式排除当前登录用户和消息 route；
-2. 为 `article` 分开 `opus_inventory`、`opus_detail` 与 `discussion`，研究 cursor/滚动终点；
-3. 为 `collection_series` 分开总览和每个系列的有界枚举，保持平台定义顺序；
+1. 为 `article` 分开 `opus_inventory`、`opus_detail` 与 `discussion`，实现 cursor/滚动终点和正文 raw-first artifact；
+2. 由 planner 使用总览 artifact 的稳定 ID 逐个调用单系列 runner，补 season、0 条系列、单页系列、采集中变化与中断恢复样本；
+3. 把当前 Gateway research projector 迁移到生产 MV3 Extension，保持可信输入、response 观察与 Gateway 账本的职责边界；
 4. 扩展权限只增加经审查的 `https://space.bilibili.com/*`，不能扩大为 `<all_urls>`；
-5. 完成生产 MV3 projector、Gateway coordinator、ignored runtime artifact、真实 E2E 与人工 review 后再 admission。
+5. 各能力完成多样本真实 E2E 与人工 review 后分别 admission，不能让单系列成功替代整个 `collection_series`。
 
 ## I. `account_profile` research runner 真实闭环
 
@@ -316,4 +316,49 @@ terminal reason = overview_captured
 
 artifact 包含 `overview.json`、`response-schema.json` 和 manifest，三类 SHA-256 均在读取时复核。敏感字段扫描为 0：没有 Profile ID、当前登录用户、认证材料、本机路径、网络 query 值或未知 response 值。
 
-该检查点只证明合集/系列总览及稳定 ID 发现。每个系列的完整分页目录仍是独立 runner；已有人工证据的 129 条、30 条/页和真实第二页 0 重叠尚未迁移成可恢复 artifact，因此整个 `collection_series` 仍未 admission。
+该检查点只证明合集/系列总览及稳定 ID 发现。单系列完整分页已经由下节的独立 runner 证明，但 planner 遍历全部系列、season、恢复与正式 MV3 策略仍未完成，因此整个 `collection_series` 仍未 admission。
+
+## K. `collection_series` 单系列详情 research runner 真实闭环
+
+Gateway 新增 `bilibili.collection-series.series-detail.response.v1 @ 1.0.0` research runner。每个 run 只处理总览 artifact 中的一个稳定 series ID；本次目标从 `f274a267-3d89-45de-b301-ee221a8a78b1` 读取，没有把账号或系列 ID 硬编码进 runner。页面始终保持平台默认排序，保存固定语义 `canonicalPageQuery=stable_type_series_only / sortRole=platform_default`，不保存 query 值。
+
+实现按职责拆为 contract、DOM、response、coordinator 与 artifact store：
+
+- `/x/series/series` 只投影公开系列身份、标题、说明、封面、声明数量和更新时间；
+- `/x/series/archives` 只投影 BVID、规范 URL、标题、公开封面、时长、发布时间和页面可见统计；
+- 每页必须满足 response/DOM BVID 集合精确一致、摘要一致、全部标题匹配、active page 正确；
+- 跨页 BVID 发现重复立即停止；各页声明总数、page size 和预期条目数必须一致；
+- 60 秒总 deadline，1 次详情导航加至多 19 次分页动作，每个语义 action ID 只能登记一次；
+- response 未知值不落盘，只保存 schema path/type/array length、body digest、状态和 query key 名。
+
+完整 Gateway 构建门禁通过后，先有意关闭旧 Gateway 管理的浏览器会话，再用原状态目录加载新代码。保存的 B站 Collection Profile 登录态被正常复用，真实 run 只提交一次：
+
+```text
+artifact id = 74c51a6b-ddb2-4011-8980-330dba19e471
+manifest sha256 = 52415bc4b587f186524d6743d77dd9ee570eec5bda6319e334616784deee3ffe
+state = completed
+series = Python零基础
+declared total = 129
+declared pages = 5
+captured page items = 30, 30, 30, 30, 9
+captured items = 129
+unique items = 129
+duplicate items = 0
+terminal reason = declared_terminal_reached
+```
+
+五页全部满足 response/DOM 身份摘要精确一致和标题全匹配。动作账本只有 `open_series_detail` 与四个 `open_series_page_N`，五个动作均为 `attempted=true / attemptCount=1 / completed`，没有失败重放。
+
+artifact 包含 `metadata.json`、`metadata-response-schema.json`、五个逐页 JSON 和 manifest；读取接口重新验证 manifest、元数据、response schema 与每页 SHA-256。递归扫描没有 Profile ID、浏览器运行 ID、Cookie/Authorization 字段、请求头对象、网络 query 值、本机绝对路径或扩展 URL。run 后状态为：
+
+```text
+extension = 0.4.24
+paired = true
+strategyPermission = granted
+chromeUiReloadAttempted = false
+contextRestarted = false
+account safety = ready
+active run = null
+```
+
+这证明“给定稳定 series ID，按平台默认顺序完整枚举单个公开系列”已经具备可重复调用的 research 底层能力。它不证明所有系列、season、0 条/单页、采集中变动或断点恢复，也尚未迁移到生产 MV3 projector，因此 `admissionEligible=false`。

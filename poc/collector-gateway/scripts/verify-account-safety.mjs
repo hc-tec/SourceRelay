@@ -92,7 +92,7 @@ try {
   const laterPermit = await registry.beginAuthenticatedRun(
     profileId,
     'bilibili',
-    'authenticated_interaction_reconnaissance',
+    'authenticated_series_detail_reconnaissance',
     new Date(baseTime.getTime() + 5_000)
   );
   assert.match(laterPermit.runId, /^[0-9a-f-]{36}$/i);
@@ -167,7 +167,7 @@ try {
       'normal_finish_returns_ready_without_cooldown',
       'legacy_cooldown_migrates_to_ready',
       'legacy_locked_state_remains_locked',
-      'interrupted_run_restart_lock'
+      'interrupted_series_detail_run_restart_lock'
     ]
   }, null, 2));
 } finally {
