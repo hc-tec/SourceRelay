@@ -1,153 +1,38 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type { BrowserContext, Page, Request, Response } from 'playwright';
 import type {
   DetailCapabilityValidationRunSnapshot,
-  VisibleDetailCollectionResult,
   VisiblePageState
 } from '../../collector-extension/src/shared/protocol';
 import { sanitiseVisibleCollectionResult } from './evidence';
+import {
+  canonicalBilibiliVideoUrl,
+  type BilibiliDetailSourceReconnaissanceRecord,
+  type SourceDomObservation,
+  type SourceDomTrigger as DomTrigger,
+  type SourceExtensionEvent,
+  type SourceLifecycleEvent,
+  type SourceNetworkObservation,
+  type SourceNetworkPhase as NetworkPhase
+} from './source-reconnaissance-contract';
+import {
+  isBilibiliOwnedHostname,
+  safePageUrl,
+  safeSourceMethod as safeMethod,
+  safeSourceMimeType as safeMimeType,
+  serialiseSourceRouteSummary as serialiseRouteSummary,
+  sourceSha256 as sha256
+} from './source-reconnaissance-projector';
+
+export * from './source-reconnaissance-contract';
+export { sourceReconnaissanceErrorCode } from './source-reconnaissance-projector';
+export { SourceReconnaissanceRegistry } from './source-reconnaissance-registry';
 
 const MAX_DOM_OBSERVATIONS = 120;
 const MAX_LIFECYCLE_EVENTS = 120;
 const MAX_NETWORK_OBSERVATIONS = 300;
 const MAX_EXTENSION_EVENTS = 120;
 const DOM_SAMPLE_INTERVAL_MS = 500;
-
-type DomTrigger = 'main_frame_navigated' | 'domcontentloaded' | 'load' | 'interval' | 'final';
-type NetworkPhase =
-  | 'target_loading'
-  | 'target_domcontentloaded'
-  | 'target_load'
-  | 'target_post_load'
-  | 'navigated_away';
-
-export interface SourceReconnaissanceInput {
-  canonicalUrl: string;
-}
-
-export interface SourceLifecycleEvent {
-  sequence: number;
-  atMs: number;
-  event: 'main_frame_navigated' | 'domcontentloaded' | 'load' | 'page_closed';
-  documentSequence: number;
-  pageUrlDigest: string;
-  targetMatch: boolean;
-}
-
-export interface SourceDomObservation {
-  sequence: number;
-  atMs: number;
-  trigger: DomTrigger;
-  documentSequence: number;
-  pageUrlDigest: string;
-  targetMatch: boolean;
-  readyState: 'loading' | 'interactive' | 'complete' | 'unknown';
-  visibleTextLength: number;
-  pageStateSignal: VisiblePageState;
-  collectorReadiness: 'ready' | 'partial' | 'terminal_state';
-  contentScriptMarkerPresent: boolean;
-  fieldSignals: {
-    title: boolean;
-    creator: boolean;
-    description: boolean;
-    publishedText: boolean;
-    visibleMetricCount: number;
-    visibleTagCount: number;
-  };
-}
-
-export interface SourceNetworkObservation {
-  sequence: number;
-  atMs: number;
-  phase: NetworkPhase;
-  documentSequence: number;
-  pageTargetMatch: boolean;
-  frameScope: 'top' | 'child';
-  resourceType: 'xhr' | 'fetch';
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' | 'OTHER';
-  origin: string;
-  pathname: string;
-  httpStatus: number | null;
-  mimeType: string;
-  responseBodyBytes: number | null;
-  outcome: 'response' | 'request_failed';
-}
-
-export interface SourceExtensionEvent {
-  sequence: number;
-  atMs: number;
-  state: DetailCapabilityValidationRunSnapshot['state'];
-  documentId: string | null;
-  navigationUrlDigest: string;
-  terminalStatus: DetailCapabilityValidationRunSnapshot['terminalStatus'];
-  errorCode: string | null;
-}
-
-export interface SourceRouteSummary {
-  origin: string;
-  pathname: string;
-  method: SourceNetworkObservation['method'];
-  resourceType: SourceNetworkObservation['resourceType'];
-  count: number;
-  firstSeenAtMs: number;
-  lastSeenAtMs: number;
-  phases: NetworkPhase[];
-  statusCodes: number[];
-  mimeTypes: string[];
-  minimumResponseBodyBytes: number | null;
-  maximumResponseBodyBytes: number | null;
-}
-
-export interface BilibiliDetailSourceReconnaissanceRecord {
-  schemaVersion: 1;
-  recordId: string;
-  runId: string;
-  collectorVersion: string;
-  profileId: string;
-  platform: 'bilibili';
-  pageRole: 'video_detail';
-  evidenceObjective: 'detail_read';
-  accountCategory: 'anonymous';
-  targetUrlDigest: string;
-  state: 'completed' | 'inconclusive' | 'failed';
-  errorCode: string | null;
-  startedAt: string;
-  completedAt: string;
-  validation: {
-    state: DetailCapabilityValidationRunSnapshot['state'] | null;
-    terminalStatus: DetailCapabilityValidationRunSnapshot['terminalStatus'];
-    errorCode: string | null;
-    result: VisibleDetailCollectionResult | null;
-  };
-  lifecycle: SourceLifecycleEvent[];
-  domObservations: SourceDomObservation[];
-  extensionTimeline: SourceExtensionEvent[];
-  networkObservations: SourceNetworkObservation[];
-  routeSummary: SourceRouteSummary[];
-  counters: {
-    attachedPages: number;
-    targetDocuments: number;
-    networkObservationsDroppedByLimit: number;
-    externalNetworkEventsExcluded: number;
-  };
-  safeguards: {
-    environment: 'local_user_controlled_validation_profile';
-    browser: 'visible_playwright_chromium';
-    observationMode: 'parallel_dom_and_network_metadata';
-    productionResponseRoutes: 'unchanged_empty';
-    requestHeaders: 'not_read';
-    requestBody: 'not_read';
-    responseHeaders: 'mime_and_content_length_only';
-    responseBody: 'not_read';
-    cookiesAndTokens: 'not_read';
-    queryAndFragmentValues: 'discarded';
-    postTerminalObservationMs: 5_000;
-    observedTargetPages: 'closed_after_reconnaissance';
-    admissionEligible: false;
-  };
-}
 
 interface ObservedPageState {
   page: Page;
@@ -167,118 +52,6 @@ interface RawDomObservation {
   pageStateSignal: VisiblePageState;
   contentScriptMarkerPresent: boolean;
   fieldSignals: SourceDomObservation['fieldSignals'];
-}
-
-function canonicalBilibiliVideoUrl(value: string): string | null {
-  try {
-    const url = new URL(value);
-    const match = url.hostname === 'www.bilibili.com' && url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/);
-    if (url.protocol !== 'https:' || !match || url.username || url.password || url.search || url.hash) return null;
-    return `https://www.bilibili.com/video/${match[1]}`;
-  } catch {
-    return null;
-  }
-}
-
-function safePageUrl(value: string): string | null {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    url.username = '';
-    url.password = '';
-    url.search = '';
-    url.hash = '';
-    return url.href;
-  } catch {
-    return null;
-  }
-}
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
-}
-
-function safeMimeType(value: string | null): string {
-  const mime = (value ?? '').split(';', 1)[0].trim().toLowerCase();
-  return mime && mime.length <= 120 && /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(mime)
-    ? mime
-    : 'unknown';
-}
-
-function safeMethod(value: string): SourceNetworkObservation['method'] {
-  const method = value.toUpperCase();
-  if (
-    method === 'GET' || method === 'POST' || method === 'PUT' || method === 'PATCH' ||
-    method === 'DELETE' || method === 'HEAD' || method === 'OPTIONS'
-  ) return method;
-  return 'OTHER';
-}
-
-function isBilibiliOwnedHostname(hostname: string): boolean {
-  return hostname === 'bilibili.com' || hostname.endsWith('.bilibili.com');
-}
-
-function safeErrorCode(value: unknown): string {
-  const code = value instanceof Error ? value.message : '';
-  return /^[a-z0-9_]{1,100}$/.test(code) ? code : 'source_reconnaissance_run_failed';
-}
-
-function serialiseRouteSummary(observations: readonly SourceNetworkObservation[]): SourceRouteSummary[] {
-  const summaries = new Map<string, SourceRouteSummary>();
-  for (const observation of observations) {
-    const key = [observation.origin, observation.pathname, observation.method, observation.resourceType].join('\n');
-    const existing = summaries.get(key);
-    if (!existing) {
-      summaries.set(key, {
-        origin: observation.origin,
-        pathname: observation.pathname,
-        method: observation.method,
-        resourceType: observation.resourceType,
-        count: 1,
-        firstSeenAtMs: observation.atMs,
-        lastSeenAtMs: observation.atMs,
-        phases: [observation.phase],
-        statusCodes: observation.httpStatus === null ? [] : [observation.httpStatus],
-        mimeTypes: observation.mimeType === 'unknown' ? [] : [observation.mimeType],
-        minimumResponseBodyBytes: observation.responseBodyBytes,
-        maximumResponseBodyBytes: observation.responseBodyBytes
-      });
-      continue;
-    }
-    existing.count += 1;
-    existing.lastSeenAtMs = observation.atMs;
-    if (!existing.phases.includes(observation.phase)) existing.phases.push(observation.phase);
-    if (observation.httpStatus !== null && !existing.statusCodes.includes(observation.httpStatus)) {
-      existing.statusCodes.push(observation.httpStatus);
-    }
-    if (observation.mimeType !== 'unknown' && !existing.mimeTypes.includes(observation.mimeType)) {
-      existing.mimeTypes.push(observation.mimeType);
-    }
-    if (observation.responseBodyBytes !== null) {
-      existing.minimumResponseBodyBytes = existing.minimumResponseBodyBytes === null
-        ? observation.responseBodyBytes
-        : Math.min(existing.minimumResponseBodyBytes, observation.responseBodyBytes);
-      existing.maximumResponseBodyBytes = existing.maximumResponseBodyBytes === null
-        ? observation.responseBodyBytes
-        : Math.max(existing.maximumResponseBodyBytes, observation.responseBodyBytes);
-    }
-  }
-  return [...summaries.values()].sort((left, right) => left.firstSeenAtMs - right.firstSeenAtMs);
-}
-
-export function sourceReconnaissanceInput(value: unknown): SourceReconnaissanceInput {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('source_reconnaissance_input_invalid');
-  }
-  const candidate = value as Partial<SourceReconnaissanceInput>;
-  if (Object.keys(candidate).some((key) => key !== 'canonicalUrl')) {
-    throw new Error('source_reconnaissance_input_invalid');
-  }
-  const canonicalUrl = typeof candidate.canonicalUrl === 'string'
-    ? canonicalBilibiliVideoUrl(candidate.canonicalUrl)
-    : null;
-  if (!canonicalUrl) throw new Error('source_reconnaissance_url_invalid');
-  return { canonicalUrl };
 }
 
 export class BilibiliDetailSourceObserver {
@@ -717,80 +490,3 @@ export class BilibiliDetailSourceObserver {
     return Math.max(0, Date.now() - this.#startedEpoch);
   }
 }
-
-function isPersistedRecord(value: unknown): value is BilibiliDetailSourceReconnaissanceRecord {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<BilibiliDetailSourceReconnaissanceRecord>;
-  return (
-    candidate.schemaVersion === 1 &&
-    typeof candidate.recordId === 'string' &&
-    typeof candidate.runId === 'string' &&
-    typeof candidate.profileId === 'string' &&
-    candidate.platform === 'bilibili' &&
-    candidate.pageRole === 'video_detail' &&
-    candidate.evidenceObjective === 'detail_read' &&
-    /^[0-9a-f]{64}$/.test(candidate.targetUrlDigest ?? '') &&
-    (candidate.state === 'completed' || candidate.state === 'inconclusive' || candidate.state === 'failed') &&
-    Array.isArray(candidate.lifecycle) &&
-    Array.isArray(candidate.domObservations) &&
-    Array.isArray(candidate.extensionTimeline) &&
-    Array.isArray(candidate.networkObservations) &&
-    Array.isArray(candidate.routeSummary) &&
-    candidate.safeguards?.admissionEligible === false
-  );
-}
-
-export class SourceReconnaissanceRegistry {
-  readonly #registryPath: string;
-  #records: BilibiliDetailSourceReconnaissanceRecord[] = [];
-  #writeChain: Promise<void> = Promise.resolve();
-
-  private constructor(stateDirectory: string) {
-    this.#registryPath = resolve(stateDirectory, 'source-reconnaissance-runs.json');
-  }
-
-  static async create(stateDirectory: string): Promise<SourceReconnaissanceRegistry> {
-    const registry = new SourceReconnaissanceRegistry(stateDirectory);
-    await mkdir(resolve(stateDirectory), { recursive: true });
-    try {
-      const parsed = JSON.parse(await readFile(registry.#registryPath, 'utf8')) as unknown;
-      if (Array.isArray(parsed)) registry.#records = parsed.filter(isPersistedRecord);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-    return registry;
-  }
-
-  list(): BilibiliDetailSourceReconnaissanceRecord[] {
-    return this.#records.map((record) => structuredClone(record));
-  }
-
-  async record(record: BilibiliDetailSourceReconnaissanceRecord): Promise<BilibiliDetailSourceReconnaissanceRecord> {
-    if (!isPersistedRecord(record)) throw new Error('source_reconnaissance_record_invalid');
-    const existing = this.#records.find((candidate) => candidate.runId === record.runId);
-    if (existing) return structuredClone(existing);
-    this.#records.push(structuredClone(record));
-    try {
-      await this.#save();
-    } catch (error) {
-      this.#records = this.#records.filter((candidate) => candidate.runId !== record.runId);
-      throw error;
-    }
-    return structuredClone(record);
-  }
-
-  async #save(): Promise<void> {
-    const write = this.#writeChain.then(async () => {
-      const temporaryPath = `${this.#registryPath}.${process.pid}.${randomUUID()}.tmp`;
-      await writeFile(temporaryPath, `${JSON.stringify(this.#records, null, 2)}\n`, {
-        encoding: 'utf8',
-        mode: 0o600
-      });
-      await rename(temporaryPath, this.#registryPath);
-    });
-    this.#writeChain = write.catch(() => undefined);
-    await write;
-  }
-}
-
-export { safeErrorCode as sourceReconnaissanceErrorCode };
