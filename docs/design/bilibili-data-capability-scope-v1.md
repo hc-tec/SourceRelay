@@ -71,7 +71,7 @@ coverage / terminal_reason / status
 | `discussion` | 已证明排序与楼中楼动作到 route 的因果；正文 projector 尚未 admission |
 | `account_profile` | research-only Gateway runner 已真实保存稳定 MID、昵称、简介、头像、横幅、公开标识、8 个统计/导航字段、公告、充电区、代表作和 7 条 route metadata；artifact digest 与敏感字段扫描通过，正式 MV3 策略和多账号覆盖仍未 admission |
 | `account_inventory` | research-only Gateway runner 已完成真实 9 页 / 330 条视频目录，逐页 DOM/response 身份摘要一致、跨页 0 重复、末页 10 条、manifest/page digest 可恢复；正式 MV3 response projector 与边缘样本仍未 admission |
-| `article` | 已证明 `/upload/opus` 的全部图文/专栏分面与 `/opus/<id>` 服务端正文 DOM；目录 cursor/终点、正文 artifact 和正式策略仍未实现 |
+| `article` | research runner 已真实完成 1 页 / 1 条专栏目录与单篇详情：目录按 Opus ID 合并 DOM 双 anchor、`has_more=false` 诚实终止；详情从已验证目录 artifact 绑定账号，保存 1376 字、15 个保序块、4 个媒体引用、10 个标签和五类公开指标；多页 cursor、删除/锁定/外链样本、MV3 正式策略与 admission 仍未完成 |
 | `collection_series` | research runner 已真实保存 11 个总览项和稳定 series ID；独立单系列 runner 又完成 5 页 / 129 条默认顺序全目录，页数为 30/30/30/30/9、DOM/response 全匹配、跨页 0 重复、artifact digest 与敏感字段扫描通过；planner 全系列遍历、season/边缘样本、MV3 正式策略与 admission 仍未完成 |
 | 其余六类（含统一 coverage） | 未形成正式生产闭环 |
 

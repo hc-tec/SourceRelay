@@ -19,8 +19,9 @@
     "verify:account-profile-contract": "node scripts/verify-bilibili-account-profile-contract.mjs",
     "verify:collection-series-contract": "node scripts/verify-bilibili-collection-series-contract.mjs",
     "verify:series-detail-contract": "node scripts/verify-bilibili-series-detail-contract.mjs",
+    "verify:article-contract": "node scripts/verify-bilibili-article-contract.mjs",
     "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
-    "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:task-resume && npm run verify:transcript-artifacts && npm run verify:transcript-control && npm run verify:reconnaissance && npm run verify:account-archive-contract && npm run verify:account-profile-contract && npm run verify:collection-series-contract && npm run verify:series-detail-contract && npm run build && npm run verify:artifacts",
+    "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:task-resume && npm run verify:transcript-artifacts && npm run verify:transcript-control && npm run verify:reconnaissance && npm run verify:account-archive-contract && npm run verify:account-profile-contract && npm run verify:collection-series-contract && npm run verify:series-detail-contract && npm run verify:article-contract && npm run build && npm run verify:artifacts",
     "setup:browser": "playwright install chromium",
     "start": "node dist/server.js"
   },

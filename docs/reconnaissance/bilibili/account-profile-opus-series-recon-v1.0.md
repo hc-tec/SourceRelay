@@ -239,7 +239,7 @@ active run = null
 
 ## H. 下一门槛
 
-1. 为 `article` 分开 `opus_inventory`、`opus_detail` 与 `discussion`，实现 cursor/滚动终点和正文 raw-first artifact；
+1. 为 `article` 补 `has_more=true` 多页账号、0 专栏、删除/锁定、超长正文与外链样本；目录、详情和 `discussion` 继续保持独立；
 2. 由 planner 使用总览 artifact 的稳定 ID 逐个调用单系列 runner，补 season、0 条系列、单页系列、采集中变化与中断恢复样本；
 3. 把当前 Gateway research projector 迁移到生产 MV3 Extension，保持可信输入、response 观察与 Gateway 账本的职责边界；
 4. 扩展权限只增加经审查的 `https://space.bilibili.com/*`，不能扩大为 `<all_urls>`；
@@ -362,3 +362,81 @@ active run = null
 ```
 
 这证明“给定稳定 series ID，按平台默认顺序完整枚举单个公开系列”已经具备可重复调用的 research 底层能力。它不证明所有系列、season、0 条/单页、采集中变动或断点恢复，也尚未迁移到生产 MV3 projector，因此 `admissionEligible=false`。
+
+## L. `article` 目录与正文 research runner 真实闭环
+
+### L.1 目录 feed 与动作时序
+
+真实页面先加载 `type=all` 的 opus feed；可信点击“专栏”一次后同时出现 `/x/article/up/lists` 和以下精确 response：
+
+```text
+GET /x/polymer/web-dynamic/v1/opus/feed/space
+type = article（只在当次控制中核对）
+status = 200
+data keys = has_more, items, offset, update_num
+item keys = opus_id, content, cover, jump_url, stat.like
+```
+
+`/x/article/up/lists` 不能单独代表当前卡片目录；实际条目、cursor 和终点来自 `type=article` feed。response 的 `offset` 只在当前 run 内用于下一页匹配，artifact 只记录 `nextOffsetPresent`，不保存 cursor 值、WBI 值或完整 query。
+
+侦察过程中还证明了两个必须编码的前置条件：
+
+- 分面文本在全页可能有隐藏/重复节点，必须限定到 `main` 内唯一可见的“专栏”；
+- 分面点击必须等待初始 `type=all` response 与其 DOM 稳定 ID 集合一致；过早点击会得到 `postcondition_unmet`，不能补点；
+- 一张目录卡有图片链接和标题链接两个 `<a>`，必须按 `opus_id` 合并，不能把 DOM 节点数当条目数。
+
+Gateway 的 `bilibili.article.inventory.opus-feed.v1 @ 1.0.0` runner 使用一次导航、一次分面点击和有界可信滚动。当前真实样本本身只有一篇专栏，因此没有触发滚动：
+
+```text
+artifact id = ba1b2ca6-07e6-4c75-bb72-2620dd16e823
+manifest sha256 = 49a0f90089c96f11f193f1a4a664597ece85c83b6c4fe27b750fd2e979cb83ba
+state = completed
+captured pages = 1
+captured items = 1
+unique items = 1
+duplicate items = 0
+has_more = false
+terminal reason = feed_terminal_reached
+```
+
+`open_article_inventory` 与 `select_article_facet` 都是 `attemptCount=1 / completed`。response/DOM 稳定 ID 集合精确一致，response `content` 能在同一 Opus 的 DOM 标题候选中找到。当前代码已经实现 `has_more=true` 时以一次 browser-level scroll-to-end 触发下一页，但多页滚动仍没有真实样本证明，不能据此声称多页已验证。
+
+### L.2 详情 DOM raw-first artifact 与来源绑定
+
+详情页没有独立正文 XHR；公开正文由服务端 document DOM 提供。真实结构为：
+
+```text
+title = .opus-module-title__text
+author = .opus-module-author
+published = .opus-module-author__pub__text
+content = .opus-module-content.opus-paragraph-children
+copyright = .opus-module-copyright
+metrics = .side-toolbar__action.{like|coin|favorite|forward|comment}
+```
+
+新版 `.opus-module-author` 只有昵称与发布时间，没有作者主页 `<a>`，因此 MID 不能从详情 DOM 猜测。第一次产品详情 artifact `ef53b262-9cb9-4a3f-a328-c90019ee2cf5` 诚实结束为 `failed / context_changed`，暴露了旧实现把“作者 MID 未提取”误归为 URL 漂移。
+
+修复后，详情 POST 只接受 `sourceInventoryArtifactId + stableOpusId`。Gateway 先读取并验证目录 manifest/page digest，确认该 Opus 确实属于目录账号，再生成内部规范 URL；详情 DOM 只核对 Opus ID、公开昵称、正文和指标。最终真实 artifact：
+
+```text
+artifact id = dc67885c-ff18-40a7-b3b3-cc0c6f430b98
+manifest sha256 = 72173c380717317297e47c7d27835e44a9d0137d1108ca5cedbe379709af261b
+state = completed
+terminal reason = article_captured
+title captured = true
+author captured = true
+published time captured = true
+content characters = 1376
+ordered content blocks = 15
+media refs = 4
+link refs = 0
+public metrics = like 10 / coin 0 / favorite 3 / forward 0 / comment 6
+tags = 10
+legacy article id = cv18011308
+```
+
+正文 artifact 保存完整可见文本、保序直属块以及去重后的规范媒体/链接引用，不把长文硬拆成大量业务列。4 个 `hdslb.com` 媒体 URL 均升级/规范为 HTTPS，并去除 query、fragment 和 `@...webp` 变体。评论 route 虽在页面加载，但正文和回复树没有进入文章 artifact，manifest 明确记录 `discussion=excluded_separate_capability`。
+
+目录与详情读取接口重新验证全部 SHA-256，详情 manifest 同时保存来源目录 artifact ID 与 manifest digest。递归扫描没有 Profile ID、浏览器运行 ID、Cookie/Authorization 字段、请求头对象、网络 query 值、本机路径、扩展 URL 或当前登录用户值。最终 Profile 为 `0.4.24 / paired / granted / ready / activeRun=null`，启动过程没有 `chrome://extensions` reload 或 visible context restart。
+
+这证明单页专栏目录和单篇公开长文已具备按需 research 能力；多页 cursor、0 条目录、删除/锁定、超长/无图/外链文章、多账号覆盖和 MV3 正式迁移仍未完成，因此 `admissionEligible=false`。

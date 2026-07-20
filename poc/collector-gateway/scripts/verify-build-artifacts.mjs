@@ -399,6 +399,46 @@ assert.match(
   /bilibili_series_detail_page_digest_mismatch/,
   'Series-detail reads must verify every bounded page artifact digest'
 );
+assert.match(
+  source,
+  /\/v1\/article-inventory-artifacts/,
+  'Gateway artifact must expose compact article-inventory artifact lookup routes'
+);
+assert.match(
+  source,
+  /\/v1\/article-detail-artifacts/,
+  'Gateway artifact must expose compact article-detail artifact lookup routes'
+);
+assert.match(
+  source,
+  /authenticated_article_inventory_reconnaissance/,
+  'Article inventory must use the persistent account-safety circuit breaker'
+);
+assert.match(
+  source,
+  /authenticated_article_detail_reconnaissance/,
+  'Article detail must use the persistent account-safety circuit breaker'
+);
+assert.match(
+  source,
+  /cursorValue:\s*["']used_in_memory_not_persisted["']/,
+  'Article inventory must not persist the opaque platform cursor value'
+);
+assert.match(
+  source,
+  /discussion:\s*["']excluded_separate_capability["']/,
+  'Article detail must keep comments in the independent discussion capability'
+);
+assert.match(
+  source,
+  /authorAccountBinding:\s*["']verified_article_inventory_artifact["']/,
+  'Article detail must bind its author account through a verified inventory artifact'
+);
+assert.match(
+  source,
+  /bilibili_article_detail_snapshot_digest_mismatch/,
+  'Article detail reads must verify the raw-first article snapshot digest'
+);
 
 console.log(JSON.stringify({
   ok: true,

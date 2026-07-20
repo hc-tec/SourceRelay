@@ -49,6 +49,17 @@ import {
   type BilibiliSeriesDetailInput,
   type BilibiliSeriesDetailRunRecord
 } from './bilibili-series-detail';
+import {
+  BilibiliArticleInventoryRunner,
+  safeBilibiliArticleErrorCode,
+  type BilibiliArticleInventoryInput,
+  type BilibiliArticleInventoryRunRecord
+} from './bilibili-article-inventory';
+import {
+  BilibiliArticleDetailRunner,
+  type BilibiliArticleDetailInput,
+  type BilibiliArticleDetailRunRecord
+} from './bilibili-article-detail';
 import { runTranscriptValidationControlLoop } from './transcript-control-loop';
 import { executeBilibiliTranscriptInteraction } from './bilibili-transcript-interaction';
 import {
@@ -521,6 +532,133 @@ export class CollectionBrowserManager {
       return record;
     } catch (error) {
       const reason = safeBilibiliSeriesDetailErrorCode(error);
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        profile.platform,
+        permit.runId,
+        reason
+      ).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async runBilibiliAuthenticatedArticleInventoryReconnaissance(
+    profileId: string,
+    input: BilibiliArticleInventoryInput
+  ): Promise<BilibiliArticleInventoryRunRecord> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('article_inventory_collection_kind_required');
+    if (profile.platform !== 'bilibili') throw new Error('article_inventory_platform_mismatch');
+    if (profile.account.category !== 'user_managed') throw new Error('article_inventory_user_managed_required');
+    const permit = await this.#accountSafety.beginAuthenticatedRun(
+      profileId,
+      profile.platform,
+      'authenticated_article_inventory_reconnaissance'
+    );
+    try {
+      await this.launch(profileId);
+      const running = this.#runtime.get(profileId);
+      if (!running) throw new Error('article_inventory_browser_not_running');
+      const runner = new BilibiliArticleInventoryRunner({
+        context: running.context,
+        runId: permit.runId,
+        collectorVersion: running.extensionVersion,
+        canonicalProfileUrl: input.canonicalProfileUrl,
+        maxPages: input.maxPages,
+        onActionAttempt: async (actionId) => {
+          await this.#accountSafety.recordActionAttempt(profileId, profile.platform, permit.runId, actionId);
+        }
+      });
+      const record = await runner.run();
+      const finishReasonByTerminal: Record<
+        BilibiliArticleInventoryRunRecord['coverage']['terminalReason'],
+        string
+      > = {
+        feed_terminal_reached: 'article_inventory_completed',
+        budget_exhausted: 'article_inventory_budget_exhausted_partial',
+        verification_required: 'article_inventory_verification_required',
+        rate_limited: 'article_inventory_rate_limited',
+        risk_controlled: 'article_inventory_risk_control',
+        response_status_unavailable: 'article_inventory_response_status_unavailable',
+        response_projection_failed: 'article_inventory_response_projection_failed',
+        dom_response_mismatch: 'article_inventory_dom_response_mismatch',
+        article_facet_missing: 'article_inventory_facet_missing',
+        pagination_postcondition_unmet: 'article_inventory_pagination_postcondition_unmet',
+        context_changed: 'article_inventory_context_changed',
+        run_deadline_exceeded: 'article_inventory_run_deadline_exceeded',
+        source_unavailable: 'article_inventory_source_unavailable'
+      };
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        profile.platform,
+        permit.runId,
+        finishReasonByTerminal[record.coverage.terminalReason]
+      );
+      return record;
+    } catch (error) {
+      const reason = safeBilibiliArticleErrorCode(error);
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        profile.platform,
+        permit.runId,
+        reason
+      ).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async runBilibiliAuthenticatedArticleDetailReconnaissance(
+    profileId: string,
+    input: BilibiliArticleDetailInput
+  ): Promise<BilibiliArticleDetailRunRecord> {
+    const profile = this.#registry.get(profileId);
+    if (profile.kind !== 'collection') throw new Error('article_detail_collection_kind_required');
+    if (profile.platform !== 'bilibili') throw new Error('article_detail_platform_mismatch');
+    if (profile.account.category !== 'user_managed') throw new Error('article_detail_user_managed_required');
+    const permit = await this.#accountSafety.beginAuthenticatedRun(
+      profileId,
+      profile.platform,
+      'authenticated_article_detail_reconnaissance'
+    );
+    try {
+      await this.launch(profileId);
+      const running = this.#runtime.get(profileId);
+      if (!running) throw new Error('article_detail_browser_not_running');
+      const runner = new BilibiliArticleDetailRunner({
+        context: running.context,
+        runId: permit.runId,
+        collectorVersion: running.extensionVersion,
+        canonicalProfileUrl: input.canonicalProfileUrl,
+        canonicalOpusUrl: input.canonicalOpusUrl,
+        sourceInventoryArtifactId: input.sourceInventoryArtifactId,
+        sourceInventoryManifestSha256: input.sourceInventoryManifestSha256,
+        onActionAttempt: async (actionId) => {
+          await this.#accountSafety.recordActionAttempt(profileId, profile.platform, permit.runId, actionId);
+        }
+      });
+      const record = await runner.run();
+      const finishReasonByTerminal: Record<
+        BilibiliArticleDetailRunRecord['coverage']['terminalReason'],
+        string
+      > = {
+        article_captured: 'article_detail_completed',
+        verification_required: 'article_detail_verification_required',
+        rate_limited: 'article_detail_rate_limited',
+        risk_controlled: 'article_detail_risk_control',
+        dom_projection_failed: 'article_detail_dom_projection_failed',
+        context_changed: 'article_detail_context_changed',
+        run_deadline_exceeded: 'article_detail_run_deadline_exceeded',
+        source_unavailable: 'article_detail_source_unavailable'
+      };
+      await this.#accountSafety.finishAuthenticatedRun(
+        profileId,
+        profile.platform,
+        permit.runId,
+        finishReasonByTerminal[record.coverage.terminalReason]
+      );
+      return record;
+    } catch (error) {
+      const reason = safeBilibiliArticleErrorCode(error);
       await this.#accountSafety.finishAuthenticatedRun(
         profileId,
         profile.platform,

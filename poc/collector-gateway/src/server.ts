@@ -27,6 +27,13 @@ import { BilibiliCollectionSeriesArtifactStore } from './bilibili-collection-ser
 import { bilibiliSeriesDetailInput } from './bilibili-series-detail';
 import { BilibiliSeriesDetailArtifactStore } from './bilibili-series-detail-artifacts';
 import {
+  bilibiliArticleDetailRequestInput,
+  bilibiliArticleInventoryInput,
+  type BilibiliArticleDetailInput
+} from './bilibili-article-contract';
+import { BilibiliArticleInventoryArtifactStore } from './bilibili-article-inventory-artifacts';
+import { BilibiliArticleDetailArtifactStore } from './bilibili-article-detail-artifacts';
+import {
   TranscriptArtifactRegistry,
   bilibiliTranscriptValidationInput
 } from './transcript-artifacts';
@@ -182,6 +189,8 @@ const accountArchiveArtifactStore = await BilibiliAccountArchiveArtifactStore.cr
 const accountProfileArtifactStore = await BilibiliAccountProfileArtifactStore.create(config.stateDirectory);
 const collectionSeriesArtifactStore = await BilibiliCollectionSeriesArtifactStore.create(config.stateDirectory);
 const seriesDetailArtifactStore = await BilibiliSeriesDetailArtifactStore.create(config.stateDirectory);
+const articleInventoryArtifactStore = await BilibiliArticleInventoryArtifactStore.create(config.stateDirectory);
+const articleDetailArtifactStore = await BilibiliArticleDetailArtifactStore.create(config.stateDirectory);
 const evidenceRegistry = await GatewayEvidenceRegistry.create(config.stateDirectory);
 const taskQueue = new GatewayTaskQueue(identity, evidenceRegistry, accountSafetyRegistry);
 const expectedHost = `${config.host}:${config.port}`;
@@ -271,6 +280,32 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === 'GET' && url.pathname === '/v1/series-detail-artifacts') {
       sendJson(response, 200, { schemaVersion: 1, artifacts: seriesDetailArtifactStore.list() });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/article-inventory-artifacts') {
+      sendJson(response, 200, { schemaVersion: 1, artifacts: articleInventoryArtifactStore.list() });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/article-detail-artifacts') {
+      sendJson(response, 200, { schemaVersion: 1, artifacts: articleDetailArtifactStore.list() });
+      return;
+    }
+    const articleInventoryArtifactMatch = url.pathname.match(
+      /^\/v1\/article-inventory-artifacts\/([0-9a-f-]{36})$/i
+    );
+    if (request.method === 'GET' && articleInventoryArtifactMatch) {
+      const artifact = await articleInventoryArtifactStore.get(articleInventoryArtifactMatch[1]);
+      if (!artifact) throw new Error('bilibili_article_inventory_artifact_not_found');
+      sendJson(response, 200, { schemaVersion: 1, artifact });
+      return;
+    }
+    const articleDetailArtifactMatch = url.pathname.match(
+      /^\/v1\/article-detail-artifacts\/([0-9a-f-]{36})$/i
+    );
+    if (request.method === 'GET' && articleDetailArtifactMatch) {
+      const artifact = await articleDetailArtifactStore.get(articleDetailArtifactMatch[1]);
+      if (!artifact) throw new Error('bilibili_article_detail_artifact_not_found');
+      sendJson(response, 200, { schemaVersion: 1, artifact });
       return;
     }
     const seriesDetailArtifactMatch = url.pathname.match(
@@ -615,6 +650,69 @@ const server = createServer(async (request, response) => {
           coverage: run.coverage,
           stableAccountId: run.metadata?.stableAccountId ?? null,
           stableSeriesId: run.metadata?.stableSeriesId ?? null,
+          admissionEligible: false
+        },
+        artifact
+      });
+      return;
+    }
+    const bilibiliArticleInventoryReconnaissanceMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/reconnaissance\/bilibili-article-inventory$/i
+    );
+    if (request.method === 'POST' && bilibiliArticleInventoryReconnaissanceMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const input = bilibiliArticleInventoryInput(await readJsonBody(request));
+      const run = await browserManager.runBilibiliAuthenticatedArticleInventoryReconnaissance(
+        bilibiliArticleInventoryReconnaissanceMatch[1],
+        input
+      );
+      const artifact = await articleInventoryArtifactStore.record(run);
+      sendJson(response, 201, {
+        schemaVersion: 1,
+        run: {
+          runId: run.runId,
+          state: run.state,
+          errorCode: run.errorCode,
+          coverage: run.coverage,
+          stableAccountId: run.stableAccountId,
+          admissionEligible: false
+        },
+        artifact
+      });
+      return;
+    }
+    const bilibiliArticleDetailReconnaissanceMatch = url.pathname.match(
+      /^\/v1\/profiles\/([0-9a-f-]{36})\/reconnaissance\/bilibili-article-detail$/i
+    );
+    if (request.method === 'POST' && bilibiliArticleDetailReconnaissanceMatch) {
+      if (!requireConsoleOrigin(request, response, identity.publicIdentity.loopbackOrigin)) return;
+      const detailRequest = bilibiliArticleDetailRequestInput(await readJsonBody(request));
+      const sourceInventory = await articleInventoryArtifactStore.get(detailRequest.sourceInventoryArtifactId);
+      if (!sourceInventory) throw new Error('bilibili_article_detail_source_inventory_not_found');
+      const sourceItems = sourceInventory.pages.flatMap((page) => page.items).filter((item) =>
+        item.stableOpusId === detailRequest.stableOpusId
+      );
+      if (sourceItems.length !== 1) throw new Error('bilibili_article_detail_source_item_not_unique');
+      const input: BilibiliArticleDetailInput = {
+        canonicalProfileUrl: `https://space.bilibili.com/${sourceInventory.summary.stableAccountId}`,
+        canonicalOpusUrl: sourceItems[0].canonicalUrl,
+        sourceInventoryArtifactId: sourceInventory.summary.artifactId,
+        sourceInventoryManifestSha256: sourceInventory.summary.manifestSha256
+      };
+      const run = await browserManager.runBilibiliAuthenticatedArticleDetailReconnaissance(
+        bilibiliArticleDetailReconnaissanceMatch[1],
+        input
+      );
+      const artifact = await articleDetailArtifactStore.record(run);
+      sendJson(response, 201, {
+        schemaVersion: 1,
+        run: {
+          runId: run.runId,
+          state: run.state,
+          errorCode: run.errorCode,
+          coverage: run.coverage,
+          stableAccountId: run.snapshot?.stableAccountId ?? null,
+          stableOpusId: run.snapshot?.stableOpusId ?? null,
           admissionEligible: false
         },
         artifact

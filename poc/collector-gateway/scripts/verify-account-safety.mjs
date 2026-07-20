@@ -89,17 +89,43 @@ try {
   const persistedAfterRun = await readFile(join(temporaryDirectory, 'account-safety.json'), 'utf8');
   assert.equal(persistedAfterRun.includes('cooldownUntil'), false);
 
-  const laterPermit = await registry.beginAuthenticatedRun(
+  const articleInventoryPermit = await registry.beginAuthenticatedRun(
+    profileId,
+    'bilibili',
+    'authenticated_article_inventory_reconnaissance',
+    new Date(baseTime.getTime() + 5_000)
+  );
+  await registry.finishAuthenticatedRun(
+    profileId,
+    'bilibili',
+    articleInventoryPermit.runId,
+    'article_inventory_completed',
+    new Date(baseTime.getTime() + 6_000)
+  );
+  const seriesDetailPermit = await registry.beginAuthenticatedRun(
     profileId,
     'bilibili',
     'authenticated_series_detail_reconnaissance',
-    new Date(baseTime.getTime() + 5_000)
+    new Date(baseTime.getTime() + 7_000)
+  );
+  await registry.finishAuthenticatedRun(
+    profileId,
+    'bilibili',
+    seriesDetailPermit.runId,
+    'series_detail_completed',
+    new Date(baseTime.getTime() + 8_000)
+  );
+  const laterPermit = await registry.beginAuthenticatedRun(
+    profileId,
+    'bilibili',
+    'authenticated_article_detail_reconnaissance',
+    new Date(baseTime.getTime() + 9_000)
   );
   assert.match(laterPermit.runId, /^[0-9a-f-]{36}$/i);
 
   const afterInterruptedRestart = await AccountSafetyRegistry.create(
     temporaryDirectory,
-    new Date(baseTime.getTime() + 6_000)
+    new Date(baseTime.getTime() + 10_000)
   );
   const interrupted = afterInterruptedRestart.get(profileId, 'bilibili');
   assert.equal(interrupted.state, 'locked');
@@ -167,7 +193,8 @@ try {
       'normal_finish_returns_ready_without_cooldown',
       'legacy_cooldown_migrates_to_ready',
       'legacy_locked_state_remains_locked',
-      'interrupted_series_detail_run_restart_lock'
+      'series_and_article_purposes_persist',
+      'interrupted_article_detail_run_restart_lock'
     ]
   }, null, 2));
 } finally {
