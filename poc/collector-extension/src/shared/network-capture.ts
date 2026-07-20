@@ -223,12 +223,12 @@ export function sanitiseNetworkJson(value: unknown, depth = 0): JsonValue | unde
 }
 
 export function isJsonContentType(value: string | null | undefined): boolean {
-  const mediaType = (value ?? '').split(';', 1)[0].trim().toLowerCase();
+  const mediaType = ((value ?? '').split(';', 1)[0] ?? '').trim().toLowerCase();
   return mediaType === 'application/json' || mediaType === 'text/json' || mediaType.endsWith('+json');
 }
 
 function safeContentType(value: string | null | undefined): string {
-  const mediaType = (value ?? '').split(';', 1)[0].trim().toLowerCase();
+  const mediaType = ((value ?? '').split(';', 1)[0] ?? '').trim().toLowerCase();
   if (!mediaType || mediaType.length > 120 || !/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(mediaType)) {
     return 'unknown';
   }

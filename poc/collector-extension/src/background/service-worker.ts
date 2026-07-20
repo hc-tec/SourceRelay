@@ -107,6 +107,7 @@ import {
   markTranscriptValidationTabClosed,
   markTranscriptValidationWindowClosed
 } from './transcript-validation-runs';
+import { initialiseNativeBridge } from './native-bridge';
 
 async function collectTab(tabId: number): Promise<VisibleCollectionResult> {
   const response = await chrome.tabs.sendMessage(tabId, { type: COLLECT_VISIBLE_RESULTS });
@@ -122,6 +123,7 @@ const runtimeBootstrap: CollectorRuntimeBootstrap = {
   controlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION
 };
 void chrome.storage.session.set({ [COLLECTOR_RUNTIME_BOOTSTRAP_KEY]: runtimeBootstrap });
+void initialiseNativeBridge();
 
 function isExtensionControlSender(sender: chrome.runtime.MessageSender): boolean {
   return (

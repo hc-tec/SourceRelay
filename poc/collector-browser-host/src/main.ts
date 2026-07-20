@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rm, stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   BROWSER_HOST_PROTOCOL_VERSION,
   type BrowserHostEndpointRecord
@@ -8,6 +9,8 @@ import {
 import { writeJsonAtomic } from './atomic-file.js';
 import { BrowserHostRuntime } from './browser-host-runtime.js';
 import { BrowserHostServer } from './ipc/browser-host-server.js';
+import { NativeBridgeRegistry } from './native-bridge/native-bridge-registry.js';
+import { NativeBridgeServer } from './native-bridge/native-bridge-server.js';
 import { createBootstrapSecret } from './security.js';
 import { absolutePath } from './validation.js';
 
@@ -28,24 +31,39 @@ async function main(): Promise<void> {
   const hostInstanceId = randomUUID();
   const bootstrapSecret = createBootstrapSecret();
   const pipeName = pipeNameFor(options.stateDirectory, hostInstanceId);
+  const nativeBridgePipeName = nativeBridgePipeNameFor(options.stateDirectory, hostInstanceId);
+  const nativeBridgeRegistry = new NativeBridgeRegistry();
   const runtime = new BrowserHostRuntime({
     hostInstanceId,
     profileRoot: options.profileRoot,
     extensionDirectory: options.extensionDirectory,
-    journalDirectory: resolve(options.stateDirectory, 'journal')
+    journalDirectory: resolve(options.stateDirectory, 'journal'),
+    endpointPath: options.endpointPath,
+    nativeBridgeModulePath: resolve(dirname(fileURLToPath(import.meta.url)), 'native-bridge.js'),
+    nativeHostStateDirectory: resolve(options.stateDirectory, 'native-hosts'),
+    nativeBridgeRegistry
   });
   await runtime.initialise();
 
   let closing = false;
   let server!: BrowserHostServer;
+  let nativeBridgeServer!: NativeBridgeServer;
   const shutdown = async (exitCode: number) => {
     if (closing) return;
     closing = true;
-    await server.close().catch(() => undefined);
+    await Promise.all([
+      server.close().catch(() => undefined),
+      nativeBridgeServer.close().catch(() => undefined)
+    ]);
     await runtime.shutdown().catch(() => undefined);
     await rm(options.endpointPath, { force: true }).catch(() => undefined);
     await rm(lockPath, { force: true }).catch(() => undefined);
-    if (process.platform !== 'win32') await rm(pipeName, { force: true }).catch(() => undefined);
+    if (process.platform !== 'win32') {
+      await Promise.all([
+        rm(pipeName, { force: true }).catch(() => undefined),
+        rm(nativeBridgePipeName, { force: true }).catch(() => undefined)
+      ]);
+    }
     process.exit(exitCode);
   };
   server = new BrowserHostServer({
@@ -54,15 +72,24 @@ async function main(): Promise<void> {
     bootstrapSecret,
     onShutdownRequested: () => void shutdown(0)
   });
+  nativeBridgeServer = new NativeBridgeServer({
+    pipeName: nativeBridgePipeName,
+    hostInstanceId,
+    bootstrapSecret,
+    registry: nativeBridgeRegistry
+  });
 
   try {
-    if (process.platform !== 'win32') await rm(pipeName, { force: true });
-    await server.listen();
+    if (process.platform !== 'win32') {
+      await Promise.all([rm(pipeName, { force: true }), rm(nativeBridgePipeName, { force: true })]);
+    }
+    await Promise.all([server.listen(), nativeBridgeServer.listen()]);
     const endpoint: BrowserHostEndpointRecord = {
       schemaVersion: 1,
       protocolVersion: BROWSER_HOST_PROTOCOL_VERSION,
       hostInstanceId,
       pipeName,
+      nativeBridgePipeName,
       bootstrapSecret,
       processId: process.pid,
       createdAt: new Date().toISOString()
@@ -71,7 +98,10 @@ async function main(): Promise<void> {
     process.on('SIGINT', () => void shutdown(0));
     process.on('SIGTERM', () => void shutdown(0));
   } catch (error) {
-    await server.close().catch(() => undefined);
+    await Promise.all([
+      server.close().catch(() => undefined),
+      nativeBridgeServer.close().catch(() => undefined)
+    ]);
     await runtime.shutdown().catch(() => undefined);
     await rm(options.endpointPath, { force: true }).catch(() => undefined);
     await rm(lockPath, { force: true }).catch(() => undefined);
@@ -137,6 +167,12 @@ function pipeNameFor(stateDirectory: string, hostInstanceId: string): string {
   const digest = createHash('sha256').update(stateDirectory).digest('hex').slice(0, 16);
   if (process.platform === 'win32') return `\\\\.\\pipe\\intelligence-collector-${digest}`;
   return resolve(stateDirectory, `browser-host-${hostInstanceId}.sock`);
+}
+
+function nativeBridgePipeNameFor(stateDirectory: string, hostInstanceId: string): string {
+  const digest = createHash('sha256').update(stateDirectory).digest('hex').slice(0, 16);
+  if (process.platform === 'win32') return `\\\\.\\pipe\\intelligence-collector-${digest}-native`;
+  return resolve(stateDirectory, `browser-host-${hostInstanceId}-native.sock`);
 }
 
 void main().catch((error) => {

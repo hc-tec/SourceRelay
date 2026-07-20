@@ -87,6 +87,7 @@ async function cleanupRun(run: TranscriptCapabilityValidationRunSnapshot, closeW
 
 async function registerRunScripts(runId: string): Promise<void> {
   const [bridgeId] = registrationIds(runId);
+  if (!bridgeId) throw new Error('transcript_bridge_registration_id_missing');
   await chrome.scripting.registerContentScripts([
     {
       id: bridgeId,

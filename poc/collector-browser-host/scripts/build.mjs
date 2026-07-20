@@ -11,7 +11,8 @@ await mkdir(outputDirectory, { recursive: true });
 
 for (const [entry, output] of [
   ['main.ts', 'main.js'],
-  ['client.ts', 'client.js']
+  ['client.ts', 'client.js'],
+  ['native-bridge/native-bridge-main.ts', 'native-bridge.js']
 ]) {
   await build({
     entryPoints: [resolve(root, 'src', entry)],

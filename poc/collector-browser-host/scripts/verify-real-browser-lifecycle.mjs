@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BrowserHostClient, launchBrowserHost } from '../dist/client.js';
@@ -32,7 +33,8 @@ const profileId = 'real-browser-lifecycle';
 
 await mkdir(stateDirectory, { recursive: true });
 await mkdir(profileRoot, { recursive: true });
-await stat(resolve(extensionDirectory, 'manifest.json'));
+const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
+assert.equal(extensionManifest.version, '0.5.0');
 
 let endpoint = null;
 let client = null;
@@ -42,9 +44,12 @@ let cleanupClient = null;
 try {
   await writeFile(endpointPath, `${JSON.stringify({
     schemaVersion: 1,
-    protocolVersion: 1,
+    protocolVersion: 2,
     hostInstanceId: 'stale-host',
     pipeName: process.platform === 'win32' ? '\\\\.\\pipe\\stale-collector-host' : resolve(stateDirectory, 'stale.sock'),
+    nativeBridgePipeName: process.platform === 'win32'
+      ? '\\\\.\\pipe\\stale-collector-native-host'
+      : resolve(stateDirectory, 'stale-native.sock'),
     bootstrapSecret: 'stale-bootstrap-secret',
     processId: 2_147_483_647,
     createdAt: new Date(0).toISOString()
@@ -64,7 +69,12 @@ try {
       profileId,
       maximumManagedPages: 3,
       headless: false,
-      offlineOnly: true
+      offlineOnly: true,
+      extensionRuntime: {
+        version: extensionManifest.version,
+        controlSurfaceRevision: 3,
+        runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
+      }
     }
   });
   const initial = asSnapshot(launched);
@@ -75,6 +85,9 @@ try {
   assert.equal(initialProfile.livePlatformRequests, 0);
   assert.ok(initialProfile.browserProcessId, 'real Chromium process id must be observable');
   assert.ok(initialProfile.extensionPages <= 1, 'Browser Session must not accumulate extension pages');
+  assert.equal(initialProfile.extensionRuntime?.finalRuntimeVersion, extensionManifest.version);
+  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 3);
+  assert.equal(initialProfile.extensionRuntime?.nativeBridgeConnected, true);
 
   const reusedEndpoint = await launchBrowserHost({
     mainModulePath,
@@ -215,6 +228,7 @@ try {
   assert.equal(reconnectedProfile.retainedPages, 1);
   assert.equal(reconnectedProfile.livePlatformRequests, 0);
   assert.ok(reconnectedProfile.extensionPages <= 1);
+  assert.equal(reconnectedProfile.extensionRuntime?.nativeBridgeConnected, true);
 
   await replacementClient.command({ type: 'close_profile', profileId });
   const shutdownResult = await replacementClient.command({ type: 'shutdown_host' });
@@ -222,6 +236,21 @@ try {
   replacementClient.close();
   replacementClient = null;
   await waitForExit(endpoint.processId, endpointPath, 15_000);
+
+  const nativeHostIdentity = createHash('sha256')
+    .update(`${resolve(endpointPath)}\n${profileId}`)
+    .digest('hex')
+    .slice(0, 32);
+  const nativeHostName = `com.intelligence.collector.p_${nativeHostIdentity}`;
+  assert.equal((await readdir(resolve(stateDirectory, 'native-hosts')).catch(() => [])).length, 0);
+  if (process.platform === 'win32') {
+    for (const root of [
+      'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts',
+      'HKCU\\Software\\Chromium\\NativeMessagingHosts'
+    ]) {
+      assert.equal(await registryKeyExists(`${root}\\${nativeHostName}`), false);
+    }
+  }
 
   const journalDirectory = resolve(stateDirectory, 'journal');
   const journalNames = await import('node:fs/promises').then(({ readdir }) => readdir(journalDirectory));
@@ -236,6 +265,9 @@ try {
     gate: 'browser-host-real-chromium-managed-page-lifecycle',
     livePlatformRequests: 0,
     browserVisible: true,
+    extensionRuntimeMarkerVerifiedBeforeVisibleLaunch: true,
+    nativeMessagingBridgeConnected: true,
+    nativeMessagingRegistrationCleaned: true,
     staleEndpointReplaced: true,
     repeatedLaunchReusedExistingHost: true,
     repeatedLaunchDidNotCreateSecondBrowser: true,
@@ -269,4 +301,10 @@ try {
       process.kill(endpoint.processId, 'SIGTERM');
     }
   }
+}
+
+async function registryKeyExists(key) {
+  return await new Promise((resolveQuery) => {
+    execFile('reg.exe', ['QUERY', key], { windowsHide: true }, (error) => resolveQuery(!error));
+  });
 }

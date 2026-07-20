@@ -1,19 +1,22 @@
-import { mkdir } from 'node:fs/promises';
 import type { BrowserContext } from 'playwright';
-import { chromium } from 'playwright';
 import {
   type AcquirePageRequest,
   type AcquirePageResult,
   type BrowserProfilePagePoolSummary,
   type CreateReclaimPlanRequest,
+  type ExtensionRuntimeExpectation,
+  type ExtensionRuntimeSummary,
   type NavigatePageRequest,
   type ReclaimExecutionResult,
   type ReclaimPlan,
   type ReconcilePageRequest,
   type ReleasePageRequest
 } from '@intelligence/collector-contracts';
+import type { NativeBridgeRegistry } from '../native-bridge/native-bridge-registry.js';
+import type { NativeMessagingHostRegistration } from '../native-bridge/native-host-installer.js';
 import { PageLedger, type PageLedgerEvent } from '../page-ledger/page-ledger.js';
 import { PageReclamationManager } from '../reclamation/page-reclamation.js';
+import { launchProfileBrowser } from './profile-browser-launcher.js';
 
 export class ProfileRuntime {
   readonly profileId: string;
@@ -21,9 +24,13 @@ export class ProfileRuntime {
   readonly #context: BrowserContext;
   readonly #ledger: PageLedger;
   readonly #reclamation: PageReclamationManager;
+  readonly #nativeBridgeRegistry: NativeBridgeRegistry;
+  readonly #nativeHostRegistration: NativeMessagingHostRegistration | null;
+  readonly #extensionRuntime: ExtensionRuntimeSummary | null;
   #browserProcessId: number | null = null;
   #livePlatformRequests = 0;
   #running = true;
+  #closed = false;
 
   private constructor(input: {
     profileId: string;
@@ -32,6 +39,9 @@ export class ProfileRuntime {
     browserProcessId: number | null;
     ledger: PageLedger;
     reclamation: PageReclamationManager;
+    nativeBridgeRegistry: NativeBridgeRegistry;
+    nativeHostRegistration: NativeMessagingHostRegistration | null;
+    extensionRuntime: ExtensionRuntimeSummary | null;
   }) {
     this.profileId = input.profileId;
     this.browserSessionId = input.browserSessionId;
@@ -39,6 +49,9 @@ export class ProfileRuntime {
     this.#browserProcessId = input.browserProcessId;
     this.#ledger = input.ledger;
     this.#reclamation = input.reclamation;
+    this.#nativeBridgeRegistry = input.nativeBridgeRegistry;
+    this.#nativeHostRegistration = input.nativeHostRegistration;
+    this.#extensionRuntime = input.extensionRuntime;
   }
 
   static async launch(input: {
@@ -46,69 +59,74 @@ export class ProfileRuntime {
     browserSessionId: string;
     userDataDirectory: string;
     extensionDirectory: string | null;
+    extensionRuntime: ExtensionRuntimeExpectation | null;
+    nativeBridgeRegistry: NativeBridgeRegistry;
+    nativeHostStateDirectory: string;
+    hostEndpointPath: string;
+    nativeBridgeModulePath: string;
     maximumManagedPages: number;
     headless: boolean;
     offlineOnly: boolean;
     onLedgerEvent: (event: PageLedgerEvent) => void;
     onClosed: () => void;
   }): Promise<ProfileRuntime> {
-    await mkdir(input.userDataDirectory, { recursive: true });
-    const extensionArgs = input.extensionDirectory
-      ? [
-          `--disable-extensions-except=${input.extensionDirectory}`,
-          `--load-extension=${input.extensionDirectory}`
-        ]
-      : [];
-    const context = await chromium.launchPersistentContext(input.userDataDirectory, {
-      channel: 'chromium',
-      headless: input.headless,
-      offline: input.offlineOnly,
-      args: [
-        '--disable-background-networking',
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--autoplay-policy=user-gesture-required',
-        '--mute-audio',
-        ...extensionArgs
-      ]
+    let runtime: ProfileRuntime | null = null;
+    let requestsBeforeRuntime = 0;
+    const launched = await launchProfileBrowser({
+      ...input,
+      onExternalHttpRequest: () => {
+        if (runtime) runtime.#livePlatformRequests += 1;
+        else requestsBeforeRuntime += 1;
+      }
     });
-    let ledger!: PageLedger;
-    const reclamation = new PageReclamationManager({
-      profileId: input.profileId,
-      browserSessionId: input.browserSessionId,
-      records: () => ledger.records(),
-      onTransition: (eventType, record, reason) => input.onLedgerEvent({
-        eventType,
-        profileId: input.profileId,
-        record,
-        reason,
-        actionId: null
-      })
-    });
-    ledger = new PageLedger({
-      context,
-      profileId: input.profileId,
-      extensionGeneration: 1,
-      maximumManagedPages: input.maximumManagedPages,
-      offlineOnly: input.offlineOnly,
-      onEvent: input.onLedgerEvent
-    });
-    const runtime = new ProfileRuntime({
-      profileId: input.profileId,
-      browserSessionId: input.browserSessionId,
-      context,
-      browserProcessId: await browserProcessId(context),
-      ledger,
-      reclamation
-    });
-    context.on('request', (request) => {
-      if (isExternalHttpRequest(request.url())) runtime.#livePlatformRequests += 1;
-    });
+    const { context, extensionRuntime, nativeHostRegistration } = launched;
     context.on('close', () => {
+      if (!runtime) return;
       runtime.#running = false;
+      runtime.#browserProcessId = null;
       input.onClosed();
     });
-    return runtime;
+    let ledger!: PageLedger;
+    try {
+      const reclamation = new PageReclamationManager({
+        profileId: input.profileId,
+        browserSessionId: input.browserSessionId,
+        records: () => ledger.records(),
+        onTransition: (eventType, record, reason) => input.onLedgerEvent({
+          eventType,
+          profileId: input.profileId,
+          record,
+          reason,
+          actionId: null
+        })
+      });
+      ledger = new PageLedger({
+        context,
+        profileId: input.profileId,
+        extensionGeneration: extensionRuntime?.finalControlSurfaceRevision ?? 0,
+        maximumManagedPages: input.maximumManagedPages,
+        offlineOnly: input.offlineOnly,
+        onEvent: input.onLedgerEvent
+      });
+      runtime = new ProfileRuntime({
+        profileId: input.profileId,
+        browserSessionId: input.browserSessionId,
+        context,
+        browserProcessId: await browserProcessId(context),
+        ledger,
+        reclamation,
+        nativeBridgeRegistry: input.nativeBridgeRegistry,
+        nativeHostRegistration,
+        extensionRuntime
+      });
+      runtime.#livePlatformRequests = requestsBeforeRuntime;
+      return runtime;
+    } catch (error) {
+      await context.close().catch(() => undefined);
+      input.nativeBridgeRegistry.clearProfile(input.profileId, input.browserSessionId);
+      await nativeHostRegistration?.uninstall().catch(() => undefined);
+      throw error;
+    }
   }
 
   acquire(request: AcquirePageRequest, controllerGeneration: string): Promise<AcquirePageResult> {
@@ -162,15 +180,25 @@ export class ProfileRuntime {
       closedPages: count('closed'),
       unmanagedPages,
       extensionPages,
+      extensionRuntime: this.#extensionRuntime
+        ? {
+            ...structuredClone(this.#extensionRuntime),
+            nativeBridgeConnected: this.#nativeBridgeRegistry.isReady(this.profileId, this.browserSessionId)
+          }
+        : null,
       livePlatformRequests: this.#livePlatformRequests,
       pages: this.#ledger.summaries()
     };
   }
 
   async close(): Promise<void> {
-    if (!this.#running) return;
-    await this.#context.close();
+    if (this.#closed) return;
+    this.#closed = true;
+    if (this.#running) await this.#context.close().catch(() => undefined);
     this.#running = false;
+    this.#browserProcessId = null;
+    this.#nativeBridgeRegistry.clearProfile(this.profileId, this.browserSessionId);
+    await this.#nativeHostRegistration?.uninstall().catch(() => undefined);
   }
 }
 
@@ -189,15 +217,5 @@ async function browserProcessId(context: BrowserContext): Promise<number | null>
     return null;
   } finally {
     await session.detach().catch(() => undefined);
-  }
-}
-
-function isExternalHttpRequest(value: string): boolean {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
-    return !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
-  } catch {
-    return false;
   }
 }

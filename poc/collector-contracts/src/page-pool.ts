@@ -84,8 +84,32 @@ export interface BrowserProfilePagePoolSummary {
   closedPages: number;
   unmanagedPages: number;
   extensionPages: number;
+  extensionRuntime: ExtensionRuntimeSummary | null;
   livePlatformRequests: number;
   pages: readonly ManagedPageSummary[];
+}
+
+export interface ExtensionRuntimeExpectation {
+  version: string;
+  controlSurfaceRevision: number;
+  runtimeBootstrapKey: string;
+}
+
+export interface ExtensionRuntimeSummary {
+  extensionId: string;
+  expectedVersion: string;
+  expectedControlSurfaceRevision: number;
+  initialManifestVersion: string;
+  initialRuntimeVersion: string | null;
+  initialControlSurfaceRevision: number | null;
+  finalManifestVersion: string;
+  finalRuntimeVersion: string;
+  finalControlSurfaceRevision: number;
+  headlessProbePerformed: true;
+  headlessProbeNetworkMode: 'offline';
+  reloadAttempted: boolean;
+  visibleContextRestarted: false;
+  nativeBridgeConnected: boolean;
 }
 
 export interface PagePoolSnapshot {
@@ -104,6 +128,7 @@ export interface LaunchProfileRequest {
   maximumManagedPages?: number;
   headless?: boolean;
   offlineOnly?: boolean;
+  extensionRuntime?: ExtensionRuntimeExpectation;
 }
 
 export interface AcquirePageRequest {

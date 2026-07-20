@@ -39,6 +39,7 @@ export async function strategyPermissionSnapshots(): Promise<StrategyPermissionS
   const snapshots: StrategyPermissionSnapshot[] = [];
   for (const group of strategiesByPlatform()) {
     const strategy = group.strategies[0];
+    if (!strategy) continue;
     const requiredOrigins = [...new Set(group.strategies.flatMap(
       (candidate) => candidate.browser.optionalHostPermissions
     ))];

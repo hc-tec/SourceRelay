@@ -11,7 +11,7 @@ const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const packageMetadata = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
 
 const approved = {
-  permissions: ['alarms', 'storage', 'scripting'],
+  permissions: ['alarms', 'nativeMessaging', 'storage', 'scripting'],
   optionalHostPermissions: [
     'http://127.0.0.1/*',
     'https://search.bilibili.com/*',
@@ -181,8 +181,14 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*2/,
+  /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*3/,
   'The runtime snapshot must expose the current control-surface revision'
+);
+assert.match(backgroundSource, /connectNative/, 'Native Messaging bridge connection is missing');
+assert.match(
+  backgroundSource,
+  /collector\.native-bridge-config\.v1/,
+  'Browser Host native-bridge bootstrap key is missing'
 );
 assert.match(
   backgroundSource,

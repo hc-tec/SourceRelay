@@ -12,6 +12,7 @@ import {
 import { hostError } from './host-errors.js';
 import { RuntimeJournal } from './journal/runtime-journal.js';
 import type { PageLedgerEvent } from './page-ledger/page-ledger.js';
+import type { NativeBridgeRegistry } from './native-bridge/native-bridge-registry.js';
 import { ProfileRuntime } from './profile-runtime/profile-runtime.js';
 import { boundedIdentifier, boundedPositiveInteger, childPath } from './validation.js';
 
@@ -20,6 +21,10 @@ export interface BrowserHostRuntimeConfig {
   profileRoot: string;
   extensionDirectory: string | null;
   journalDirectory: string;
+  endpointPath: string;
+  nativeBridgeModulePath: string;
+  nativeHostStateDirectory: string;
+  nativeBridgeRegistry: NativeBridgeRegistry;
 }
 
 export class BrowserHostRuntime {
@@ -27,6 +32,10 @@ export class BrowserHostRuntime {
   readonly #profileRoot: string;
   readonly #extensionDirectory: string | null;
   readonly #journal: RuntimeJournal;
+  readonly #endpointPath: string;
+  readonly #nativeBridgeModulePath: string;
+  readonly #nativeHostStateDirectory: string;
+  readonly #nativeBridgeRegistry: NativeBridgeRegistry;
   readonly #profiles = new Map<string, ProfileRuntime>();
   #controllerGeneration: string | null = null;
   #snapshotRevision = 0;
@@ -36,6 +45,10 @@ export class BrowserHostRuntime {
     this.#profileRoot = resolve(config.profileRoot);
     this.#extensionDirectory = config.extensionDirectory ? resolve(config.extensionDirectory) : null;
     this.#journal = new RuntimeJournal(config.journalDirectory, config.hostInstanceId);
+    this.#endpointPath = resolve(config.endpointPath);
+    this.#nativeBridgeModulePath = resolve(config.nativeBridgeModulePath);
+    this.#nativeHostStateDirectory = resolve(config.nativeHostStateDirectory);
+    this.#nativeBridgeRegistry = config.nativeBridgeRegistry;
   }
 
   async initialise(): Promise<void> {
@@ -128,6 +141,11 @@ export class BrowserHostRuntime {
       browserSessionId,
       userDataDirectory: childPath(this.#profileRoot, profileId),
       extensionDirectory: this.#extensionDirectory,
+      extensionRuntime: request.extensionRuntime ?? null,
+      nativeBridgeRegistry: this.#nativeBridgeRegistry,
+      nativeHostStateDirectory: this.#nativeHostStateDirectory,
+      hostEndpointPath: this.#endpointPath,
+      nativeBridgeModulePath: this.#nativeBridgeModulePath,
       maximumManagedPages,
       headless: request.headless ?? false,
       offlineOnly: request.offlineOnly ?? false,

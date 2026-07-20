@@ -73,6 +73,7 @@ function isCompatibleEndpoint(value: unknown): value is BrowserHostEndpointRecor
     candidate.protocolVersion === BROWSER_HOST_PROTOCOL_VERSION &&
     typeof candidate.hostInstanceId === 'string' && candidate.hostInstanceId.length > 0 &&
     typeof candidate.pipeName === 'string' && candidate.pipeName.length > 0 &&
+    typeof candidate.nativeBridgePipeName === 'string' && candidate.nativeBridgePipeName.length > 0 &&
     typeof candidate.bootstrapSecret === 'string' && candidate.bootstrapSecret.length > 0 &&
     Number.isSafeInteger(candidate.processId) && Number(candidate.processId) > 0 &&
     typeof candidate.createdAt === 'string' && Number.isFinite(Date.parse(candidate.createdAt));

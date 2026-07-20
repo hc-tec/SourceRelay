@@ -14,7 +14,7 @@ import type {
 } from './page-pool.js';
 import type { BrowserHostErrorRecord } from './errors.js';
 
-export const BROWSER_HOST_PROTOCOL_VERSION = 1 as const;
+export const BROWSER_HOST_PROTOCOL_VERSION = 2 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
 
 export interface BrowserHostEndpointRecord {
@@ -22,6 +22,7 @@ export interface BrowserHostEndpointRecord {
   protocolVersion: typeof BROWSER_HOST_PROTOCOL_VERSION;
   hostInstanceId: string;
   pipeName: string;
+  nativeBridgePipeName: string;
   bootstrapSecret: string;
   processId: number;
   createdAt: string;

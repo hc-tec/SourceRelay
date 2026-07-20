@@ -80,8 +80,9 @@ function visibleText(document: Document, selectors: readonly string[], maximum: 
 function canonicalBilibiliVideo(location: Location): { contentId: string; url: string } | null {
   if (location.hostname !== 'www.bilibili.com') return null;
   const match = location.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/);
-  return match
-    ? { contentId: match[1], url: `https://www.bilibili.com/video/${match[1]}` }
+  const contentId = match?.[1];
+  return contentId
+    ? { contentId, url: `https://www.bilibili.com/video/${contentId}` }
     : null;
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "@intelligence/collector-extension",
-  "version": "0.4.24",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Manifest V3 core for user-approved, read-only browser collection tasks.",
@@ -15,6 +15,9 @@
     "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
     "verify:extension-load": "node scripts/verify-extension-load.mjs",
     "verify:build": "npm run typecheck && npm run verify:transcript-capture && npm run build && npm run verify:artifacts && npm run verify:extension-load"
+  },
+  "dependencies": {
+    "@intelligence/collector-contracts": "0.1.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.330",
