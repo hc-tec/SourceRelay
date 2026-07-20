@@ -15,7 +15,6 @@ await build({
   platform: 'node',
   format: 'esm',
   target: 'node22',
-  external: ['playwright'],
   outfile: resolve(outputDirectory, 'server.js'),
   sourcemap: true,
   logLevel: 'info'

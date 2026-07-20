@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import type { Response } from 'playwright';
 import {
   BILIBILI_ARTICLE_FEED_PATH,
   BILIBILI_ARTICLE_RESPONSE_LIMIT,
@@ -11,6 +10,13 @@ import {
   type BilibiliArticleInventoryPageProjection
 } from './bilibili-article-contract';
 import { responseSchema } from './interaction-response-projector';
+
+interface ProjectableResponse {
+  url(): string;
+  status(): number;
+  body(): Promise<Buffer>;
+  request(): { method(): string };
+}
 
 export interface BoundedBilibiliArticleFeedResponse {
   value: unknown;
@@ -33,7 +39,7 @@ function safeQueryKeyNames(url: URL): string[] {
 }
 
 export function isBilibiliArticleFeedResponse(
-  response: Response,
+  response: ProjectableResponse,
   expectedAccountId: string,
   expectedPageNumber: number,
   expectedOffset: string,
@@ -54,7 +60,7 @@ export function isBilibiliArticleFeedResponse(
 }
 
 export async function boundedBilibiliArticleFeedResponse(
-  response: Response
+  response: ProjectableResponse
 ): Promise<BoundedBilibiliArticleFeedResponse> {
   const body = await response.body();
   if (body.byteLength > BILIBILI_ARTICLE_RESPONSE_LIMIT) {

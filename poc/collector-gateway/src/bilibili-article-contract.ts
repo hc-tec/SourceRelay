@@ -171,7 +171,10 @@ export interface BilibiliArticleInventoryRunRecord {
     unknownResponseValues: 'not_persisted';
     semanticActionDelivery: 'at_most_once';
     runDeadlineMs: 60_000;
-    targetTabSelection: 'reused_matching_managed_tab' | 'created_new_managed_tab';
+    targetTabSelection:
+      | 'reused_matching_managed_tab'
+      | 'reused_retained_managed_tab'
+      | 'created_new_managed_tab';
     targetPage: 'retained_after_run';
     admissionEligible: false;
   };
@@ -308,6 +311,7 @@ export interface BilibiliArticleDetailRunRecord {
     runDeadlineMs: 60_000;
     targetTabSelection:
       | 'reused_matching_managed_tab'
+      | 'reused_retained_managed_tab'
       | 'reused_related_article_inventory_tab'
       | 'created_new_managed_tab';
     targetPage: 'retained_after_run';
@@ -352,8 +356,10 @@ function canonicalOpusIdFromUrl(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 2_000) return null;
   try {
     const url = new URL(value.startsWith('//') ? `https:${value}` : value);
-    const match = url.hostname === 'www.bilibili.com' && url.pathname.match(/^\/opus\/(\d{1,20})\/?$/);
-    return url.protocol === 'https:' && !url.username && !url.password && match ? match[1] : null;
+    const match = url.hostname === 'www.bilibili.com'
+      ? url.pathname.match(/^\/opus\/(\d{1,20})\/?$/)
+      : null;
+    return url.protocol === 'https:' && !url.username && !url.password ? match?.[1] ?? null : null;
   } catch {
     return null;
   }

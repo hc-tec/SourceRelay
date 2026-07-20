@@ -1,17 +1,24 @@
 import { createHash } from 'node:crypto';
-import type { Response } from 'playwright';
 import {
   BILIBILI_DYNAMIC_FEED_PATH,
   BILIBILI_DYNAMIC_RESPONSE_LIMIT,
   projectBilibiliDynamicDomCard,
   projectBilibiliDynamicFeedResponse,
   type BilibiliDynamicDomSnapshot,
+  type BilibiliDynamicItemProjection,
   type BilibiliDynamicPageCandidate,
   type BilibiliDynamicPageProjection,
   type BilibiliDynamicResponseEvidence,
   type BilibiliDynamicResponseItem
 } from './bilibili-dynamic-contract';
 import { responseSchema } from './interaction-response-projector';
+
+interface ProjectableResponse {
+  url(): string;
+  status(): number;
+  body(): Promise<Buffer>;
+  request(): { method(): string };
+}
 
 export interface BoundedBilibiliDynamicResponse {
   value: unknown;
@@ -74,7 +81,7 @@ function primaryIdentityCrossCheckable(kind: BilibiliDynamicResponseItem['primar
 }
 
 export function isBilibiliDynamicFeedResponse(
-  response: Response,
+  response: ProjectableResponse,
   expectedAccountId: string,
   expectedOffset: string
 ): boolean {
@@ -91,7 +98,7 @@ export function isBilibiliDynamicFeedResponse(
 }
 
 export async function boundedBilibiliDynamicResponse(
-  response: Response
+  response: ProjectableResponse
 ): Promise<BoundedBilibiliDynamicResponse> {
   const body = await response.body();
   if (body.byteLength > BILIBILI_DYNAMIC_RESPONSE_LIMIT) {
@@ -144,10 +151,12 @@ export function projectBilibiliDynamicPageWithDom(
   const cumulativeItems = [...previousItems, ...candidate.items];
   const pageCards = dom.cards.slice(previousItems.length, cumulativeItems.length);
   const projectedCards = pageCards.map(projectBilibiliDynamicDomCard);
-  if (projectedCards.some((card) => card === null)) return null;
+  if (projectedCards.some((card) => card === null) || projectedCards.length !== candidate.items.length) return null;
   const cards = projectedCards as Array<NonNullable<(typeof projectedCards)[number]>>;
-  const items = candidate.items.map((item, index) => ({ ...item, card: cards[index] }));
-  if (items.some((item) => !item.card)) return null;
+  const items: BilibiliDynamicItemProjection[] = candidate.items.map((item, index) => ({
+    ...item,
+    card: cards[index]!
+  }));
 
   let authorMatches = 0;
   let publicationMatches = 0;

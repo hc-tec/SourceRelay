@@ -282,17 +282,26 @@ function canonicalPublicIdentityUrl(value: unknown): BilibiliDynamicPrimaryIdent
       /^\[.*\]$/.test(url.hostname) ||
       /^\d{1,3}(?:\.\d{1,3}){3}$/.test(url.hostname)
     ) return null;
-    const video = url.hostname === 'www.bilibili.com' && url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/);
-    if (video) return canonicalBvidUrl(video[1]);
-    const opus = url.hostname === 'www.bilibili.com' && url.pathname.match(/^\/opus\/(\d{1,20})\/?$/);
-    if (opus) return { kind: 'opus', stableId: opus[1], canonicalUrl: `https://www.bilibili.com/opus/${opus[1]}` };
-    const article = url.hostname === 'www.bilibili.com' && url.pathname.match(/^\/read\/cv(\d{1,20})\/?$/);
-    if (article) return { kind: 'article', stableId: `cv${article[1]}`, canonicalUrl: `https://www.bilibili.com/read/cv${article[1]}` };
-    const live = url.hostname === 'live.bilibili.com' && url.pathname.match(/^\/(\d{1,20})\/?$/);
-    if (live) return { kind: 'live', stableId: live[1], canonicalUrl: `https://live.bilibili.com/${live[1]}` };
-    const dynamic = (url.hostname === 't.bilibili.com' || url.hostname === 'www.bilibili.com') &&
-      url.pathname.match(/^\/(?:dynamic\/)?(\d{1,20})\/?$/);
-    if (dynamic) {
+    const video = url.hostname === 'www.bilibili.com'
+      ? url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/)
+      : null;
+    if (video?.[1]) return canonicalBvidUrl(video[1]);
+    const opus = url.hostname === 'www.bilibili.com'
+      ? url.pathname.match(/^\/opus\/(\d{1,20})\/?$/)
+      : null;
+    if (opus?.[1]) return { kind: 'opus', stableId: opus[1], canonicalUrl: `https://www.bilibili.com/opus/${opus[1]}` };
+    const article = url.hostname === 'www.bilibili.com'
+      ? url.pathname.match(/^\/read\/cv(\d{1,20})\/?$/)
+      : null;
+    if (article?.[1]) return { kind: 'article', stableId: `cv${article[1]}`, canonicalUrl: `https://www.bilibili.com/read/cv${article[1]}` };
+    const live = url.hostname === 'live.bilibili.com'
+      ? url.pathname.match(/^\/(\d{1,20})\/?$/)
+      : null;
+    if (live?.[1]) return { kind: 'live', stableId: live[1], canonicalUrl: `https://live.bilibili.com/${live[1]}` };
+    const dynamic = url.hostname === 't.bilibili.com' || url.hostname === 'www.bilibili.com'
+      ? url.pathname.match(/^\/(?:dynamic\/)?(\d{1,20})\/?$/)
+      : null;
+    if (dynamic?.[1]) {
       return { kind: 'dynamic', stableId: dynamic[1], canonicalUrl: `https://t.bilibili.com/${dynamic[1]}` };
     }
     url.search = '';

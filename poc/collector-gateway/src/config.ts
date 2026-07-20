@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export interface GatewayConfig {
   host: '127.0.0.1';
@@ -7,6 +8,9 @@ export interface GatewayConfig {
   stateDirectory: string;
   profileDirectory: string;
   extensionDirectory: string;
+  browserHostMainModulePath: string;
+  browserHostStateDirectory: string;
+  browserHostEndpointPath: string;
   proxyServer?: string;
 }
 
@@ -23,6 +27,10 @@ export function loadGatewayConfig(): GatewayConfig {
   const displayName = (process.env.COLLECTOR_GATEWAY_NAME ?? 'Local Collector Gateway').trim();
   if (!displayName || displayName.length > 80) throw new Error('COLLECTOR_GATEWAY_NAME must contain 1 to 80 characters.');
   const stateDirectory = resolve(process.env.COLLECTOR_GATEWAY_STATE_DIR ?? 'runtime');
+  const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const browserHostStateDirectory = resolve(
+    process.env.COLLECTOR_BROWSER_HOST_STATE_DIR ?? resolve(stateDirectory, 'browser-host')
+  );
   const proxyServer = normaliseProxyServer(process.env.COLLECTOR_BROWSER_PROXY_SERVER);
   return {
     host: '127.0.0.1',
@@ -31,6 +39,13 @@ export function loadGatewayConfig(): GatewayConfig {
     stateDirectory,
     profileDirectory: resolve(stateDirectory, 'profiles'),
     extensionDirectory: resolve(process.env.COLLECTOR_EXTENSION_DIRECTORY ?? '../collector-extension/dist'),
+    browserHostMainModulePath: resolve(
+      process.env.COLLECTOR_BROWSER_HOST_MAIN ?? resolve(packageDirectory, '../collector-browser-host/dist/main.js')
+    ),
+    browserHostStateDirectory,
+    browserHostEndpointPath: resolve(
+      process.env.COLLECTOR_BROWSER_HOST_ENDPOINT ?? resolve(browserHostStateDirectory, 'endpoint.json')
+    ),
     ...(proxyServer ? { proxyServer } : {})
   };
 }

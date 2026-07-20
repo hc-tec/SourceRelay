@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import type { Response } from 'playwright';
 import {
   BILIBILI_SERIES_ARCHIVES_PATH,
   BILIBILI_SERIES_METADATA_PATH,
@@ -11,6 +10,13 @@ import {
   type BilibiliSeriesPageProjection
 } from './bilibili-series-detail-contract';
 import { responseSchema } from './interaction-response-projector';
+
+interface ProjectableResponse {
+  url(): string;
+  status(): number;
+  body(): Promise<Buffer>;
+  request(): { method(): string };
+}
 
 interface BoundedSeriesResponse {
   value: unknown;
@@ -32,7 +38,7 @@ function safeQueryKeyNames(url: URL): string[] {
     .map((key) => key.replace(/[^a-zA-Z0-9_.\-\[\]]/g, '_')))].sort();
 }
 
-export function isBilibiliSeriesMetadataResponse(response: Response, seriesId: string): boolean {
+export function isBilibiliSeriesMetadataResponse(response: ProjectableResponse, seriesId: string): boolean {
   try {
     const url = new URL(response.url());
     return response.request().method() === 'GET' &&
@@ -45,7 +51,7 @@ export function isBilibiliSeriesMetadataResponse(response: Response, seriesId: s
 }
 
 export function isBilibiliSeriesArchivesResponse(
-  response: Response,
+  response: ProjectableResponse,
   seriesId: string,
   pageNumber: number
 ): boolean {
@@ -61,7 +67,7 @@ export function isBilibiliSeriesArchivesResponse(
   }
 }
 
-export async function boundedBilibiliSeriesResponse(response: Response): Promise<BoundedSeriesResponse> {
+export async function boundedBilibiliSeriesResponse(response: ProjectableResponse): Promise<BoundedSeriesResponse> {
   const body = await response.body();
   if (body.byteLength > BILIBILI_SERIES_RESPONSE_LIMIT) {
     throw new Error('bilibili_series_detail_response_too_large');

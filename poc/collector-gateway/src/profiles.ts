@@ -83,7 +83,14 @@ function browserProfileRecord(value: unknown): BrowserProfileRecord | null {
   );
   if (!valid) return null;
   return {
-    ...(candidate as BrowserProfileRecord),
+    schemaVersion: 1,
+    profileId: candidate.profileId!,
+    kind: candidate.kind!,
+    platform: candidate.platform!,
+    account: structuredClone(account!),
+    browser: 'playwright_chromium',
+    createdAt: candidate.createdAt!,
+    lastLaunchedAt: candidate.lastLaunchedAt ?? null,
     lastExtensionVersion: candidate.lastExtensionVersion ?? null
   };
 }

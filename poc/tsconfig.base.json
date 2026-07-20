@@ -10,7 +10,8 @@
     "noUncheckedIndexedAccess": true,
     "baseUrl": ".",
     "paths": {
-      "@intelligence/collector-contracts": ["collector-contracts/src/index.ts"]
+      "@intelligence/collector-contracts": ["collector-contracts/src/index.ts"],
+      "@intelligence/collector-browser-host/client": ["collector-browser-host/src/client.ts"]
     }
   }
 }

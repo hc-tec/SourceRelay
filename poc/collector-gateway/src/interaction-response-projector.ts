@@ -22,7 +22,7 @@ export function safeInteractionErrorCode(value: unknown): string {
 }
 
 export function safeMimeType(value: string | null): string {
-  const mime = (value ?? '').split(';', 1)[0].trim().toLowerCase();
+  const mime = ((value ?? '').split(';', 1)[0] ?? '').trim().toLowerCase();
   return mime && mime.length <= 120 && /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(mime)
     ? mime
     : 'unknown';

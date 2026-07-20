@@ -12,21 +12,15 @@
     "typecheck": "tsc --noEmit",
     "verify:safety": "node scripts/verify-account-safety.mjs",
     "verify:task-resume": "node scripts/verify-task-account-safety-resume.mjs",
-    "verify:transcript-artifacts": "node scripts/verify-transcript-artifacts.mjs",
-    "verify:transcript-control": "node scripts/verify-transcript-control-loop.mjs",
-    "verify:reconnaissance": "node scripts/verify-interaction-reconnaissance.mjs",
-    "verify:account-archive-contract": "node scripts/verify-bilibili-account-archive-contract.mjs",
-    "verify:account-profile-contract": "node scripts/verify-bilibili-account-profile-contract.mjs",
-    "verify:collection-series-contract": "node scripts/verify-bilibili-collection-series-contract.mjs",
-    "verify:series-detail-contract": "node scripts/verify-bilibili-series-detail-contract.mjs",
-    "verify:article-contract": "node scripts/verify-bilibili-article-contract.mjs",
+    "verify:dynamic-contract": "node scripts/verify-bilibili-dynamic-contract.mjs",
+    "verify:host-integration": "node scripts/verify-real-browser-host-integration.mjs",
     "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
-    "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:task-resume && npm run verify:transcript-artifacts && npm run verify:transcript-control && npm run verify:reconnaissance && npm run verify:account-archive-contract && npm run verify:account-profile-contract && npm run verify:collection-series-contract && npm run verify:series-detail-contract && npm run verify:article-contract && npm run build && npm run verify:artifacts",
-    "setup:browser": "playwright install chromium",
+    "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:task-resume && npm run verify:dynamic-contract && npm run build && npm run verify:artifacts",
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "playwright": "^1.61.1"
+    "@intelligence/collector-browser-host": "0.1.0",
+    "@intelligence/collector-contracts": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
