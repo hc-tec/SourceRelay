@@ -1,0 +1,272 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { BrowserHostClient, launchBrowserHost } from '../dist/client.js';
+import {
+  acquireRequest,
+  asAcquire,
+  asReclaimPlan,
+  asReclaimResult,
+  asSnapshot,
+  delay,
+  expectHostError,
+  navigateRequest,
+  onlyProfile,
+  processAlive,
+  releaseRequest,
+  waitForExit
+} from './lifecycle-gate-helpers.mjs';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const workspaceRoot = resolve(root, '..');
+const runId = `managed-page-pool-${Date.now()}`;
+const runtimeRoot = resolve(root, 'runtime', runId);
+const stateDirectory = resolve(runtimeRoot, 'host-state');
+const profileRoot = resolve(runtimeRoot, 'profiles');
+const endpointPath = resolve(stateDirectory, 'endpoint.json');
+const extensionDirectory = resolve(workspaceRoot, 'collector-extension', 'dist');
+const mainModulePath = resolve(root, 'dist', 'main.js');
+const profileId = 'real-browser-lifecycle';
+
+await mkdir(stateDirectory, { recursive: true });
+await mkdir(profileRoot, { recursive: true });
+await stat(resolve(extensionDirectory, 'manifest.json'));
+
+let endpoint = null;
+let client = null;
+let replacementClient = null;
+let cleanupClient = null;
+
+try {
+  await writeFile(endpointPath, `${JSON.stringify({
+    schemaVersion: 1,
+    protocolVersion: 1,
+    hostInstanceId: 'stale-host',
+    pipeName: process.platform === 'win32' ? '\\\\.\\pipe\\stale-collector-host' : resolve(stateDirectory, 'stale.sock'),
+    bootstrapSecret: 'stale-bootstrap-secret',
+    processId: 2_147_483_647,
+    createdAt: new Date(0).toISOString()
+  })}\n`, 'utf8');
+  endpoint = await launchBrowserHost({
+    mainModulePath,
+    stateDirectory,
+    profileRoot,
+    extensionDirectory,
+    endpointPath,
+    timeoutMs: 30_000
+  });
+  client = await BrowserHostClient.connect(endpointPath, 'lifecycle-gateway-a');
+  const launched = await client.command({
+    type: 'launch_profile',
+    request: {
+      profileId,
+      maximumManagedPages: 3,
+      headless: false,
+      offlineOnly: true
+    }
+  });
+  const initial = asSnapshot(launched);
+  const initialProfile = onlyProfile(initial);
+  assert.equal(initial.hostProcessId, endpoint.processId);
+  assert.equal(initialProfile.running, true);
+  assert.equal(initialProfile.maximumManagedPages, 3);
+  assert.equal(initialProfile.livePlatformRequests, 0);
+  assert.ok(initialProfile.browserProcessId, 'real Chromium process id must be observable');
+  assert.ok(initialProfile.extensionPages <= 1, 'Browser Session must not accumulate extension pages');
+
+  const reusedEndpoint = await launchBrowserHost({
+    mainModulePath,
+    stateDirectory,
+    profileRoot,
+    extensionDirectory,
+    endpointPath,
+    timeoutMs: 30_000
+  });
+  assert.equal(reusedEndpoint.hostInstanceId, endpoint.hostInstanceId);
+  assert.equal(reusedEndpoint.processId, endpoint.processId);
+  assert.equal(reusedEndpoint.pipeName, endpoint.pipeName);
+  const afterSecondLaunch = asSnapshot(await client.command({ type: 'get_snapshot' }));
+  assert.equal(afterSecondLaunch.hostProcessId, initial.hostProcessId);
+  assert.equal(onlyProfile(afterSecondLaunch).browserProcessId, initialProfile.browserProcessId);
+  assert.equal(afterSecondLaunch.profiles.length, 1);
+
+  const pageA = asAcquire(await client.command({
+    type: 'acquire_page',
+    request: acquireRequest(profileId, 'task-a', 'run-a', 'inventory', 'about:blank', { maxIdleTrustMs: 100 })
+  }));
+  const pageB = asAcquire(await client.command({
+    type: 'acquire_page',
+    request: acquireRequest(profileId, 'task-b', 'run-b', 'detail', 'about:blank#detail')
+  }));
+  const pageC = asAcquire(await client.command({
+    type: 'acquire_page',
+    request: acquireRequest(profileId, 'task-c', 'run-c', 'discussion', 'about:blank#discussion')
+  }));
+  assert.equal(pageA.selection, 'created_new_page');
+  assert.equal(pageB.selection, 'created_new_page');
+  assert.equal(pageC.selection, 'created_new_page');
+  assert.equal(new Set([pageA.page.pageAlias, pageB.page.pageAlias, pageC.page.pageAlias]).size, 3);
+
+  await expectHostError(
+    () => client.command({
+      type: 'acquire_page',
+      request: acquireRequest(profileId, 'task-over-cap', 'run-over-cap', 'detail', 'about:blank#four')
+    }),
+    'page_pool_capacity_exhausted'
+  );
+
+  await client.command({
+    type: 'navigate_page',
+    request: navigateRequest(profileId, pageB, 'about:blank#detail', 'navigate-detail')
+  });
+  await client.command({
+    type: 'navigate_page',
+    request: navigateRequest(profileId, pageC, 'about:blank#discussion', 'navigate-discussion')
+  });
+  await client.command({
+    type: 'release_page',
+    request: releaseRequest(profileId, pageA, 'idle_reusable')
+  });
+  await delay(150);
+  const staleSnapshot = onlyProfile(asSnapshot(await client.command({ type: 'get_snapshot' })));
+  const stalePage = staleSnapshot.pages.find((page) => page.pageAlias === pageA.page.pageAlias);
+  assert.equal(stalePage?.state, 'idle_stale');
+  const reconciledPage = await client.command({
+    type: 'reconcile_page',
+    request: { profileId, pageAlias: pageA.page.pageAlias }
+  });
+  assert.equal(reconciledPage.state, 'idle_reusable');
+  const reusedA = asAcquire(await client.command({
+    type: 'acquire_page',
+    request: acquireRequest(profileId, 'task-reuse', 'run-reuse', 'inventory', 'about:blank')
+  }));
+  assert.equal(reusedA.page.pageAlias, pageA.page.pageAlias);
+  assert.equal(reusedA.selection, 'reused_exact_target');
+
+  await client.command({ type: 'release_page', request: releaseRequest(profileId, reusedA, 'idle_reusable') });
+  await client.command({ type: 'release_page', request: releaseRequest(profileId, pageB, 'idle_reusable') });
+  await client.command({ type: 'release_page', request: releaseRequest(profileId, pageC, 'retained_for_review') });
+
+  const plan = asReclaimPlan(await client.command({
+    type: 'create_reclaim_plan',
+    request: { profileId, maximumPagesToClose: 1, expiresInMs: 30_000 }
+  }));
+  assert.equal(plan.candidates.length, 1);
+  assert.notEqual(plan.candidates[0].pageAlias, pageC.page.pageAlias);
+  const reclaimed = asReclaimResult(await client.command({
+    type: 'execute_reclaim_plan',
+    request: { reclaimPlanId: plan.reclaimPlanId }
+  }));
+  assert.equal(reclaimed.items.filter((item) => item.status === 'closed').length, 1);
+
+  const selfNavigating = asAcquire(await client.command({
+    type: 'acquire_page',
+    request: acquireRequest(profileId, 'task-self-nav', 'run-self-nav', 'inventory', null)
+  }));
+  const selfNavigationUrl = 'data:text/html,<meta charset=utf-8><script>setTimeout(()=>location.href="about:blank%23unexpected",150)</script>';
+  const navigationBody = {
+    type: 'navigate_page',
+    request: navigateRequest(profileId, selfNavigating, selfNavigationUrl, 'navigate-self-changing')
+  };
+  const navigationCommandId = randomUUID();
+  const firstNavigation = await client.command(navigationBody, { commandId: navigationCommandId });
+  const replayedNavigation = await client.command(navigationBody, { commandId: navigationCommandId });
+  assert.deepEqual(replayedNavigation, firstNavigation, 'same command id must return cached outcome');
+  await expectHostError(
+    () => client.command({
+      ...navigationBody,
+      request: { ...navigationBody.request, url: 'about:blank#command-id-conflict' }
+    }, { commandId: navigationCommandId }),
+    'command_id_payload_conflict'
+  );
+  await client.command({
+    type: 'release_page',
+    request: releaseRequest(profileId, selfNavigating, 'idle_reusable')
+  });
+  await delay(500);
+  const afterUnexpectedNavigation = onlyProfile(asSnapshot(await client.command({ type: 'get_snapshot' })));
+  const changedPage = afterUnexpectedNavigation.pages.find((page) => page.pageAlias === selfNavigating.page.pageAlias);
+  assert.equal(changedPage?.state, 'quarantined');
+  assert.equal(changedPage?.quarantineReason, 'unexpected_navigation');
+
+  const activeBeforeDisconnect = asAcquire(await client.command({
+    type: 'acquire_page',
+    request: acquireRequest(profileId, 'task-disconnect', 'run-disconnect', 'detail', null)
+  }));
+  const beforeDisconnect = asSnapshot(await client.command({ type: 'get_snapshot' }));
+  const hostPid = beforeDisconnect.hostProcessId;
+  const browserSessionId = onlyProfile(beforeDisconnect).browserSessionId;
+  const browserPid = onlyProfile(beforeDisconnect).browserProcessId;
+  client.close();
+  client = null;
+  await delay(250);
+
+  replacementClient = await BrowserHostClient.connect(endpointPath, 'lifecycle-gateway-b');
+  const afterReconnect = asSnapshot(await replacementClient.command({ type: 'get_snapshot' }));
+  const reconnectedProfile = onlyProfile(afterReconnect);
+  assert.equal(afterReconnect.hostProcessId, hostPid);
+  assert.equal(reconnectedProfile.browserSessionId, browserSessionId);
+  assert.equal(reconnectedProfile.browserProcessId, browserPid);
+  const disconnectedPage = reconnectedProfile.pages.find((page) => page.pageAlias === activeBeforeDisconnect.page.pageAlias);
+  assert.equal(disconnectedPage?.state, 'quarantined');
+  assert.equal(disconnectedPage?.quarantineReason, 'controller_disconnected');
+  assert.equal(reconnectedProfile.retainedPages, 1);
+  assert.equal(reconnectedProfile.livePlatformRequests, 0);
+  assert.ok(reconnectedProfile.extensionPages <= 1);
+
+  await replacementClient.command({ type: 'close_profile', profileId });
+  const shutdownResult = await replacementClient.command({ type: 'shutdown_host' });
+  assert.equal(shutdownResult.ok, true);
+  replacementClient.close();
+  replacementClient = null;
+  await waitForExit(endpoint.processId, endpointPath, 15_000);
+
+  const journalDirectory = resolve(stateDirectory, 'journal');
+  const journalNames = await import('node:fs/promises').then(({ readdir }) => readdir(journalDirectory));
+  const journalText = (await Promise.all(journalNames.map((name) => readFile(resolve(journalDirectory, name), 'utf8')))).join('\n');
+  for (const forbidden of ['cookie', 'authorization', 'requestHeaders', 'requestBody', 'data:text/html']) {
+    assert.equal(journalText.toLowerCase().includes(forbidden.toLowerCase()), false, `journal must omit ${forbidden}`);
+  }
+  assert.equal(/"targetId"\s*:/.test(journalText), false, 'journal must omit raw targetId fields');
+
+  console.log(JSON.stringify({
+    ok: true,
+    gate: 'browser-host-real-chromium-managed-page-lifecycle',
+    livePlatformRequests: 0,
+    browserVisible: true,
+    staleEndpointReplaced: true,
+    repeatedLaunchReusedExistingHost: true,
+    repeatedLaunchDidNotCreateSecondBrowser: true,
+    gatewayDisconnectDidNotCloseBrowser: true,
+    hostPidStableAcrossControllers: true,
+    browserPidStableAcrossControllers: true,
+    browserSessionStableAcrossControllers: true,
+    threeManagedPageCapacityEnforced: true,
+    releasedPageReused: true,
+    idleStaleReconciledWithoutPlatformInput: true,
+    retainedPageProtected: true,
+    unexpectedNavigationQuarantined: true,
+    activeLeaseQuarantinedOnControllerDisconnect: true,
+    reclaimPlanExecutedExplicitly: true,
+    commandReplayDidNotRepeatNavigation: true,
+    commandIdPayloadConflictRejected: true,
+    extensionPagesAtMostOne: true,
+    testScopedExplicitCleanup: true,
+    runtimeRoot
+  }, null, 2));
+} finally {
+  client?.close();
+  replacementClient?.close();
+  if (endpoint && await processAlive(endpoint.processId)) {
+    try {
+      cleanupClient = await BrowserHostClient.connect(endpointPath, 'lifecycle-cleanup');
+      await cleanupClient.command({ type: 'close_profile', profileId }).catch(() => undefined);
+      await cleanupClient.command({ type: 'shutdown_host' }).catch(() => undefined);
+      cleanupClient.close();
+    } catch {
+      process.kill(endpoint.processId, 'SIGTERM');
+    }
+  }
+}

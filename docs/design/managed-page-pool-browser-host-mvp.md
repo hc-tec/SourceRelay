@@ -1,6 +1,6 @@
 # Browser Host 与受管页面池 MVP 架构
 
-- 状态：Accepted / implementation pending
+- 状态：Accepted / Checkpoint 2 verified / Checkpoint 3 pending
 - 日期：2026-07-20
 - 决策源：[Grill 决策账本 101–170](collector-grilling-decision-log.md)
 - 一致性审计：[Collector 决策审计](collector-decision-audit.md)
@@ -414,7 +414,7 @@ Gateway 直接 BrowserContext/Page ownership
 - 冲突审计与产品规格更新；
 - 不改运行时代码。
 
-### Checkpoint 2：Contracts 与 Browser Host Core
+### Checkpoint 2：Contracts 与 Browser Host Core（完成）
 
 - workspace 与四包边界；
 - IPC schema、错误、PageRecord reducer；
@@ -459,4 +459,6 @@ Gateway 直接 BrowserContext/Page ownership
 
 ## 15. 当前实现差距
 
-截至 2026-07-20，本文是已接受设计，不是已实现能力。当前分支仍有旧 Gateway 直接持有 Playwright、单页 helper、旧 Console page lifecycle 和扩展 loopback 控制路径；源码还处于删除旧 Profile URL 字段但未完成页面池替换的中间态。B站 dynamic 的真实侦察与 artifact contract 已完成，可作为 Checkpoint 4 canary，但不能被描述为已经通过 Browser Host。
+截至 2026-07-20，Checkpoint 2 已实现独立 Contracts 与 Browser Host Core：当前用户单实例 Host、Windows Named Pipe/HMAC、controller generation、真实持久 Chromium、Profile 页面池、PageLease、Host 内部 target 因果账本、去敏 Snapshot/Journal、隔离与显式两阶段回收均已落地。真实可见 Chromium 门禁加载生产扩展但只使用 `about:` / `data:` 页面，证明失效 endpoint 替换、重复 launcher 复用同一 Host/Chromium、三页容量、release 后复用、idle stale 本地 reconcile、retained 保护、意外导航与 controller 断连 quarantine、command replay 去重和显式清理；`livePlatformRequests=0`，因此它不构成任何平台能力验证。
+
+Checkpoint 3 尚未开始一次性切换。当前分支仍有旧 Gateway 直接持有 Playwright、单页 helper、旧 Console page lifecycle 和扩展 loopback 控制路径；这些路径必须与新 Gateway Host client、Native Messaging Bridge 和 PageLease runner 同一次删除，不提供 adapter、dual write、legacy endpoint 或 fallback。B站 dynamic 的真实侦察与 artifact contract 已完成，可作为 Checkpoint 4 canary，但尚未通过 Browser Host。

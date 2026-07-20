@@ -118,8 +118,8 @@ Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git
 
 ## 下一阶段
 
-1. 实现独立 Browser Host、受管多页面池、PageLease、Native Messaging 和真实本地 Chromium 生命周期门禁；
-2. 将 Gateway、扩展与现有 runner 一次性切换到新执行面，删除旧单 tab / URL 所有权路径；
+1. 已完成独立 Contracts、单实例 Browser Host、受管多页面池、PageLease 和真实本地 Chromium 生命周期门禁；
+2. 将 Gateway、扩展与现有 runner 一次性切换到 Browser Host + Native Messaging 执行面，删除旧单 tab / URL 所有权路径；
 3. 用 B站 dynamic 完成一次低频真实 canary，并证明 Gateway 重启不关闭浏览器；
 4. 再迁移和发布 B站 `detail -> bounded discussion`，随后推进小红书账号归档；
 5. 建设加密 Vault、EvidencePackage 与 DeepResearch / 蜂群分析接入。

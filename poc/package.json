@@ -1,0 +1,23 @@
+{
+  "name": "@intelligence/collector-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "collector-contracts",
+    "collector-browser-host",
+    "collector-extension",
+    "collector-gateway"
+  ],
+  "scripts": {
+    "build:contracts": "npm run build --workspace @intelligence/collector-contracts",
+    "build:extension": "npm run build --workspace @intelligence/collector-extension",
+    "build:browser-host": "npm run build:contracts && npm run build --workspace @intelligence/collector-browser-host",
+    "typecheck:contracts": "npm run typecheck --workspace @intelligence/collector-contracts",
+    "typecheck:browser-host": "npm run typecheck:contracts && npm run typecheck --workspace @intelligence/collector-browser-host",
+    "verify:browser-host": "npm run build:browser-host && npm run build:extension && npm run verify:lifecycle --workspace @intelligence/collector-browser-host"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@intelligence/collector-browser-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Long-lived local owner of Collector Chromium profiles and managed page leases.",
+  "exports": {
+    ".": "./dist/main.js",
+    "./client": "./dist/client.js"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify:lifecycle": "node scripts/verify-real-browser-lifecycle.mjs"
+  },
+  "dependencies": {
+    "@intelligence/collector-contracts": "0.1.0",
+    "playwright": "^1.61.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

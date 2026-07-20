@@ -13,7 +13,9 @@
 
 Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面。B站匿名首屏关键词搜索是目前唯一获得真实平台 admission、并完成正式 Research Task 调度与本地 Evidence batch 闭环的能力；其他平台和深度能力仍未发布。
 
-2026-07-20 已完成第 101–170 题 Browser Host / 受管多页面池产品设计与一致性审计，但运行时代码尚未实现该架构。当前分支正处于零兼容切换前的中间态：旧 Profile URL 摘要字段已删除，旧单页面 helper 与调用点仍存在，因此当前源码 typecheck 失败于 `lastManagedTargetUrlDigest` / `markManagedTarget` 两处遗留引用。这个状态不能被描述为页面池可用或构建绿色；后续按独立 Contracts/Browser Host、Gateway/Extension 一次性切换、B站 dynamic canary 三个代码 checkpoint 修复，不恢复旧字段或兼容层。
+2026-07-20 已完成第 101–170 题 Browser Host / 受管多页面池产品设计、一致性审计，以及 Checkpoint 2 的独立 Contracts 与 Browser Host Core。Host 现在是页面账本唯一写入者，提供当前用户单实例、Windows Named Pipe/HMAC、controller generation、真实持久 Chromium、每 Profile 三页池、PageLease、idle/stale/quarantine/retain/reclaim、去敏 Snapshot/Journal 和显式关闭边界。真实可见 Chromium 门禁已证明失效 endpoint 替换、第二次 launcher 调用复用同一 Host PID/Chromium PID/Browser Session、Gateway controller 重连不关闭浏览器、release 后页面复用、idle stale 无平台输入 reconcile、retained 保护、意外导航隔离、两阶段回收和 command replay 去重；门禁加载生产扩展但只使用 `about:` / `data:`，`livePlatformRequests=0`，不冒充平台验证。
+
+当前分支仍处于零兼容切换前的中间态：Browser Host/Contracts 自身 typecheck、build 和真实生命周期门禁为绿色，但旧 Gateway 仍直接持有 Playwright、单页面 helper 与旧 Console page lifecycle，Gateway/Extension/runner 尚未使用新 PageLease 与 Native Messaging 边界。因此整体 Collector 还不能描述为已经完成新页面池迁移；Checkpoint 3 必须一次性删除旧路径，不恢复旧字段，不加入 adapter、dual write、legacy endpoint 或 fallback。
 
 已完成的 B站 dynamic 真实侦察和两页 raw-first artifact contract 保留为 Browser Host canary 输入：它证明当前真实页面的 DOM/XHR/稳定 ID/覆盖语义，不证明页面已经通过新 Host、PageLease、Native Messaging 或 Gateway 重连链路。
 
@@ -74,7 +76,7 @@ B站详情正式 Task 的 receipt / Evidence race 已加入控制面修复：acc
 已完成：B站 collection_series 总览 + 单系列 5 页 / 129 条 research 闭环（尚未 admission）
 已完成：B站 article 单页目录 + 单篇 raw-first 详情 research 闭环（尚未 admission）
 已完成设计：Browser Host / 多 PageLease / Native Messaging / 页面状态 / Console MVP（101–170）
-进行中：Browser Host Contracts 与真实本地 Chromium 页面池 foundation
+已完成：Browser Host Contracts、单实例 Host 与真实本地 Chromium 页面池 foundation
 待切换：Gateway/Extension/全部 runner 零兼容迁移并删除旧单 tab 路径
 待验证：B站 dynamic 通过新页面池的低频真实 canary
 未开始：P3 加密 Evidence Vault
