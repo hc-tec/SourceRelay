@@ -10,7 +10,9 @@ const contractBundle = join(temporaryDirectory, 'bilibili-dynamic-contract.mjs')
 const responseBundle = join(temporaryDirectory, 'bilibili-dynamic-response.mjs');
 const crossCheckBundle = join(temporaryDirectory, 'bilibili-dynamic-cross-check.mjs');
 const reservationDiagnosticBundle = join(temporaryDirectory, 'bilibili-dynamic-reservation-opus-diagnostic.mjs');
+const opusDiagnosticBundle = join(temporaryDirectory, 'bilibili-dynamic-opus-diagnostic.mjs');
 const artifactBundle = join(temporaryDirectory, 'bilibili-dynamic-artifacts.mjs');
+const twoPagePlanBundle = join(temporaryDirectory, 'bilibili-dynamic-two-page-plan.mjs');
 
 try {
   await Promise.all([
@@ -18,7 +20,9 @@ try {
     [new URL('../src/bilibili-dynamic-response.ts', import.meta.url), responseBundle],
     [new URL('../src/bilibili-dynamic-cross-check.ts', import.meta.url), crossCheckBundle],
     [new URL('../src/bilibili-dynamic-reservation-opus-diagnostic.ts', import.meta.url), reservationDiagnosticBundle],
-    [new URL('../src/bilibili-dynamic-artifacts.ts', import.meta.url), artifactBundle]
+    [new URL('../src/bilibili-dynamic-opus-diagnostic.ts', import.meta.url), opusDiagnosticBundle],
+    [new URL('../src/bilibili-dynamic-artifacts.ts', import.meta.url), artifactBundle],
+    [new URL('../src/bilibili-dynamic-two-page-plan.ts', import.meta.url), twoPagePlanBundle]
   ].map(([entry, outfile]) => build({
     entryPoints: [fileURLToPath(entry)],
     outfile,
@@ -32,7 +36,9 @@ try {
   const response = await import(pathToFileURL(responseBundle).href);
   const crossCheck = await import(pathToFileURL(crossCheckBundle).href);
   const reservationDiagnostic = await import(pathToFileURL(reservationDiagnosticBundle).href);
+  const opusDiagnostic = await import(pathToFileURL(opusDiagnosticBundle).href);
   const { BilibiliDynamicArtifactStore } = await import(pathToFileURL(artifactBundle).href);
+  const twoPagePlan = await import(pathToFileURL(twoPagePlanBundle).href);
 
   const accountId = '123456';
   const canonicalProfileUrl = `https://space.bilibili.com/${accountId}`;
@@ -153,6 +159,8 @@ try {
   assert.equal(candidate.items[0].primaryIdentity.stableId, 'BV1qZSLBYEpa');
   assert.equal(candidate.items[1].primaryIdentity.kind, 'dynamic');
   assert.equal(candidate.items[1].reservationTitle, '公开视频预约');
+  assert.equal(candidate.items[1].additionalGoodsHeadText, null);
+  assert.equal(candidate.items[1].additionalUpowerLotteryTitle, null);
   assert.equal(candidate.items[2].accessState, 'restricted_placeholder');
   assert.equal(candidate.items[3].forwardedSource.primaryIdentity.stableId, 'BV1xA411c7mD');
 
@@ -249,11 +257,82 @@ try {
     ...reservationOnlyCard,
     card: { ...reservationOnlyCard.card, reservation: false }
   }).textMatch, false);
+  assert.equal(response.bilibiliDynamicCardEvidenceCheck({
+    ...reservationOnlyCard,
+    additionalGoodsHeadText: '不该被预约卡采纳',
+    card: {
+      ...reservationOnlyCard.card,
+      visibleText: '公开作者 2天前 不该被预约卡采纳 去观看'
+    }
+  }).textMatch, false);
   assert.equal('nextOffset' in projected.projection, false);
   assert.equal(projected.projection.items[0].card.mediaRefs[0].url,
     'https://i0.hdslb.com/bfs/archive/one.jpg');
   assert.equal(projected.projection.items[0].card.links[0].url,
     'https://www.bilibili.com/video/BV1qZSLBYEpa');
+
+  const rawSecondFeed = structuredClone(rawFeed);
+  rawSecondFeed.data.has_more = false;
+  rawSecondFeed.data.offset = '';
+  const secondIds = [
+    '100000000000000011',
+    '100000000000000012',
+    '100000000000000013',
+    '100000000000000014'
+  ];
+  rawSecondFeed.data.items.forEach((item, index) => {
+    item.id_str = secondIds[index];
+  });
+  const projectedSecond = response.projectBilibiliDynamicPageWithDom(
+    {
+      value: rawSecondFeed,
+      status: 200,
+      capturedAt: 1_753_000_010_000,
+      bodyBytes: 1_024,
+      bodySha256: 'd'.repeat(64),
+      queryKeyNames: ['host_mid', 'offset'],
+      schemaPaths: [],
+      sensitiveFieldPathsOmitted: 0
+    },
+    accountId,
+    2,
+    projected.projection.items,
+    {
+      stableAccountId: accountId,
+      visibleFilterLabels: ['全部', '视频'],
+      activeFilterLabel: '全部',
+      cards: [...domCards, ...domCards.map((card, index) => ({ ...card, position: index + 5 }))],
+      risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+    },
+    '2026-07-20T02:00:01.000Z'
+  );
+  assert.ok(projectedSecond);
+  assert.equal(projectedSecond.projection.pageNumber, 2);
+  assert.equal(projectedSecond.projection.domCrossCheck.exactCumulativeCardCount, true);
+  assert.equal(twoPagePlan.hasDuplicateBilibiliDynamicIds([
+    projected.projection,
+    projectedSecond.projection
+  ]), false);
+  assert.equal(twoPagePlan.hasDuplicateBilibiliDynamicIds([
+    projected.projection,
+    projected.projection
+  ]), true);
+  const plannedScroll = twoPagePlan.bilibiliDynamicSecondPageScrollAction(
+    '11111111-1111-4111-8111-111111111111',
+    1
+  );
+  twoPagePlan.completeBilibiliDynamicScrollAction(plannedScroll, {
+    before: { scrollX: 0, scrollY: 0, scrollHeight: 3_000, viewportWidth: 1_280, viewportHeight: 720 },
+    after: { scrollX: 0, scrollY: 1_200, scrollHeight: 3_500, viewportWidth: 1_280, viewportHeight: 720 }
+  });
+  assert.deepEqual(plannedScroll.scroll, {
+    deltaY: 1_200,
+    beforeScrollY: 0,
+    afterScrollY: 1_200,
+    beforeScrollHeight: 3_000,
+    afterScrollHeight: 3_500,
+    viewportHeight: 720
+  });
 
   const reservationOpusFieldDiagnostic = reservationDiagnostic.bilibiliDynamicReservationOpusFieldDiagnostic({
     responseValue: rawFeed,
@@ -274,6 +353,92 @@ try {
   ]);
   assert.equal(JSON.stringify(reservationOpusFieldDiagnostic).includes('预约图文'), false);
 
+  const rawNormalOpusFeed = structuredClone(rawFeed);
+  rawNormalOpusFeed.data.has_more = false;
+  rawNormalOpusFeed.data.offset = '';
+  rawNormalOpusFeed.data.items = [structuredClone(rawFeed.data.items[1])];
+  rawNormalOpusFeed.data.items[0].basic.jump_url = 'https://www.bilibili.com/opus/100000000000000002';
+  delete rawNormalOpusFeed.data.items[0].modules.module_dynamic.additional;
+  const normalOpusFieldDiagnostic = opusDiagnostic.bilibiliDynamicOpusFieldDiagnostic({
+    responseValue: rawNormalOpusFeed,
+    expectedAccountId: accountId,
+    pageNumber: 2,
+    dom: {
+      stableAccountId: accountId,
+      visibleFilterLabels: ['全部', '视频'],
+      activeFilterLabel: '全部',
+      cards: [{
+        ...domCards[1],
+        position: 1,
+        reservation: false,
+        visibleText: '公开作者 2天前 预约图文​说明',
+        links: [{
+          text: '公开图文',
+          url: 'https://www.bilibili.com/opus/100000000000000002'
+        }],
+        identityAttributeCandidates: [{
+          name: 'data-did',
+          value: '100000000000000002'
+        }]
+      }],
+      risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+    }
+  });
+  assert.equal(normalOpusFieldDiagnostic?.cards.length, 1);
+  assert.deepEqual(normalOpusFieldDiagnostic?.cards[0]?.matchingFieldPaths, [
+    'modules.module_dynamic.major.opus.summary.text'
+  ]);
+  assert.equal(normalOpusFieldDiagnostic?.cards[0]?.exactPrimaryIdentityLinkPresent, true);
+  assert.deepEqual(normalOpusFieldDiagnostic?.cards[0]?.matchingStableDynamicIdAttributeNames, ['data-did']);
+  assert.equal(JSON.stringify(normalOpusFieldDiagnostic).includes('预约图文'), false);
+
+  const rawOrdinaryAdditionalFeed = structuredClone(rawNormalOpusFeed);
+  rawOrdinaryAdditionalFeed.data.items[0].modules.module_dynamic = {
+    major: { type: 'MAJOR_TYPE_OPUS', opus: { summary: { text: '未出现在卡片上的图文说明' } } },
+    additional: {
+      goods: { head_text: '公开商品提示' },
+      upower_lottery: { title: '公开抽奖提示' }
+    }
+  };
+  const ordinaryAdditionalProjected = response.projectBilibiliDynamicPageWithDom(
+    {
+      value: rawOrdinaryAdditionalFeed,
+      status: 200,
+      capturedAt: 1_753_000_020_000,
+      bodyBytes: 1_024,
+      bodySha256: 'e'.repeat(64),
+      queryKeyNames: ['host_mid'],
+      schemaPaths: [],
+      sensitiveFieldPathsOmitted: 0
+    },
+    accountId,
+    2,
+    [],
+    {
+      stableAccountId: accountId,
+      visibleFilterLabels: ['全部', '视频'],
+      activeFilterLabel: '全部',
+      cards: [{
+        ...domCards[1],
+        position: 1,
+        reservation: false,
+        visibleText: '公开作者 2天前 公开商品提示 去观看'
+      }],
+      risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+    },
+    '2026-07-20T02:00:02.000Z'
+  );
+  assert.ok(ordinaryAdditionalProjected);
+  assert.equal(ordinaryAdditionalProjected.projection.items[0].additionalGoodsHeadText, '公开商品提示');
+  assert.equal(ordinaryAdditionalProjected.projection.items[0].additionalUpowerLotteryTitle, '公开抽奖提示');
+  assert.equal(ordinaryAdditionalProjected.projection.items[0].domEvidence.textMatch, true);
+  assert.equal(ordinaryAdditionalProjected.projection.items[0].domEvidence.cardEvidenceMatch, true);
+  assert.equal(
+    crossCheck.bilibiliDynamicCrossCheckDiagnostic(ordinaryAdditionalProjected.projection)
+      .cards[0].responseTextCandidateCount,
+    3
+  );
+
   const run = {
     schemaVersion: 1,
     runId: '11111111-1111-4111-8111-111111111111',
@@ -284,7 +449,7 @@ try {
     targetUrlDigest: 'b'.repeat(64),
     strategyCandidate: {
       strategyId: 'bilibili.dynamic.account-feed.response-dom.v1',
-      version: '1.0.0',
+      version: '1.2.0',
       admissionEligible: false
     },
     state: 'partial',
@@ -295,23 +460,27 @@ try {
     failedResponseEvidence: null,
     crossCheckDiagnostic: null,
     reservationOpusFieldDiagnostic,
-    visualEvidence: null,
+    opusFieldDiagnostic: null,
+    visualEvidence: [],
     pages: [projected.projection],
     actions: [{
       actionId: 'open_dynamic_inventory',
+      kind: 'navigation',
       intent: 'Open the canonical account dynamic feed in the public all-items filter.',
       expectedPageNumber: 1,
       attempted: true,
       attemptCount: 1,
       outcome: 'completed',
-      errorCode: null
+      errorCode: null,
+      scroll: null
     }],
     coverage: {
-      plannedMaximumPages: 1,
+      plannedMaximumPages: 2,
       capturedPages: 1,
       capturedItems: 4,
       uniqueItems: 4,
       duplicateItems: 0,
+      unresolvedCardEvidenceItems: 0,
       forwardedItems: 1,
       restrictedPlaceholderItems: 1,
       dynamicTypes: [
@@ -358,6 +527,8 @@ try {
   assert.equal(artifact.failedResponseEvidence, null);
   assert.equal(artifact.crossCheckDiagnostic, null);
   assert.deepEqual(artifact.reservationOpusFieldDiagnostic, reservationOpusFieldDiagnostic);
+  assert.equal(artifact.opusFieldDiagnostic, null);
+  assert.equal(summary.unresolvedCardEvidenceItemCount, 0);
   const recovered = await BilibiliDynamicArtifactStore.create(stateDirectory);
   assert.equal((await recovered.get(summary.artifactId)).summary.manifestSha256, summary.manifestSha256);
 
@@ -377,9 +548,12 @@ try {
     !card.checks.primaryIdentityCrossCheckable
   );
   assert.notEqual(mismatchedItemIndex, -1);
-  const mismatchedItems = projected.projection.items.map((item, index) => index === mismatchedItemIndex
-    ? { ...item, card: { ...item.card, visibleText: '无匹配文本', links: [], mediaRefs: [] } }
-    : item);
+  const mismatchedItems = projected.projection.items.map((item, index) => {
+    if (index !== mismatchedItemIndex) return item;
+    const changed = { ...item, card: { ...item.card, visibleText: '无匹配文本', links: [], mediaRefs: [] } };
+    const domEvidence = response.bilibiliDynamicCardEvidenceCheck(changed);
+    return { ...changed, domEvidence };
+  });
   const mismatchedProjection = {
     ...projected.projection,
     items: mismatchedItems,
@@ -396,6 +570,26 @@ try {
   assert.equal(mismatchedCard?.checks.textMatch, false);
   assert.equal(mismatchedCard?.checks.cardEvidenceMatch, false);
   assert.equal(mismatchedCard?.checks.authorMatch, true);
+  const partialRun = {
+    ...run,
+    runId: '33333333-3333-4333-8333-333333333333',
+    state: 'partial',
+    errorCode: 'dynamic_second_card_evidence_partial',
+    failedResponseEvidence: null,
+    crossCheckDiagnostic,
+    pages: [mismatchedProjection],
+    coverage: {
+      ...run.coverage,
+      unresolvedCardEvidenceItems: 1,
+      terminalReason: 'dom_response_mismatch'
+    }
+  };
+  const partialSummary = await store.record(partialRun);
+  const partialArtifact = await store.get(partialSummary.artifactId);
+  assert.equal(partialSummary.state, 'partial');
+  assert.equal(partialSummary.unresolvedCardEvidenceItemCount, 1);
+  assert.equal(partialArtifact.failedResponseEvidence, null);
+  assert.equal(partialArtifact.pages[0].items[mismatchedItemIndex].domEvidence.cardEvidenceMatch, false);
   const failedRun = {
     ...run,
     runId: '22222222-2222-4222-8222-222222222222',

@@ -16,6 +16,8 @@ import {
   stableDynamicAccountId,
   type BilibiliDynamicAction,
   type BilibiliDynamicCrossCheckDiagnostic,
+  type BilibiliDynamicDomSnapshot,
+  type BilibiliDynamicOpusFieldDiagnostic,
   type BilibiliDynamicPageProjection,
   type BilibiliDynamicReservationOpusFieldDiagnostic,
   type BilibiliDynamicResponseEvidence,
@@ -23,21 +25,37 @@ import {
   type BilibiliDynamicTerminalReason,
   type BilibiliDynamicVisualEvidence
 } from './bilibili-dynamic-contract';
-import { bilibiliDynamicStrategyObservation } from './bilibili-dynamic-observation';
+import {
+  bilibiliDynamicStrategyObservation,
+  type BilibiliDynamicStrategyObservation
+} from './bilibili-dynamic-observation';
 import {
   bilibiliDynamicCrossCheckDiagnostic,
   hasFullBilibiliDynamicDomResponseCrossCheck
 } from './bilibili-dynamic-cross-check';
 import { createBilibiliDynamicRunRecord } from './bilibili-dynamic-run-record';
+import { bilibiliDynamicOpusFieldDiagnostic } from './bilibili-dynamic-opus-diagnostic';
 import { bilibiliDynamicReservationOpusFieldDiagnostic } from './bilibili-dynamic-reservation-opus-diagnostic';
 import { dynamicResponseEvidence, projectBilibiliDynamicPageWithDom } from './bilibili-dynamic-response';
+import {
+  BILIBILI_DYNAMIC_SECOND_PAGE_MAX_SCROLL_ACTIONS,
+  BILIBILI_DYNAMIC_TRUSTED_SCROLL_DELTA_Y,
+  BILIBILI_DYNAMIC_TWO_PAGE_LIMIT,
+  bilibiliDynamicNavigationAction,
+  bilibiliDynamicSecondPageScrollAction,
+  completeBilibiliDynamicScrollAction,
+  hasDuplicateBilibiliDynamicIds
+} from './bilibili-dynamic-two-page-plan';
 import type { CollectionBrowserManager } from './browser-manager';
 import type { BrowserProfileRegistry } from './profiles';
 
 const PROFILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const RUN_DEADLINE_MS = 60_000;
 const NAVIGATION_TIMEOUT_MS = 20_000;
-const OBSERVATION_DEADLINE_MS = 15_000;
+const INITIAL_OBSERVATION_TIMEOUT_MS = 15_000;
+const AFTER_SCROLL_OBSERVATION_TIMEOUT_MS = 6_000;
+const SCROLL_TIMEOUT_MS = 8_000;
+const MINIMUM_OBSERVATION_COMMAND_MS = 250;
 
 export interface BilibiliDynamicHostRunInput {
   profileId: string;
@@ -49,22 +67,18 @@ export interface BilibiliDynamicHostRunResult {
   artifact: BilibiliDynamicArtifactSummary;
 }
 
-function input(value: BilibiliDynamicHostRunInput): BilibiliDynamicHostRunInput {
-  if (!PROFILE_ID.test(value.profileId)) throw new Error('bilibili_dynamic_profile_invalid');
-  const dynamic = bilibiliDynamicInput({ canonicalProfileUrl: value.canonicalProfileUrl, maxPages: 1 });
-  return { profileId: value.profileId, canonicalProfileUrl: dynamic.canonicalProfileUrl };
+interface LeasedPageContext {
+  recordVersion: number;
+  documentGeneration: number;
 }
 
-function action(runId: string): BilibiliDynamicAction {
-  return {
-    actionId: `navigate_dynamic_${runId.replace(/-/g, '_')}`,
-    intent: 'Navigate once to the canonical Bilibili account dynamic feed.',
-    expectedPageNumber: 1,
-    attempted: false,
-    attemptCount: 0,
-    outcome: 'prerequisite_unmet',
-    errorCode: null
-  };
+function input(value: BilibiliDynamicHostRunInput): BilibiliDynamicHostRunInput {
+  if (!PROFILE_ID.test(value.profileId)) throw new Error('bilibili_dynamic_profile_invalid');
+  const dynamic = bilibiliDynamicInput({
+    canonicalProfileUrl: value.canonicalProfileUrl,
+    maxPages: BILIBILI_DYNAMIC_TWO_PAGE_LIMIT
+  });
+  return { profileId: value.profileId, canonicalProfileUrl: dynamic.canonicalProfileUrl };
 }
 
 function pageSelection(selection: AcquirePageResult['selection']): BilibiliDynamicRunRecord['safeguards']['targetTabSelection'] {
@@ -72,6 +86,23 @@ function pageSelection(selection: AcquirePageResult['selection']): BilibiliDynam
   return selection === 'reused_exact_target'
     ? 'reused_matching_managed_tab'
     : 'reused_retained_managed_tab';
+}
+
+function riskOutcome(dom: BilibiliDynamicStrategyObservation['dom']): {
+  state: BilibiliDynamicRunRecord['state'];
+  terminalReason: BilibiliDynamicTerminalReason;
+  errorCode: string;
+} | null {
+  if (dom.risk.verificationRequired) {
+    return { state: 'partial', terminalReason: 'verification_required', errorCode: 'verification_required' };
+  }
+  if (dom.risk.rateLimited) {
+    return { state: 'partial', terminalReason: 'rate_limited', errorCode: 'rate_limited' };
+  }
+  if (dom.risk.sourceUnavailable) {
+    return { state: 'partial', terminalReason: 'source_unavailable', errorCode: 'source_unavailable' };
+  }
+  return null;
 }
 
 function failureFor(error: unknown): {
@@ -83,6 +114,9 @@ function failureFor(error: unknown): {
   const errorCode = safeBilibiliDynamicErrorCode(error);
   if (
     errorCode === 'navigation_outcome_unknown' ||
+    errorCode === 'scroll_outcome_unknown' ||
+    errorCode === 'scroll_page_identity_unverified' ||
+    errorCode === 'managed_page_document_generation_mismatch' ||
     errorCode === 'dynamic_strategy_document_context_changed' ||
     errorCode === 'dynamic_strategy_binding_context_rejected' ||
     errorCode === 'dynamic_managed_page_context_changed' ||
@@ -102,6 +136,10 @@ function remainingDeadline(deadline: number, minimumMs: number): number {
   const remaining = deadline - Date.now();
   if (remaining < minimumMs) throw new Error('run_deadline_exceeded');
   return remaining;
+}
+
+function pageDomSnapshot(dom: BilibiliDynamicDomSnapshot, previousCardCount: number): BilibiliDynamicDomSnapshot {
+  return { ...dom, cards: dom.cards.slice(previousCardCount) };
 }
 
 export class BilibiliDynamicHostRunner {
@@ -147,13 +185,19 @@ export class BilibiliDynamicHostRunner {
     stableAccountId: string
   ): Promise<BilibiliDynamicHostRunResult> {
     const startedAt = permit.startedAt;
-    const deadline = Date.parse(startedAt) + RUN_DEADLINE_MS;
-    const navigation = action(permit.runId);
+    // Account Safety starts before any local setup. The bounded semantic-action
+    // window starts only after the exact page lease and observer binding exist,
+    // so a cold Host/Profile launch cannot silently consume the Bilibili
+    // navigation-and-scroll budget while the safety permit is already active.
+    let deadline = 0;
+    const navigation = bilibiliDynamicNavigationAction(permit.runId);
+    const actions: BilibiliDynamicAction[] = [navigation];
     const pages: BilibiliDynamicPageProjection[] = [];
+    const visualEvidence: BilibiliDynamicVisualEvidence[] = [];
     let failedResponseEvidence: BilibiliDynamicResponseEvidence | null = null;
     let crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null = null;
     let reservationOpusFieldDiagnostic: BilibiliDynamicReservationOpusFieldDiagnostic | null = null;
-    let visualEvidence: BilibiliDynamicVisualEvidence | null = null;
+    let opusFieldDiagnostic: BilibiliDynamicOpusFieldDiagnostic | null = null;
     let state: BilibiliDynamicRunRecord['state'] = 'failed';
     let terminalReason: BilibiliDynamicTerminalReason = 'source_unavailable';
     let errorCode: string | null = null;
@@ -178,7 +222,7 @@ export class BilibiliDynamicHostRunner {
       targetTabSelection = pageSelection(acquired.selection);
       releaseReason = 'dynamic_strategy_binding_not_completed';
 
-      const expiresAt = new Date(Math.min(deadline, Date.now() + 55_000)).toISOString();
+      const expiresAt = new Date(Date.now() + 55_000).toISOString();
       const observerBindingId = randomUUID();
       await this.#browserManager.bindStrategyObserver({
         schemaVersion: 1,
@@ -191,9 +235,10 @@ export class BilibiliDynamicHostRunner {
         strategyId: BILIBILI_DYNAMIC_STRATEGY_ID,
         target: { canonicalUrl: targetUrl, stableAccountId },
         expiresAt,
-        maximumResponseObservations: 1,
+        maximumResponseObservations: BILIBILI_DYNAMIC_TWO_PAGE_LIMIT,
         maximumPayloadBytes: 192 * 1024
       });
+      deadline = Date.now() + RUN_DEADLINE_MS;
 
       await this.#accountSafety.recordActionAttempt(
         permit.profileId,
@@ -215,85 +260,160 @@ export class BilibiliDynamicHostRunner {
       navigation.outcome = 'completed';
       navigation.errorCode = null;
       releaseDisposition = 'retained_for_review';
-      releaseReason = 'dynamic_single_page_review_retained';
+      releaseReason = 'dynamic_two_page_review_retained';
 
-      const observation = await this.#readStableObservation({
+      const firstObserved = await this.#observeUntil({
         profileId: permit.profileId,
         pageAlias: acquired.page.pageAlias,
         pageLeaseId: acquired.lease.pageLeaseId,
         runId: permit.runId,
         observerBindingId,
-        deadline
-      });
-      const observed = bilibiliDynamicStrategyObservation(observation, stableAccountId);
-      failedResponseEvidence = observed.failedResponseEvidence;
-      const visual = await this.#captureStableVisualEvidence({
+        deadline,
+        minimumResponses: 1,
+        maximumWaitMs: INITIAL_OBSERVATION_TIMEOUT_MS
+      }, stableAccountId);
+      failedResponseEvidence = firstObserved.failedResponseEvidence;
+      visualEvidence.push(await this.#captureVisualEvidence({
         profileId: permit.profileId,
         pageAlias: acquired.page.pageAlias,
         pageLeaseId: acquired.lease.pageLeaseId,
         runId: permit.runId,
-        deadline
-      });
-      visualEvidence = {
-        evidenceId: visual.evidenceId,
-        capturedAt: visual.capturedAt,
-        viewport: visual.viewport,
-        screenshot: visual.screenshot
-      };
+        deadline,
+        phase: 'baseline',
+        actionId: navigation.actionId
+      }));
 
-      if (observed.dom.risk.verificationRequired) {
-        state = 'partial';
-        terminalReason = 'verification_required';
-        errorCode = 'verification_required';
-      } else if (observed.dom.risk.rateLimited) {
-        state = 'partial';
-        terminalReason = 'rate_limited';
-        errorCode = 'rate_limited';
-      } else if (observed.dom.risk.sourceUnavailable) {
-        state = 'partial';
-        terminalReason = 'source_unavailable';
-        errorCode = 'source_unavailable';
-      } else if (!observed.response) {
+      const initialRisk = riskOutcome(firstObserved.dom);
+      if (initialRisk) {
+        state = initialRisk.state;
+        terminalReason = initialRisk.terminalReason;
+        errorCode = initialRisk.errorCode;
+      } else if (!firstObserved.responses[0]) {
         state = 'failed';
-        terminalReason = observed.failedResponseEvidence ? 'response_status_unavailable' : 'response_projection_failed';
-        errorCode = observed.failedResponseEvidence
+        terminalReason = firstObserved.failedResponseEvidence ? 'response_status_unavailable' : 'response_projection_failed';
+        errorCode = firstObserved.failedResponseEvidence
           ? 'dynamic_observation_response_not_captured'
           : 'dynamic_observation_response_missing';
       } else {
-        const projected = projectBilibiliDynamicPageWithDom(
-          observed.response,
+        const firstPage = projectBilibiliDynamicPageWithDom(
+          firstObserved.responses[0],
           stableAccountId,
           1,
           [],
-          observed.dom,
-          observation.capturedAt
+          firstObserved.dom,
+          new Date().toISOString()
         );
-        if (!projected) {
+        if (!firstPage) {
           state = 'failed';
           terminalReason = 'response_projection_failed';
           errorCode = 'dynamic_response_projection_failed';
-          failedResponseEvidence = dynamicResponseEvidence(observed.response, 1);
-        } else if (!hasFullBilibiliDynamicDomResponseCrossCheck(projected.projection)) {
+          failedResponseEvidence = dynamicResponseEvidence(firstObserved.responses[0], 1);
+        } else if (!hasFullBilibiliDynamicDomResponseCrossCheck(firstPage.projection)) {
           reservationOpusFieldDiagnostic = bilibiliDynamicReservationOpusFieldDiagnostic({
-            responseValue: observed.response.value,
+            responseValue: firstObserved.responses[0].value,
             expectedAccountId: stableAccountId,
-            dom: observed.dom
+            dom: firstObserved.dom
+          });
+          opusFieldDiagnostic = bilibiliDynamicOpusFieldDiagnostic({
+            responseValue: firstObserved.responses[0].value,
+            expectedAccountId: stableAccountId,
+            pageNumber: 1,
+            dom: firstObserved.dom
           });
           state = 'failed';
           terminalReason = 'dom_response_mismatch';
           errorCode = 'dynamic_dom_response_cross_check_failed';
-          failedResponseEvidence = dynamicResponseEvidence(observed.response, 1);
-          crossCheckDiagnostic = bilibiliDynamicCrossCheckDiagnostic(projected.projection);
+          failedResponseEvidence = dynamicResponseEvidence(firstObserved.responses[0], 1);
+          crossCheckDiagnostic = bilibiliDynamicCrossCheckDiagnostic(firstPage.projection);
         } else {
           reservationOpusFieldDiagnostic = bilibiliDynamicReservationOpusFieldDiagnostic({
-            responseValue: observed.response.value,
+            responseValue: firstObserved.responses[0].value,
             expectedAccountId: stableAccountId,
-            dom: observed.dom
+            dom: firstObserved.dom
           });
-          pages.push(projected.projection);
-          state = projected.candidate.hasMore ? 'partial' : 'completed';
-          terminalReason = projected.candidate.hasMore ? 'budget_exhausted' : 'feed_terminal_reached';
-          errorCode = null;
+          pages.push(firstPage.projection);
+          if (!firstPage.candidate.hasMore) {
+            state = 'completed';
+            terminalReason = 'feed_terminal_reached';
+            errorCode = null;
+          } else {
+            const secondObserved = await this.#scrollUntilSecondResponse({
+              permit,
+              acquired,
+              observerBindingId,
+              deadline,
+              stableAccountId,
+              actions,
+              visualEvidence
+            });
+            if (!secondObserved) {
+              state = 'partial';
+              terminalReason = 'scroll_response_not_observed';
+              errorCode = 'dynamic_second_response_not_captured';
+            } else {
+              failedResponseEvidence = secondObserved.failedResponseEvidence;
+              const postScrollRisk = riskOutcome(secondObserved.dom);
+              if (postScrollRisk) {
+                state = postScrollRisk.state;
+                terminalReason = postScrollRisk.terminalReason;
+                errorCode = postScrollRisk.errorCode;
+              } else if (!secondObserved.responses[1]) {
+                state = 'failed';
+                terminalReason = secondObserved.failedResponseEvidence
+                  ? 'response_status_unavailable'
+                  : 'scroll_response_not_observed';
+                errorCode = secondObserved.failedResponseEvidence
+                  ? 'dynamic_observation_second_response_not_captured'
+                  : 'dynamic_second_response_not_captured';
+              } else {
+                const secondPage = projectBilibiliDynamicPageWithDom(
+                  secondObserved.responses[1],
+                  stableAccountId,
+                  2,
+                  pages.flatMap((page) => page.items),
+                  secondObserved.dom,
+                  new Date().toISOString()
+                );
+                if (!secondPage) {
+                  state = 'failed';
+                  terminalReason = 'response_projection_failed';
+                  errorCode = 'dynamic_second_response_projection_failed';
+                  failedResponseEvidence = dynamicResponseEvidence(secondObserved.responses[1], 2);
+                } else if (hasDuplicateBilibiliDynamicIds([...pages, secondPage.projection])) {
+                  state = 'failed';
+                  terminalReason = 'duplicate_dynamic_id';
+                  errorCode = 'dynamic_response_duplicate_id';
+                  failedResponseEvidence = dynamicResponseEvidence(secondObserved.responses[1], 2);
+                } else if (!hasFullBilibiliDynamicDomResponseCrossCheck(secondPage.projection)) {
+                  // The response itself is valid and structurally aligned with
+                  // the rendered page. Preserve its item-level evidence for
+                  // review; only a card-level proof remains unresolved.
+                  pages.push(secondPage.projection);
+                  reservationOpusFieldDiagnostic = bilibiliDynamicReservationOpusFieldDiagnostic({
+                    responseValue: secondObserved.responses[1].value,
+                    expectedAccountId: stableAccountId,
+                    dom: pageDomSnapshot(secondObserved.dom, pages.flatMap((page) => page.items).length)
+                  });
+                  opusFieldDiagnostic = bilibiliDynamicOpusFieldDiagnostic({
+                    responseValue: secondObserved.responses[1].value,
+                    expectedAccountId: stableAccountId,
+                    pageNumber: 2,
+                    dom: pageDomSnapshot(secondObserved.dom, pages.flatMap((page) => page.items).length)
+                  });
+                  state = 'partial';
+                  terminalReason = 'dom_response_mismatch';
+                  errorCode = 'dynamic_second_card_evidence_partial';
+                  failedResponseEvidence = null;
+                  crossCheckDiagnostic = bilibiliDynamicCrossCheckDiagnostic(secondPage.projection);
+                } else {
+                  pages.push(secondPage.projection);
+                  state = secondPage.candidate.hasMore ? 'partial' : 'completed';
+                  terminalReason = secondPage.candidate.hasMore ? 'budget_exhausted' : 'feed_terminal_reached';
+                  errorCode = null;
+                }
+              }
+            }
+          }
         }
       }
     } catch (error) {
@@ -302,9 +422,10 @@ export class BilibiliDynamicHostRunner {
       terminalReason = failure.terminalReason;
       errorCode = failure.errorCode;
       uncertainPageOutcome = failure.uncertainPageOutcome;
-      if (navigation.attempted && navigation.outcome !== 'completed') {
-        navigation.outcome = failure.uncertainPageOutcome ? 'postcondition_unmet' : 'failed';
-        navigation.errorCode = failure.errorCode;
+      const latestAttempt = [...actions].reverse().find((action) => action.attempted && action.outcome !== 'completed');
+      if (latestAttempt) {
+        latestAttempt.outcome = failure.uncertainPageOutcome ? 'postcondition_unmet' : 'failed';
+        latestAttempt.errorCode = failure.errorCode;
       }
       if (failure.uncertainPageOutcome) {
         releaseDisposition = 'quarantined';
@@ -350,12 +471,14 @@ export class BilibiliDynamicHostRunner {
       state,
       errorCode,
       pages,
-      actions: [navigation],
+      actions,
       terminalReason,
       failedResponseEvidence,
       crossCheckDiagnostic,
       reservationOpusFieldDiagnostic,
+      opusFieldDiagnostic,
       visualEvidence,
+      plannedMaximumPages: BILIBILI_DYNAMIC_TWO_PAGE_LIMIT,
       targetTabSelection,
       targetPage
     });
@@ -373,12 +496,78 @@ export class BilibiliDynamicHostRunner {
     }
   }
 
-  async #leasedRecordVersion(input: {
+  async #scrollUntilSecondResponse(input: {
+    permit: AccountSafetyRunPermit;
+    acquired: AcquirePageResult;
+    observerBindingId: string;
+    deadline: number;
+    stableAccountId: string;
+    actions: BilibiliDynamicAction[];
+    visualEvidence: BilibiliDynamicVisualEvidence[];
+  }): Promise<BilibiliDynamicStrategyObservation | null> {
+    for (let ordinal = 1; ordinal <= BILIBILI_DYNAMIC_SECOND_PAGE_MAX_SCROLL_ACTIONS; ordinal += 1) {
+      const action = bilibiliDynamicSecondPageScrollAction(input.permit.runId, ordinal);
+      input.actions.push(action);
+      const context = await this.#leasedPageContext({
+        profileId: input.permit.profileId,
+        pageAlias: input.acquired.page.pageAlias,
+        pageLeaseId: input.acquired.lease.pageLeaseId,
+        runId: input.permit.runId
+      });
+      await this.#accountSafety.recordActionAttempt(
+        input.permit.profileId,
+        'bilibili',
+        input.permit.runId,
+        action.actionId
+      );
+      action.attempted = true;
+      action.attemptCount = 1;
+      const result = await this.#browserManager.scrollPage({
+        profileId: input.permit.profileId,
+        pageAlias: input.acquired.page.pageAlias,
+        pageLeaseId: input.acquired.lease.pageLeaseId,
+        runId: input.permit.runId,
+        expectedRecordVersion: context.recordVersion,
+        expectedDocumentGeneration: context.documentGeneration,
+        actionId: action.actionId,
+        deltaY: BILIBILI_DYNAMIC_TRUSTED_SCROLL_DELTA_Y,
+        timeoutMs: Math.min(SCROLL_TIMEOUT_MS, remainingDeadline(input.deadline, 1_000))
+      });
+      completeBilibiliDynamicScrollAction(action, result);
+      const observed = await this.#observeUntil({
+        profileId: input.permit.profileId,
+        pageAlias: input.acquired.page.pageAlias,
+        pageLeaseId: input.acquired.lease.pageLeaseId,
+        runId: input.permit.runId,
+        observerBindingId: input.observerBindingId,
+        deadline: input.deadline,
+        minimumResponses: 2,
+        maximumWaitMs: AFTER_SCROLL_OBSERVATION_TIMEOUT_MS
+      }, input.stableAccountId);
+      input.visualEvidence.push(await this.#captureVisualEvidence({
+        profileId: input.permit.profileId,
+        pageAlias: input.acquired.page.pageAlias,
+        pageLeaseId: input.acquired.lease.pageLeaseId,
+        runId: input.permit.runId,
+        deadline: input.deadline,
+        phase: 'after_trusted_scroll',
+        actionId: action.actionId
+      }));
+      if (
+        riskOutcome(observed.dom) ||
+        observed.failedResponseEvidence ||
+        observed.responses.length >= 2
+      ) return observed;
+    }
+    return null;
+  }
+
+  async #leasedPageContext(input: {
     profileId: string;
     pageAlias: string;
     pageLeaseId: string;
     runId: string;
-  }): Promise<number> {
+  }): Promise<LeasedPageContext> {
     const snapshot = await this.#browserManager.snapshot();
     const profile = snapshot.profiles.find((candidate) => candidate.profileId === input.profileId);
     const page = profile?.pages.find((candidate) => candidate.pageAlias === input.pageAlias);
@@ -388,10 +577,10 @@ export class BilibiliDynamicHostRunner {
       page.activeLease?.pageLeaseId !== input.pageLeaseId ||
       page.activeLease.runId !== input.runId
     ) throw new Error('dynamic_managed_page_context_changed');
-    return page.recordVersion;
+    return { recordVersion: page.recordVersion, documentGeneration: page.documentGeneration };
   }
 
-  async #readStableObservation(input: {
+  async #readStrategyResult(input: {
     profileId: string;
     pageAlias: string;
     pageLeaseId: string;
@@ -400,18 +589,18 @@ export class BilibiliDynamicHostRunner {
     deadline: number;
   }) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const expectedRecordVersion = await this.#leasedRecordVersion(input);
+      const context = await this.#leasedPageContext(input);
       try {
         return await this.#browserManager.readStrategyObservation({
           schemaVersion: 1,
           profileId: input.profileId,
           pageAlias: input.pageAlias,
           pageLeaseId: input.pageLeaseId,
-          expectedRecordVersion,
+          expectedRecordVersion: context.recordVersion,
           runId: input.runId,
           observerBindingId: input.observerBindingId,
           strategyId: BILIBILI_DYNAMIC_STRATEGY_ID,
-          deadlineMs: Math.min(OBSERVATION_DEADLINE_MS, remainingDeadline(input.deadline, 100))
+          deadlineMs: Math.min(INITIAL_OBSERVATION_TIMEOUT_MS, remainingDeadline(input.deadline, 100))
         });
       } catch (error) {
         if (!(error instanceof BrowserHostError) ||
@@ -419,6 +608,65 @@ export class BilibiliDynamicHostRunner {
       }
     }
     throw new Error('dynamic_observation_local_version_unavailable');
+  }
+
+  async #observeUntil(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    runId: string;
+    observerBindingId: string;
+    deadline: number;
+    minimumResponses: 1 | 2;
+    maximumWaitMs: number;
+  }, expectedAccountId: string): Promise<BilibiliDynamicStrategyObservation> {
+    const observationDeadline = Math.min(input.deadline, Date.now() + input.maximumWaitMs);
+    let observed: BilibiliDynamicStrategyObservation | null = null;
+    while (true) {
+      const globalRemaining = remainingDeadline(input.deadline, 100);
+      const observationRemaining = observationDeadline - Date.now();
+      // The short observation window is a local read budget, not a failed
+      // platform action and not the run deadline. Do not start a new bridge
+      // read when it cannot receive its minimum bounded deadline.
+      if (observationRemaining < MINIMUM_OBSERVATION_COMMAND_MS) break;
+      const result = await this.#readStrategyResult({
+        profileId: input.profileId,
+        pageAlias: input.pageAlias,
+        pageLeaseId: input.pageLeaseId,
+        runId: input.runId,
+        observerBindingId: input.observerBindingId,
+        deadline: Date.now() + Math.min(globalRemaining, observationRemaining)
+      });
+      observed = bilibiliDynamicStrategyObservation(result, expectedAccountId);
+      if (
+        riskOutcome(observed.dom) ||
+        observed.failedResponseEvidence ||
+        observed.responses.length >= input.minimumResponses
+      ) return observed;
+      await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    }
+    if (!observed) throw new Error('dynamic_observation_local_window_unavailable');
+    return observed;
+  }
+
+  async #captureVisualEvidence(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    runId: string;
+    deadline: number;
+    phase: BilibiliDynamicVisualEvidence['phase'];
+    actionId: string;
+  }): Promise<BilibiliDynamicVisualEvidence> {
+    const visual = await this.#captureStableVisualEvidence(input);
+    return {
+      phase: input.phase,
+      actionId: input.actionId,
+      evidenceId: visual.evidenceId,
+      capturedAt: visual.capturedAt,
+      viewport: visual.viewport,
+      screenshot: visual.screenshot
+    };
   }
 
   async #captureStableVisualEvidence(input: {
@@ -429,13 +677,13 @@ export class BilibiliDynamicHostRunner {
     deadline: number;
   }) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const expectedRecordVersion = await this.#leasedRecordVersion(input);
+      const context = await this.#leasedPageContext(input);
       try {
         return await this.#browserManager.capturePageVisualEvidence({
           profileId: input.profileId,
           pageAlias: input.pageAlias,
           pageLeaseId: input.pageLeaseId,
-          expectedRecordVersion,
+          expectedRecordVersion: context.recordVersion,
           runId: input.runId
         });
       } catch (error) {
@@ -446,5 +694,4 @@ export class BilibiliDynamicHostRunner {
     }
     throw new Error('dynamic_visual_local_version_unavailable');
   }
-
 }

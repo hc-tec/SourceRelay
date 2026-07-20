@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { canonicalJson } from '../../collector-extension/src/shared/cryptography';
 import type {
   BilibiliDynamicPageProjection,
+  BilibiliDynamicOpusFieldDiagnostic,
   BilibiliDynamicCrossCheckDiagnostic,
   BilibiliDynamicReservationOpusFieldDiagnostic,
   BilibiliDynamicResponseEvidence,
@@ -33,6 +34,7 @@ export interface BilibiliDynamicArtifactSummary {
   stableAccountId: string;
   pageCount: number;
   itemCount: number;
+  unresolvedCardEvidenceItemCount: number;
   forwardedItemCount: number;
   restrictedPlaceholderItemCount: number;
   completeWithinAccountFeed: boolean;
@@ -47,9 +49,10 @@ export interface BilibiliDynamicArtifactManifest
   actions: BilibiliDynamicRunRecord['actions'];
   coverage: BilibiliDynamicRunRecord['coverage'];
   pageFiles: BilibiliDynamicPageFile[];
-  visualEvidence: BilibiliDynamicVisualEvidence | null;
+  visualEvidence: BilibiliDynamicVisualEvidence[];
   crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
   reservationOpusFieldDiagnostic: BilibiliDynamicReservationOpusFieldDiagnostic | null;
+  opusFieldDiagnostic: BilibiliDynamicOpusFieldDiagnostic | null;
   failedResponseFile: typeof FAILED_RESPONSE_FILE | null;
   failedResponseFileSha256: string | null;
   safeguards: BilibiliDynamicRunRecord['safeguards'];
@@ -62,6 +65,7 @@ export interface BilibiliDynamicArtifactView {
   failedResponseEvidence: BilibiliDynamicResponseEvidence | null;
   crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
   reservationOpusFieldDiagnostic: BilibiliDynamicReservationOpusFieldDiagnostic | null;
+  opusFieldDiagnostic: BilibiliDynamicOpusFieldDiagnostic | null;
 }
 
 function sha256(value: string): string {
@@ -87,6 +91,9 @@ function isSummary(value: unknown): value is BilibiliDynamicArtifactSummary {
     typeof candidate.stableAccountId === 'string' && /^\d{1,20}$/.test(candidate.stableAccountId) &&
     typeof candidate.pageCount === 'number' && Number.isSafeInteger(candidate.pageCount) && candidate.pageCount >= 0 &&
     typeof candidate.itemCount === 'number' && Number.isSafeInteger(candidate.itemCount) && candidate.itemCount >= 0 &&
+    typeof candidate.unresolvedCardEvidenceItemCount === 'number' &&
+      Number.isSafeInteger(candidate.unresolvedCardEvidenceItemCount) &&
+      candidate.unresolvedCardEvidenceItemCount >= 0 &&
     typeof candidate.forwardedItemCount === 'number' && Number.isSafeInteger(candidate.forwardedItemCount) &&
       candidate.forwardedItemCount >= 0 &&
     typeof candidate.restrictedPlaceholderItemCount === 'number' &&
@@ -112,6 +119,7 @@ function compactSummary(
     stableAccountId: manifest.stableAccountId,
     pageCount: manifest.pageCount,
     itemCount: manifest.itemCount,
+    unresolvedCardEvidenceItemCount: manifest.unresolvedCardEvidenceItemCount,
     forwardedItemCount: manifest.forwardedItemCount,
     restrictedPlaceholderItemCount: manifest.restrictedPlaceholderItemCount,
     completeWithinAccountFeed: manifest.completeWithinAccountFeed,
@@ -186,6 +194,7 @@ export class BilibiliDynamicArtifactStore {
       stableAccountId: run.stableAccountId,
       pageCount: run.pages.length,
       itemCount: run.coverage.uniqueItems,
+      unresolvedCardEvidenceItemCount: run.coverage.unresolvedCardEvidenceItems,
       forwardedItemCount: run.coverage.forwardedItems,
       restrictedPlaceholderItemCount: run.coverage.restrictedPlaceholderItems,
       completeWithinAccountFeed: run.coverage.completeWithinAccountFeed,
@@ -198,6 +207,7 @@ export class BilibiliDynamicArtifactStore {
       visualEvidence: run.visualEvidence,
       crossCheckDiagnostic: run.crossCheckDiagnostic,
       reservationOpusFieldDiagnostic: run.reservationOpusFieldDiagnostic,
+      opusFieldDiagnostic: run.opusFieldDiagnostic,
       failedResponseFile,
       failedResponseFileSha256,
       safeguards: run.safeguards
@@ -256,13 +266,15 @@ export class BilibiliDynamicArtifactStore {
       throw new Error('bilibili_dynamic_failed_response_reference_invalid');
     }
     const reservationOpusFieldDiagnostic = manifest.reservationOpusFieldDiagnostic ?? null;
+    const opusFieldDiagnostic = manifest.opusFieldDiagnostic ?? null;
     return {
       summary: structuredClone(summary),
       manifest: structuredClone(manifest),
       pages: structuredClone(pages),
       failedResponseEvidence: structuredClone(failedResponseEvidence),
       crossCheckDiagnostic: structuredClone(manifest.crossCheckDiagnostic),
-      reservationOpusFieldDiagnostic: structuredClone(reservationOpusFieldDiagnostic)
+      reservationOpusFieldDiagnostic: structuredClone(reservationOpusFieldDiagnostic),
+      opusFieldDiagnostic: structuredClone(opusFieldDiagnostic)
     };
   }
 

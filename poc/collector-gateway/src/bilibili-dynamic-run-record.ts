@@ -3,6 +3,7 @@ import type {
   BilibiliDynamicAction,
   BilibiliDynamicCrossCheckDiagnostic,
   BilibiliDynamicPageProjection,
+  BilibiliDynamicOpusFieldDiagnostic,
   BilibiliDynamicReservationOpusFieldDiagnostic,
   BilibiliDynamicResponseEvidence,
   BilibiliDynamicRunRecord,
@@ -37,7 +38,9 @@ export function createBilibiliDynamicRunRecord(input: {
   failedResponseEvidence: BilibiliDynamicResponseEvidence | null;
   crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
   reservationOpusFieldDiagnostic: BilibiliDynamicReservationOpusFieldDiagnostic | null;
-  visualEvidence: BilibiliDynamicVisualEvidence | null;
+  opusFieldDiagnostic: BilibiliDynamicOpusFieldDiagnostic | null;
+  visualEvidence: BilibiliDynamicVisualEvidence[];
+  plannedMaximumPages: 1 | 2;
   targetTabSelection: BilibiliDynamicRunRecord['safeguards']['targetTabSelection'];
   targetPage: BilibiliDynamicRunRecord['safeguards']['targetPage'];
 }): BilibiliDynamicRunRecord {
@@ -54,7 +57,7 @@ export function createBilibiliDynamicRunRecord(input: {
     targetUrlDigest: sha256(input.targetUrl),
     strategyCandidate: {
       strategyId: 'bilibili.dynamic.account-feed.response-dom.v1',
-      version: '1.0.0',
+      version: '1.2.0',
       admissionEligible: false
     },
     state: input.state,
@@ -65,15 +68,17 @@ export function createBilibiliDynamicRunRecord(input: {
     failedResponseEvidence: input.failedResponseEvidence,
     crossCheckDiagnostic: input.crossCheckDiagnostic,
     reservationOpusFieldDiagnostic: input.reservationOpusFieldDiagnostic,
+    opusFieldDiagnostic: input.opusFieldDiagnostic,
     visualEvidence: input.visualEvidence,
     pages: input.pages,
     actions: input.actions,
     coverage: {
-      plannedMaximumPages: 1,
+      plannedMaximumPages: input.plannedMaximumPages,
       capturedPages: input.pages.length,
       capturedItems: allItems.length,
       uniqueItems: items.length,
       duplicateItems: allItems.length - items.length,
+      unresolvedCardEvidenceItems: items.filter((item) => !item.domEvidence.cardEvidenceMatch).length,
       forwardedItems: items.filter((item) => item.forwardedSourceState !== 'not_forward').length,
       restrictedPlaceholderItems: items.filter((item) => item.accessState === 'restricted_placeholder').length,
       dynamicTypes: counts(items.map((item) => item.dynamicType)),

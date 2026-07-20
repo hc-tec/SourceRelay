@@ -24,6 +24,7 @@ interface ProjectableResponse {
 export interface BoundedBilibiliDynamicResponse {
   value: unknown;
   status: number;
+  capturedAt: number;
   bodyBytes: number;
   bodySha256: string;
   queryKeyNames: string[];
@@ -87,7 +88,7 @@ function isPrimaryIdentityCrossCheckable(kind: BilibiliDynamicResponseItem['prim
  * aggregate and per-card conclusions cannot drift apart.
  */
 export function bilibiliDynamicCardEvidenceCheck(
-  item: BilibiliDynamicItemProjection
+  item: Omit<BilibiliDynamicItemProjection, 'domEvidence'>
 ): BilibiliDynamicCardEvidenceCheck {
   const authorMatch = normaliseText(item.card.outerAuthor) === normaliseText(item.displayName);
   const publicationMatch = item.publishedVisibleText === null ||
@@ -96,9 +97,18 @@ export function bilibiliDynamicCardEvidenceCheck(
   const primaryIdentityMatch = primaryIdentityCrossCheckable && item.card.links.some((link) =>
     link.url === item.primaryIdentity.canonicalUrl
   );
+  const ordinaryOpusAdditionalCandidates = item.primaryIdentity.kind === 'opus' &&
+    item.reservationTitle === null && !item.card.reservation
+    ? [item.additionalGoodsHeadText, item.additionalUpowerLotteryTitle]
+    : [];
   const textMatch = bilibiliDynamicCardTextEvidenceMatches(
     item.card.visibleText,
-    [item.visibleText, item.majorTitle, item.card.reservation ? item.reservationTitle : null],
+    [
+      item.visibleText,
+      item.majorTitle,
+      item.card.reservation ? item.reservationTitle : null,
+      ...ordinaryOpusAdditionalCandidates
+    ],
     item.card.mediaRefs.map((media) => media.alt).filter(Boolean)
   );
   const accessStateMatch = (item.accessState === 'restricted_placeholder') === item.card.blockedPlaceholder;
@@ -156,6 +166,7 @@ export async function boundedBilibiliDynamicResponse(
   return {
     value,
     status: response.status(),
+    capturedAt: Date.now(),
     bodyBytes: body.byteLength,
     bodySha256: sha256(body),
     queryKeyNames: safeQueryKeyNames(new URL(response.url())),
@@ -195,10 +206,17 @@ export function projectBilibiliDynamicPageWithDom(
   const projectedCards = pageCards.map(projectBilibiliDynamicDomCard);
   if (projectedCards.some((card) => card === null) || projectedCards.length !== candidate.items.length) return null;
   const cards = projectedCards as Array<NonNullable<(typeof projectedCards)[number]>>;
-  const items: BilibiliDynamicItemProjection[] = candidate.items.map((item, index) => ({
-    ...item,
-    card: cards[index]!
-  }));
+  const items: BilibiliDynamicItemProjection[] = candidate.items.map((item, index) => {
+    const itemWithCard: Omit<BilibiliDynamicItemProjection, 'domEvidence'> = {
+      ...item,
+      card: cards[index]!
+    };
+    const domEvidence = bilibiliDynamicCardEvidenceCheck(itemWithCard);
+    return {
+      ...itemWithCard,
+      domEvidence
+    };
+  });
 
   let authorMatches = 0;
   let publicationMatches = 0;
@@ -209,7 +227,7 @@ export function projectBilibiliDynamicPageWithDom(
   let accessStateMatches = 0;
   let forwardedStateMatches = 0;
   for (const item of items) {
-    const evidence = bilibiliDynamicCardEvidenceCheck(item);
+    const evidence = item.domEvidence;
     if (evidence.authorMatch) authorMatches += 1;
     if (evidence.publicationMatch) publicationMatches += 1;
     if (evidence.primaryIdentityCrossCheckable) crossCheckablePrimaryIdentities += 1;

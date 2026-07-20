@@ -4,14 +4,18 @@ import type {
   BilibiliDynamicCrossCheckFailure,
   BilibiliDynamicPageProjection
 } from './bilibili-dynamic-contract';
-import { bilibiliDynamicCardEvidenceCheck } from './bilibili-dynamic-response';
 
-function textCandidateCount(page: BilibiliDynamicPageProjection['items'][number]): 0 | 1 | 2 | 3 {
+function textCandidateCount(page: BilibiliDynamicPageProjection['items'][number]): 0 | 1 | 2 | 3 | 4 | 5 {
+  const ordinaryOpusAdditionalCandidateCount = page.primaryIdentity.kind === 'opus' &&
+    page.reservationTitle === null && !page.card.reservation
+    ? Number(Boolean(page.additionalGoodsHeadText)) + Number(Boolean(page.additionalUpowerLotteryTitle))
+    : 0;
   return (
     Number(Boolean(page.visibleText)) +
     Number(Boolean(page.majorTitle)) +
-    Number(page.card.reservation && Boolean(page.reservationTitle))
-  ) as 0 | 1 | 2 | 3;
+    Number(page.card.reservation && Boolean(page.reservationTitle)) +
+    ordinaryOpusAdditionalCandidateCount
+  ) as 0 | 1 | 2 | 3 | 4 | 5;
 }
 
 function cardDiagnostic(
@@ -29,7 +33,7 @@ function cardDiagnostic(
     responseAccessState: item.accessState,
     responseForwardedState: item.forwardedSourceState,
     responseTextCandidateCount: textCandidateCount(item),
-    checks: bilibiliDynamicCardEvidenceCheck(item)
+    checks: item.domEvidence
   };
 }
 

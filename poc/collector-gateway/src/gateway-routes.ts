@@ -120,7 +120,7 @@ export async function handleGatewayRoute(
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.dynamicArtifacts.list() });
     return true;
   }
-  const dynamicRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/dynamic/single-page$`, 'i'));
+  const dynamicRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/dynamic/two-page$`, 'i'));
   if (request.method === 'POST' && dynamicRun) {
     if (!sameOrigin(request, response, context)) return true;
     const body = await readJsonBody(request);

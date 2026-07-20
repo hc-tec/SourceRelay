@@ -16,7 +16,7 @@ const FEED_RESPONSE_URL = `https://api.bilibili.com${BILIBILI_DYNAMIC_FEED_PATH}
 
 export interface BilibiliDynamicStrategyObservation {
   dom: BilibiliDynamicDomSnapshot;
-  response: BoundedBilibiliDynamicResponse | null;
+  responses: BoundedBilibiliDynamicResponse[];
   failedResponseEvidence: BilibiliDynamicResponseEvidence | null;
 }
 
@@ -70,7 +70,8 @@ function domCard(value: unknown, expectedPosition: number): BilibiliDynamicDomCa
     typeof candidate.reservation !== 'boolean' ||
     typeof candidate.forwarded !== 'boolean' ||
     !Array.isArray(candidate.links) || candidate.links.length > 12 ||
-    !Array.isArray(candidate.images) || candidate.images.length > 8
+    !Array.isArray(candidate.images) || candidate.images.length > 8 ||
+    !Array.isArray(candidate.identityAttributeCandidates) || candidate.identityAttributeCandidates.length > 12
   ) return null;
   const links: Array<{ text: string; url: string }> = [];
   for (const rawLink of candidate.links) {
@@ -88,6 +89,15 @@ function domCard(value: unknown, expectedPosition: number): BilibiliDynamicDomCa
     if (!image || alt === null || !url) return null;
     images.push({ alt, url });
   }
+  const identityAttributeCandidates: Array<{ name: string; value: string }> = [];
+  for (const rawCandidate of candidate.identityAttributeCandidates) {
+    const attribute = record(rawCandidate);
+    const name = boundedText(attribute?.name, 100);
+    const value = boundedText(attribute?.value, 20);
+    if (!attribute || !name || !value ||
+      !/^data-[a-z0-9_.:-]{1,80}$/i.test(name) || !/^\d{1,20}$/.test(value)) return null;
+    identityAttributeCandidates.push({ name: name.toLowerCase(), value });
+  }
   return {
     position: expectedPosition,
     outerAuthor,
@@ -95,6 +105,7 @@ function domCard(value: unknown, expectedPosition: number): BilibiliDynamicDomCa
     visibleText,
     links,
     images,
+    identityAttributeCandidates,
     kind: candidate.kind,
     blockedPlaceholder: candidate.blockedPlaceholder,
     reservation: candidate.reservation,
@@ -146,7 +157,8 @@ function queryKeyNames(value: unknown): string[] | null {
 function responseEvidence(
   candidate: Record<string, unknown>,
   body: unknown,
-  queryKeys: string[]
+  queryKeys: string[],
+  pageNumber: number
 ): BilibiliDynamicResponseEvidence | null {
   const status = candidate.httpStatus;
   const bodyBytes = candidate.bodyBytes;
@@ -159,7 +171,7 @@ function responseEvidence(
   const schema = body === undefined ? { schemaPaths: [], sensitiveFieldPathsOmitted: 0 } : responseSchema(body);
   return {
     pathname: BILIBILI_DYNAMIC_FEED_PATH,
-    pageNumber: 1,
+    pageNumber,
     responseStatus: status,
     responseBodyBytes: bodyBytes,
     responseBodySha256: bodySha256,
@@ -169,7 +181,7 @@ function responseEvidence(
   };
 }
 
-function dynamicResponse(value: unknown): {
+function dynamicResponse(value: unknown, pageNumber: number): {
   response: BoundedBilibiliDynamicResponse | null;
   failedResponseEvidence: BilibiliDynamicResponseEvidence | null;
 } {
@@ -185,7 +197,11 @@ function dynamicResponse(value: unknown): {
   ) throw new Error('dynamic_observation_response_context_invalid');
   const keys = queryKeyNames(candidate.queryKeyNames);
   if (!keys || !keys.includes('host_mid')) throw new Error('dynamic_observation_response_query_shape_invalid');
-  const evidence = responseEvidence(candidate, candidate.body, keys);
+  const capturedAt = candidate.capturedAt;
+  if (typeof capturedAt !== 'number' || !Number.isSafeInteger(capturedAt) || capturedAt <= 0) {
+    throw new Error('dynamic_observation_response_capture_time_invalid');
+  }
+  const evidence = responseEvidence(candidate, candidate.body, keys, pageNumber);
   if (!evidence) throw new Error('dynamic_observation_response_metadata_invalid');
   if (candidate.status !== 'captured' || evidence.responseStatus !== 200) {
     return { response: null, failedResponseEvidence: evidence };
@@ -195,6 +211,7 @@ function dynamicResponse(value: unknown): {
     response: {
       value: candidate.body,
       status: evidence.responseStatus,
+      capturedAt,
       bodyBytes: evidence.responseBodyBytes,
       bodySha256: evidence.responseBodySha256,
       queryKeyNames: evidence.queryKeyNames,
@@ -228,10 +245,23 @@ export function bilibiliDynamicStrategyObservation(
     payload.stableAccountId !== expectedAccountId
   ) throw new Error('dynamic_observation_payload_context_invalid');
   const dom = dynamicDom(payload.dom, expectedAccountId);
-  if (!Array.isArray(payload.responses) || payload.responses.length > 1) {
+  if (!Array.isArray(payload.responses) || payload.responses.length > 2) {
     throw new Error('dynamic_observation_response_count_invalid');
   }
-  if (payload.responses.length === 0) return { dom, response: null, failedResponseEvidence: null };
-  const response = dynamicResponse(payload.responses[0]);
-  return { dom, ...response };
+  const responses: BoundedBilibiliDynamicResponse[] = [];
+  let failedResponseEvidence: BilibiliDynamicResponseEvidence | null = null;
+  let previousCapturedAt = 0;
+  for (const [index, value] of payload.responses.entries()) {
+    const observed = dynamicResponse(value, index + 1);
+    if (observed.response) {
+      if (failedResponseEvidence || observed.response.capturedAt < previousCapturedAt) {
+        throw new Error('dynamic_observation_response_order_invalid');
+      }
+      previousCapturedAt = observed.response.capturedAt;
+      responses.push(observed.response);
+    } else if (!failedResponseEvidence) {
+      failedResponseEvidence = observed.failedResponseEvidence;
+    }
+  }
+  return { dom, responses, failedResponseEvidence };
 }

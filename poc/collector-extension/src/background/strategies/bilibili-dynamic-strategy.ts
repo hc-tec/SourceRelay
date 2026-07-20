@@ -32,7 +32,7 @@ export async function bindBilibiliDynamicObserver(
   await cleanupExpiredBilibiliDynamicObserverBindings();
   const { binding, tabId } = command;
   if (binding.strategyId !== BILIBILI_DYNAMIC_STRATEGY_ID) throw new Error('dynamic_strategy_id_rejected');
-  if (binding.maximumResponseObservations !== 1) {
+  if (binding.maximumResponseObservations !== 1 && binding.maximumResponseObservations !== 2) {
     throw new Error('dynamic_strategy_response_budget_rejected');
   }
   const permissionsReady = await chrome.permissions.contains({
@@ -215,6 +215,7 @@ interface DynamicDomSnapshot {
     visibleText: string;
     links: Array<{ text: string; url: string }>;
     images: Array<{ alt: string; url: string }>;
+    identityAttributeCandidates: Array<{ name: string; value: string }>;
     kind: 'video' | 'opus' | 'blocked' | 'other';
     blockedPlaceholder: boolean;
     reservation: boolean;
@@ -249,6 +250,24 @@ async function captureDynamicDom(tabId: number, documentId: string): Promise<Dyn
         const style = getComputedStyle(element);
         return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
       };
+      const numericDataAttributes = (card: HTMLElement): Array<{ name: string; value: string }> => {
+        const candidates: Array<{ name: string; value: string }> = [];
+        const seen = new Set<string>();
+        const elements = [card, ...Array.from(card.querySelectorAll<HTMLElement>('*')).slice(0, 80)];
+        for (const element of elements) {
+          for (const name of element.getAttributeNames()) {
+            if (!/^data-[a-z0-9_.:-]{1,80}$/i.test(name)) continue;
+            const value = element.getAttribute(name);
+            if (!value || !/^\d{1,20}$/.test(value)) continue;
+            const key = `${name.toLowerCase()}\n${value}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            candidates.push({ name: name.toLowerCase(), value });
+            if (candidates.length >= 12) return candidates;
+          }
+        }
+        return candidates;
+      };
       const pathMatch = location.hostname === 'space.bilibili.com'
         ? location.pathname.match(/^\/(\d{1,20})\/dynamic\/?$/)
         : null;
@@ -270,6 +289,7 @@ async function captureDynamicDom(tabId: number, documentId: string): Promise<Dyn
               const url = safeUrl(image.currentSrc || image.src);
               return url ? { alt: clean(image.alt, 240), url } : null;
             }).filter((image): image is { alt: string; url: string } => image !== null),
+          identityAttributeCandidates: numericDataAttributes(card),
           kind: (card.querySelector('.dyn-blocked-mask') ? 'blocked'
             : card.querySelector('a.bili-dyn-card-video[href]') ? 'video'
               : card.querySelector('.dyn-card-opus') ? 'opus' : 'other') as 'video' | 'opus' | 'blocked' | 'other',

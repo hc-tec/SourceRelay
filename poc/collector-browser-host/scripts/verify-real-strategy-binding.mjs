@@ -44,7 +44,7 @@ let browserProcessId = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.1');
+  assert.equal(extensionManifest.version, '0.7.3');
 
   endpoint = await launchBrowserHost({
     mainModulePath,
@@ -68,7 +68,7 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 5,
+        controlSurfaceRevision: 7,
         runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
       }
     }

@@ -326,7 +326,7 @@ function isStrategyObserverBindingRequest(value: unknown): value is StrategyObse
     validDynamicTarget(candidate.target) &&
     typeof candidate.expiresAt === 'string' && Date.parse(candidate.expiresAt) > Date.now() &&
     Number.isSafeInteger(candidate.maximumResponseObservations) &&
-    Number(candidate.maximumResponseObservations) >= 1 && Number(candidate.maximumResponseObservations) <= 10 &&
+    Number(candidate.maximumResponseObservations) >= 1 && Number(candidate.maximumResponseObservations) <= 2 &&
     Number.isSafeInteger(candidate.maximumPayloadBytes) &&
     Number(candidate.maximumPayloadBytes) >= 1_024 && Number(candidate.maximumPayloadBytes) <= 192 * 1024;
 }

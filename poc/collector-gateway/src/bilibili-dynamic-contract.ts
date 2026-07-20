@@ -33,6 +33,8 @@ export interface BilibiliDynamicResponseItem {
   majorType: string | null;
   majorTitle: string | null;
   reservationTitle: string | null;
+  additionalGoodsHeadText: string | null;
+  additionalUpowerLotteryTitle: string | null;
   primaryIdentity: BilibiliDynamicPrimaryIdentity;
   responseVisible: boolean | null;
   accessState: 'public' | 'restricted_placeholder';
@@ -70,6 +72,7 @@ export interface BilibiliDynamicDomCardObservation {
   visibleText: string;
   links: Array<{ text: string; url: string }>;
   images: Array<{ alt: string; url: string }>;
+  identityAttributeCandidates: Array<{ name: string; value: string }>;
   kind: 'video' | 'opus' | 'blocked' | 'other';
   blockedPlaceholder: boolean;
   reservation: boolean;
@@ -100,6 +103,7 @@ export interface BilibiliDynamicItemProjection extends BilibiliDynamicResponseIt
     reservation: boolean;
     forwarded: boolean;
   };
+  domEvidence: BilibiliDynamicCardEvidenceCheck;
 }
 
 /**
@@ -157,7 +161,7 @@ export interface BilibiliDynamicCardCrossCheckDiagnostic {
   responsePrimaryIdentityKind: BilibiliDynamicPrimaryIdentity['kind'];
   responseAccessState: BilibiliDynamicResponseItem['accessState'];
   responseForwardedState: BilibiliDynamicResponseItem['forwardedSourceState'];
-  responseTextCandidateCount: 0 | 1 | 2 | 3;
+  responseTextCandidateCount: 0 | 1 | 2 | 3 | 4 | 5;
   checks: BilibiliDynamicCardEvidenceCheck;
 }
 
@@ -231,6 +235,32 @@ export interface BilibiliDynamicReservationOpusFieldDiagnostic {
   }>;
 }
 
+/**
+ * Value-free research evidence for ordinary Opus cards whose rendered text is
+ * not covered by the current response candidate allowlist. Field paths are
+ * generated only from a bounded scan under `modules.module_dynamic`; neither
+ * response values nor DOM text are durable diagnostic fields.
+ */
+export interface BilibiliDynamicOpusFieldDiagnostic {
+  schemaVersion: 1;
+  pageNumber: number;
+  responseItemCount: number;
+  domCardCount: number;
+  exactCardCountAlignment: boolean;
+  cards: Array<{
+    positionOnPage: number;
+    responseMajorType: string | null;
+    domCardKind: BilibiliDynamicDomCardObservation['kind'];
+    domReservation: false;
+    genericVisibleTextMatch: boolean;
+    genericMajorTitleMatch: boolean;
+    exactPrimaryIdentityLinkPresent: boolean;
+    matchingStableDynamicIdAttributeNames: string[];
+    candidateTextPathCount: number;
+    matchingFieldPaths: string[];
+  }>;
+}
+
 export interface BilibiliDynamicResponseEvidence {
   pathname: typeof BILIBILI_DYNAMIC_FEED_PATH;
   pageNumber: number;
@@ -242,7 +272,11 @@ export interface BilibiliDynamicResponseEvidence {
   sensitiveFieldPathsOmitted: number;
 }
 
+export type BilibiliDynamicVisualEvidencePhase = 'baseline' | 'after_trusted_scroll';
+
 export interface BilibiliDynamicVisualEvidence {
+  phase: BilibiliDynamicVisualEvidencePhase;
+  actionId: string;
   evidenceId: string;
   capturedAt: string;
   viewport: {
@@ -259,14 +293,25 @@ export interface BilibiliDynamicVisualEvidence {
   };
 }
 
+export interface BilibiliDynamicScrollEvidence {
+  deltaY: number;
+  beforeScrollY: number;
+  afterScrollY: number;
+  beforeScrollHeight: number;
+  afterScrollHeight: number;
+  viewportHeight: number;
+}
+
 export interface BilibiliDynamicAction {
   actionId: string;
+  kind: 'navigation' | 'trusted_scroll';
   intent: string;
   expectedPageNumber: number;
   attempted: boolean;
   attemptCount: 0 | 1;
   outcome: 'completed' | 'prerequisite_unmet' | 'postcondition_unmet' | 'risk_stopped' | 'failed';
   errorCode: string | null;
+  scroll: BilibiliDynamicScrollEvidence | null;
 }
 
 export type BilibiliDynamicTerminalReason =
@@ -278,6 +323,8 @@ export type BilibiliDynamicTerminalReason =
   | 'response_status_unavailable'
   | 'response_projection_failed'
   | 'dom_response_mismatch'
+  | 'duplicate_dynamic_id'
+  | 'scroll_response_not_observed'
   | 'context_changed'
   | 'run_deadline_exceeded'
   | 'source_unavailable';
@@ -292,7 +339,7 @@ export interface BilibiliDynamicRunRecord {
   targetUrlDigest: string;
   strategyCandidate: {
     strategyId: 'bilibili.dynamic.account-feed.response-dom.v1';
-    version: '1.0.0';
+    version: '1.2.0';
     admissionEligible: false;
   };
   state: 'completed' | 'partial' | 'failed';
@@ -303,7 +350,8 @@ export interface BilibiliDynamicRunRecord {
   failedResponseEvidence: BilibiliDynamicResponseEvidence | null;
   crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
   reservationOpusFieldDiagnostic: BilibiliDynamicReservationOpusFieldDiagnostic | null;
-  visualEvidence: BilibiliDynamicVisualEvidence | null;
+  opusFieldDiagnostic: BilibiliDynamicOpusFieldDiagnostic | null;
+  visualEvidence: BilibiliDynamicVisualEvidence[];
   pages: BilibiliDynamicPageProjection[];
   actions: BilibiliDynamicAction[];
   coverage: {
@@ -312,6 +360,7 @@ export interface BilibiliDynamicRunRecord {
     capturedItems: number;
     uniqueItems: number;
     duplicateItems: number;
+    unresolvedCardEvidenceItems: number;
     forwardedItems: number;
     restrictedPlaceholderItems: number;
     dynamicTypes: Array<{ type: string; count: number }>;
@@ -496,6 +545,27 @@ function reservationTitleFromItem(value: Record<string, unknown>): string | null
   return cleanText(reserve.title, 500);
 }
 
+/**
+ * These are intentionally individual, observed response paths rather than a
+ * generic `additional` traversal.  Ordinary Opus cards can render either of
+ * them, while reservation cards retain their separately proven reserve path.
+ */
+function additionalGoodsHeadTextFromItem(value: Record<string, unknown>): string | null {
+  const modules = isRecord(value.modules) ? value.modules : {};
+  const dynamic = isRecord(modules.module_dynamic) ? modules.module_dynamic : {};
+  const additional = isRecord(dynamic.additional) ? dynamic.additional : {};
+  const goods = isRecord(additional.goods) ? additional.goods : {};
+  return cleanText(goods.head_text, 500);
+}
+
+function additionalUpowerLotteryTitleFromItem(value: Record<string, unknown>): string | null {
+  const modules = isRecord(value.modules) ? value.modules : {};
+  const dynamic = isRecord(modules.module_dynamic) ? modules.module_dynamic : {};
+  const additional = isRecord(dynamic.additional) ? dynamic.additional : {};
+  const lottery = isRecord(additional.upower_lottery) ? additional.upower_lottery : {};
+  return cleanText(lottery.title, 500);
+}
+
 function projectedForwardSource(value: unknown): BilibiliDynamicResponseItem['forwardedSource'] {
   if (!isRecord(value)) return null;
   const stableDynamicId = stablePositiveId(value.id_str);
@@ -626,6 +696,8 @@ export function projectBilibiliDynamicFeedResponse(
       majorType,
       majorTitle: majorTitleFromItem(rawItem),
       reservationTitle: reservationTitleFromItem(rawItem),
+      additionalGoodsHeadText: additionalGoodsHeadTextFromItem(rawItem),
+      additionalUpowerLotteryTitle: additionalUpowerLotteryTitleFromItem(rawItem),
       primaryIdentity,
       responseVisible: typeof visibleValue === 'boolean' ? visibleValue : null,
       accessState,
