@@ -7,6 +7,8 @@
 
 本记录只描述 Browser Host / MV3 Extension / Gateway 新架构下的单页 canary。旧的直接浏览器研究记录仍是历史页面结构证据，不能替代本次闭环结果。
 
+本记录中的“下一步”已在同日完成；字段来源、最小修复与独立真实复核见 [预约 Opus 字段映射真实闭环](dynamic-reservation-opus-field-mapping-v1.0.md)。
+
 ## 1. 已执行的真实 canary
 
 本次独立 run：
@@ -129,10 +131,6 @@ browserMode: headless_test_scoped
 
 原因是这些离线门禁没有人类视觉确认需求；headless 可避免桌面出现“突然打开又关闭”的测试窗口。真实平台侦察和产品 canary 仍使用可见、持久的 Collection Profile，并遵循视觉、DOM、Network 三面证据契约。
 
-## 6. 下一步与停止条件
+## 6. 后续闭环
 
-1. 对第 4、10 张预约 Opus 卡执行只读的 DOM/visual/response 字段来源研究，确认页面实际展示的是哪一个公开 response 字段；
-2. 不把 Opus 主身份链接直接加入 allowlist；历史证据已经否定这一假设；
-3. 只在新的字段映射具有三面证据后，实施最小 response-to-DOM 映射修复；
-4. 修复后最多执行一个新的独立单页 canary。该 run 应复用现有 exact retained 页，并继续保持一次导航、零滚动、零筛选/评论动作和零自动平台重试；
-5. 只有所有 strict cross-check 项通过，才把结果标记为 `live authenticated canary`；production admission 仍需独立评审。
+本记录中列出的字段来源研究、最小映射修复和独立 retained-tab canary 已全部完成。结论与停止点以 [预约 Opus 字段映射真实闭环](dynamic-reservation-opus-field-mapping-v1.0.md) 为准。
