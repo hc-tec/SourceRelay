@@ -31,6 +31,17 @@ reason:     dom_response_mismatch
 
 Extension 在精确 tab/document/run binding 内观察到公共 feed route 的一次 `200` response；Gateway 只接收受限 public projection，不接收 Cookie、Token、请求头、query value 或原始 response bytes。Browser Host 同时保存了一张仅本地、ignored runtime 内的视觉截图；本文件不复制图片、账号身份或截图路径。
 
+Browser Host 完成受控维护升级后，另一次独立单页 canary 已用于验证新增的逐卡诊断：
+
+```text
+runId:      6158ddb9-2fae-4c30-9901-feca4eaeabc9
+artifactId: 1379b198-5eb3-4f90-9a55-a41f4009f902
+state:      failed
+reason:     dom_response_mismatch
+```
+
+它同样只有一次导航、零滚动、零筛选/评论/互动点击、零自动平台重试。页面在 run 后保留供复核。
+
 ## 2. 三面证据与严格拒绝的原因
 
 视觉上，页面身份、动态导航和“全部”筛选均处于预期状态。DOM、response 与截图都已在同一个受管页面闭环中取得。
@@ -70,9 +81,24 @@ BilibiliDynamicCrossCheckDiagnostic
   -> Artifact read model
 ```
 
-它只包含 aggregate count、boolean 与 digest。下一次失败 diagnostic 还会按页面位置附带固定类别、链接/媒体数量与逐项 match boolean；仍不会携带正文、动态 ID、URL、作者名或 selector。后续修改 DOM projector 或 response 规则前，应先以这份 evidence 缩小问题；不得为了通过而把 gate 降成“任一张卡匹配即可”。
+它只包含 aggregate count、boolean 与 digest。现在还会按页面位置附带固定类别、链接/媒体数量与逐项 match boolean；仍不会携带正文、动态 ID、URL、作者名或 selector。
 
-历史已验证的页面结构可作为假设：首屏存在公开 Opus + 预约附加卡，它们是当前两个缺少文本/结构性证据的候选类型。该假设尚未被本次 Browser Host run 精确证明，因此不能据此直接修改 selector 或放宽规则。
+第二次 canary 已证明失败卡恰为第 4、10 张，且两者具有同一安全结构：
+
+```text
+cardKind                     = opus
+reservation                  = true
+accessState                  = public
+forwarded                    = false
+DOM links                    = 1
+response primary kind        = opus
+textMatch                    = false
+primary identity checkable   = false
+```
+
+历史已验证 artifact 中的同类第 4、10 张卡也各有一个 DOM 链接，但该链接并不等于 Opus 主身份的 canonical URL。因此不能通过“将 Opus 主身份加入链接 allowlist”来让 gate 通过；这会把预约对象链接误报成动态主对象。
+
+后续修改 DOM projector 或 response 规则前，应先以这份 evidence 缩小问题；不得为了通过而把 gate 降成“任一张卡匹配即可”。
 
 ## 4. 页面复用与浏览器生命周期修复
 
@@ -91,7 +117,7 @@ retained_for_review
 
 该页仍不参与泛用 role/profile 复用或自动回收；如果用户已把页面导航到别处，实际 URL 校验失败，系统不会劫持或关闭该 tab。
 
-当前已登录 Browser Host 进程在此修复构建之前启动，尚未受控重启。因此“真实 B 站页面已在新规则下复用”还没有成立；目前成立的是隔离 real-Chromium lifecycle gate 已证明该规则。
+实际 Browser Host 已完成一次受控重启，并已加载该修复；第二次 canary 后留下一个同目标 retained 页。由于该 run 是重启后的首次 run，选页为 `created_new_managed_tab` 是预期结果。真实 B 站页面的下一独立 run 应复用这个 exact retained 页；在此发生前，已成立的是隔离 real-Chromium lifecycle gate 对复用规则的证明。
 
 ## 5. 测试窗口策略
 
@@ -105,7 +131,8 @@ browserMode: headless_test_scoped
 
 ## 6. 下一步与停止条件
 
-1. 先为失败的 card evidence 增加仍然去敏的逐位置结构诊断，或在新的独立真实 run 前完成对应的人类 DOM/视觉研究；
-2. 仅在明确安排的受控 Browser Host 维护窗口中重启实际 Host，以加载 exact-retained-reuse 修复。该维护会改变浏览器进程生命周期，不能隐式执行；
-3. Host 升级后，最多执行一个新的独立单页 canary，继续保持一次导航、零滚动、零筛选/评论动作和零自动平台重试；
-4. 只有所有 strict cross-check 项通过，才把结果标记为 `live authenticated canary`；production admission 仍需独立评审。
+1. 对第 4、10 张预约 Opus 卡执行只读的 DOM/visual/response 字段来源研究，确认页面实际展示的是哪一个公开 response 字段；
+2. 不把 Opus 主身份链接直接加入 allowlist；历史证据已经否定这一假设；
+3. 只在新的字段映射具有三面证据后，实施最小 response-to-DOM 映射修复；
+4. 修复后最多执行一个新的独立单页 canary。该 run 应复用现有 exact retained 页，并继续保持一次导航、零滚动、零筛选/评论动作和零自动平台重试；
+5. 只有所有 strict cross-check 项通过，才把结果标记为 `live authenticated canary`；production admission 仍需独立评审。
