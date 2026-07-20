@@ -5,8 +5,10 @@ import type {
   ManagedPageSummary,
   NavigatePageRequest,
   PagePoolSnapshot,
+  PageScrollResult,
   PageVisualEvidence,
   ReleasePageRequest,
+  ScrollPageRequest,
   StrategyObservationReadRequest,
   StrategyObservationResult,
   StrategyObserverBindingRequest,
@@ -68,6 +70,11 @@ export class CollectionBrowserManager {
   async navigatePage(request: NavigatePageRequest): Promise<ManagedPageSummary> {
     this.#registry.get(request.profileId);
     return await this.#runtime.navigatePage(request);
+  }
+
+  async scrollPage(request: ScrollPageRequest): Promise<PageScrollResult> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.scrollPage(request);
   }
 
   async capturePageVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {

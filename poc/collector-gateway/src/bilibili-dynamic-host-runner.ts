@@ -17,6 +17,7 @@ import {
   type BilibiliDynamicAction,
   type BilibiliDynamicCrossCheckDiagnostic,
   type BilibiliDynamicPageProjection,
+  type BilibiliDynamicReservationOpusFieldDiagnostic,
   type BilibiliDynamicResponseEvidence,
   type BilibiliDynamicRunRecord,
   type BilibiliDynamicTerminalReason,
@@ -28,6 +29,7 @@ import {
   hasFullBilibiliDynamicDomResponseCrossCheck
 } from './bilibili-dynamic-cross-check';
 import { createBilibiliDynamicRunRecord } from './bilibili-dynamic-run-record';
+import { bilibiliDynamicReservationOpusFieldDiagnostic } from './bilibili-dynamic-reservation-opus-diagnostic';
 import { dynamicResponseEvidence, projectBilibiliDynamicPageWithDom } from './bilibili-dynamic-response';
 import type { CollectionBrowserManager } from './browser-manager';
 import type { BrowserProfileRegistry } from './profiles';
@@ -150,6 +152,7 @@ export class BilibiliDynamicHostRunner {
     const pages: BilibiliDynamicPageProjection[] = [];
     let failedResponseEvidence: BilibiliDynamicResponseEvidence | null = null;
     let crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null = null;
+    let reservationOpusFieldDiagnostic: BilibiliDynamicReservationOpusFieldDiagnostic | null = null;
     let visualEvidence: BilibiliDynamicVisualEvidence | null = null;
     let state: BilibiliDynamicRunRecord['state'] = 'failed';
     let terminalReason: BilibiliDynamicTerminalReason = 'source_unavailable';
@@ -271,12 +274,22 @@ export class BilibiliDynamicHostRunner {
           errorCode = 'dynamic_response_projection_failed';
           failedResponseEvidence = dynamicResponseEvidence(observed.response, 1);
         } else if (!hasFullBilibiliDynamicDomResponseCrossCheck(projected.projection)) {
+          reservationOpusFieldDiagnostic = bilibiliDynamicReservationOpusFieldDiagnostic({
+            responseValue: observed.response.value,
+            expectedAccountId: stableAccountId,
+            dom: observed.dom
+          });
           state = 'failed';
           terminalReason = 'dom_response_mismatch';
           errorCode = 'dynamic_dom_response_cross_check_failed';
           failedResponseEvidence = dynamicResponseEvidence(observed.response, 1);
           crossCheckDiagnostic = bilibiliDynamicCrossCheckDiagnostic(projected.projection);
         } else {
+          reservationOpusFieldDiagnostic = bilibiliDynamicReservationOpusFieldDiagnostic({
+            responseValue: observed.response.value,
+            expectedAccountId: stableAccountId,
+            dom: observed.dom
+          });
           pages.push(projected.projection);
           state = projected.candidate.hasMore ? 'partial' : 'completed';
           terminalReason = projected.candidate.hasMore ? 'budget_exhausted' : 'feed_terminal_reached';
@@ -341,6 +354,7 @@ export class BilibiliDynamicHostRunner {
       terminalReason,
       failedResponseEvidence,
       crossCheckDiagnostic,
+      reservationOpusFieldDiagnostic,
       visualEvidence,
       targetTabSelection,
       targetPage

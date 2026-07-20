@@ -3,6 +3,7 @@ import type {
   BilibiliDynamicAction,
   BilibiliDynamicCrossCheckDiagnostic,
   BilibiliDynamicPageProjection,
+  BilibiliDynamicReservationOpusFieldDiagnostic,
   BilibiliDynamicResponseEvidence,
   BilibiliDynamicRunRecord,
   BilibiliDynamicTerminalReason,
@@ -35,6 +36,7 @@ export function createBilibiliDynamicRunRecord(input: {
   terminalReason: BilibiliDynamicTerminalReason;
   failedResponseEvidence: BilibiliDynamicResponseEvidence | null;
   crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
+  reservationOpusFieldDiagnostic: BilibiliDynamicReservationOpusFieldDiagnostic | null;
   visualEvidence: BilibiliDynamicVisualEvidence | null;
   targetTabSelection: BilibiliDynamicRunRecord['safeguards']['targetTabSelection'];
   targetPage: BilibiliDynamicRunRecord['safeguards']['targetPage'];
@@ -62,6 +64,7 @@ export function createBilibiliDynamicRunRecord(input: {
     stableAccountId: input.stableAccountId,
     failedResponseEvidence: input.failedResponseEvidence,
     crossCheckDiagnostic: input.crossCheckDiagnostic,
+    reservationOpusFieldDiagnostic: input.reservationOpusFieldDiagnostic,
     visualEvidence: input.visualEvidence,
     pages: input.pages,
     actions: input.actions,

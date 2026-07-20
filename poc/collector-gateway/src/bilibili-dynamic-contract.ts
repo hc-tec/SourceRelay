@@ -199,6 +199,37 @@ export interface BilibiliDynamicCrossCheckDiagnostic {
   cards: BilibiliDynamicCardCrossCheckDiagnostic[];
 }
 
+/**
+ * A value-free explanation of which public response text fields are actually
+ * rendered by a reservation Opus card. It is research evidence only: dynamic
+ * IDs, text, URLs, display names, and raw response values are intentionally
+ * excluded.
+ */
+export interface BilibiliDynamicReservationOpusFieldDiagnostic {
+  schemaVersion: 1;
+  responseItemCount: number;
+  domCardCount: number;
+  exactCardCountAlignment: boolean;
+  cards: Array<{
+    positionOnPage: number;
+    responsePrimaryIdentityKind: BilibiliDynamicPrimaryIdentity['kind'];
+    responseMajorType: string | null;
+    domCardKind: BilibiliDynamicDomCardObservation['kind'];
+    domReservation: true;
+    genericVisibleTextMatch: boolean;
+    genericMajorTitleMatch: boolean;
+    matchingFieldPaths: Array<
+      | 'modules.module_dynamic.desc.text'
+      | 'modules.module_dynamic.major.opus.title'
+      | 'modules.module_dynamic.major.opus.desc'
+      | 'modules.module_dynamic.major.opus.summary.text'
+      | 'modules.module_dynamic.additional.reserve.title'
+      | 'modules.module_dynamic.additional.reserve.desc1'
+      | 'modules.module_dynamic.additional.reserve.desc2'
+    >;
+  }>;
+}
+
 export interface BilibiliDynamicResponseEvidence {
   pathname: typeof BILIBILI_DYNAMIC_FEED_PATH;
   pageNumber: number;
@@ -270,6 +301,7 @@ export interface BilibiliDynamicRunRecord {
   stableAccountId: string;
   failedResponseEvidence: BilibiliDynamicResponseEvidence | null;
   crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
+  reservationOpusFieldDiagnostic: BilibiliDynamicReservationOpusFieldDiagnostic | null;
   visualEvidence: BilibiliDynamicVisualEvidence | null;
   pages: BilibiliDynamicPageProjection[];
   actions: BilibiliDynamicAction[];

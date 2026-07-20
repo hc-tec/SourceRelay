@@ -9,6 +9,7 @@ const temporaryDirectory = await mkdtemp(join(tmpdir(), 'collector-bilibili-dyna
 const contractBundle = join(temporaryDirectory, 'bilibili-dynamic-contract.mjs');
 const responseBundle = join(temporaryDirectory, 'bilibili-dynamic-response.mjs');
 const crossCheckBundle = join(temporaryDirectory, 'bilibili-dynamic-cross-check.mjs');
+const reservationDiagnosticBundle = join(temporaryDirectory, 'bilibili-dynamic-reservation-opus-diagnostic.mjs');
 const artifactBundle = join(temporaryDirectory, 'bilibili-dynamic-artifacts.mjs');
 
 try {
@@ -16,6 +17,7 @@ try {
     [new URL('../src/bilibili-dynamic-contract.ts', import.meta.url), contractBundle],
     [new URL('../src/bilibili-dynamic-response.ts', import.meta.url), responseBundle],
     [new URL('../src/bilibili-dynamic-cross-check.ts', import.meta.url), crossCheckBundle],
+    [new URL('../src/bilibili-dynamic-reservation-opus-diagnostic.ts', import.meta.url), reservationDiagnosticBundle],
     [new URL('../src/bilibili-dynamic-artifacts.ts', import.meta.url), artifactBundle]
   ].map(([entry, outfile]) => build({
     entryPoints: [fileURLToPath(entry)],
@@ -29,6 +31,7 @@ try {
   const contract = await import(pathToFileURL(contractBundle).href);
   const response = await import(pathToFileURL(responseBundle).href);
   const crossCheck = await import(pathToFileURL(crossCheckBundle).href);
+  const reservationDiagnostic = await import(pathToFileURL(reservationDiagnosticBundle).href);
   const { BilibiliDynamicArtifactStore } = await import(pathToFileURL(artifactBundle).href);
 
   const accountId = '123456';
@@ -239,6 +242,25 @@ try {
   assert.equal(projected.projection.items[0].card.links[0].url,
     'https://www.bilibili.com/video/BV1qZSLBYEpa');
 
+  const reservationOpusFieldDiagnostic = reservationDiagnostic.bilibiliDynamicReservationOpusFieldDiagnostic({
+    responseValue: rawFeed,
+    expectedAccountId: accountId,
+    dom: {
+      stableAccountId: accountId,
+      visibleFilterLabels: ['全部', '视频'],
+      activeFilterLabel: '全部',
+      cards: domCards,
+      risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+    }
+  });
+  assert.equal(reservationOpusFieldDiagnostic?.cards.length, 1);
+  assert.equal(reservationOpusFieldDiagnostic?.cards[0]?.positionOnPage, 2);
+  assert.deepEqual(reservationOpusFieldDiagnostic?.cards[0]?.matchingFieldPaths, [
+    'modules.module_dynamic.major.opus.summary.text',
+    'modules.module_dynamic.additional.reserve.title'
+  ]);
+  assert.equal(JSON.stringify(reservationOpusFieldDiagnostic).includes('预约图文'), false);
+
   const run = {
     schemaVersion: 1,
     runId: '11111111-1111-4111-8111-111111111111',
@@ -259,6 +281,7 @@ try {
     stableAccountId: accountId,
     failedResponseEvidence: null,
     crossCheckDiagnostic: null,
+    reservationOpusFieldDiagnostic,
     visualEvidence: null,
     pages: [projected.projection],
     actions: [{
@@ -321,6 +344,7 @@ try {
   assert.equal(artifact.pages[0].items[2].accessState, 'restricted_placeholder');
   assert.equal(artifact.failedResponseEvidence, null);
   assert.equal(artifact.crossCheckDiagnostic, null);
+  assert.deepEqual(artifact.reservationOpusFieldDiagnostic, reservationOpusFieldDiagnostic);
   const recovered = await BilibiliDynamicArtifactStore.create(stateDirectory);
   assert.equal((await recovered.get(summary.artifactId)).summary.manifestSha256, summary.manifestSha256);
 
@@ -395,6 +419,7 @@ try {
   assert.deepEqual(failedArtifact.manifest.crossCheckDiagnostic?.failedChecks, ['card_evidence_mismatch']);
   assert.equal(failedArtifact.crossCheckDiagnostic?.cards.length, 4);
   assert.equal(failedArtifact.crossCheckDiagnostic?.cards[mismatchedItemIndex]?.checks.textMatch, false);
+  assert.deepEqual(failedArtifact.reservationOpusFieldDiagnostic, reservationOpusFieldDiagnostic);
   assert.equal(failedArtifact.pages.length, 0);
   const failedArtifactDirectory = join(stateDirectory, 'bilibili-dynamic', failedSummary.artifactId);
   const failedPersisted = (await Promise.all((await readdir(failedArtifactDirectory)).map((name) =>
@@ -404,6 +429,7 @@ try {
   assert.equal(failedPersisted.includes('预约图文'), false);
   assert.equal(failedPersisted.includes('stableDynamicId'), false);
   assert.equal(failedPersisted.includes('canonicalUrl'), false);
+  assert.equal(failedPersisted.includes('预约图文'), false);
   assert.equal(failedPersisted.includes(dynamicIds[0]), false);
 
   console.log(JSON.stringify({
@@ -413,6 +439,7 @@ try {
     responseStableDynamicIdsAndForwardSourceProjected: true,
     domCardsCrossCheckedInResponseOrder: true,
     restrictedPlaceholdersPreservedWithoutUnlocking: true,
+    reservationOpusFieldPathsDiagnosedWithoutPersistingValues: true,
     cursorAndQueryValuesOmitted: true,
     manifestAndPageDigestsVerified: true,
     restartReloadVerified: true

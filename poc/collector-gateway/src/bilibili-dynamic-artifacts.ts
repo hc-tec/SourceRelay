@@ -5,6 +5,7 @@ import { canonicalJson } from '../../collector-extension/src/shared/cryptography
 import type {
   BilibiliDynamicPageProjection,
   BilibiliDynamicCrossCheckDiagnostic,
+  BilibiliDynamicReservationOpusFieldDiagnostic,
   BilibiliDynamicResponseEvidence,
   BilibiliDynamicRunRecord,
   BilibiliDynamicVisualEvidence
@@ -48,6 +49,7 @@ export interface BilibiliDynamicArtifactManifest
   pageFiles: BilibiliDynamicPageFile[];
   visualEvidence: BilibiliDynamicVisualEvidence | null;
   crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
+  reservationOpusFieldDiagnostic: BilibiliDynamicReservationOpusFieldDiagnostic | null;
   failedResponseFile: typeof FAILED_RESPONSE_FILE | null;
   failedResponseFileSha256: string | null;
   safeguards: BilibiliDynamicRunRecord['safeguards'];
@@ -59,6 +61,7 @@ export interface BilibiliDynamicArtifactView {
   pages: BilibiliDynamicPageProjection[];
   failedResponseEvidence: BilibiliDynamicResponseEvidence | null;
   crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
+  reservationOpusFieldDiagnostic: BilibiliDynamicReservationOpusFieldDiagnostic | null;
 }
 
 function sha256(value: string): string {
@@ -194,6 +197,7 @@ export class BilibiliDynamicArtifactStore {
       pageFiles,
       visualEvidence: run.visualEvidence,
       crossCheckDiagnostic: run.crossCheckDiagnostic,
+      reservationOpusFieldDiagnostic: run.reservationOpusFieldDiagnostic,
       failedResponseFile,
       failedResponseFileSha256,
       safeguards: run.safeguards
@@ -251,12 +255,14 @@ export class BilibiliDynamicArtifactStore {
     } else if (manifest.failedResponseFileSha256 !== null) {
       throw new Error('bilibili_dynamic_failed_response_reference_invalid');
     }
+    const reservationOpusFieldDiagnostic = manifest.reservationOpusFieldDiagnostic ?? null;
     return {
       summary: structuredClone(summary),
       manifest: structuredClone(manifest),
       pages: structuredClone(pages),
       failedResponseEvidence: structuredClone(failedResponseEvidence),
-      crossCheckDiagnostic: structuredClone(manifest.crossCheckDiagnostic)
+      crossCheckDiagnostic: structuredClone(manifest.crossCheckDiagnostic),
+      reservationOpusFieldDiagnostic: structuredClone(reservationOpusFieldDiagnostic)
     };
   }
 
