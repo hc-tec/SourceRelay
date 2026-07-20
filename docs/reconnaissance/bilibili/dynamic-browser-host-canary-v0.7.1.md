@@ -70,7 +70,7 @@ BilibiliDynamicCrossCheckDiagnostic
   -> Artifact read model
 ```
 
-它只包含 aggregate count、boolean 与 digest。后续修改 DOM projector 或 response 规则前，应先以这份 evidence 缩小问题；不得为了通过而把 gate 降成“任一张卡匹配即可”。
+它只包含 aggregate count、boolean 与 digest。下一次失败 diagnostic 还会按页面位置附带固定类别、链接/媒体数量与逐项 match boolean；仍不会携带正文、动态 ID、URL、作者名或 selector。后续修改 DOM projector 或 response 规则前，应先以这份 evidence 缩小问题；不得为了通过而把 gate 降成“任一张卡匹配即可”。
 
 历史已验证的页面结构可作为假设：首屏存在公开 Opus + 预约附加卡，它们是当前两个缺少文本/结构性证据的候选类型。该假设尚未被本次 Browser Host run 精确证明，因此不能据此直接修改 selector 或放宽规则。
 

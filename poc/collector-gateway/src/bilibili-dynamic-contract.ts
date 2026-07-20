@@ -125,6 +125,41 @@ export interface BilibiliDynamicDomResponseCrossCheck {
   responseCumulativeDynamicIdDigest: string;
 }
 
+/**
+ * Per-card booleans calculated by the same strict evidence rule used for the
+ * aggregate page gate.  It deliberately carries no response or DOM text.
+ */
+export interface BilibiliDynamicCardEvidenceCheck {
+  authorMatch: boolean;
+  publicationMatch: boolean;
+  primaryIdentityCrossCheckable: boolean;
+  primaryIdentityMatch: boolean;
+  textMatch: boolean;
+  accessStateMatch: boolean;
+  forwardedStateMatch: boolean;
+  cardEvidenceMatch: boolean;
+}
+
+/**
+ * A redacted explanation for one response/DOM card pair.  Positions are local
+ * to a single observed page; stable dynamic IDs, text, URLs, and author names
+ * must not be added here.
+ */
+export interface BilibiliDynamicCardCrossCheckDiagnostic {
+  positionOnPage: number;
+  cardKind: BilibiliDynamicDomCardObservation['kind'];
+  domLinkCount: number;
+  domMediaRefCount: number;
+  domReservation: boolean;
+  domBlockedPlaceholder: boolean;
+  domForwarded: boolean;
+  responsePrimaryIdentityKind: BilibiliDynamicPrimaryIdentity['kind'];
+  responseAccessState: BilibiliDynamicResponseItem['accessState'];
+  responseForwardedState: BilibiliDynamicResponseItem['forwardedSourceState'];
+  responseTextCandidateCount: 0 | 1 | 2;
+  checks: BilibiliDynamicCardEvidenceCheck;
+}
+
 export interface BilibiliDynamicPageProjection {
   schemaVersion: 1;
   pageNumber: number;
@@ -161,6 +196,7 @@ export interface BilibiliDynamicCrossCheckDiagnostic {
   itemCount: number;
   domCrossCheck: BilibiliDynamicDomResponseCrossCheck;
   failedChecks: BilibiliDynamicCrossCheckFailure[];
+  cards: BilibiliDynamicCardCrossCheckDiagnostic[];
 }
 
 export interface BilibiliDynamicResponseEvidence {

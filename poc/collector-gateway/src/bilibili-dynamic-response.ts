@@ -5,6 +5,7 @@ import {
   projectBilibiliDynamicDomCard,
   projectBilibiliDynamicFeedResponse,
   type BilibiliDynamicDomSnapshot,
+  type BilibiliDynamicCardEvidenceCheck,
   type BilibiliDynamicItemProjection,
   type BilibiliDynamicPageCandidate,
   type BilibiliDynamicPageProjection,
@@ -76,8 +77,49 @@ function textContains(left: string | null, right: string | null): boolean {
   return normalLeft.includes(normalRight) || normalRight.includes(normalLeft);
 }
 
-function primaryIdentityCrossCheckable(kind: BilibiliDynamicResponseItem['primaryIdentity']['kind']): boolean {
+function isPrimaryIdentityCrossCheckable(kind: BilibiliDynamicResponseItem['primaryIdentity']['kind']): boolean {
   return kind === 'video' || kind === 'article' || kind === 'live';
+}
+
+/**
+ * Evaluates one response item and its same-position DOM card.  Both page
+ * projection and rejected-page diagnostics call this function so their
+ * aggregate and per-card conclusions cannot drift apart.
+ */
+export function bilibiliDynamicCardEvidenceCheck(
+  item: BilibiliDynamicItemProjection
+): BilibiliDynamicCardEvidenceCheck {
+  const authorMatch = normaliseText(item.card.outerAuthor) === normaliseText(item.displayName);
+  const publicationMatch = item.publishedVisibleText === null ||
+    textContains(item.card.publishedVisibleText, item.publishedVisibleText);
+  const primaryIdentityCrossCheckable = isPrimaryIdentityCrossCheckable(item.primaryIdentity.kind);
+  const primaryIdentityMatch = primaryIdentityCrossCheckable && item.card.links.some((link) =>
+    link.url === item.primaryIdentity.canonicalUrl
+  );
+  const textMatch = bilibiliDynamicCardTextEvidenceMatches(
+    item.card.visibleText,
+    [item.visibleText, item.majorTitle],
+    item.card.mediaRefs.map((media) => media.alt).filter(Boolean)
+  );
+  const accessStateMatch = (item.accessState === 'restricted_placeholder') === item.card.blockedPlaceholder;
+  const responseForwarded = item.forwardedSourceState !== 'not_forward';
+  const forwardedStateMatch = responseForwarded === item.card.forwarded;
+  const cardEvidenceMatch = accessStateMatch && (
+    item.accessState === 'restricted_placeholder' ||
+    primaryIdentityMatch ||
+    textMatch ||
+    (responseForwarded && forwardedStateMatch)
+  );
+  return {
+    authorMatch,
+    publicationMatch,
+    primaryIdentityCrossCheckable,
+    primaryIdentityMatch,
+    textMatch,
+    accessStateMatch,
+    forwardedStateMatch,
+    cardEvidenceMatch
+  };
 }
 
 export function isBilibiliDynamicFeedResponse(
@@ -167,35 +209,15 @@ export function projectBilibiliDynamicPageWithDom(
   let accessStateMatches = 0;
   let forwardedStateMatches = 0;
   for (const item of items) {
-    const authorMatch = normaliseText(item.card.outerAuthor) === normaliseText(item.displayName);
-    const publicationMatch = item.publishedVisibleText === null ||
-      textContains(item.card.publishedVisibleText, item.publishedVisibleText);
-    const crossCheckable = primaryIdentityCrossCheckable(item.primaryIdentity.kind);
-    const primaryMatch = crossCheckable && item.card.links.some((link) =>
-      link.url === item.primaryIdentity.canonicalUrl
-    );
-    const textMatch = bilibiliDynamicCardTextEvidenceMatches(
-      item.card.visibleText,
-      [item.visibleText, item.majorTitle],
-      item.card.mediaRefs.map((media) => media.alt).filter(Boolean)
-    );
-    const accessMatch = (item.accessState === 'restricted_placeholder') === item.card.blockedPlaceholder;
-    const responseForwarded = item.forwardedSourceState !== 'not_forward';
-    const forwardedMatch = responseForwarded === item.card.forwarded;
-    const structuralMatch = accessMatch && (
-      item.accessState === 'restricted_placeholder' ||
-      primaryMatch ||
-      textMatch ||
-      (responseForwarded && forwardedMatch)
-    );
-    if (authorMatch) authorMatches += 1;
-    if (publicationMatch) publicationMatches += 1;
-    if (crossCheckable) crossCheckablePrimaryIdentities += 1;
-    if (primaryMatch) primaryIdentityMatches += 1;
-    if (textMatch) textMatches += 1;
-    if (structuralMatch) cardEvidenceMatches += 1;
-    if (accessMatch) accessStateMatches += 1;
-    if (forwardedMatch) forwardedStateMatches += 1;
+    const evidence = bilibiliDynamicCardEvidenceCheck(item);
+    if (evidence.authorMatch) authorMatches += 1;
+    if (evidence.publicationMatch) publicationMatches += 1;
+    if (evidence.primaryIdentityCrossCheckable) crossCheckablePrimaryIdentities += 1;
+    if (evidence.primaryIdentityMatch) primaryIdentityMatches += 1;
+    if (evidence.textMatch) textMatches += 1;
+    if (evidence.cardEvidenceMatch) cardEvidenceMatches += 1;
+    if (evidence.accessStateMatch) accessStateMatches += 1;
+    if (evidence.forwardedStateMatch) forwardedStateMatches += 1;
   }
 
   const pageIds = candidate.items.map((item) => item.stableDynamicId);

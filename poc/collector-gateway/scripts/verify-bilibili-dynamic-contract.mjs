@@ -224,7 +224,10 @@ try {
   assert.equal(projected.projection.domCrossCheck.authorMatches, 4);
   assert.equal(projected.projection.domCrossCheck.accessStateMatches, 4);
   assert.equal(projected.projection.domCrossCheck.forwardedStateMatches, 4);
-  assert.deepEqual(crossCheck.bilibiliDynamicCrossCheckDiagnostic(projected.projection).failedChecks, []);
+  const successfulCrossCheckDiagnostic = crossCheck.bilibiliDynamicCrossCheckDiagnostic(projected.projection);
+  assert.deepEqual(successfulCrossCheckDiagnostic.failedChecks, []);
+  assert.equal(successfulCrossCheckDiagnostic.cards.length, 4);
+  assert.equal(successfulCrossCheckDiagnostic.cards.every((card) => card.checks.cardEvidenceMatch), true);
   assert.equal(response.bilibiliDynamicCardTextEvidenceMatches(
     '互动抽奖​六一快乐',
     ['互动抽奖六一快乐'],
@@ -331,15 +334,31 @@ try {
     'next-offset-secret', 'offset=next-offset-secret', 'w_rid=', 'tracking=discard'
   ]) assert.equal(persisted.includes(forbidden), false, `forbidden persisted value: ${forbidden}`);
 
+  const mismatchedItemIndex = successfulCrossCheckDiagnostic.cards.findIndex((card) =>
+    card.responseAccessState === 'public' &&
+    card.responseForwardedState === 'not_forward' &&
+    !card.checks.primaryIdentityCrossCheckable
+  );
+  assert.notEqual(mismatchedItemIndex, -1);
+  const mismatchedItems = projected.projection.items.map((item, index) => index === mismatchedItemIndex
+    ? { ...item, card: { ...item.card, visibleText: '无匹配文本', links: [], mediaRefs: [] } }
+    : item);
   const mismatchedProjection = {
     ...projected.projection,
+    items: mismatchedItems,
     domCrossCheck: {
       ...projected.projection.domCrossCheck,
-      authorMatches: projected.projection.items.length - 1
+      cardEvidenceMatches: projected.projection.items.length - 1,
+      textMatches: projected.projection.items.length - 1
     }
   };
   const crossCheckDiagnostic = crossCheck.bilibiliDynamicCrossCheckDiagnostic(mismatchedProjection);
-  assert.deepEqual(crossCheckDiagnostic.failedChecks, ['author_mismatch']);
+  assert.deepEqual(crossCheckDiagnostic.failedChecks, ['card_evidence_mismatch']);
+  const mismatchedCard = crossCheckDiagnostic.cards.find((card) => card.positionOnPage === mismatchedItemIndex + 1);
+  assert.equal(mismatchedCard?.checks.primaryIdentityCrossCheckable, false);
+  assert.equal(mismatchedCard?.checks.textMatch, false);
+  assert.equal(mismatchedCard?.checks.cardEvidenceMatch, false);
+  assert.equal(mismatchedCard?.checks.authorMatch, true);
   const failedRun = {
     ...run,
     runId: '22222222-2222-4222-8222-222222222222',
@@ -373,13 +392,18 @@ try {
   const failedSummary = await store.record(failedRun);
   const failedArtifact = await store.get(failedSummary.artifactId);
   assert.deepEqual(failedArtifact.crossCheckDiagnostic, crossCheckDiagnostic);
-  assert.deepEqual(failedArtifact.manifest.crossCheckDiagnostic?.failedChecks, ['author_mismatch']);
+  assert.deepEqual(failedArtifact.manifest.crossCheckDiagnostic?.failedChecks, ['card_evidence_mismatch']);
+  assert.equal(failedArtifact.crossCheckDiagnostic?.cards.length, 4);
+  assert.equal(failedArtifact.crossCheckDiagnostic?.cards[mismatchedItemIndex]?.checks.textMatch, false);
   assert.equal(failedArtifact.pages.length, 0);
   const failedArtifactDirectory = join(stateDirectory, 'bilibili-dynamic', failedSummary.artifactId);
   const failedPersisted = (await Promise.all((await readdir(failedArtifactDirectory)).map((name) =>
     readFile(join(failedArtifactDirectory, name), 'utf8')
   ))).join('\n');
   assert.equal(failedPersisted.includes('公开视频说明'), false);
+  assert.equal(failedPersisted.includes('预约图文'), false);
+  assert.equal(failedPersisted.includes('stableDynamicId'), false);
+  assert.equal(failedPersisted.includes('canonicalUrl'), false);
   assert.equal(failedPersisted.includes(dynamicIds[0]), false);
 
   console.log(JSON.stringify({

@@ -1,8 +1,33 @@
 import type {
+  BilibiliDynamicCardCrossCheckDiagnostic,
   BilibiliDynamicCrossCheckDiagnostic,
   BilibiliDynamicCrossCheckFailure,
   BilibiliDynamicPageProjection
 } from './bilibili-dynamic-contract';
+import { bilibiliDynamicCardEvidenceCheck } from './bilibili-dynamic-response';
+
+function textCandidateCount(page: BilibiliDynamicPageProjection['items'][number]): 0 | 1 | 2 {
+  return (Number(Boolean(page.visibleText)) + Number(Boolean(page.majorTitle))) as 0 | 1 | 2;
+}
+
+function cardDiagnostic(
+  item: BilibiliDynamicPageProjection['items'][number]
+): BilibiliDynamicCardCrossCheckDiagnostic {
+  return {
+    positionOnPage: item.positionOnPage,
+    cardKind: item.card.kind,
+    domLinkCount: item.card.links.length,
+    domMediaRefCount: item.card.mediaRefs.length,
+    domReservation: item.card.reservation,
+    domBlockedPlaceholder: item.card.blockedPlaceholder,
+    domForwarded: item.card.forwarded,
+    responsePrimaryIdentityKind: item.primaryIdentity.kind,
+    responseAccessState: item.accessState,
+    responseForwardedState: item.forwardedSourceState,
+    responseTextCandidateCount: textCandidateCount(item),
+    checks: bilibiliDynamicCardEvidenceCheck(item)
+  };
+}
 
 /**
  * Produces a redacted, durable explanation for a strict cross-check result.
@@ -26,7 +51,8 @@ export function bilibiliDynamicCrossCheckDiagnostic(
     pageNumber: page.pageNumber,
     itemCount,
     domCrossCheck: { ...check },
-    failedChecks
+    failedChecks,
+    cards: page.items.map(cardDiagnostic)
   };
 }
 
