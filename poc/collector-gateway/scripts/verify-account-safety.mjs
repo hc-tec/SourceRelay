@@ -115,17 +115,30 @@ try {
     'series_detail_completed',
     new Date(baseTime.getTime() + 8_000)
   );
-  const laterPermit = await registry.beginAuthenticatedRun(
+  const articleDetailPermit = await registry.beginAuthenticatedRun(
     profileId,
     'bilibili',
     'authenticated_article_detail_reconnaissance',
     new Date(baseTime.getTime() + 9_000)
   );
-  assert.match(laterPermit.runId, /^[0-9a-f-]{36}$/i);
+  await registry.finishAuthenticatedRun(
+    profileId,
+    'bilibili',
+    articleDetailPermit.runId,
+    'article_detail_completed',
+    new Date(baseTime.getTime() + 10_000)
+  );
+  const dynamicPermit = await registry.beginAuthenticatedRun(
+    profileId,
+    'bilibili',
+    'authenticated_dynamic_reconnaissance',
+    new Date(baseTime.getTime() + 11_000)
+  );
+  assert.match(dynamicPermit.runId, /^[0-9a-f-]{36}$/i);
 
   const afterInterruptedRestart = await AccountSafetyRegistry.create(
     temporaryDirectory,
-    new Date(baseTime.getTime() + 10_000)
+    new Date(baseTime.getTime() + 12_000)
   );
   const interrupted = afterInterruptedRestart.get(profileId, 'bilibili');
   assert.equal(interrupted.state, 'locked');
@@ -193,8 +206,8 @@ try {
       'normal_finish_returns_ready_without_cooldown',
       'legacy_cooldown_migrates_to_ready',
       'legacy_locked_state_remains_locked',
-      'series_and_article_purposes_persist',
-      'interrupted_article_detail_run_restart_lock'
+      'series_article_and_dynamic_purposes_persist',
+      'interrupted_dynamic_run_restart_lock'
     ]
   }, null, 2));
 } finally {
