@@ -12,6 +12,7 @@ import type {
   ReconcilePageRequest,
   ReleasePageRequest
 } from './page-pool.js';
+import type { PageScrollResult, ScrollPageRequest } from './page-scroll.js';
 import type { CapturePageVisualEvidenceRequest, PageVisualEvidence } from './page-visual-evidence.js';
 import type { BrowserHostErrorRecord } from './errors.js';
 import type {
@@ -21,7 +22,7 @@ import type {
   StrategyObserverBindingResult
 } from './strategy-observation.js';
 
-export const BROWSER_HOST_PROTOCOL_VERSION = 3 as const;
+export const BROWSER_HOST_PROTOCOL_VERSION = 4 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
 
 export interface BrowserHostEndpointRecord {
@@ -58,6 +59,7 @@ export type BrowserHostCommandBody =
   | { type: 'acquire_page'; request: AcquirePageRequest }
   | { type: 'release_page'; request: ReleasePageRequest }
   | { type: 'navigate_page'; request: NavigatePageRequest }
+  | { type: 'scroll_page'; request: ScrollPageRequest }
   | { type: 'capture_page_visual_evidence'; request: CapturePageVisualEvidenceRequest }
   | { type: 'bind_strategy_observer'; request: StrategyObserverBindingRequest }
   | { type: 'read_strategy_observation'; request: StrategyObservationReadRequest }
@@ -85,6 +87,7 @@ export type BrowserHostCommandResult =
   | PagePoolSnapshot
   | AcquirePageResult
   | ManagedPageSummary
+  | PageScrollResult
   | PageVisualEvidence
   | ReclaimPlan
   | ReclaimExecutionResult

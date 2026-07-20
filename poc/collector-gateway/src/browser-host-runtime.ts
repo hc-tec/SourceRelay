@@ -17,8 +17,10 @@ import {
   type ManagedPageSummary,
   type NavigatePageRequest,
   type PagePoolSnapshot,
+  type PageScrollResult,
   type PageVisualEvidence,
   type ReleasePageRequest,
+  type ScrollPageRequest,
   type StrategyObservationReadRequest,
   type StrategyObservationResult,
   type StrategyObserverBindingRequest,
@@ -82,6 +84,19 @@ export class GatewayBrowserHostRuntime {
 
   async navigatePage(request: NavigatePageRequest): Promise<ManagedPageSummary> {
     return managedPageResult(await this.#command({ type: 'navigate_page', request }, false));
+  }
+
+  async scrollPage(request: ScrollPageRequest): Promise<PageScrollResult> {
+    const result = await this.#command({ type: 'scroll_page', request }, false);
+    if (!result || typeof result !== 'object' ||
+      (result as { schemaVersion?: unknown }).schemaVersion !== 1 ||
+      typeof (result as { pageAlias?: unknown }).pageAlias !== 'string' ||
+      typeof (result as { actionId?: unknown }).actionId !== 'string' ||
+      typeof (result as { recordVersion?: unknown }).recordVersion !== 'number' ||
+      !('before' in result) || !('after' in result)) {
+      throw new Error('browser_host_scroll_page_response_invalid');
+    }
+    return structuredClone(result as PageScrollResult);
   }
 
   async capturePageVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {

@@ -326,6 +326,16 @@ Gateway issues one typed ActionCommand
 
 Planner 可以展示完整计划，但 Host 一次只执行一个受限 AST 原语。禁止任意 Playwright、CDP、evaluate、模型脚本和无界循环。
 
+### 8.2.1 窄化的可信滚动原语
+
+`scroll_page` 是 Browser Host Protocol v4 中唯一的滚动输入，不是通用浏览器遥控接口。它只接受当前 `PageLease` 对应的 `profileId/pageAlias/pageLeaseId`，并额外要求 `runId`、`expectedRecordVersion`、`expectedDocumentGeneration`、稳定 `actionId`、正向且有上限的 `deltaY` 与短 deadline。
+
+- Host 固定在当前页面可视区域中心执行浏览器级 `mouse.move()` 和 `mouse.wheel(0, deltaY)`；调用者不能给坐标、selector、JavaScript、反向滚动或任意输入事件；
+- 输入前只读采样滚动位置与页面可滚动余量；没有下行余量时不发送任何输入；
+- 输入已发出后，同一 `actionId` 永远拒绝重放。超时、页面身份/文档 generation 改变、页面关闭或滚动后置条件不成立，都将页面 quarantine 并要求新 run，绝不自动重试；
+- Gateway 只有内部 typed client wrapper，不开放 Console/loopback 的“任意 tab 滚动”接口。未来平台 runner 必须先建立 ObserverBinding，再将此原语包进自己的单次、源专属动作；
+- 该原语在真实无头 Chromium、真实 MV3 和 Native Messaging 的离线页面上验证了滚动、动作去重、lease/run/record 拒绝与显式清理，且 `livePlatformRequests=0`。这只证明 Host 输入边界，不证明任何平台的滚动采集能力。
+
 ### 8.3 ObserverBinding
 
 可能触发 XHR 的输入前必须完成：

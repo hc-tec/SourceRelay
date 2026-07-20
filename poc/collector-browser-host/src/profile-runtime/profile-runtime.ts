@@ -8,10 +8,12 @@ import {
   type ExtensionRuntimeExpectation,
   type ExtensionRuntimeSummary,
   type NavigatePageRequest,
+  type PageScrollResult,
   type ReclaimExecutionResult,
   type ReclaimPlan,
   type ReconcilePageRequest,
   type ReleasePageRequest,
+  type ScrollPageRequest,
   type StrategyObservationReadRequest,
   type StrategyObservationResult,
   type StrategyObserverBindingRequest,
@@ -170,6 +172,10 @@ export class ProfileRuntime {
 
   navigate(request: NavigatePageRequest) {
     return this.#ledger.navigate(request);
+  }
+
+  scroll(request: ScrollPageRequest): Promise<PageScrollResult> {
+    return this.#ledger.scroll(request);
   }
 
   async bindStrategyObserver(request: StrategyObserverBindingRequest): Promise<StrategyObserverBindingResult> {

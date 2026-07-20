@@ -5,9 +5,11 @@ import {
   type CapturePageVisualEvidenceRequest,
   type ManagedPageSummary,
   type NavigatePageRequest,
+  type PageScrollResult,
   type PageVisualEvidence,
   type ReconcilePageRequest,
-  type ReleasePageRequest
+  type ReleasePageRequest,
+  type ScrollPageRequest
 } from '@intelligence/collector-contracts';
 import { hostError } from '../host-errors.js';
 import { attachManagedPageEvents, type PageLedgerEvent } from './page-events.js';
@@ -21,6 +23,7 @@ import {
 } from './page-record.js';
 import { createManagedPage } from './managed-page-creation.js';
 import { captureManagedPageVisualEvidence } from './page-visual-evidence.js';
+import { executeTrustedScroll } from './trusted-scroll.js';
 import {
   DEFAULT_MAX_IDLE_TRUST_MS,
   leaseSelectedPage,
@@ -205,6 +208,16 @@ export class PageLedger {
     }
   }
 
+  async scroll(request: ScrollPageRequest): Promise<PageScrollResult> {
+    const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
+    return await executeTrustedScroll({
+      record,
+      request,
+      assertLeasedRunRecord: () => this.#assertLeasedRunRecord(record, request),
+      emit: (eventType, reason, actionId) => this.#emit(eventType, record, reason, actionId)
+    });
+  }
+
   extensionCommandContext(input: {
     profileId: string;
     pageAlias: string;
@@ -212,23 +225,7 @@ export class PageLedger {
     expectedRecordVersion: number;
     runId: string;
   }): LeasedExtensionPageContext {
-    const record = this.#leasedRecord(input.profileId, input.pageAlias, input.pageLeaseId);
-    if (record.activeLease?.runId !== input.runId) {
-      throw hostError({
-        code: 'managed_page_run_mismatch',
-        category: 'lease',
-        scope: 'lease',
-        retryClass: 'local_query_only'
-      });
-    }
-    if (record.recordVersion !== input.expectedRecordVersion) {
-      throw hostError({
-        code: 'managed_page_record_version_mismatch',
-        category: 'page_identity',
-        scope: 'page',
-        retryClass: 'local_query_only'
-      });
-    }
+    const record = this.#leasedRunRecord(input);
     if (record.extensionTabId === null) {
       throw hostError({
         code: 'managed_page_extension_binding_missing',
@@ -345,6 +342,40 @@ export class PageLedger {
       throw hostError({ code: 'page_lease_expired', category: 'lease', scope: 'lease', pageDisposition: 'quarantined' });
     }
     return record;
+  }
+
+  #leasedRunRecord(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    expectedRecordVersion: number;
+    runId: string;
+  }): ManagedPageRecord {
+    const record = this.#leasedRecord(input.profileId, input.pageAlias, input.pageLeaseId);
+    this.#assertLeasedRunRecord(record, input);
+    return record;
+  }
+
+  #assertLeasedRunRecord(record: ManagedPageRecord, input: {
+    expectedRecordVersion: number;
+    runId: string;
+  }): void {
+    if (record.activeLease?.runId !== input.runId) {
+      throw hostError({
+        code: 'managed_page_run_mismatch',
+        category: 'lease',
+        scope: 'lease',
+        retryClass: 'local_query_only'
+      });
+    }
+    if (record.recordVersion !== input.expectedRecordVersion) {
+      throw hostError({
+        code: 'managed_page_record_version_mismatch',
+        category: 'page_identity',
+        scope: 'page',
+        retryClass: 'local_query_only'
+      });
+    }
   }
 
   #record(profileId: string, pageAlias: string): ManagedPageRecord {

@@ -95,6 +95,8 @@ export class BrowserHostRuntime {
         return this.#profile(body.request.profileId).release(body.request);
       case 'navigate_page':
         return await this.#profile(body.request.profileId).navigate(body.request);
+      case 'scroll_page':
+        return await this.#profile(body.request.profileId).scroll(body.request);
       case 'capture_page_visual_evidence':
         return await this.#profile(body.request.profileId).captureVisualEvidence(body.request);
       case 'bind_strategy_observer':

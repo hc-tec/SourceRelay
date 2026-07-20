@@ -27,6 +27,21 @@ export function navigateRequest(profileId, acquired, url, actionId) {
   };
 }
 
+export function scrollRequest(profileId, acquired, expectedPage, actionId, overrides = {}) {
+  return {
+    profileId,
+    pageAlias: acquired.page.pageAlias,
+    pageLeaseId: acquired.lease.pageLeaseId,
+    runId: acquired.lease.runId,
+    expectedRecordVersion: expectedPage.recordVersion,
+    expectedDocumentGeneration: expectedPage.documentGeneration,
+    actionId,
+    deltaY: 480,
+    timeoutMs: 5_000,
+    ...overrides
+  };
+}
+
 export function releaseRequest(profileId, acquired, disposition) {
   return {
     profileId,
@@ -56,6 +71,16 @@ export function asReclaimPlan(value) {
 
 export function asReclaimResult(value) {
   assert.ok(Array.isArray(value?.items));
+  return value;
+}
+
+export function asScroll(value) {
+  assert.equal(value?.schemaVersion, 1);
+  assert.equal(typeof value?.pageAlias, 'string');
+  assert.equal(typeof value?.actionId, 'string');
+  assert.equal(typeof value?.recordVersion, 'number');
+  assert.equal(typeof value?.before?.scrollY, 'number');
+  assert.equal(typeof value?.after?.scrollY, 'number');
   return value;
 }
 
