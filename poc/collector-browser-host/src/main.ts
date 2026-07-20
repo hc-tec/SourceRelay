@@ -47,6 +47,7 @@ async function main(): Promise<void> {
     endpointPath: options.endpointPath,
     nativeBridgeModulePath: resolve(dirname(fileURLToPath(import.meta.url)), 'native-bridge.js'),
     nativeHostStateDirectory: resolve(options.stateDirectory, 'native-hosts'),
+    visualEvidenceDirectory: resolve(options.stateDirectory, 'visual-evidence'),
     nativeBridgeRegistry,
     nativeBridgeCommands: nativeBridgeServer
   });

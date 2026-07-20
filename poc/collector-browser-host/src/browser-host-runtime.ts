@@ -25,6 +25,7 @@ export interface BrowserHostRuntimeConfig {
   endpointPath: string;
   nativeBridgeModulePath: string;
   nativeHostStateDirectory: string;
+  visualEvidenceDirectory: string;
   nativeBridgeRegistry: NativeBridgeRegistry;
   nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
 }
@@ -37,6 +38,7 @@ export class BrowserHostRuntime {
   readonly #endpointPath: string;
   readonly #nativeBridgeModulePath: string;
   readonly #nativeHostStateDirectory: string;
+  readonly #visualEvidenceDirectory: string;
   readonly #nativeBridgeRegistry: NativeBridgeRegistry;
   readonly #nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
   readonly #profiles = new Map<string, ProfileRuntime>();
@@ -51,12 +53,14 @@ export class BrowserHostRuntime {
     this.#endpointPath = resolve(config.endpointPath);
     this.#nativeBridgeModulePath = resolve(config.nativeBridgeModulePath);
     this.#nativeHostStateDirectory = resolve(config.nativeHostStateDirectory);
+    this.#visualEvidenceDirectory = resolve(config.visualEvidenceDirectory);
     this.#nativeBridgeRegistry = config.nativeBridgeRegistry;
     this.#nativeBridgeCommands = config.nativeBridgeCommands;
   }
 
   async initialise(): Promise<void> {
     await mkdir(this.#profileRoot, { recursive: true });
+    await mkdir(this.#visualEvidenceDirectory, { recursive: true, mode: 0o700 });
     await this.#journal.initialise();
   }
 
@@ -91,6 +95,8 @@ export class BrowserHostRuntime {
         return this.#profile(body.request.profileId).release(body.request);
       case 'navigate_page':
         return await this.#profile(body.request.profileId).navigate(body.request);
+      case 'capture_page_visual_evidence':
+        return await this.#profile(body.request.profileId).captureVisualEvidence(body.request);
       case 'bind_strategy_observer':
         return await this.#profile(body.request.profileId).bindStrategyObserver(body.request);
       case 'read_strategy_observation':
@@ -155,6 +161,7 @@ export class BrowserHostRuntime {
       nativeHostStateDirectory: this.#nativeHostStateDirectory,
       hostEndpointPath: this.#endpointPath,
       nativeBridgeModulePath: this.#nativeBridgeModulePath,
+      visualEvidenceDirectory: this.#visualEvidenceDirectory,
       maximumManagedPages,
       headless: request.headless ?? false,
       offlineOnly: request.offlineOnly ?? false,

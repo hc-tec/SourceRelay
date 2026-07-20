@@ -1,4 +1,17 @@
-import type { PagePoolSnapshot } from '@intelligence/collector-contracts';
+import type {
+  AcquirePageRequest,
+  AcquirePageResult,
+  CapturePageVisualEvidenceRequest,
+  ManagedPageSummary,
+  NavigatePageRequest,
+  PagePoolSnapshot,
+  PageVisualEvidence,
+  ReleasePageRequest,
+  StrategyObservationReadRequest,
+  StrategyObservationResult,
+  StrategyObserverBindingRequest,
+  StrategyObserverBindingResult
+} from '@intelligence/collector-contracts';
 import type { GatewayConfig } from './config';
 import { GatewayBrowserHostRuntime } from './browser-host-runtime';
 import {
@@ -45,6 +58,36 @@ export class CollectionBrowserManager {
     const profile = this.#registry.get(profileId);
     await this.#runtime.closeProfile(profileId);
     return profileSummary(profile, await this.#runtime.snapshotIfRunning());
+  }
+
+  async acquirePage(request: AcquirePageRequest): Promise<AcquirePageResult> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.acquirePage(request);
+  }
+
+  async navigatePage(request: NavigatePageRequest): Promise<ManagedPageSummary> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.navigatePage(request);
+  }
+
+  async capturePageVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.capturePageVisualEvidence(request);
+  }
+
+  async bindStrategyObserver(request: StrategyObserverBindingRequest): Promise<StrategyObserverBindingResult> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.bindStrategyObserver(request);
+  }
+
+  async readStrategyObservation(request: StrategyObservationReadRequest): Promise<StrategyObservationResult> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.readStrategyObservation(request);
+  }
+
+  async releasePage(request: ReleasePageRequest): Promise<ManagedPageSummary> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.releasePage(request);
   }
 
   disconnect(): void {

@@ -11,6 +11,7 @@ export interface GatewayConfig {
   browserHostMainModulePath: string;
   browserHostStateDirectory: string;
   browserHostEndpointPath: string;
+  browserHeadless: boolean;
   proxyServer?: string;
 }
 
@@ -21,6 +22,14 @@ function gatewayPort(value: string | undefined): number {
     throw new Error('COLLECTOR_GATEWAY_PORT must be an integer between 1024 and 65535.');
   }
   return parsed;
+}
+
+function browserHeadless(value: string | undefined): boolean {
+  if (value === undefined || value.trim() === '') return false;
+  const normalised = value.trim().toLowerCase();
+  if (normalised === 'true' || normalised === '1') return true;
+  if (normalised === 'false' || normalised === '0') return false;
+  throw new Error('COLLECTOR_BROWSER_HEADLESS must be true, false, 1, or 0.');
 }
 
 export function loadGatewayConfig(): GatewayConfig {
@@ -46,6 +55,7 @@ export function loadGatewayConfig(): GatewayConfig {
     browserHostEndpointPath: resolve(
       process.env.COLLECTOR_BROWSER_HOST_ENDPOINT ?? resolve(browserHostStateDirectory, 'endpoint.json')
     ),
+    browserHeadless: browserHeadless(process.env.COLLECTOR_BROWSER_HEADLESS),
     ...(proxyServer ? { proxyServer } : {})
   };
 }

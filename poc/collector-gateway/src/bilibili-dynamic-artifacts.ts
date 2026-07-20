@@ -4,8 +4,10 @@ import { resolve } from 'node:path';
 import { canonicalJson } from '../../collector-extension/src/shared/cryptography';
 import type {
   BilibiliDynamicPageProjection,
+  BilibiliDynamicCrossCheckDiagnostic,
   BilibiliDynamicResponseEvidence,
-  BilibiliDynamicRunRecord
+  BilibiliDynamicRunRecord,
+  BilibiliDynamicVisualEvidence
 } from './bilibili-dynamic-contract';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -44,6 +46,8 @@ export interface BilibiliDynamicArtifactManifest
   actions: BilibiliDynamicRunRecord['actions'];
   coverage: BilibiliDynamicRunRecord['coverage'];
   pageFiles: BilibiliDynamicPageFile[];
+  visualEvidence: BilibiliDynamicVisualEvidence | null;
+  crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
   failedResponseFile: typeof FAILED_RESPONSE_FILE | null;
   failedResponseFileSha256: string | null;
   safeguards: BilibiliDynamicRunRecord['safeguards'];
@@ -54,6 +58,7 @@ export interface BilibiliDynamicArtifactView {
   manifest: BilibiliDynamicArtifactManifest;
   pages: BilibiliDynamicPageProjection[];
   failedResponseEvidence: BilibiliDynamicResponseEvidence | null;
+  crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
 }
 
 function sha256(value: string): string {
@@ -187,6 +192,8 @@ export class BilibiliDynamicArtifactStore {
       actions: run.actions,
       coverage: run.coverage,
       pageFiles,
+      visualEvidence: run.visualEvidence,
+      crossCheckDiagnostic: run.crossCheckDiagnostic,
       failedResponseFile,
       failedResponseFileSha256,
       safeguards: run.safeguards
@@ -248,7 +255,8 @@ export class BilibiliDynamicArtifactStore {
       summary: structuredClone(summary),
       manifest: structuredClone(manifest),
       pages: structuredClone(pages),
-      failedResponseEvidence: structuredClone(failedResponseEvidence)
+      failedResponseEvidence: structuredClone(failedResponseEvidence),
+      crossCheckDiagnostic: structuredClone(manifest.crossCheckDiagnostic)
     };
   }
 

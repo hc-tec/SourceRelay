@@ -101,6 +101,30 @@ export interface BilibiliDynamicItemProjection extends BilibiliDynamicResponseIt
   };
 }
 
+/**
+ * The non-identifying facts used to prove that a response page and the
+ * rendered dynamic-card sequence describe the same public page.  It is kept
+ * separate from item/card projections so a rejected page can still be
+ * diagnosed without persisting its public text or response-derived records.
+ */
+export interface BilibiliDynamicDomResponseCrossCheck {
+  responsePageItems: number;
+  responseCumulativeItems: number;
+  domCumulativeCards: number;
+  matchedPageCards: number;
+  cardEvidenceMatches: number;
+  accessStateMatches: number;
+  forwardedStateMatches: number;
+  crossCheckablePrimaryIdentities: number;
+  primaryIdentityMatches: number;
+  textMatches: number;
+  authorMatches: number;
+  publicationMatches: number;
+  exactCumulativeCardCount: boolean;
+  responsePageDynamicIdDigest: string;
+  responseCumulativeDynamicIdDigest: string;
+}
+
 export interface BilibiliDynamicPageProjection {
   schemaVersion: 1;
   pageNumber: number;
@@ -114,24 +138,29 @@ export interface BilibiliDynamicPageProjection {
   queryKeyNames: string[];
   schemaPaths: ResponseSchemaPath[];
   sensitiveFieldPathsOmitted: number;
-  domCrossCheck: {
-    responsePageItems: number;
-    responseCumulativeItems: number;
-    domCumulativeCards: number;
-    matchedPageCards: number;
-    cardEvidenceMatches: number;
-    accessStateMatches: number;
-    forwardedStateMatches: number;
-    crossCheckablePrimaryIdentities: number;
-    primaryIdentityMatches: number;
-    textMatches: number;
-    authorMatches: number;
-    publicationMatches: number;
-    exactCumulativeCardCount: boolean;
-    responsePageDynamicIdDigest: string;
-    responseCumulativeDynamicIdDigest: string;
-  };
+  domCrossCheck: BilibiliDynamicDomResponseCrossCheck;
   capturedAt: string;
+}
+
+export type BilibiliDynamicCrossCheckFailure =
+  | 'cumulative_card_count_mismatch'
+  | 'page_card_alignment_mismatch'
+  | 'card_evidence_mismatch'
+  | 'author_mismatch'
+  | 'access_state_mismatch'
+  | 'forwarded_state_mismatch';
+
+/**
+ * Safe failure evidence for a strict DOM/response cross-check.  This must
+ * never contain a dynamic ID, author/display name, visible text, URL query
+ * value, response body, or DOM selector.
+ */
+export interface BilibiliDynamicCrossCheckDiagnostic {
+  schemaVersion: 1;
+  pageNumber: number;
+  itemCount: number;
+  domCrossCheck: BilibiliDynamicDomResponseCrossCheck;
+  failedChecks: BilibiliDynamicCrossCheckFailure[];
 }
 
 export interface BilibiliDynamicResponseEvidence {
@@ -143,6 +172,23 @@ export interface BilibiliDynamicResponseEvidence {
   queryKeyNames: string[];
   schemaPaths: ResponseSchemaPath[];
   sensitiveFieldPathsOmitted: number;
+}
+
+export interface BilibiliDynamicVisualEvidence {
+  evidenceId: string;
+  capturedAt: string;
+  viewport: {
+    cssWidth: number;
+    cssHeight: number;
+    devicePixelRatio: number;
+    scrollX: number;
+    scrollY: number;
+  };
+  screenshot: {
+    fileName: string;
+    byteLength: number;
+    sha256: string;
+  };
 }
 
 export interface BilibiliDynamicAction {
@@ -187,6 +233,8 @@ export interface BilibiliDynamicRunRecord {
   completedAt: string;
   stableAccountId: string;
   failedResponseEvidence: BilibiliDynamicResponseEvidence | null;
+  crossCheckDiagnostic: BilibiliDynamicCrossCheckDiagnostic | null;
+  visualEvidence: BilibiliDynamicVisualEvidence | null;
   pages: BilibiliDynamicPageProjection[];
   actions: BilibiliDynamicAction[];
   coverage: {
@@ -206,7 +254,7 @@ export interface BilibiliDynamicRunRecord {
   safeguards: {
     environment: 'local_user_controlled_collection_profile';
     browser: 'visible_playwright_chromium';
-    acquisition: 'trusted_navigation_and_scroll_plus_dom_response_projection';
+    acquisition: 'trusted_navigation_plus_dom_response_projection';
     requestHeaders: 'not_read';
     requestBody: 'not_read';
     cookiesAndTokens: 'not_read';
@@ -222,8 +270,9 @@ export interface BilibiliDynamicRunRecord {
     targetTabSelection:
       | 'reused_matching_managed_tab'
       | 'reused_retained_managed_tab'
-      | 'created_new_managed_tab';
-    targetPage: 'retained_after_run';
+      | 'created_new_managed_tab'
+      | 'not_acquired';
+    targetPage: 'retained_after_run' | 'quarantined_on_uncertain_outcome' | 'not_acquired';
     admissionEligible: false;
   };
 }

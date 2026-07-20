@@ -4,7 +4,7 @@
  * contracts package prevents the live worker from importing the retired
  * Gateway control-plane protocol merely to publish its own identity.
  */
-export const COLLECTOR_EXTENSION_VERSION = '0.7.0' as const;
+export const COLLECTOR_EXTENSION_VERSION = '0.7.1' as const;
 export const COLLECTOR_CONTROL_SURFACE_REVISION = 5 as const;
 export const COLLECTOR_RUNTIME_BOOTSTRAP_KEY = 'collector.runtime-bootstrap.v1' as const;
 

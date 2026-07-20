@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AccountSafetyRegistry } from './account-safety';
 import { accountSafetyUnlockInput } from './account-safety';
 import type { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
+import type { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
 import type { CollectionBrowserManager } from './browser-manager';
 import type { LoadedGatewayIdentity } from './identity';
 import type { BrowserProfileRegistry } from './profiles';
@@ -17,6 +18,7 @@ export interface GatewayRouteContext {
   profileRegistry: BrowserProfileRegistry;
   accountSafety: AccountSafetyRegistry;
   dynamicArtifacts: BilibiliDynamicArtifactStore;
+  dynamicRunner: BilibiliDynamicHostRunner;
 }
 
 export async function handleGatewayRoute(
@@ -116,6 +118,31 @@ export async function handleGatewayRoute(
 
   if (request.method === 'GET' && url.pathname === '/v1/dynamic-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.dynamicArtifacts.list() });
+    return true;
+  }
+  const dynamicRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/dynamic/single-page$`, 'i'));
+  if (request.method === 'POST' && dynamicRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const body = await readJsonBody(request);
+    if (
+      !body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).length !== 1 ||
+      typeof (body as { canonicalProfileUrl?: unknown }).canonicalProfileUrl !== 'string'
+    ) throw new Error('bilibili_dynamic_run_input_invalid');
+    const result = await context.dynamicRunner.run({
+      profileId: dynamicRun[1]!,
+      canonicalProfileUrl: (body as { canonicalProfileUrl: string }).canonicalProfileUrl
+    });
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        artifact: result.artifact
+      }
+    });
     return true;
   }
   const dynamicArtifact = url.pathname.match(new RegExp(`^/v1/dynamic-artifacts/(${PROFILE_ID})$`, 'i'));

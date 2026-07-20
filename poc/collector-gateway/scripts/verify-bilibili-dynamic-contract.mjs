@@ -8,12 +8,14 @@ import { build } from 'esbuild';
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'collector-bilibili-dynamic-'));
 const contractBundle = join(temporaryDirectory, 'bilibili-dynamic-contract.mjs');
 const responseBundle = join(temporaryDirectory, 'bilibili-dynamic-response.mjs');
+const crossCheckBundle = join(temporaryDirectory, 'bilibili-dynamic-cross-check.mjs');
 const artifactBundle = join(temporaryDirectory, 'bilibili-dynamic-artifacts.mjs');
 
 try {
   await Promise.all([
     [new URL('../src/bilibili-dynamic-contract.ts', import.meta.url), contractBundle],
     [new URL('../src/bilibili-dynamic-response.ts', import.meta.url), responseBundle],
+    [new URL('../src/bilibili-dynamic-cross-check.ts', import.meta.url), crossCheckBundle],
     [new URL('../src/bilibili-dynamic-artifacts.ts', import.meta.url), artifactBundle]
   ].map(([entry, outfile]) => build({
     entryPoints: [fileURLToPath(entry)],
@@ -26,6 +28,7 @@ try {
   })));
   const contract = await import(pathToFileURL(contractBundle).href);
   const response = await import(pathToFileURL(responseBundle).href);
+  const crossCheck = await import(pathToFileURL(crossCheckBundle).href);
   const { BilibiliDynamicArtifactStore } = await import(pathToFileURL(artifactBundle).href);
 
   const accountId = '123456';
@@ -221,6 +224,7 @@ try {
   assert.equal(projected.projection.domCrossCheck.authorMatches, 4);
   assert.equal(projected.projection.domCrossCheck.accessStateMatches, 4);
   assert.equal(projected.projection.domCrossCheck.forwardedStateMatches, 4);
+  assert.deepEqual(crossCheck.bilibiliDynamicCrossCheckDiagnostic(projected.projection).failedChecks, []);
   assert.equal(response.bilibiliDynamicCardTextEvidenceMatches(
     '互动抽奖​六一快乐',
     ['互动抽奖六一快乐'],
@@ -251,6 +255,8 @@ try {
     completedAt: '2026-07-20T02:00:01.000Z',
     stableAccountId: accountId,
     failedResponseEvidence: null,
+    crossCheckDiagnostic: null,
+    visualEvidence: null,
     pages: [projected.projection],
     actions: [{
       actionId: 'open_dynamic_inventory',
@@ -291,7 +297,7 @@ try {
     safeguards: {
       environment: 'local_user_controlled_collection_profile',
       browser: 'visible_playwright_chromium',
-      acquisition: 'trusted_navigation_and_scroll_plus_dom_response_projection',
+      acquisition: 'trusted_navigation_plus_dom_response_projection',
       requestHeaders: 'not_read', requestBody: 'not_read', cookiesAndTokens: 'not_read',
       networkQueryAndFragmentValues: 'discarded', cursorValue: 'used_in_memory_not_persisted',
       responseProjection: 'public_dynamic_identity_author_text_relation_and_metrics_allowlist',
@@ -311,6 +317,7 @@ try {
   assert.equal(artifact.pages[0].items.length, 4);
   assert.equal(artifact.pages[0].items[2].accessState, 'restricted_placeholder');
   assert.equal(artifact.failedResponseEvidence, null);
+  assert.equal(artifact.crossCheckDiagnostic, null);
   const recovered = await BilibiliDynamicArtifactStore.create(stateDirectory);
   assert.equal((await recovered.get(summary.artifactId)).summary.manifestSha256, summary.manifestSha256);
 
@@ -323,6 +330,57 @@ try {
     'profileId', 'browserProfileId', 'Cookie', 'Authorization', 'credential=discard',
     'next-offset-secret', 'offset=next-offset-secret', 'w_rid=', 'tracking=discard'
   ]) assert.equal(persisted.includes(forbidden), false, `forbidden persisted value: ${forbidden}`);
+
+  const mismatchedProjection = {
+    ...projected.projection,
+    domCrossCheck: {
+      ...projected.projection.domCrossCheck,
+      authorMatches: projected.projection.items.length - 1
+    }
+  };
+  const crossCheckDiagnostic = crossCheck.bilibiliDynamicCrossCheckDiagnostic(mismatchedProjection);
+  assert.deepEqual(crossCheckDiagnostic.failedChecks, ['author_mismatch']);
+  const failedRun = {
+    ...run,
+    runId: '22222222-2222-4222-8222-222222222222',
+    state: 'failed',
+    errorCode: 'dynamic_dom_response_cross_check_failed',
+    failedResponseEvidence: {
+      pathname: '/x/polymer/web-dynamic/v1/feed/space',
+      pageNumber: 1,
+      responseStatus: 200,
+      responseBodyBytes: 2_048,
+      responseBodySha256: 'a'.repeat(64),
+      queryKeyNames: ['host_mid'],
+      schemaPaths: [{ path: '$', type: 'object' }],
+      sensitiveFieldPathsOmitted: 0
+    },
+    crossCheckDiagnostic,
+    pages: [],
+    coverage: {
+      ...run.coverage,
+      capturedPages: 0,
+      capturedItems: 0,
+      uniqueItems: 0,
+      forwardedItems: 0,
+      restrictedPlaceholderItems: 0,
+      dynamicTypes: [],
+      majorTypes: [],
+      domCardKinds: [],
+      terminalReason: 'dom_response_mismatch'
+    }
+  };
+  const failedSummary = await store.record(failedRun);
+  const failedArtifact = await store.get(failedSummary.artifactId);
+  assert.deepEqual(failedArtifact.crossCheckDiagnostic, crossCheckDiagnostic);
+  assert.deepEqual(failedArtifact.manifest.crossCheckDiagnostic?.failedChecks, ['author_mismatch']);
+  assert.equal(failedArtifact.pages.length, 0);
+  const failedArtifactDirectory = join(stateDirectory, 'bilibili-dynamic', failedSummary.artifactId);
+  const failedPersisted = (await Promise.all((await readdir(failedArtifactDirectory)).map((name) =>
+    readFile(join(failedArtifactDirectory, name), 'utf8')
+  ))).join('\n');
+  assert.equal(failedPersisted.includes('公开视频说明'), false);
+  assert.equal(failedPersisted.includes(dynamicIds[0]), false);
 
   console.log(JSON.stringify({
     ok: true,

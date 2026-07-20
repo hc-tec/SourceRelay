@@ -62,9 +62,9 @@ async function connectConfiguredBridge(value: unknown): Promise<void> {
     if (isCollectorHostBridgeCommand(message) && commandMatchesConfig(message, value)) {
       void executeHostCommand(message).then(
         (result) => postCommandResult(port, value, message.commandId, { ok: true, result }),
-        () => postCommandResult(port, value, message.commandId, {
+        (error) => postCommandResult(port, value, message.commandId, {
           ok: false,
-          errorCode: 'native_bridge_extension_command_failed'
+          errorCode: safeExtensionCommandErrorCode(error)
         })
       );
       return;
@@ -91,6 +91,13 @@ async function connectConfiguredBridge(value: unknown): Promise<void> {
     nonce: randomNonce()
   };
   port.postMessage(hello);
+}
+
+function safeExtensionCommandErrorCode(error: unknown): string {
+  const code = error instanceof Error ? error.message : '';
+  return /^[a-z0-9_]{1,100}$/.test(code)
+    ? code
+    : 'native_bridge_extension_command_failed';
 }
 
 function commandMatchesConfig(command: CollectorHostBridgeCommand, config: CollectorNativeBridgeConfig): boolean {

@@ -7,14 +7,17 @@ import {
 import {
   COLLECTOR_CONTROL_SURFACE_REVISION,
   COLLECTOR_EXTENSION_VERSION,
+  BrowserHostError,
   PAGE_POOL_SCHEMA_VERSION,
   type AcquirePageRequest,
   type AcquirePageResult,
   type BrowserHostCommandBody,
   type BrowserHostCommandResult,
+  type CapturePageVisualEvidenceRequest,
   type ManagedPageSummary,
   type NavigatePageRequest,
   type PagePoolSnapshot,
+  type PageVisualEvidence,
   type ReleasePageRequest,
   type StrategyObservationReadRequest,
   type StrategyObservationResult,
@@ -56,7 +59,7 @@ export class GatewayBrowserHostRuntime {
       request: {
         profileId,
         maximumManagedPages: 3,
-        headless: false,
+        headless: this.#config.browserHeadless,
         offlineOnly: false,
         extensionRuntime: EXTENSION_RUNTIME_EXPECTATION
       }
@@ -79,6 +82,15 @@ export class GatewayBrowserHostRuntime {
 
   async navigatePage(request: NavigatePageRequest): Promise<ManagedPageSummary> {
     return managedPageResult(await this.#command({ type: 'navigate_page', request }, false));
+  }
+
+  async capturePageVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {
+    const result = await this.#command({ type: 'capture_page_visual_evidence', request }, false);
+    if (!result || typeof result !== 'object' ||
+      !('evidenceId' in result) || !('screenshot' in result) || !('viewport' in result)) {
+      throw new Error('browser_host_visual_evidence_response_invalid');
+    }
+    return structuredClone(result as PageVisualEvidence);
   }
 
   async releasePage(request: ReleasePageRequest): Promise<ManagedPageSummary> {
@@ -124,7 +136,11 @@ export class GatewayBrowserHostRuntime {
     try {
       return await client.command(body);
     } catch (error) {
-      if (this.#client === client) this.disconnect();
+      // A typed Host error is a completed, correlated command result (for
+      // example a lease, extension, or platform-context rejection). Closing
+      // the IPC client here would make Host quarantine the live PageLease and
+      // hide the original error behind a later page_lease_mismatch.
+      if (this.#client === client && !(error instanceof BrowserHostError)) this.disconnect();
       throw error;
     }
   }

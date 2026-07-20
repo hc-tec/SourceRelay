@@ -34,7 +34,7 @@ const profileId = 'real-browser-lifecycle';
 await mkdir(stateDirectory, { recursive: true });
 await mkdir(profileRoot, { recursive: true });
 const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-assert.equal(extensionManifest.version, '0.7.0');
+assert.equal(extensionManifest.version, '0.7.1');
 
 let endpoint = null;
 let client = null;
@@ -68,7 +68,10 @@ try {
     request: {
       profileId,
       maximumManagedPages: 3,
-      headless: false,
+      // This is a real Chromium gate, but it is offline-only and does not
+      // need a human-visible window.  Keeping it headless prevents the test
+      // harness from looking like an unexpected browser flash/crash.
+      headless: true,
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
@@ -166,6 +169,17 @@ try {
   await client.command({ type: 'release_page', request: releaseRequest(profileId, reusedA, 'idle_reusable') });
   await client.command({ type: 'release_page', request: releaseRequest(profileId, pageB, 'idle_reusable') });
   await client.command({ type: 'release_page', request: releaseRequest(profileId, pageC, 'retained_for_review') });
+
+  const reusedRetainedExact = asAcquire(await client.command({
+    type: 'acquire_page',
+    request: acquireRequest(profileId, 'task-retained-reuse', 'run-retained-reuse', 'discussion', 'about:blank#discussion')
+  }));
+  assert.equal(reusedRetainedExact.page.pageAlias, pageC.page.pageAlias);
+  assert.equal(reusedRetainedExact.selection, 'reused_exact_target');
+  await client.command({
+    type: 'release_page',
+    request: releaseRequest(profileId, reusedRetainedExact, 'retained_for_review')
+  });
 
   const plan = asReclaimPlan(await client.command({
     type: 'create_reclaim_plan',
@@ -269,8 +283,8 @@ try {
     ok: true,
     gate: 'browser-host-real-chromium-managed-page-lifecycle',
     livePlatformRequests: 0,
-    browserVisible: true,
-    extensionRuntimeMarkerVerifiedBeforeVisibleLaunch: true,
+    browserMode: 'headless_test_scoped',
+    extensionRuntimeMarkerVerifiedBeforeTestLaunch: true,
     nativeMessagingBridgeConnected: true,
     hostCreatedPagesBoundToExtensionTabs: true,
     nativeMessagingRegistrationCleaned: true,
@@ -285,6 +299,7 @@ try {
     releasedPageReused: true,
     idleStaleReconciledWithoutPlatformInput: true,
     retainedPageProtected: true,
+    exactRetainedPageReusedWithoutNewTab: true,
     unexpectedNavigationQuarantined: true,
     activeLeaseQuarantinedOnControllerDisconnect: true,
     reclaimPlanExecutedExplicitly: true,

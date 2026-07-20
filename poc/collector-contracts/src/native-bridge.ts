@@ -48,6 +48,7 @@ export interface CollectorListExtensionTabsCommand {
 export interface CollectorBindStrategyObserverCommand {
   type: 'collector_bind_strategy_observer';
   tabId: number;
+  // A lower bound: one user navigation may contain legitimate redirects.
   nextDocumentGeneration: number;
   binding: StrategyObserverBindingRequest;
 }

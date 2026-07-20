@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BrowserHostClient, launchBrowserHost } from '../dist/client.js';
@@ -44,7 +44,7 @@ let browserProcessId = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.0');
+  assert.equal(extensionManifest.version, '0.7.1');
 
   endpoint = await launchBrowserHost({
     mainModulePath,
@@ -61,7 +61,10 @@ try {
     request: {
       profileId,
       maximumManagedPages: 1,
-      headless: false,
+      // Strategy binding is verified against real Chromium and the real MV3
+      // worker.  No person needs to inspect this offline-only gate, so avoid
+      // opening and then immediately closing a visible test window.
+      headless: true,
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
@@ -106,6 +109,24 @@ try {
   assert.equal(binding.observerBindingId, bindingRequest.observerBindingId);
   assert.equal(binding.pageAlias, acquired.page.pageAlias);
   assert.equal(binding.nextDocumentGeneration, acquired.page.documentGeneration + 1);
+
+  const visual = await client.command({
+    type: 'capture_page_visual_evidence',
+    request: {
+      profileId,
+      pageAlias: acquired.page.pageAlias,
+      pageLeaseId: acquired.lease.pageLeaseId,
+      expectedRecordVersion: acquired.page.recordVersion,
+      runId
+    }
+  });
+  assert.equal(visual.pageAlias, acquired.page.pageAlias);
+  assert.equal(visual.documentGeneration, 0);
+  assert.match(visual.screenshot.sha256, /^[0-9a-f]{64}$/);
+  assert.equal(
+    (await stat(resolve(stateDirectory, 'visual-evidence', visual.screenshot.fileName))).size,
+    visual.screenshot.byteLength
+  );
 
   await expectHostError(
     () => client.command({
@@ -157,11 +178,12 @@ try {
     gate: 'browser-host-real-chromium-strategy-observer-binding',
     platformNavigationCount: 0,
     livePlatformRequests: 0,
-    browserVisible: true,
+    browserMode: 'headless_test_scoped',
     nativeMessagingBridgeConnected: true,
     hostCreatedPageBoundToOneExtensionTab: true,
     hostToExtensionStrategyCommandRoundTripCompleted: true,
     observerBindingCorrelationVerified: true,
+    postObservationVisualEvidenceCaptured: true,
     runLeaseMismatchRejectedBeforeExtensionDispatch: true,
     recordVersionMismatchRejectedBeforeExtensionDispatch: true,
     testScopedExplicitCleanup: true

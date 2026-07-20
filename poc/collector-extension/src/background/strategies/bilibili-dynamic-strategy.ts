@@ -96,7 +96,7 @@ export async function readBilibiliDynamicObservation(
     stored.binding.runId !== command.request.runId ||
     stored.binding.pageAlias !== command.request.pageAlias ||
     stored.binding.strategyId !== command.request.strategyId ||
-    stored.nextDocumentGeneration !== command.documentGeneration) {
+    command.documentGeneration < stored.nextDocumentGeneration) {
     throw new Error('dynamic_strategy_binding_context_rejected');
   }
   const arm = await getActiveNetworkCaptureArm(command.tabId);

@@ -12,6 +12,7 @@ import type {
   ReconcilePageRequest,
   ReleasePageRequest
 } from './page-pool.js';
+import type { CapturePageVisualEvidenceRequest, PageVisualEvidence } from './page-visual-evidence.js';
 import type { BrowserHostErrorRecord } from './errors.js';
 import type {
   StrategyObservationReadRequest,
@@ -57,6 +58,7 @@ export type BrowserHostCommandBody =
   | { type: 'acquire_page'; request: AcquirePageRequest }
   | { type: 'release_page'; request: ReleasePageRequest }
   | { type: 'navigate_page'; request: NavigatePageRequest }
+  | { type: 'capture_page_visual_evidence'; request: CapturePageVisualEvidenceRequest }
   | { type: 'bind_strategy_observer'; request: StrategyObserverBindingRequest }
   | { type: 'read_strategy_observation'; request: StrategyObservationReadRequest }
   | { type: 'reconcile_page'; request: ReconcilePageRequest }
@@ -83,6 +85,7 @@ export type BrowserHostCommandResult =
   | PagePoolSnapshot
   | AcquirePageResult
   | ManagedPageSummary
+  | PageVisualEvidence
   | ReclaimPlan
   | ReclaimExecutionResult
   | StrategyObserverBindingResult

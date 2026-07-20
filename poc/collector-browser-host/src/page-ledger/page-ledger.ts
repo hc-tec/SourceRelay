@@ -2,8 +2,10 @@ import type { BrowserContext } from 'playwright';
 import {
   type AcquirePageRequest,
   type AcquirePageResult,
+  type CapturePageVisualEvidenceRequest,
   type ManagedPageSummary,
   type NavigatePageRequest,
+  type PageVisualEvidence,
   type ReconcilePageRequest,
   type ReleasePageRequest
 } from '@intelligence/collector-contracts';
@@ -18,10 +20,11 @@ import {
   type ManagedPageRecord
 } from './page-record.js';
 import { createManagedPage } from './managed-page-creation.js';
+import { captureManagedPageVisualEvidence } from './page-visual-evidence.js';
 import {
   DEFAULT_MAX_IDLE_TRUST_MS,
   leaseSelectedPage,
-  selectIdlePage,
+  selectLeaseablePage,
   validateAcquireRequest
 } from './page-selection.js';
 
@@ -90,7 +93,7 @@ export class PageLedger {
     await this.#reconcileStaleCandidates();
 
     const targetUrlDigest = request.targetUrl ? digestUrl(request.targetUrl) : null;
-    const selected = selectIdlePage([...this.#records.values()], request.platform, request.pageRole, targetUrlDigest);
+    const selected = selectLeaseablePage([...this.#records.values()], request.platform, request.pageRole, targetUrlDigest);
     if (selected.record && selected.selection) {
       const result = leaseSelectedPage(
         selected.record,
@@ -239,6 +242,21 @@ export class PageLedger {
       documentGeneration: record.documentGeneration,
       routeGeneration: record.routeGeneration
     };
+  }
+
+  async captureVisualEvidence(
+    request: CapturePageVisualEvidenceRequest,
+    directory: string
+  ): Promise<PageVisualEvidence> {
+    const context = this.extensionCommandContext(request);
+    const record = this.#record(request.profileId, request.pageAlias);
+    return await captureManagedPageVisualEvidence({
+      page: record.page,
+      pageAlias: record.pageAlias,
+      documentGeneration: context.documentGeneration,
+      routeGeneration: context.routeGeneration,
+      directory
+    });
   }
 
   release(request: ReleasePageRequest): ManagedPageSummary {

@@ -25,7 +25,8 @@ const environment = {
   COLLECTOR_BROWSER_HOST_STATE_DIR: resolve(runtimeRoot, 'browser-host'),
   COLLECTOR_BROWSER_HOST_ENDPOINT: resolve(runtimeRoot, 'browser-host', 'endpoint.json'),
   COLLECTOR_BROWSER_HOST_MAIN: browserHostMain,
-  COLLECTOR_EXTENSION_DIRECTORY: extensionDirectory
+  COLLECTOR_EXTENSION_DIRECTORY: extensionDirectory,
+  COLLECTOR_BROWSER_HEADLESS: 'true'
 };
 
 let gateway = null;
@@ -52,7 +53,7 @@ try {
   });
   const first = launched.profile;
   assert.equal(first.running, true);
-  assert.equal(first.runtime?.extensionRuntime?.finalRuntimeVersion, '0.7.0');
+  assert.equal(first.runtime?.extensionRuntime?.finalRuntimeVersion, '0.7.1');
   assert.equal(first.runtime?.extensionRuntime?.nativeBridgeConnected, true);
   assert.equal(first.runtime?.livePlatformRequests, 0);
   hostPid = first.host?.hostProcessId ?? null;
@@ -84,6 +85,7 @@ try {
     ok: true,
     gate: 'gateway-real-browser-host-lifecycle',
     livePlatformRequests: 0,
+    browserMode: 'headless_test_scoped',
     gatewayExitDidNotCloseHost: true,
     gatewayExitDidNotCloseBrowser: true,
     reconnectPreservedHostPid: true,

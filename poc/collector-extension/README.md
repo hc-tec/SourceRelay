@@ -2,7 +2,7 @@
 
 这是个人情报产品在用户自己浏览器 Profile 内的只读观察层。它不是传统爬虫，也不是一个把 Cookie、任意 selector 或任意请求转发给本地服务的代理。浏览器自然保留用户正常登录状态；扩展不导出凭证、不绕过验证码/限流，也不执行点赞、关注、评论、私信、发布或删除。
 
-当前版本为 `0.7.0`。正在实现的唯一编译期 Strategy 是 B 站账号动态页的单页 DOM/XHR 观察：
+当前版本为 `0.7.1`。正在实现的唯一编译期 Strategy 是 B 站账号动态页的单页 DOM/XHR 观察：
 
 ```text
 Gateway
@@ -30,7 +30,7 @@ MV3 Extension
 
 ## 已移除的旧路径
 
-`0.7.0` 不再包含以下 Extension runtime：
+`0.7.1` 不再包含以下 Extension runtime：
 
 - Extension 到 `127.0.0.1` Gateway 的配对、轮询、fetch、签名任务 envelope 和 evidence 回传；
 - stage lease、单工作 tab、URL digest 认领、静态 `content.js` 和旧的 capability-validation runner；

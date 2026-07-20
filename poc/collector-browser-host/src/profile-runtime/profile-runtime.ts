@@ -3,6 +3,7 @@ import {
   type AcquirePageRequest,
   type AcquirePageResult,
   type BrowserProfilePagePoolSummary,
+  type CapturePageVisualEvidenceRequest,
   type CreateReclaimPlanRequest,
   type ExtensionRuntimeExpectation,
   type ExtensionRuntimeSummary,
@@ -14,7 +15,8 @@ import {
   type StrategyObservationReadRequest,
   type StrategyObservationResult,
   type StrategyObserverBindingRequest,
-  type StrategyObserverBindingResult
+  type StrategyObserverBindingResult,
+  type PageVisualEvidence
 } from '@intelligence/collector-contracts';
 import type { NativeBridgeRegistry } from '../native-bridge/native-bridge-registry.js';
 import type { NativeBridgeServer } from '../native-bridge/native-bridge-server.js';
@@ -33,6 +35,7 @@ export class ProfileRuntime {
   readonly #nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
   readonly #nativeHostRegistration: NativeMessagingHostRegistration | null;
   readonly #extensionRuntime: ExtensionRuntimeSummary | null;
+  readonly #visualEvidenceDirectory: string;
   #browserProcessId: number | null = null;
   #livePlatformRequests = 0;
   #running = true;
@@ -49,6 +52,7 @@ export class ProfileRuntime {
     nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
     nativeHostRegistration: NativeMessagingHostRegistration | null;
     extensionRuntime: ExtensionRuntimeSummary | null;
+    visualEvidenceDirectory: string;
   }) {
     this.profileId = input.profileId;
     this.browserSessionId = input.browserSessionId;
@@ -60,6 +64,7 @@ export class ProfileRuntime {
     this.#nativeBridgeCommands = input.nativeBridgeCommands;
     this.#nativeHostRegistration = input.nativeHostRegistration;
     this.#extensionRuntime = input.extensionRuntime;
+    this.#visualEvidenceDirectory = input.visualEvidenceDirectory;
   }
 
   static async launch(input: {
@@ -73,6 +78,7 @@ export class ProfileRuntime {
     nativeHostStateDirectory: string;
     hostEndpointPath: string;
     nativeBridgeModulePath: string;
+    visualEvidenceDirectory: string;
     maximumManagedPages: number;
     headless: boolean;
     offlineOnly: boolean;
@@ -141,7 +147,8 @@ export class ProfileRuntime {
         nativeBridgeRegistry: input.nativeBridgeRegistry,
         nativeBridgeCommands: input.nativeBridgeCommands,
         nativeHostRegistration,
-        extensionRuntime
+        extensionRuntime,
+        visualEvidenceDirectory: input.visualEvidenceDirectory
       });
       runtime.#livePlatformRequests = requestsBeforeRuntime;
       return runtime;
@@ -209,6 +216,10 @@ export class ProfileRuntime {
       throw new Error('strategy_observation_result_invalid');
     }
     return result;
+  }
+
+  async captureVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {
+    return await this.#ledger.captureVisualEvidence(request, this.#visualEvidenceDirectory);
   }
 
   reconcile(request: ReconcilePageRequest) {

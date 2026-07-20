@@ -22,7 +22,14 @@ export interface PageSelectionResult {
   selection: ManagedPageSelection | null;
 }
 
-export function selectIdlePage(
+/**
+ * Selects a page that can safely receive a new lease.  A review-retained page
+ * is deliberately excluded from generic role/profile reuse and reclamation,
+ * but an exact same-target request may reopen it after rechecking the live
+ * browser URL.  This lets repeat work stay in its existing tab without ever
+ * hijacking a page a person has since navigated elsewhere.
+ */
+export function selectLeaseablePage(
   records: readonly ManagedPageRecord[],
   platform: string,
   pageRole: string,
@@ -36,6 +43,25 @@ export function selectIdlePage(
       record.expectedIdentity.targetUrlDigest === targetUrlDigest)
     : null;
   if (exact) return { record: exact, selection: 'reused_exact_target' };
+
+  // A retained page is never a generic pool candidate.  It can only be
+  // leased again for the exact identity it was retained to review, and only
+  // when the real page has not moved since then.  The latter check protects a
+  // user who keeps the tab but browses elsewhere before the next run.
+  const retainedExact = targetUrlDigest
+    ? records
+      .filter((record) =>
+        record.state === 'retained_for_review' &&
+        record.activeLease === null &&
+        !record.page.isClosed() &&
+        record.platform === platform &&
+        record.pageRole === pageRole &&
+        record.expectedIdentity.targetUrlDigest === targetUrlDigest &&
+        digestUrl(record.page.url()) === targetUrlDigest)
+      .sort((left, right) => Date.parse(right.lastUsedAt) - Date.parse(left.lastUsedAt))[0] ?? null
+    : null;
+  if (retainedExact) return { record: retainedExact, selection: 'reused_exact_target' };
+
   const sameRole = idle.find((record) => record.platform === platform && record.pageRole === pageRole);
   if (sameRole) return { record: sameRole, selection: 'reused_same_role' };
   return idle[0]
