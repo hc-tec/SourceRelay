@@ -49,10 +49,16 @@ async function main(): Promise<void> {
   };
   socket.write(`${JSON.stringify(handshake)}\n`);
   const accepted = JSON.parse(await lines.next()) as NativeBridgeHostResponse;
-  if (!accepted.ok || accepted.type !== 'native_bridge_handshake_accepted') {
-    throw new Error(!accepted.ok ? accepted.errorCode : 'native_bridge_handshake_response_invalid');
+  if (accepted.type === 'native_bridge_error') throw new Error(accepted.errorCode);
+  if (accepted.type !== 'native_bridge_handshake_accepted') {
+    throw new Error('native_bridge_handshake_response_invalid');
   }
 
+  const pending = new Map<string, {
+    resolve: (response: NativeBridgeHostResponse) => void;
+    reject: (error: Error) => void;
+  }>();
+  void pumpHostMessages(lines, accepted.bridgeConnectionId, pending).catch(fail);
   let tail = Promise.resolve();
   const nativeInput = nativeMessageReader((payload) => {
     tail = tail.then(async () => {
@@ -64,10 +70,10 @@ async function main(): Promise<void> {
         messageId,
         payload
       };
-      socket.write(`${JSON.stringify(envelope)}\n`);
-      const response = JSON.parse(await lines.next()) as NativeBridgeHostResponse;
-      if (!response.ok || response.type !== 'native_bridge_delivery' || response.messageId !== messageId) {
-        throw new Error(!response.ok ? response.errorCode : 'native_bridge_delivery_invalid');
+      const response = await sendExtensionMessage(socket, envelope, pending);
+      if (response.type === 'native_bridge_error') throw new Error(response.errorCode);
+      if (response.type !== 'native_bridge_delivery' || response.messageId !== messageId) {
+        throw new Error('native_bridge_delivery_invalid');
       }
       writeNativeMessage(response.payload);
     }).catch((error) => fail(error));
@@ -75,6 +81,52 @@ async function main(): Promise<void> {
   process.stdin.on('data', nativeInput.onData);
   process.stdin.on('end', () => socket.end());
   process.stdin.resume();
+}
+
+async function pumpHostMessages(
+  lines: { next(): Promise<string> },
+  bridgeConnectionId: string,
+  pending: Map<string, {
+    resolve: (response: NativeBridgeHostResponse) => void;
+    reject: (error: Error) => void;
+  }>
+): Promise<never> {
+  while (true) {
+    const response = JSON.parse(await lines.next()) as NativeBridgeHostResponse;
+    if (response.type === 'native_bridge_host_push') {
+      if (response.protocolVersion !== NATIVE_BRIDGE_PROTOCOL_VERSION ||
+        response.bridgeConnectionId !== bridgeConnectionId) {
+        throw new Error('native_bridge_host_push_context_rejected');
+      }
+      writeNativeMessage(response.payload);
+      continue;
+    }
+    const messageId = response.type === 'native_bridge_delivery' || response.type === 'native_bridge_error'
+      ? response.messageId
+      : null;
+    const waiter = messageId ? pending.get(messageId) : null;
+    if (!messageId || !waiter) throw new Error('native_bridge_host_response_uncorrelated');
+    pending.delete(messageId);
+    waiter.resolve(response);
+  }
+}
+
+function sendExtensionMessage(
+  socket: Socket,
+  envelope: NativeBridgeMessageEnvelope,
+  pending: Map<string, {
+    resolve: (response: NativeBridgeHostResponse) => void;
+    reject: (error: Error) => void;
+  }>
+): Promise<NativeBridgeHostResponse> {
+  return new Promise((resolve, reject) => {
+    pending.set(envelope.messageId, { resolve, reject });
+    socket.write(`${JSON.stringify(envelope)}\n`, (error) => {
+      if (!error) return;
+      pending.delete(envelope.messageId);
+      reject(error);
+    });
+  });
 }
 
 function parseOptions(args: readonly string[]): BridgeOptions {
@@ -160,8 +212,7 @@ function writeNativeMessage(value: unknown): void {
   if (payload.length > NATIVE_BRIDGE_MAX_MESSAGE_BYTES) throw new Error('native_bridge_host_delivery_too_large');
   const header = Buffer.allocUnsafe(4);
   header.writeUInt32LE(payload.length, 0);
-  process.stdout.write(header);
-  process.stdout.write(payload);
+  process.stdout.write(Buffer.concat([header, payload]));
 }
 
 function connectSocket(pipeName: string): Promise<Socket> {

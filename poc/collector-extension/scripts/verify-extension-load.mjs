@@ -31,7 +31,7 @@ try {
   assert.deepEqual(runtime.runtimeBootstrap, {
     schemaVersion: 1,
     collectorVersion: runtime.extensionVersion,
-    controlSurfaceRevision: 3
+    controlSurfaceRevision: 4
   }, 'service worker must publish its compiled runtime identity');
 
   const controlPage = await context.newPage();

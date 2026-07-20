@@ -1,6 +1,6 @@
 import { canonicalJson } from './ipc.js';
 
-export const NATIVE_BRIDGE_PROTOCOL_VERSION = 1 as const;
+export const NATIVE_BRIDGE_PROTOCOL_VERSION = 2 as const;
 export const NATIVE_BRIDGE_MAX_MESSAGE_BYTES = 256 * 1024;
 export const COLLECTOR_NATIVE_BRIDGE_CONFIG_KEY = 'collector.native-bridge-config.v1' as const;
 export const COLLECTOR_NATIVE_BRIDGE_STATUS_KEY = 'collector.native-bridge-status.v1' as const;
@@ -32,6 +32,50 @@ export interface CollectorExtensionBridgeReady {
   bridgeConnectionId: string;
 }
 
+export interface CollectorListExtensionTabsCommand {
+  type: 'collector_list_extension_tabs';
+}
+
+export type CollectorHostExtensionCommand = CollectorListExtensionTabsCommand;
+
+export interface CollectorExtensionTabInventory {
+  type: 'collector_extension_tab_inventory';
+  schemaVersion: 1;
+  tabIds: readonly number[];
+}
+
+export type CollectorExtensionCommandResult = CollectorExtensionTabInventory;
+
+export interface CollectorHostBridgeCommand {
+  type: 'collector_host_bridge_command';
+  protocolVersion: typeof NATIVE_BRIDGE_PROTOCOL_VERSION;
+  profileId: string;
+  browserSessionId: string;
+  commandId: string;
+  issuedAt: string;
+  expiresAt: string;
+  command: CollectorHostExtensionCommand;
+}
+
+export type CollectorExtensionBridgeCommandResult = {
+  type: 'collector_extension_bridge_command_result';
+  protocolVersion: typeof NATIVE_BRIDGE_PROTOCOL_VERSION;
+  profileId: string;
+  browserSessionId: string;
+  commandId: string;
+} & (
+  | { ok: true; result: CollectorExtensionCommandResult }
+  | { ok: false; errorCode: string }
+);
+
+export interface CollectorHostBridgeCommandReceipt {
+  type: 'collector_host_bridge_command_receipt';
+  protocolVersion: typeof NATIVE_BRIDGE_PROTOCOL_VERSION;
+  profileId: string;
+  browserSessionId: string;
+  commandId: string;
+}
+
 export interface CollectorExtensionBridgeStatus {
   schemaVersion: 1;
   state: 'unconfigured' | 'connecting' | 'ready' | 'disconnected' | 'rejected';
@@ -42,8 +86,13 @@ export interface CollectorExtensionBridgeStatus {
   lastErrorCode: string | null;
 }
 
-export type CollectorExtensionBridgeMessage = CollectorExtensionBridgeHello;
-export type CollectorHostBridgeMessage = CollectorExtensionBridgeReady;
+export type CollectorExtensionBridgeMessage =
+  | CollectorExtensionBridgeHello
+  | CollectorExtensionBridgeCommandResult;
+export type CollectorHostBridgeMessage =
+  | CollectorExtensionBridgeReady
+  | CollectorHostBridgeCommand
+  | CollectorHostBridgeCommandReceipt;
 
 export interface NativeBridgeHandshakeRequest {
   type: 'native_bridge_handshake';
@@ -80,6 +129,13 @@ export interface NativeBridgeMessageDelivery {
   payload: CollectorHostBridgeMessage;
 }
 
+export interface NativeBridgeHostPush {
+  type: 'native_bridge_host_push';
+  protocolVersion: typeof NATIVE_BRIDGE_PROTOCOL_VERSION;
+  bridgeConnectionId: string;
+  payload: CollectorHostBridgeMessage;
+}
+
 export interface NativeBridgeErrorResponse {
   ok: false;
   type: 'native_bridge_error';
@@ -92,7 +148,8 @@ export type NativeBridgeHostRequest = NativeBridgeHandshakeRequest | NativeBridg
 export type NativeBridgeHostResponse =
   | NativeBridgeHandshakeAccepted
   | NativeBridgeMessageDelivery
-  | NativeBridgeErrorResponse;
+  | NativeBridgeErrorResponse
+  | NativeBridgeHostPush;
 
 export function nativeBridgeHandshakeAuthenticationPayload(
   request: Omit<NativeBridgeHandshakeRequest, 'authenticationDigest'>
@@ -123,4 +180,69 @@ export function isCollectorExtensionBridgeHello(value: unknown): value is Collec
     typeof candidate.collectorVersion === 'string' && /^\d{1,6}(?:\.\d{1,6}){2,3}$/.test(candidate.collectorVersion) &&
     Number.isSafeInteger(candidate.controlSurfaceRevision) && Number(candidate.controlSurfaceRevision) > 0 &&
     typeof candidate.nonce === 'string' && candidate.nonce.length >= 16 && candidate.nonce.length <= 128;
+}
+
+export function isCollectorHostBridgeCommand(value: unknown): value is CollectorHostBridgeCommand {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<CollectorHostBridgeCommand>;
+  return candidate.type === 'collector_host_bridge_command' &&
+    candidate.protocolVersion === NATIVE_BRIDGE_PROTOCOL_VERSION &&
+    boundedContextIdentifier(candidate.profileId) &&
+    boundedContextIdentifier(candidate.browserSessionId) &&
+    boundedCommandId(candidate.commandId) &&
+    typeof candidate.issuedAt === 'string' && Number.isFinite(Date.parse(candidate.issuedAt)) &&
+    typeof candidate.expiresAt === 'string' && Number.isFinite(Date.parse(candidate.expiresAt)) &&
+    isCollectorHostExtensionCommand(candidate.command);
+}
+
+export function isCollectorExtensionBridgeCommandResult(
+  value: unknown
+): value is CollectorExtensionBridgeCommandResult {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<CollectorExtensionBridgeCommandResult> & {
+    result?: unknown;
+    errorCode?: unknown;
+  };
+  if (candidate.type !== 'collector_extension_bridge_command_result' ||
+    candidate.protocolVersion !== NATIVE_BRIDGE_PROTOCOL_VERSION ||
+    !boundedContextIdentifier(candidate.profileId) ||
+    !boundedContextIdentifier(candidate.browserSessionId) ||
+    !boundedCommandId(candidate.commandId)) return false;
+  return candidate.ok === true
+    ? isCollectorExtensionCommandResult(candidate.result)
+    : candidate.ok === false && typeof candidate.errorCode === 'string' && /^[a-z0-9_]{1,100}$/.test(candidate.errorCode);
+}
+
+export function isCollectorHostBridgeCommandReceipt(
+  value: unknown
+): value is CollectorHostBridgeCommandReceipt {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<CollectorHostBridgeCommandReceipt>;
+  return candidate.type === 'collector_host_bridge_command_receipt' &&
+    candidate.protocolVersion === NATIVE_BRIDGE_PROTOCOL_VERSION &&
+    boundedContextIdentifier(candidate.profileId) &&
+    boundedContextIdentifier(candidate.browserSessionId) &&
+    boundedCommandId(candidate.commandId);
+}
+
+function isCollectorHostExtensionCommand(value: unknown): value is CollectorHostExtensionCommand {
+  return Boolean(value && typeof value === 'object' &&
+    (value as Partial<CollectorHostExtensionCommand>).type === 'collector_list_extension_tabs');
+}
+
+function isCollectorExtensionCommandResult(value: unknown): value is CollectorExtensionCommandResult {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<CollectorExtensionTabInventory>;
+  if (candidate.type !== 'collector_extension_tab_inventory' || candidate.schemaVersion !== 1 ||
+    !Array.isArray(candidate.tabIds) || candidate.tabIds.length > 10_000) return false;
+  return candidate.tabIds.every((tabId) => Number.isSafeInteger(tabId) && Number(tabId) >= 0) &&
+    new Set(candidate.tabIds).size === candidate.tabIds.length;
+}
+
+function boundedContextIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 128;
+}
+
+function boundedCommandId(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 16 && value.length <= 128;
 }

@@ -13,6 +13,7 @@ import {
   type ReleasePageRequest
 } from '@intelligence/collector-contracts';
 import type { NativeBridgeRegistry } from '../native-bridge/native-bridge-registry.js';
+import type { NativeBridgeServer } from '../native-bridge/native-bridge-server.js';
 import type { NativeMessagingHostRegistration } from '../native-bridge/native-host-installer.js';
 import { PageLedger, type PageLedgerEvent } from '../page-ledger/page-ledger.js';
 import { PageReclamationManager } from '../reclamation/page-reclamation.js';
@@ -61,6 +62,7 @@ export class ProfileRuntime {
     extensionDirectory: string | null;
     extensionRuntime: ExtensionRuntimeExpectation | null;
     nativeBridgeRegistry: NativeBridgeRegistry;
+    nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
     nativeHostStateDirectory: string;
     hostEndpointPath: string;
     nativeBridgeModulePath: string;
@@ -106,6 +108,20 @@ export class ProfileRuntime {
         extensionGeneration: extensionRuntime?.finalControlSurfaceRevision ?? 0,
         maximumManagedPages: input.maximumManagedPages,
         offlineOnly: input.offlineOnly,
+        listExtensionTabIds: extensionRuntime
+          ? async () => {
+              const result = await input.nativeBridgeCommands.command(
+                input.profileId,
+                input.browserSessionId,
+                { type: 'collector_list_extension_tabs' },
+                3_000
+              );
+              if (result.type !== 'collector_extension_tab_inventory') {
+                throw new Error('native_bridge_tab_inventory_invalid');
+              }
+              return result.tabIds;
+            }
+          : null,
         onEvent: input.onLedgerEvent
       });
       runtime = new ProfileRuntime({

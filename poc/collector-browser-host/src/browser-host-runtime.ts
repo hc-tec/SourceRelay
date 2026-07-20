@@ -13,6 +13,7 @@ import { hostError } from './host-errors.js';
 import { RuntimeJournal } from './journal/runtime-journal.js';
 import type { PageLedgerEvent } from './page-ledger/page-ledger.js';
 import type { NativeBridgeRegistry } from './native-bridge/native-bridge-registry.js';
+import type { NativeBridgeServer } from './native-bridge/native-bridge-server.js';
 import { ProfileRuntime } from './profile-runtime/profile-runtime.js';
 import { boundedIdentifier, boundedPositiveInteger, childPath } from './validation.js';
 
@@ -25,6 +26,7 @@ export interface BrowserHostRuntimeConfig {
   nativeBridgeModulePath: string;
   nativeHostStateDirectory: string;
   nativeBridgeRegistry: NativeBridgeRegistry;
+  nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
 }
 
 export class BrowserHostRuntime {
@@ -36,6 +38,7 @@ export class BrowserHostRuntime {
   readonly #nativeBridgeModulePath: string;
   readonly #nativeHostStateDirectory: string;
   readonly #nativeBridgeRegistry: NativeBridgeRegistry;
+  readonly #nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
   readonly #profiles = new Map<string, ProfileRuntime>();
   #controllerGeneration: string | null = null;
   #snapshotRevision = 0;
@@ -49,6 +52,7 @@ export class BrowserHostRuntime {
     this.#nativeBridgeModulePath = resolve(config.nativeBridgeModulePath);
     this.#nativeHostStateDirectory = resolve(config.nativeHostStateDirectory);
     this.#nativeBridgeRegistry = config.nativeBridgeRegistry;
+    this.#nativeBridgeCommands = config.nativeBridgeCommands;
   }
 
   async initialise(): Promise<void> {
@@ -143,6 +147,7 @@ export class BrowserHostRuntime {
       extensionDirectory: this.#extensionDirectory,
       extensionRuntime: request.extensionRuntime ?? null,
       nativeBridgeRegistry: this.#nativeBridgeRegistry,
+      nativeBridgeCommands: this.#nativeBridgeCommands,
       nativeHostStateDirectory: this.#nativeHostStateDirectory,
       hostEndpointPath: this.#endpointPath,
       nativeBridgeModulePath: this.#nativeBridgeModulePath,

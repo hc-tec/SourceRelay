@@ -2,10 +2,15 @@ import {
   COLLECTOR_NATIVE_BRIDGE_CONFIG_KEY,
   COLLECTOR_NATIVE_BRIDGE_STATUS_KEY,
   NATIVE_BRIDGE_PROTOCOL_VERSION,
+  isCollectorHostBridgeCommand,
+  isCollectorHostBridgeCommandReceipt,
   isCollectorNativeBridgeConfig,
+  type CollectorExtensionBridgeCommandResult,
+  type CollectorExtensionCommandResult,
   type CollectorExtensionBridgeHello,
   type CollectorExtensionBridgeReady,
   type CollectorExtensionBridgeStatus,
+  type CollectorHostBridgeCommand,
   type CollectorNativeBridgeConfig
 } from '@intelligence/collector-contracts';
 import { COLLECTOR_CONTROL_SURFACE_REVISION } from '../shared/control-plane';
@@ -43,12 +48,25 @@ async function connectConfiguredBridge(value: unknown): Promise<void> {
   activePort = port;
   port.onMessage.addListener((message: unknown) => {
     if (generation !== connectionGeneration || activePort !== port) return;
-    if (!bridgeReadyMatches(message, value)) {
-      void storeStatus('rejected', value, 'native_bridge_ready_invalid');
-      port.disconnect();
+    if (bridgeReadyMatches(message, value)) {
+      void storeStatus('ready', value, null, new Date().toISOString());
       return;
     }
-    void storeStatus('ready', value, null, new Date().toISOString());
+    if (isCollectorHostBridgeCommandReceipt(message) &&
+      message.profileId === value.profileId &&
+      message.browserSessionId === value.browserSessionId) return;
+    if (isCollectorHostBridgeCommand(message) && commandMatchesConfig(message, value)) {
+      void executeHostCommand(message).then(
+        (result) => postCommandResult(port, value, message.commandId, { ok: true, result }),
+        () => postCommandResult(port, value, message.commandId, {
+          ok: false,
+          errorCode: 'native_bridge_extension_command_failed'
+        })
+      );
+      return;
+    }
+    void storeStatus('rejected', value, 'native_bridge_host_message_invalid');
+    port.disconnect();
   });
   port.onDisconnect.addListener(() => {
     if (generation !== connectionGeneration || activePort !== port) return;
@@ -69,6 +87,56 @@ async function connectConfiguredBridge(value: unknown): Promise<void> {
     nonce: randomNonce()
   };
   port.postMessage(hello);
+}
+
+function commandMatchesConfig(command: CollectorHostBridgeCommand, config: CollectorNativeBridgeConfig): boolean {
+  return command.profileId === config.profileId &&
+    command.browserSessionId === config.browserSessionId &&
+    Date.parse(command.expiresAt) > Date.now();
+}
+
+async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<CollectorExtensionCommandResult> {
+  switch (command.command.type) {
+    case 'collector_list_extension_tabs': {
+      const tabs = await chrome.tabs.query({});
+      const tabIds = [...new Set(tabs
+        .map((tab) => tab.id)
+        .filter((tabId): tabId is number => Number.isSafeInteger(tabId) && Number(tabId) >= 0))]
+        .sort((left, right) => left - right);
+      return { type: 'collector_extension_tab_inventory', schemaVersion: 1, tabIds };
+    }
+  }
+}
+
+function postCommandResult(
+  port: chrome.runtime.Port,
+  config: CollectorNativeBridgeConfig,
+  commandId: string,
+  outcome: Pick<CollectorExtensionBridgeCommandResult, 'ok'> & {
+    result?: CollectorExtensionCommandResult;
+    errorCode?: string;
+  }
+): void {
+  const message: CollectorExtensionBridgeCommandResult = outcome.ok
+    ? {
+        type: 'collector_extension_bridge_command_result',
+        protocolVersion: NATIVE_BRIDGE_PROTOCOL_VERSION,
+        profileId: config.profileId,
+        browserSessionId: config.browserSessionId,
+        commandId,
+        ok: true,
+        result: outcome.result!
+      }
+    : {
+        type: 'collector_extension_bridge_command_result',
+        protocolVersion: NATIVE_BRIDGE_PROTOCOL_VERSION,
+        profileId: config.profileId,
+        browserSessionId: config.browserSessionId,
+        commandId,
+        ok: false,
+        errorCode: outcome.errorCode ?? 'native_bridge_extension_command_failed'
+      };
+  if (activePort === port) port.postMessage(message);
 }
 
 function bridgeReadyMatches(value: unknown, config: CollectorNativeBridgeConfig): value is CollectorExtensionBridgeReady {

@@ -13,11 +13,11 @@ import {
   createLease,
   digestUrl,
   recordSummary,
-  targetIdForPage,
   touchRecord,
   transitionRecord,
   type ManagedPageRecord
 } from './page-record.js';
+import { createManagedPage } from './managed-page-creation.js';
 import {
   DEFAULT_MAX_IDLE_TRUST_MS,
   leaseSelectedPage,
@@ -32,6 +32,7 @@ export class PageLedger {
   readonly #profileId: string;
   readonly #extensionGeneration: number;
   readonly #offlineOnly: boolean;
+  readonly #listExtensionTabIds: (() => Promise<readonly number[]>) | null;
   readonly #onEvent: (event: PageLedgerEvent) => void;
   readonly #records = new Map<string, ManagedPageRecord>();
   readonly #targetAliases = new Map<string, string>();
@@ -44,6 +45,7 @@ export class PageLedger {
     extensionGeneration: number;
     maximumManagedPages: number;
     offlineOnly: boolean;
+    listExtensionTabIds?: (() => Promise<readonly number[]>) | null;
     onEvent: (event: PageLedgerEvent) => void;
   }) {
     this.#context = input.context;
@@ -51,6 +53,7 @@ export class PageLedger {
     this.#extensionGeneration = input.extensionGeneration;
     this.#maximumManagedPages = input.maximumManagedPages;
     this.#offlineOnly = input.offlineOnly;
+    this.#listExtensionTabIds = input.listExtensionTabIds ?? null;
     this.#onEvent = input.onEvent;
   }
 
@@ -103,8 +106,10 @@ export class PageLedger {
       });
     }
 
-    const page = await this.#context.newPage();
-    const targetId = await targetIdForPage(page);
+    const { page, targetId, extensionTabId } = await createManagedPage(
+      this.#context,
+      this.#listExtensionTabIds
+    );
     const now = new Date();
     const pageAlias = `page-${this.#nextPageSequence++}`;
     const currentDigest = digestUrl(page.url());
@@ -126,6 +131,7 @@ export class PageLedger {
       targetId,
       targetIdentityDigest: digestUrl(targetId),
       page,
+      extensionTabId,
       ownershipSource: 'direct_created',
       platform: request.platform,
       pageRole: request.pageRole,

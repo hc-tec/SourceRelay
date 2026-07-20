@@ -17,6 +17,7 @@ export interface ManagedPageRecord {
   targetId: string;
   targetIdentityDigest: string;
   page: Page;
+  extensionTabId: number | null;
   ownershipSource: ManagedPageOwnershipSource;
   platform: string;
   pageRole: string;
@@ -122,6 +123,7 @@ export function recordSummary(record: ManagedPageRecord): ManagedPageSummary {
     documentGeneration: record.documentGeneration,
     routeGeneration: record.routeGeneration,
     extensionGeneration: record.extensionGeneration,
+    extensionTabBound: record.extensionTabId !== null,
     maxIdleTrustMs: record.maxIdleTrustMs,
     activeLease: record.activeLease ? structuredClone(record.activeLease) : null,
     createdAt: record.createdAt,

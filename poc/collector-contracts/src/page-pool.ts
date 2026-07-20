@@ -58,6 +58,7 @@ export interface ManagedPageSummary {
   documentGeneration: number;
   routeGeneration: number;
   extensionGeneration: number;
+  extensionTabBound: boolean;
   maxIdleTrustMs: number;
   activeLease: PageLeaseSnapshot | null;
   createdAt: string;

@@ -34,7 +34,7 @@ const profileId = 'real-browser-lifecycle';
 await mkdir(stateDirectory, { recursive: true });
 await mkdir(profileRoot, { recursive: true });
 const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-assert.equal(extensionManifest.version, '0.5.0');
+assert.equal(extensionManifest.version, '0.6.0');
 
 let endpoint = null;
 let client = null;
@@ -72,7 +72,7 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 3,
+        controlSurfaceRevision: 4,
         runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
       }
     }
@@ -86,7 +86,7 @@ try {
   assert.ok(initialProfile.browserProcessId, 'real Chromium process id must be observable');
   assert.ok(initialProfile.extensionPages <= 1, 'Browser Session must not accumulate extension pages');
   assert.equal(initialProfile.extensionRuntime?.finalRuntimeVersion, extensionManifest.version);
-  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 3);
+  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 4);
   assert.equal(initialProfile.extensionRuntime?.nativeBridgeConnected, true);
 
   const reusedEndpoint = await launchBrowserHost({
@@ -121,6 +121,11 @@ try {
   assert.equal(pageB.selection, 'created_new_page');
   assert.equal(pageC.selection, 'created_new_page');
   assert.equal(new Set([pageA.page.pageAlias, pageB.page.pageAlias, pageC.page.pageAlias]).size, 3);
+  assert.equal(
+    [pageA, pageB, pageC].every((result) => result.page.extensionTabBound),
+    true,
+    'Every Host-created managed page must be causally bound to one extension tab'
+  );
 
   await expectHostError(
     () => client.command({
@@ -267,6 +272,7 @@ try {
     browserVisible: true,
     extensionRuntimeMarkerVerifiedBeforeVisibleLaunch: true,
     nativeMessagingBridgeConnected: true,
+    hostCreatedPagesBoundToExtensionTabs: true,
     nativeMessagingRegistrationCleaned: true,
     staleEndpointReplaced: true,
     repeatedLaunchReusedExistingHost: true,

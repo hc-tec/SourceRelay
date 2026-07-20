@@ -4,13 +4,16 @@ import {
   NATIVE_BRIDGE_MAX_MESSAGE_BYTES,
   NATIVE_BRIDGE_PROTOCOL_VERSION,
   nativeBridgeHandshakeAuthenticationPayload,
+  type CollectorExtensionCommandResult,
+  type CollectorHostExtensionCommand,
   type NativeBridgeErrorResponse,
   type NativeBridgeHandshakeAccepted,
   type NativeBridgeHandshakeRequest,
   type NativeBridgeHostRequest,
   type NativeBridgeHostResponse,
   type NativeBridgeMessageDelivery,
-  type NativeBridgeMessageEnvelope
+  type NativeBridgeMessageEnvelope,
+  type NativeBridgeHostPush
 } from '@intelligence/collector-contracts';
 import { BrowserHostError } from '@intelligence/collector-contracts';
 import { hostError } from '../host-errors.js';
@@ -61,6 +64,31 @@ export class NativeBridgeServer {
       if (!this.#server.listening) return resolve();
       this.#server.close(() => resolve());
     });
+  }
+
+  command(
+    profileId: string,
+    browserSessionId: string,
+    command: CollectorHostExtensionCommand,
+    timeoutMs?: number
+  ): Promise<CollectorExtensionCommandResult> {
+    return this.#registry.requestCommand(
+      profileId,
+      browserSessionId,
+      command,
+      (bridgeConnectionId, payload) => {
+        const socket = this.#connectionSockets.get(bridgeConnectionId);
+        if (!socket?.writable) throw new Error('native_bridge_connection_not_writable');
+        const push: NativeBridgeHostPush = {
+          type: 'native_bridge_host_push',
+          protocolVersion: NATIVE_BRIDGE_PROTOCOL_VERSION,
+          bridgeConnectionId,
+          payload
+        };
+        this.#write(socket, push);
+      },
+      timeoutMs
+    );
   }
 
   #handleConnection(socket: Socket): void {

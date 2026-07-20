@@ -22,7 +22,7 @@ export const COLLECTOR_CONTROL_PROTOCOL_VERSION = 1 as const;
 // It is intentionally separate from the signed Gateway task protocol so a
 // stale persistent MV3 service worker can be detected and reloaded without
 // invalidating existing pairing records.
-export const COLLECTOR_CONTROL_SURFACE_REVISION = 3 as const;
+export const COLLECTOR_CONTROL_SURFACE_REVISION = 4 as const;
 export const COLLECTOR_RUNTIME_BOOTSTRAP_KEY = 'collector.runtime-bootstrap.v1' as const;
 export const STAGE_LEASE_SCHEMA_VERSION = 1 as const;
 

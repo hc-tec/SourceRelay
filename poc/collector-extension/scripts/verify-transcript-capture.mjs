@@ -81,7 +81,7 @@ try {
     errorCode: null,
     completedAt: '2026-07-19T00:00:05.000Z'
   };
-  assert.equal(protocol.COLLECTOR_CORE_VERSION, '0.5.0');
+  assert.equal(protocol.COLLECTOR_CORE_VERSION, '0.6.0');
   assert.equal(protocol.isTranscriptInteractionResult(interaction), true);
   assert.equal(protocol.isCompleteTranscriptCapabilityValidationMessage({
     type: 'collector.completeTranscriptCapabilityValidation',

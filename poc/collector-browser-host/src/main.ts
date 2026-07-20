@@ -33,6 +33,12 @@ async function main(): Promise<void> {
   const pipeName = pipeNameFor(options.stateDirectory, hostInstanceId);
   const nativeBridgePipeName = nativeBridgePipeNameFor(options.stateDirectory, hostInstanceId);
   const nativeBridgeRegistry = new NativeBridgeRegistry();
+  const nativeBridgeServer = new NativeBridgeServer({
+    pipeName: nativeBridgePipeName,
+    hostInstanceId,
+    bootstrapSecret,
+    registry: nativeBridgeRegistry
+  });
   const runtime = new BrowserHostRuntime({
     hostInstanceId,
     profileRoot: options.profileRoot,
@@ -41,13 +47,13 @@ async function main(): Promise<void> {
     endpointPath: options.endpointPath,
     nativeBridgeModulePath: resolve(dirname(fileURLToPath(import.meta.url)), 'native-bridge.js'),
     nativeHostStateDirectory: resolve(options.stateDirectory, 'native-hosts'),
-    nativeBridgeRegistry
+    nativeBridgeRegistry,
+    nativeBridgeCommands: nativeBridgeServer
   });
   await runtime.initialise();
 
   let closing = false;
   let server!: BrowserHostServer;
-  let nativeBridgeServer!: NativeBridgeServer;
   const shutdown = async (exitCode: number) => {
     if (closing) return;
     closing = true;
@@ -72,13 +78,6 @@ async function main(): Promise<void> {
     bootstrapSecret,
     onShutdownRequested: () => void shutdown(0)
   });
-  nativeBridgeServer = new NativeBridgeServer({
-    pipeName: nativeBridgePipeName,
-    hostInstanceId,
-    bootstrapSecret,
-    registry: nativeBridgeRegistry
-  });
-
   try {
     if (process.platform !== 'win32') {
       await Promise.all([rm(pipeName, { force: true }), rm(nativeBridgePipeName, { force: true })]);

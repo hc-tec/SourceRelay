@@ -2,12 +2,18 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   NATIVE_BRIDGE_PROTOCOL_VERSION,
   canonicalJson,
+  isCollectorExtensionBridgeCommandResult,
   isCollectorExtensionBridgeHello,
   type CollectorExtensionBridgeMessage,
   type CollectorExtensionBridgeReady,
+  type CollectorHostBridgeCommand,
+  type CollectorHostBridgeCommandReceipt,
+  type CollectorHostBridgeMessage,
+  type CollectorHostExtensionCommand,
   type NativeBridgeHandshakeRequest
 } from '@intelligence/collector-contracts';
 import { hostError } from '../host-errors.js';
+import { NativeBridgeCommandBroker } from './native-bridge-command-broker.js';
 
 interface ExpectedBridge {
   profileId: string;
@@ -43,6 +49,7 @@ export class NativeBridgeRegistry {
   readonly #connections = new Map<string, BridgeConnection>();
   readonly #profileConnections = new Map<string, string>();
   readonly #waiters = new Map<string, ReadyWaiter[]>();
+  readonly #commandBroker = new NativeBridgeCommandBroker();
 
   expect(input: ExpectedBridge): void {
     this.#expected.set(input.profileId, structuredClone(input));
@@ -61,7 +68,7 @@ export class NativeBridgeRegistry {
     }
     const bridgeConnectionId = randomUUID();
     const replacedConnectionId = this.#profileConnections.get(request.profileId) ?? null;
-    if (replacedConnectionId) this.#connections.delete(replacedConnectionId);
+    if (replacedConnectionId) this.disconnect(replacedConnectionId);
     this.#connections.set(bridgeConnectionId, {
       bridgeConnectionId,
       profileId: request.profileId,
@@ -77,14 +84,41 @@ export class NativeBridgeRegistry {
   handleMessage(
     bridgeConnectionId: string,
     payload: CollectorExtensionBridgeMessage
-  ): CollectorExtensionBridgeReady {
+  ): CollectorHostBridgeMessage {
     const connection = this.#connections.get(bridgeConnectionId);
     if (!connection) {
       throw hostError({ code: 'native_bridge_connection_rejected', category: 'native_bridge', scope: 'host' });
     }
-    if (!isCollectorExtensionBridgeHello(payload)) {
-      throw hostError({ code: 'native_bridge_message_rejected', category: 'native_bridge', scope: 'host' });
+    if (isCollectorExtensionBridgeHello(payload)) {
+      return this.#handleHello(connection, payload);
     }
+    if (isCollectorExtensionBridgeCommandResult(payload)) {
+      return this.#handleCommandResult(connection, payload);
+    }
+    throw hostError({ code: 'native_bridge_message_rejected', category: 'native_bridge', scope: 'host' });
+  }
+
+  requestCommand(
+    profileId: string,
+    browserSessionId: string,
+    command: CollectorHostExtensionCommand,
+    deliver: (bridgeConnectionId: string, command: CollectorHostBridgeCommand) => void,
+    timeoutMs = 5_000
+  ) {
+    const connectionId = this.#profileConnections.get(profileId);
+    const connection = connectionId ? this.#connections.get(connectionId) : null;
+    return this.#commandBroker.request(
+      connection?.browserSessionId === browserSessionId ? connection : null,
+      command,
+      deliver,
+      timeoutMs
+    );
+  }
+
+  #handleHello(
+    connection: BridgeConnection,
+    payload: Extract<CollectorExtensionBridgeMessage, { type: 'collector_extension_bridge_hello' }>
+  ): CollectorExtensionBridgeReady {
     const expected = this.#expected.get(connection.profileId);
     if (!expected ||
       payload.protocolVersion !== NATIVE_BRIDGE_PROTOCOL_VERSION ||
@@ -112,8 +146,15 @@ export class NativeBridgeRegistry {
       protocolVersion: NATIVE_BRIDGE_PROTOCOL_VERSION,
       profileId: expected.profileId,
       browserSessionId: expected.browserSessionId,
-      bridgeConnectionId
+      bridgeConnectionId: connection.bridgeConnectionId
     };
+  }
+
+  #handleCommandResult(
+    connection: BridgeConnection,
+    payload: Extract<CollectorExtensionBridgeMessage, { type: 'collector_extension_bridge_command_result' }>
+  ): CollectorHostBridgeCommandReceipt {
+    return this.#commandBroker.resolve(connection, payload);
   }
 
   disconnect(bridgeConnectionId: string): void {
@@ -123,6 +164,7 @@ export class NativeBridgeRegistry {
     if (this.#profileConnections.get(connection.profileId) === bridgeConnectionId) {
       this.#profileConnections.delete(connection.profileId);
     }
+    this.#commandBroker.disconnect(bridgeConnectionId);
   }
 
   isReady(profileId: string, browserSessionId: string): boolean {

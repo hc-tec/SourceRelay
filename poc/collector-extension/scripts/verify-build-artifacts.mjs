@@ -181,7 +181,7 @@ assert.match(
 );
 assert.match(
   backgroundSource,
-  /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*3/,
+  /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*4/,
   'The runtime snapshot must expose the current control-surface revision'
 );
 assert.match(backgroundSource, /connectNative/, 'Native Messaging bridge connection is missing');
@@ -189,6 +189,16 @@ assert.match(
   backgroundSource,
   /collector\.native-bridge-config\.v1/,
   'Browser Host native-bridge bootstrap key is missing'
+);
+assert.match(
+  backgroundSource,
+  /collector_list_extension_tabs/,
+  'The production worker must expose the narrow Host-to-Extension tab inventory command'
+);
+assert.match(
+  backgroundSource,
+  /collector_extension_bridge_command_result/,
+  'The production worker must correlate Native Messaging command results'
 );
 assert.match(
   backgroundSource,
