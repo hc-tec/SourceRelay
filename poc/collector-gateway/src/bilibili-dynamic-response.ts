@@ -98,7 +98,7 @@ export function bilibiliDynamicCardEvidenceCheck(
   );
   const textMatch = bilibiliDynamicCardTextEvidenceMatches(
     item.card.visibleText,
-    [item.visibleText, item.majorTitle],
+    [item.visibleText, item.majorTitle, item.card.reservation ? item.reservationTitle : null],
     item.card.mediaRefs.map((media) => media.alt).filter(Boolean)
   );
   const accessStateMatch = (item.accessState === 'restricted_placeholder') === item.card.blockedPlaceholder;

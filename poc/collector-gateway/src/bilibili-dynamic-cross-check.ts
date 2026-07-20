@@ -6,8 +6,12 @@ import type {
 } from './bilibili-dynamic-contract';
 import { bilibiliDynamicCardEvidenceCheck } from './bilibili-dynamic-response';
 
-function textCandidateCount(page: BilibiliDynamicPageProjection['items'][number]): 0 | 1 | 2 {
-  return (Number(Boolean(page.visibleText)) + Number(Boolean(page.majorTitle))) as 0 | 1 | 2;
+function textCandidateCount(page: BilibiliDynamicPageProjection['items'][number]): 0 | 1 | 2 | 3 {
+  return (
+    Number(Boolean(page.visibleText)) +
+    Number(Boolean(page.majorTitle)) +
+    Number(page.card.reservation && Boolean(page.reservationTitle))
+  ) as 0 | 1 | 2 | 3;
 }
 
 function cardDiagnostic(

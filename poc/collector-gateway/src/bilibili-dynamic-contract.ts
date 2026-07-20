@@ -32,6 +32,7 @@ export interface BilibiliDynamicResponseItem {
   visibleText: string | null;
   majorType: string | null;
   majorTitle: string | null;
+  reservationTitle: string | null;
   primaryIdentity: BilibiliDynamicPrimaryIdentity;
   responseVisible: boolean | null;
   accessState: 'public' | 'restricted_placeholder';
@@ -156,7 +157,7 @@ export interface BilibiliDynamicCardCrossCheckDiagnostic {
   responsePrimaryIdentityKind: BilibiliDynamicPrimaryIdentity['kind'];
   responseAccessState: BilibiliDynamicResponseItem['accessState'];
   responseForwardedState: BilibiliDynamicResponseItem['forwardedSourceState'];
-  responseTextCandidateCount: 0 | 1 | 2;
+  responseTextCandidateCount: 0 | 1 | 2 | 3;
   checks: BilibiliDynamicCardEvidenceCheck;
 }
 
@@ -487,6 +488,14 @@ function majorTitleFromItem(value: Record<string, unknown>): string | null {
   return null;
 }
 
+function reservationTitleFromItem(value: Record<string, unknown>): string | null {
+  const modules = isRecord(value.modules) ? value.modules : {};
+  const dynamic = isRecord(modules.module_dynamic) ? modules.module_dynamic : {};
+  const additional = isRecord(dynamic.additional) ? dynamic.additional : {};
+  const reserve = isRecord(additional.reserve) ? additional.reserve : {};
+  return cleanText(reserve.title, 500);
+}
+
 function projectedForwardSource(value: unknown): BilibiliDynamicResponseItem['forwardedSource'] {
   if (!isRecord(value)) return null;
   const stableDynamicId = stablePositiveId(value.id_str);
@@ -616,6 +625,7 @@ export function projectBilibiliDynamicFeedResponse(
       visibleText: cleanText(desc.text, 20_000),
       majorType,
       majorTitle: majorTitleFromItem(rawItem),
+      reservationTitle: reservationTitleFromItem(rawItem),
       primaryIdentity,
       responseVisible: typeof visibleValue === 'boolean' ? visibleValue : null,
       accessState,

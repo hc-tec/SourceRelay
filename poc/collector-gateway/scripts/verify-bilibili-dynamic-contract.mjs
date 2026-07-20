@@ -152,6 +152,7 @@ try {
   assert.equal(candidate.items.length, 4);
   assert.equal(candidate.items[0].primaryIdentity.stableId, 'BV1qZSLBYEpa');
   assert.equal(candidate.items[1].primaryIdentity.kind, 'dynamic');
+  assert.equal(candidate.items[1].reservationTitle, '公开视频预约');
   assert.equal(candidate.items[2].accessState, 'restricted_placeholder');
   assert.equal(candidate.items[3].forwardedSource.primaryIdentity.stableId, 'BV1xA411c7mD');
 
@@ -236,6 +237,18 @@ try {
     ['互动抽奖六一快乐'],
     []
   ), true);
+  const reservationOnlyCard = {
+    ...projected.projection.items[1],
+    card: {
+      ...projected.projection.items[1].card,
+      visibleText: '公开作者 2天前 公开视频预约 去观看'
+    }
+  };
+  assert.equal(response.bilibiliDynamicCardEvidenceCheck(reservationOnlyCard).textMatch, true);
+  assert.equal(response.bilibiliDynamicCardEvidenceCheck({
+    ...reservationOnlyCard,
+    card: { ...reservationOnlyCard.card, reservation: false }
+  }).textMatch, false);
   assert.equal('nextOffset' in projected.projection, false);
   assert.equal(projected.projection.items[0].card.mediaRefs[0].url,
     'https://i0.hdslb.com/bfs/archive/one.jpg');
