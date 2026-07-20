@@ -1,9 +1,9 @@
 # 产品规格：面向中文平台研究的浏览器采集策略系统
 
-- 状态：Accepted
-- 日期：2026-07-17
+- 状态：Accepted / revised for Browser Host MVP
+- 日期：2026-07-20
 - 适用范围：Personal Intelligence 的浏览器扩展执行面、平台采集策略与本地研究证据包
-- 相关决策：[Grill 决策账本](collector-grilling-decision-log.md)、[决策一致性与实现差距审计](collector-decision-audit.md)、[ADR-002：数据源层](data-source-layer.md)、[浏览器扩展采集系统基线](../research/browser-extension-collection-architecture-2026-07-17.md)、[受控网络响应观察](../research/browser-extension-network-observation-2026-07-17.md)
+- 相关决策：[Grill 决策账本](collector-grilling-decision-log.md)、[Browser Host 与受管页面池 MVP](managed-page-pool-browser-host-mvp.md)、[决策一致性与实现差距审计](collector-decision-audit.md)、[ADR-002：数据源层](data-source-layer.md)、[浏览器扩展采集系统基线](../research/browser-extension-collection-architecture-2026-07-17.md)、[受控网络响应观察](../research/browser-extension-network-observation-2026-07-17.md)
 
 ## 1. 北极星与边界
 
@@ -80,22 +80,30 @@ trend_snapshot                         detail_navigation
 
 ## 4. 执行架构与权限模型
 
-采用一个 Manifest V3 **Collector Core**，而不是每个平台一个高权限扩展、一个“万能 crawler”，或运行时下载任意插件：
+Collector Core 是一个产品能力边界，不再等同于单个 MV3 service worker。它由四个单向协作组件构成，而不是每个平台一个高权限扩展、一个“万能 crawler”，或运行时下载任意插件：
 
 ```text
-Collector Core
-  ├─ task planner / lease broker
-  ├─ read-only DOM executor
-  ├─ bounded interaction executor
-  ├─ controlled response observer
-  ├─ artifact writer
-  └─ static Platform Capture Strategy Registry
-       └─ repository-local, code-reviewed, versioned, live-validated packs
+Research Console / DeepResearch
+              |
+              v
+Gateway
+  task planner / scheduler / account safety / artifact writer
+              |
+              | authenticated OS-local IPC
+              v
+Browser Host  <------ Native Messaging Bridge ------>  MV3 Extension
+  Chromium lifecycle                                    static Strategy Registry
+  PageRecord / PageLease                                pageRole / DOM / XHR
+  trusted input / target causality                       user-activity observation
 ```
 
-策略包在构建时静态注册、随仓库版本发布。它们不得直接访问特权浏览器 API、浏览器会话材料、原始 header、用户 Profile 路径、任意网络、Gateway 连接或任意 JavaScript 执行能力。Core 只向策略暴露受限的页面角色、动作 AST、字段投影与配额接口。第三方平台爬虫仓库只能提供调研参考，不能复制、集成、运行或成为策略后端；正式采集只通过扩展在 Collection Browser Profile 的正常页面上下文中执行。
+Gateway 只批准逐步 Action AST、预算和证据目标，不直接持有 Playwright Page。Browser Host 是 Chromium、页面所有权账本、PageLease、前台许可和可信输入的唯一执行边界。Extension Strategy 识别 pageRole、语义目标、DOM 和批准 XHR，使用一次性 ticket 交给 Host；普通 content script `click()` 不能冒充可信输入。
 
-默认权限保持最小化。安全底座只在精确任务 tab/document 中做固定文件注入和去敏响应观察；不使用 OS 级抓包、MITM、`webRequest`、`debugger`、浏览器会话导出、请求重放或私有 API 签名。平台行为不使用离线 fixture 验证，只在用户控制环境中的专用 Validation Profile 低频真实验证；远程 CI 只构建制品。编译、bundle、MV3 manifest、脚本存在性、自动加载和权限清单属于构建门禁，不作为平台能力测试。
+策略包在构建时静态注册、随扩展版本发布。它们不得直接访问浏览器会话材料、原始 header、用户 Profile 路径、任意网络、Gateway 连接或任意 JavaScript 执行能力。Core 只向策略暴露受限页面角色、动作 AST、字段投影与配额接口。第三方平台爬虫仓库只能提供调研参考，不能复制、集成、运行或成为策略后端；正式采集只通过持久 Collection Profile 中的 Extension Strategy + Browser Host trusted input 执行。
+
+默认权限保持最小化。安全底座只在精确 PageLease/document/action 中做固定文件注入和去敏响应观察；不使用 OS 级抓包、MITM、`webRequest`、`debugger`、浏览器会话导出、请求重放或私有 API 签名。纯 reducer/schema/canonicalization 可以做单元测试；IPC、进程、浏览器、扩展加载和页面池集成必须使用真实本地 Chromium，平台行为必须在用户控制环境中的专用 Profile 低频真实验证。Fixture、fake Gateway、fake XHR 和合成页面不得冒充平台能力；远程 CI 只构建制品。
+
+每个 Collection Profile 对应一个持久可见 Collection Window，窗口内使用受管多页面池。页面所有权只由当前 browser session 的 target 因果账本建立，任务完成只 release、不立即关闭。Gateway restart 不结束 Browser Host/Chromium；Browser Host/Chromium 换代才使旧 target 身份失效。完整状态机、协议和验收见 [Browser Host 与受管页面池 MVP](managed-page-pool-browser-host-mvp.md)。
 
 任何新策略进入代码前，必须先完成[数据源勘察工作流](source-reconnaissance-workflow.md)。系统先像人类研究者一样复现浏览路径，联合观察页面 DOM、正常交互和页面自己触发的 XHR / fetch，再按字段选择最小且稳定的证据表面。未形成 Source Reconnaissance Dossier、字段—证据映射、失败状态矩阵和真实验证计划时，不得创建 production selector、action graph 或 response route；“先写采集代码再看能不能用”不属于本产品流程。
 
@@ -136,7 +144,7 @@ reconnaissance_dossier: docs/reconnaissance/xiaohongshu/...
 6. Source Reconnaissance Dossier、字段—证据映射和被否决的替代方案；
 7. 构建制品校验、用户控制环境中的低频真实验证日期/证据和失败语义。
 
-策略成熟度采用保守生命周期：`draft -> build_ready -> live_anonymous_verified | live_authenticated_verified -> suspended`。`build_ready` 只表示制品可构建、加载和满足批准的权限清单，不代表平台能力；页面结构漂移、登录门禁、错误相关性或无法满足 output contract 都必须降低成熟度，不能因某次页面能打开就升格为通用能力。
+策略发布成熟度采用保守生命周期：`draft -> build_ready -> live_anonymous_verified | live_authenticated_verified -> suspended`。运行时另有 `healthy / degraded / live_revalidation_required` capability health，不改变 Strategy version 的历史真实性。`build_ready` 只表示制品可构建、加载和满足批准权限，不代表平台能力；页面漂移、登录门禁、错误相关性或无法满足 output contract 都必须降级或暂停，不能因某次页面能打开就升格为通用能力。
 
 ## 6. 有界交互规则
 
@@ -153,7 +161,7 @@ collect visible cards / declared terminal marker
 
 每个动作记录目标页面角色、原因、开始/结束、影响的条目数和结果。禁止执行模型生成的任意脚本、无界滚动、隐式关注/点赞/发布、登录按钮、验证码处理或跨平台跳转。若页面要求人工确认，任务返回 `authentication_required` 或 `user_action_required`，等待用户在该浏览器上下文中处理后由用户显式恢复。
 
-账号安全是有界交互的更高优先级门禁。认证 Profile 的动作结果未知、断网、弱网、导航失败、验证码、风控或限流时，本轮立即停止；相同 action ID 不得重试，Gateway 重启不得清除风险状态。验证码、风控、限流、登录失效和中断进入人工解锁；普通网络失败立即回到 `ready`，但不会后台自动重试或恢复，新的真实平台操作仍须新的逐次授权。具体状态机、审计分类和验收条件见[账号安全熔断设计](account-safety-circuit-breaker.md)。
+账号安全是有界交互的更高优先级门禁。认证 Profile 的动作结果未知、断网、弱网、导航失败、验证码、风控或限流时，本轮立即停止；相同 action ID 不得重试，Gateway/Host 重启不得清除风险状态。验证码、风控、限流、账号错配和存在在途输入的崩溃进入人工处理或持久锁；普通网络失败立即回到 `ready`，但不会后台自动重试或恢复。产品任务继续以批准计划为授权边界；项目开发与验证已获常设低频只读授权，不再逐 run 请求聊天批准。具体状态机、审计分类和验收条件见[账号安全熔断设计](account-safety-circuit-breaker.md)。
 
 ## 7. 账号内容归档（account corpus）
 
@@ -241,7 +249,7 @@ Collector Core / Gateway -> local evidence bundle -> DeepResearch
 
 | 阶段 | 交付 | 最小验收 |
 |---|---|---|
-| P0：执行安全基座 | MV3 Core、任务绑定 DOM、自动构建 / 加载门禁、专用 Validation Browser、空生产 response allowlist | 不需手工加载/点击；不接触日常 Profile；无认证导出/原始网络包；失败状态可见 |
+| P0：执行安全基座 | Contracts、Browser Host、PageLease、MV3 Strategy、自动构建/加载、空生产 response allowlist | 不需手工加载/点击；Gateway restart 不关浏览器；无认证导出/原始网络包；失败状态可见 |
 | P1：策略注册表 | `scout` 的平台原生入口、版本化 DOM output contract、能力状态页、真实验证记录 | 每个平台能区分站内成功、外部发现、登录门禁、布局漂移和无结果；只以用户控制环境中的真实验证升级能力 |
 | P2：受限深度 | `evidence`/`deep_dive`，详情与有界筛选、分页、展开策略 | 每个动作具备 AST、预算、语义轨迹和失败语义；无任意脚本/无界操作 |
 | P3：讨论与账号 | `discussion`、`account_context`、`account_archive`、可恢复快照 | 清单与详情/评论分层；coverage/终点/部分完成可复查；不宣称不可证明的全历史 |

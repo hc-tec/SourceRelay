@@ -3,6 +3,7 @@
 - 状态：Accepted product safety gate；implemented；项目开发/验证采用常设实网授权，不再使用逐次聊天授权门禁
 - 日期：2026-07-19
 - 适用范围：所有使用 `user_managed` Collection Profile 的实网页面导航、语义动作、response reconnaissance 和正式采集 stage
+- 页面生命周期：[Browser Host 与受管页面池 MVP](managed-page-pool-browser-host-mvp.md)
 - 优先级：高于数据覆盖、任务完成率、自动恢复和吞吐量
 
 ## 1. 问题与结论
@@ -112,13 +113,13 @@ run 的 `completed` 也不能由“至少一个动作完成”推导。每个 sc
 ## 7. 页面关闭与用户体验
 
 - 风险信号出现后冻结自动化创建的目标页并停止输入；验证码、登录失效或页面异常需要用户处理时保留原页面供人工查看，不得刷新、绕过或自动重开；
-- 受管 Profile 每次启动都关闭浏览器尝试恢复的 HTTP(S) 旧 tab，只保留浏览器原生登录存储与扩展 Control 页；任何平台页必须来自新的显式动作；
-- 平台 run 终态不等于 Profile 会话终态。字幕 validation 保留最终目标窗口以便视觉/DOM/Network 复核；下一独立 run 只复用仍停留于原规范目标的专用 tab。显式 Profile `/close`、账号暂停或 Gateway 退出才结束整个受管浏览器会话；
+- Browser Host 只操作当前 browser session 所有权账本中的 Collector 页面；启动时已有、session 换代后恢复或无法证明因果所有权的 tab 一律视为 unmanaged，不按 URL 关闭、复用或认领；
+- 平台 run 终态不等于 Profile 会话终态。正常终态只将仍符合身份的页面释放为 `idle_reusable`，不立即关闭；Gateway 退出或重启不结束 Browser Host/Chromium。只有显式 `close_collection_profile`、`exit_browser_host` 或用户关闭窗口才结束对应会话；
 - 临时 DevTools、手工侦察和 headless 版本预热 context 仍必须结束即清理。残留审计要区分“未解释的泄漏”和“产品明确保留的受管会话”；
 - 不在风险页面上继续截图、滚动、点击或读取响应正文；
 - Console 显示 `ready / running / locked`、原因、时间和是否需要人工解锁；
 - 不显示 Cookie、Token、Profile 路径、验证码图片或账号身份；
-- 用户可以显式“暂停账号自动化”；解锁必须提交固定 acknowledgement，普通刷新/重启无效；
+- 用户可以显式暂停 task，也可以执行更强的“暂停账号自动化”。前者停止该任务后续动作但不自动锁账号；后者进入持久 `locked`，解锁必须提交固定 acknowledgement，普通刷新/重启无效；
 - 非最终 stage 完成后，Research Task 进入 `waiting_for_user_resume`；扩展轮询拿不到下一 stage，只有 Console 上针对该 task 的显式 resume 才能重新进入调度；该边界没有时间等待；
 - task resume 只核对已批准计划中的下一个 pending stage 与既有 Profile binding，不启动浏览器、不导航、不修改预算或计划，也不能代替 `locked` 状态的人工解锁；
 - 已采集结果按 `partial` 保存，不能因风险停止而丢弃，也不能称为完整。

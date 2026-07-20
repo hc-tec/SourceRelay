@@ -1,5 +1,7 @@
 # 浏览器扩展采集系统与无人值守测试基线（2026-07-17）
 
+> 历史状态：本文保留 2026-07-17 POC 的实现证据，不再是当前执行架构。较晚的第 101–170 题已经用独立 Browser Host、多页面池、Native Messaging、Extension Strategy + Host trusted input、纯逻辑单元测试 + 真实 Chromium/真实平台验证覆盖了本文的扩展单体、Gateway 直连、per-task window 和 fixture E2E 方向。当前权威规格见 [Browser Host 与受管页面池 MVP](../design/managed-page-pool-browser-host-mvp.md)；本文中的 fixture 结果只能说明当时的历史运行时合约，不能作为当前平台或页面池能力证据。
+
 > 决策：浏览器扩展成为登录态平台采集的执行面；Playwright bundled Chromium 成为唯一的扩展自动化验收面。用户日常 Chrome/Edge、BrowserWing、外部搜索引擎和手工 `chrome://extensions` 操作都不进入默认测试链。
 
 ## 为什么要转向扩展

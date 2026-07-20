@@ -5,12 +5,17 @@
 - 权威决策：[collector-grilling-decision-log.md](collector-grilling-decision-log.md)
 - 产品规格：[platform-strategy-product-spec.md](platform-strategy-product-spec.md)
 - 冲突审计：[collector-decision-audit.md](collector-decision-audit.md)
+- 页面池架构：[managed-page-pool-browser-host-mvp.md](managed-page-pool-browser-host-mvp.md)
 - 数据源勘察门禁：[source-reconnaissance-workflow.md](source-reconnaissance-workflow.md)
 - 账号安全熔断门禁：[account-safety-circuit-breaker.md](account-safety-circuit-breaker.md)
 
 ## 1. 当前结论
 
 Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面。B站匿名首屏关键词搜索是目前唯一获得真实平台 admission、并完成正式 Research Task 调度与本地 Evidence batch 闭环的能力；其他平台和深度能力仍未发布。
+
+2026-07-20 已完成第 101–170 题 Browser Host / 受管多页面池产品设计与一致性审计，但运行时代码尚未实现该架构。当前分支正处于零兼容切换前的中间态：旧 Profile URL 摘要字段已删除，旧单页面 helper 与调用点仍存在，因此当前源码 typecheck 失败于 `lastManagedTargetUrlDigest` / `markManagedTarget` 两处遗留引用。这个状态不能被描述为页面池可用或构建绿色；后续按独立 Contracts/Browser Host、Gateway/Extension 一次性切换、B站 dynamic canary 三个代码 checkpoint 修复，不恢复旧字段或兼容层。
+
+已完成的 B站 dynamic 真实侦察和两页 raw-first artifact contract 保留为 Browser Host canary 输入：它证明当前真实页面的 DOM/XHR/稳定 ID/覆盖语义，不证明页面已经通过新 Host、PageLease、Native Messaging 或 Gateway 重连链路。
 
 B站字幕目前已具备“按需真实采集”的产品底层能力，但仍是 research-only validation、`admissionEligible=false`，没有进入正式 Task production routes。v0.4.23 的 Gateway + 生产 MV3 扩展已在真实登录 Profile 中完成轨道目录、中文选择、字幕正文和本地 raw-first artifact 闭环；这证明能力可用，不等于把单一样本升级为正式策略 admission。
 
@@ -34,7 +39,7 @@ B站账号主页、图文/专栏与合集/系列先完成真实三面侦察：�
 
 用户指出断网、弱网、验证码和异常恢复可能导致重复平台动作并带来封号风险后，所有 B站认证实网研究曾立即暂停并写入 `locked / user_safety_pause`。账号安全门禁完成后，早期逐次授权 run 暴露了旧 MV3 service worker、权限和 synthetic interaction 问题。项目所有者随后授予仓库范围内的持续开发/验证权限；产品动作账本、预算、Profile 绑定和风险停止仍保留。v0.4.23 已用真实启动和真实字幕 run 验证 control-surface revision、运行时代码 marker、可信浏览器输入与 at-most-once 控制循环。
 
-实现已加入 `account-safety.json` 原子状态、崩溃遗留 run 启动锁定、固定 acknowledgement 解锁、同 action ID 二次拒绝、60 秒 run deadline、三次 Fetch/XHR failure 中止、正式 task dispatch 风险门禁和启动时 HTTP(S) 旧 tab 清理。按用户最新决定，正常完成、普通失败、断网和超时均由 `running` 直接回到 `ready`，不再存在计时冷却；验证码、风控、限流、登录失效、中断和用户暂停仍进入 `locked`。持久记录升级为 schema v2，旧 v1 `cooldown` JSON 会一次性迁移为 `ready`。
+实现已加入 `account-safety.json` 原子状态、崩溃遗留 run 启动锁定、固定 acknowledgement 解锁、同 action ID 二次拒绝、60 秒 run deadline、三次 Fetch/XHR failure 中止和正式 task dispatch 风险门禁。早期“启动时关闭恢复 HTTP(S) tab”的逻辑已经删除；当前设计改为 Browser Host session 所有权账本，未知 tab 一律 unmanaged。按用户最新决定，正常完成、普通失败、断网和超时均由 `running` 直接回到 `ready`，不再存在计时冷却；验证码、风控、限流、登录失效、中断和显式账号暂停仍进入 `locked`。持久记录升级为 schema v2，旧 v1 `cooldown` JSON 会一次性迁移为 `ready`。
 
 该 run 暴露的结果语义随后已修正：字幕控件点击后必须在 2.5 秒内满足菜单后置条件，否则 `open_caption_menu=postcondition_unmet`；依赖动作记为 `select_caption_language=prerequisite_unmet / attempted=false`。run 新增 scope objective，只有全部 required actions 完成才能标记 `completed`。认证 interaction 结果现在原子保存为不含 Profile ID、原始 URL、正文和未知 DOM 字段的 ignored runtime artifact；列表只返回 compact summary，详情按 record ID 读取完整安全 schema 投影。
 
@@ -68,7 +73,10 @@ B站详情正式 Task 的 receipt / Evidence race 已加入控制面修复：acc
 已完成：B站 account_profile / account_inventory research runner 9 页 / 330 条真实闭环（尚未 admission）
 已完成：B站 collection_series 总览 + 单系列 5 页 / 129 条 research 闭环（尚未 admission）
 已完成：B站 article 单页目录 + 单篇 raw-first 详情 research 闭环（尚未 admission）
-进行中：P2d B站详情 DOM / XHR-fetch 并行 Source Reconnaissance（production route 仍为空）
+已完成设计：Browser Host / 多 PageLease / Native Messaging / 页面状态 / Console MVP（101–170）
+进行中：Browser Host Contracts 与真实本地 Chromium 页面池 foundation
+待切换：Gateway/Extension/全部 runner 零兼容迁移并删除旧单 tab 路径
+待验证：B站 dynamic 通过新页面池的低频真实 canary
 未开始：P3 加密 Evidence Vault
 未开始：P4 EvidencePackage / DeepResearch 正式接入
 ```

@@ -118,15 +118,16 @@ Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git
 
 ## 下一阶段
 
-1. 用已 admitted 的 B站 discovery 完成一次配对 Gateway → preflight → 批准 → Collection Window 正式控制链验证；
-2. 推进 B站 `detail -> bounded discussion`，每项能力继续独立验证和 admission；
-3. 随后推进小红书登录态 `account identity -> visible inventory -> resumable archive -> selected detail`；
-4. 建设加密 Vault、不可变批次、coverage ledger、hash manifest 和 Evidence Explorer；
-5. 最后通过 EvidencePackage 接入 DeepResearch / 蜂群分析。
+1. 实现独立 Browser Host、受管多页面池、PageLease、Native Messaging 和真实本地 Chromium 生命周期门禁；
+2. 将 Gateway、扩展与现有 runner 一次性切换到新执行面，删除旧单 tab / URL 所有权路径；
+3. 用 B站 dynamic 完成一次低频真实 canary，并证明 Gateway 重启不关闭浏览器；
+4. 再迁移和发布 B站 `detail -> bounded discussion`，随后推进小红书账号归档；
+5. 建设加密 Vault、EvidencePackage 与 DeepResearch / 蜂群分析接入。
 
 权威产品文档：
 
 - [Collector 决策审计](docs/design/collector-decision-audit.md)
 - [平台采集策略产品规格](docs/design/platform-strategy-product-spec.md)
-- [1–100 题决策账本](docs/design/collector-grilling-decision-log.md)
+- [Browser Host 与受管页面池 MVP](docs/design/managed-page-pool-browser-host-mvp.md)
+- [1–170 题决策账本](docs/design/collector-grilling-decision-log.md)
 - [Collector 实现状态](docs/design/collector-implementation-status.md)

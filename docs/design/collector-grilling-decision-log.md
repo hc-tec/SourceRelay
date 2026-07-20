@@ -1,6 +1,6 @@
 # 浏览器采集策略系统：Grill 决策账本
 
-- 状态：Complete / Audited — 已采纳决策的权威累积记录
+- 状态：Complete / Audited through 170 — 已采纳决策的权威累积记录
 - 创建日期：2026-07-17
 - 更新规则：每一批问题得到采纳后，先写入本账本，再进入下一批；只有显式记录的后续决策才能替代已有决策。
 - 问询格式：每批恰好 5 题；每题必须完整显示 A / B / C / D 四项与推荐项；发送前执行选项完整性检查，优先使用固定文本块避免渲染吞项。
@@ -32,6 +32,20 @@
 | 86–90 | 一期范围、平台顺序、能力矩阵、证据复用、定时增量 | 已采纳推荐方案 |
 | 91–95 | Vault 位置、容量清理、密钥恢复、schema 演进、完整性 | 已采纳推荐方案 |
 | 96–100 | 第三方采集仓库、发布门槛、紧急停用、诊断、一期完成 | 96 采纳自定义方案；97–100 采纳 A |
+| 101–105 | Collection Window、页面所有权、并发边界、页面状态与回收 | 已采纳推荐方案 |
+| 106–110 | 两层 lease、选页顺序、用户接管、隔离恢复、页面容量 | 已采纳推荐方案 |
+| 111–115 | 前台许可、Control 页、Browser Host、重启恢复、关闭语义 | 已采纳推荐方案 |
+| 116–120 | 页面身份、导航 generation、弱网、lease deadline、Console | 已采纳推荐方案 |
+| 121–125 | pageRole 策略、认证页、新建页、用户保留、两阶段回收 | 已采纳推荐方案 |
+| 126–130 | Browser Host IPC、单写者、防重放、跨 Profile 调度、迁移 | 已采纳推荐方案 |
+| 131–135 | Host 启动、扩展升级、运行 journal、崩溃语义、MVP 验收 | 已采纳推荐方案 |
+| 136–140 | 包边界、零兼容迁移、错误模型、真实验证、Git checkpoint | 136、138–140 采纳推荐方案；137 采纳零兼容自定义方案 |
+| 141–145 | 混合执行面、Native Messaging、交互 ticket、新 target、XHR 链路 | 已采纳推荐方案 |
+| 146–150 | Strategy 部署、Action AST、ObserverBinding、证据 receipt、取消 | 已采纳推荐方案 |
+| 151–155 | frame/shadow、下载、弹窗、renderer crash、坐标稳定 | 已采纳推荐方案 |
+| 156–160 | 文本输入、媒体静音、外部协议、全局输入许可、用户关窗 | 已采纳推荐方案 |
+| 161–165 | 公平调度、用户接管、idle stale、账号核验、安全边界 | 已采纳推荐方案 |
+| 166–170 | Snapshot 恢复、状态 UX、Strategy 漂移、canary 提交、Console MVP | 已采纳推荐方案 |
 
 ## 批次 1–5：产品北极星与总体架构
 
@@ -287,6 +301,8 @@ DeepResearch 可以提出结构化补采建议，但每一次详情、评论、�
 
 本题明确采纳 **B**：取消所有离线测试，不仅取消平台页面 fixture，也取消以离线测试形式运行的类型、权限、脱敏、URL 规范化、预算、状态机和敏感字段反例测试；测试活动全部通过访问真实平台完成。该决定进一步覆盖第 55 题中“是否仍保留纯离线安全测试”的待定项。
 
+较晚的第 139 题对本题作出明确修订：fixture、fake Gateway、fake XHR 和合成平台页面继续禁止冒充平台验证；但纯 reducer、schema validator、canonicalization 和预算计算可以做单元测试，IPC/浏览器集成必须使用真实本地执行面，平台能力必须使用真实站点。
+
 由于扩展至少需要经过编译与打包才能在浏览器中运行，编译器报错、构建失败、manifest 无法加载等是否属于“测试”尚未定义；下一批将区分“测试”与“产生可运行制品所必需的构建门禁”，不在本条中自行推断。
 
 ### 57. 真实平台测试触发频率
@@ -385,6 +401,8 @@ DeerFlow、天工式方案或其他蜂群框架通过稳定适配边界接入：
 
 每个采集任务使用专用、可见的 Collection Window，tab 明确归属于 task、platform、account 和 stage。扩展不在用户已有日常 tab 上自动执行动作，也不默认使用不可见 headless 页面。用户可观察或接管；手工导航触发第 44 题的 `task_context_changed`。任务结束后由用户选择关闭窗口、保留页面复核或继续新阶段，tab 和窗口数量始终受预算控制。
 
+较晚的第 101 题覆盖本题的窗口粒度：现在每个 Collection Profile 使用一个持久可见窗口，任务专用性由 PageLease/StageLease 保证，不再为每个任务创建 OS 窗口。
+
 ### 78. 按策略请求精确站点权限
 
 Collector Core 安装时保持最小权限。用户首次启用平台或站点策略时，扩展按照经过审查的策略声明请求精确 optional host permission；计划展示域名、只读能力、登录要求、详情 / 评论 / response observation 范围和撤销方式。禁止 `<all_urls>`、`*://*/*`、未绑定策略的宽泛 host 权限，也不拆成多个相互竞争的高权限平台扩展。
@@ -396,6 +414,8 @@ Collector Core 安装时保持最小权限。用户首次启用平台或站点�
 ### 80. 重启后以新 lease 恢复
 
 Collection Browser Profile 正常保留浏览器登录状态；Gateway / artifact writer 持久保存计划、item ledger、覆盖账本、已封存批次和安全检查点。重启后旧 tab、document 和 stage lease 全部失效；系统展示可恢复任务，用户确认后创建新 Collection Window 和新 lease，重新核验平台、账号、页面角色和登录状态，再从稳定 ledger 恢复。禁止无提示后台续跑、删除全部成果或尝试恢复旧 document lease。
+
+较晚的第 114 题将“重启”拆分：仅 Gateway 重启时 Browser Host/Chromium 和 idle 页面所有权继续存在，但 active lease 失效；Browser Host/Chromium 换代时才使整个 browser session 和旧 target 身份失效。两种情况都不恢复旧平台动作。
 
 ## 批次 81–85：用户任务与证据复核体验
 
@@ -544,3 +564,605 @@ MediaCrawler、XHS-Downloader、`xhs`、my-collection-skills 及各种微博 / �
 ```
 
 content script 的 `HTMLElement.click()`、synthetic `MouseEvent`、直接修改 class 或离线页面克隆都不能证明真实人类交互可行。侦察坐标只用于证明输入层能力，生产策略必须从当时页面实时取得位置。该方法已固化为仓库内 [`recon-live-web-interactions`](../../skills/recon-live-web-interactions/SKILL.md)，未来字幕、评论、筛选、排序、分页、账号主页和其他需要主动触发 XHR 的操作都必须复用。
+
+## 批次 101–105：多页面池 MVP 的拓扑、所有权与生命周期
+
+### 101. 每个 Collection Profile 一个持久可见窗口，窗口内使用受管多页面池
+
+每个 Collection Profile 对应一个独立、持久、可见的 Collection Window；窗口内部可以同时存在多个受管 tab。每个受管 tab 通过 lease 归属于具体 task / stage / platform / page role，但登录状态和账号隔离仍由 Profile 边界承担。不同 Profile 使用不同浏览器上下文或窗口，不得混用登录状态。
+
+本决定细化并部分覆盖第 77 题的“每个采集任务使用专用 Collection Window”：专用性下沉到页面 lease，而不是要求每个任务创建新的 OS 窗口。任务仍只能使用明确属于它的页面，不得接管用户页面或其他任务正在租用的页面。
+
+### 102. 页面所有权只由本地 session 账本建立，URL 不能建立所有权
+
+MVP 只认 Collector 在当前浏览器 session 中亲自创建并登记的页面。页面身份使用本地 `browserSessionId + Chrome targetId`；URL、页面角色和其他页面特征只用于核验该受管页面是否仍处于预期上下文，不能用来认领所有权。
+
+启动时已存在但没有进入当前 session 所有权账本的页面一律视为 `unmanaged / user_owned`，不得自动复用、导航或关闭。不得依赖 URL 相同、tab 顺序、DOM 属性、`window.name`、query 参数或页面注入标记推断 Collector 所有权。
+
+### 103. 页面池支持多 lease，认证 Profile 的平台动作并发由独立调度门禁控制
+
+页面池从 MVP 起支持多个受管页面和多个彼此独立的 lease，不能在数据结构或 API 上退化为单工作 tab。页面容量与真实平台动作并发是两个不同维度：MVP 默认每个认证 Profile 同一时刻最多执行一个会触碰平台的导航或交互动作；不同 Profile、不同浏览器上下文可以并行，本地 artifact 写入、去敏投影、解析和 AI 分析也可以并行。
+
+同一 Profile 的详情页有界并发属于后续按平台验证后才能放宽的调度能力；不得因为页面池能够提供多个 tab，就默认允许多个 worker 同时滚动、点击或翻页。该规则与第 72 题兼容：Enumeration Coordinator 的单一所有者约束保持不变，Detail Workers 的并发还必须通过平台和账号安全门禁。
+
+### 104. 受管页面采用显式生命周期状态机
+
+受管页面至少具有以下状态：
+
+```text
+leased
+idle_reusable
+quarantined
+reclaim_pending
+closed
+```
+
+- `leased`：页面被一个且仅一个 active lease 使用；
+- `idle_reusable`：Collector 所有、无 active lease，且页面身份核验通过；
+- `quarantined`：Collector 所有，但发生用户导航、身份不符、验证码、风控、登录变化、网络结果未知或其他无法安全判断的情况；
+- `reclaim_pending`：页面已经进入显式回收计划，但关闭前仍需再次核验所有权、lease 与页面身份；
+- `closed`：页面已经确认关闭，不再参与调度。
+
+没有进入 Collector 所有权账本的页面是 `unmanaged / user_owned`，不进入受管状态机，也不参与自动调度。页面状态只能由 acquire、release、reconcile、reclamation 等受控操作转换，不得按 URL 或标题即时猜测为“空闲”。
+
+### 105. 正常任务结束只释放页面；MVP 不自动关闭页面
+
+正常完成或正常耗尽预算时，页面释放为 `idle_reusable`，不得在任务结束后立即关闭。后续任务优先复用合适的空闲页；即使目标 URL 不同，只要页面仍符合最后预期身份，也可以由新 lease 在同一页面正常导航，从而避免 tab 持续增加。
+
+MVP 可以生成可审计的 `reclaim_pending` 计划，但只有用户执行页面清理、关闭 Profile，或明确的浏览器开发生命周期切换才真正关闭页面。关闭前必须再次确认页面仍为 Collector 所有、没有 active lease、身份未发生意外变化，且不处于 `quarantined`。`leased`、`quarantined` 和 `unmanaged / user_owned` 页面绝不进入自动关闭范围。自动超时关闭或容量压力下的无人值守关闭不属于 MVP，待真实使用证明所有权与接管检测可靠后再单独决策。
+
+## 批次 106–110：页面 lease、确定性调度与隔离恢复
+
+### 106. 物理页面占用使用独立 PageLease，并与 StageLease 显式关联
+
+页面池使用内部 `PageLease` 表达物理 tab 的独占占用；现有 `StageLease` 继续表达获批 task / stage 的执行与证据提交权限。二者职责和生命周期不同，不合并：
+
+```text
+PageLease
+  acquire page -> use page -> release page
+
+StageLease
+  approve stage -> execute document -> submit evidence / terminate
+```
+
+`PageLease` 至少绑定 `pageLeaseId`、`browserSessionId`、`targetId`、`profileId`、`taskId`、`runId`、`pageRole`、取得时间和状态；正式任务执行时再关联可选的 `stageLeaseId`。一个受管页面同一时刻只能拥有一个 active `PageLease`，错误 lease、过期 lease、重复 release 和跨 run 操作都必须拒绝。没有正式 `StageLease` 的侦察、登录状态检查等内部流程也必须先取得 `PageLease`，但不能因此获得正式证据提交权限。
+
+### 107. Acquire 使用确定性的分层复用顺序
+
+页面选择顺序固定为：
+
+```text
+1. 同 Profile、同平台、同规范目标、同页面角色的 idle_reusable 页面
+2. 同 Profile、同平台、同页面角色族的 idle_reusable 页面
+3. 同 Profile 内其他已核验的 idle_reusable 页面
+4. 在 Profile 页面预算内创建新的受管页面
+5. 没有安全页面且已到上限时，失败 page_pool_capacity_exhausted
+```
+
+同一优先级内按最久未使用优先。第 2、3 类页面可以由新 lease 正常导航到新目标，但导航前必须重新核验所有权、状态和最后预期页面身份。每次 acquire 都要记录安全的 selection reason；不得随机选页、抢占 leased 页面、复用 quarantined 页面，也不得因为目标 URL 不同就无条件新增 tab。
+
+### 108. 通过预期动作窗口和页面状态观察识别用户接管
+
+Collector 执行动作前创建带 action ID 的短时 action epoch，声明该动作允许发生的导航、滚动、页面角色变化和后置条件。动作窗口外发生用户滚动、点击、键盘输入、表单变化、非预期主文档导航、SPA 路由变化、页面关闭、页面替换或 document generation 改变时，当前 `PageLease` 和关联 `StageLease` 立即失效，页面进入 `quarantined / unexpected_user_activity`。
+
+单纯切换到 tab、窗口获得焦点、鼠标移动或停留查看不算接管，用户仍可观察任务。Collector 自己的浏览器级输入必须关联 action ID，不能只依赖 `event.isTrusted` 区分人类和自动化，因为浏览器级自动化输入同样可能产生可信事件。无法归因的状态变化按接管或上下文未知处理，不继续沿用旧策略。
+
+### 109. Quarantine 按良性上下文变化和账号风险分流
+
+`benign_context_change` 包括用户导航、页面角色改变和无风险的意外跳转。页面保持可见，用户可以按当前页面重新规划并创建新 lease、放弃 Collector 所有权转为 unmanaged，或显式关闭；系统不自动导航回原地址。
+
+`risk_or_identity_change` 包括验证码、风控、登录账号变化、会话失效和平台动作结果未知。页面保持 quarantined，并同时进入对应账号安全或认证状态；不能仅通过“重新使用页面”把它改回空闲，也不能用自动刷新尝试恢复。恢复页面资源状态不能绕过账号安全状态机。
+
+### 110. MVP 默认每个 Collection Profile 最多三个受管 Web 页面
+
+MVP 默认预算为：
+
+```text
+maximumManagedPagesPerProfile = 3
+maximumActivePlatformActionsPerProfile = 1
+```
+
+`leased`、`idle_reusable`、`quarantined` 和 `reclaim_pending` 都占用受管页面名额；`unmanaged / user_owned` 不占受管名额，但必须进入浏览器总页面数遥测。达到上限时优先复用 `idle_reusable` 页面；如果只有 leased 或 quarantined 页面，则返回 `page_pool_capacity_exhausted`，不得抢占、关闭或继续开页。后续任务计划可以显式申请提高上限，但升级必须可见，并继续受 Profile、平台、账号和动作并发门禁控制。
+
+## 批次 111–115：前台操作、控制页与浏览器进程生命周期
+
+### 111. PageLease 与窗口前台操作权分离
+
+取得 `PageLease` 不自动调用 `bringToFront()`。每个 Collection Window 另有至多一个 `ForegroundActionPermit`；只有导航、滚动、hover、点击、键盘输入、筛选、展开等需要可见浏览器输入的动作序列才能申请该许可。取得许可后只切换一次目标 tab，等待页面稳定，执行一组语义连贯的动作，核验视觉、DOM 和 XHR 后置条件，再释放许可。页面停留在最终状态，不自动切回 Control 页。
+
+已经加载的页面可以在后台完成不产生新平台输入的 DOM 投影、已观察响应解析和 artifact 写入。不得为了模拟真人随机切 tab、随机停留或随机制造输入；目标是确定、可解释、不机械抖动的页面工作流，而不是伪造随机行为。
+
+### 112. 每个 Browser Session 最多一个非池化 Control 页
+
+Control 页具有独立系统角色：
+
+```text
+pageRole = collector_control
+ownership = collector_system
+poolEligible = false
+reclaimable = false
+platformActionEligible = false
+```
+
+扩展 worker 必须先在不可见探测阶段完成版本与 control surface 核验，随后每个 Browser Session 至多打开一次 Control 页。Control 页不进入 Web 页面池、不被平台任务导航、不在每个 run 开始或结束时切到前台。用户手工关闭后，任务运行期间不得通过失败重试循环自动重开；Research Console 或明确本地命令可以重新打开一次。Gateway 与扩展的后台控制通信不能依赖 Control 页保持打开或处于前台。
+
+### 113. Browser Host 独立拥有 Chromium 生命周期
+
+新增独立、长寿命的本地 Browser Host，由它启动并持有 Chromium、Collection Profile、`browserSessionId`、页面所有权账本、`PageLease` 状态和扩展加载核验。Gateway 通过受保护的本地控制通道连接 Browser Host，负责研究任务、计划、动作和证据协调；Gateway 重启、崩溃或升级不关闭 Collection Window。
+
+不得把未经认证的原始 CDP 端口暴露给任意 localhost 客户端。控制通道必须使用固定本地身份、随机 session secret、操作系统级命名管道或等价保护。不得为了获得进程持久性而连接用户日常 Chrome，也不得恢复成每个 task 启停一个 Chromium 进程。
+
+### 114. Gateway 与 Chromium 重启采用两级恢复语义
+
+Gateway 重启而 Browser Host 与 Chromium 仍存活时，`browserSessionId` 不变，Browser Host 页面所有权账本继续有效，`idle_reusable` 页面保持空闲；旧 Gateway 的 active `PageLease` 全部失效，对应页面进入 `quarantined / controller_disconnected`。新 Gateway 可以读取去敏页面池摘要，但必须申请新 lease，不能恢复旧平台动作。
+
+Browser Host 或 Chromium 重启时生成新的 `browserSessionId`，旧 `targetId`、`PageLease` 和页面账本全部失效。即使浏览器恢复出 URL 相同的 tab，也将其视为 `unmanaged / user_owned`，不得按 URL、历史摘要或 tab 顺序重新认领。稳定 task ledger、coverage 和 artifact 可以恢复，但继续任务必须重新核验 Profile、平台、账号、页面角色和安全状态。
+
+### 115. 暂停、取消、断开和关闭 Profile 是四种不同操作
+
+产品和代码必须区分：
+
+```text
+pause_task
+  停止开始新平台动作；当前动作按有界后置条件收尾
+
+cancel_task
+  终止该任务后续 stage；保留已完成 artifact；释放或隔离页面
+
+disconnect_gateway
+  Browser Host 与浏览器继续存活；旧 active lease 失效
+
+close_collection_profile
+  用户明确请求关闭整个 Collection Window
+```
+
+`close_collection_profile` 默认拒绝在存在 active lease 时执行，并先展示 leased、idle、quarantined 和 unmanaged 页面数量；用户解决 active lease 或明确强制关闭后，Browser Host 才关闭 Chromium context。扩展升级、Gateway 重启、重新构建、普通任务结束和 `cancel_task` 都不得隐式调用该操作。平台动作结果未知时遵守 at-most-once 和隔离规则，不能把“暂停”实现成关闭页面后重试。
+
+## 批次 116–120：页面身份、导航世代、弱网与可观察性
+
+### 116. 页面身份采用所有权、文档导航和平台语义三层契约
+
+页面身份分为：
+
+```text
+本地所有权身份
+  browserSessionId + targetId + profileId + ownership record
+
+文档与导航身份
+  main-frame document generation + route generation
+  规范 origin/path/page kind + 最近批准导航的 URL digest
+
+平台语义身份
+  platform + pageRole + stable target identity
+  登录状态类别 + 可可靠核验时的公开账号身份
+```
+
+所有权只能由第一层证明，不能由 URL 或页面内容建立。Acquire 空闲页面时核验第一、二层；开始平台动作或采集证据前核验全部三层；正常 release 前再次核验所有权、文档身份和动作后置条件。无法证明平台语义身份时返回 `page_identity_unverified`、登录或漂移状态，不得猜测匹配。
+
+### 117. 分离 browser session、document、route 与 action 四种 generation
+
+`browserSessionGeneration` 在 Chromium 或 Browser Host session 换代时变化；`documentGeneration` 在主 frame 提交新文档时递增；`routeGeneration` 在 `pushState`、`replaceState`、`popstate` 或平台 SPA 路由变化时递增；`actionEpoch` 为每个已批准语义动作独立编号。
+
+`PageLease` 可以跨一次已计划导航继续占用同一物理 tab，但完整主文档导航会使旧 document-bound `StageLease` 和 observer 失效，新文档必须建立新绑定。已声明的 SPA transition 可以保留 PageLease，但必须递增 route generation、重新核验 pageRole 和目标身份；未声明的 route transition 返回 `task_context_changed` 并隔离页面。
+
+迟到的 DOM 或 XHR 结果必须同时匹配 `PageLease + documentGeneration + routeGeneration + actionEpoch`，否则丢弃，不能写入当前证据批次。
+
+### 118. 目标网络动作一次发出，弱网和结果未知不自动恢复
+
+每个导航和语义动作最多发出一次，并使用有界 deadline。已确认目标后置条件才继续；验证码、风控、限流和登录变化终止 run、隔离页面并进入对应安全状态；主文档或目标 route 超时、断网、网络切换、连接中断和动作是否生效未知时，将动作记录为 `attempted / outcome_unknown`，终止 run 并隔离页面，不执行 reload、back、重复点击或另开 tab。
+
+无关图片、广告、推荐和遥测资源失败不构成任务失败；只有策略声明的主文档、目标 route 与动作后置条件参与终态判断。deadline 内可以本地轮询已经存在的 DOM、响应队列和浏览器状态，但不得重新发出平台动作。后续尝试必须属于新 run 和新 action ID。
+
+### 119. PageLease deadline 从获批任务预算派生
+
+active `PageLease.expiresAt` 不得晚于当前 run deadline、获批 stage/task `maxDuration` 和 Browser Host 本地安全硬上限。Gateway 使用受保护的本地 heartbeat 证明控制器存活；续租仅限原 lease 未过期、controller generation、task/run/stage 均未变化、仍在总时间预算内、没有 outcome_unknown 动作且页面身份核验通过。续租只延长本地资源占用，不产生平台输入。
+
+heartbeat 丢失或 lease 到期时，若没有在途平台动作，页面进入 `quarantined / controller_timeout`；若存在可能已经发出的平台动作，页面进入 `quarantined / platform_action_outcome_unknown`，run 按 at-most-once 终止。页面不会因 lease 到期自动关闭。
+
+### 120. Console 展示去敏页面池状态卡，不暴露浏览器内部或页面内容
+
+Console 为当前 session 的页面分配本地短别名，展示 Profile、Browser Session 状态、page alias、平台、pageRole、ownership、lifecycle state、关联 task/run 短别名、lease/idle age、前台许可、最后状态转换、安全 selection reason、quarantine reason 和 reclaim eligibility，并提供聚焦页面、查看隔离原因、按当前页重新规划、放弃 Collector 所有权、生成回收计划和显式关闭安全页面等本地操作。
+
+默认不得展示 Chrome `targetId`、完整 URL/query/fragment、页面标题或正文、账号敏感信息、Cookie、Token、storage、请求头或请求体。用户需要理解的是页面归属、状态、任务关系和安全操作，不是内部 target 标识；更深调试只能通过受控、去敏诊断导出提供。
+
+## 批次 121–125：页面角色、身份交互、用户保留与回收执行
+
+### 121. pageRole 分类与转换由版本化 Platform Strategy 声明
+
+通用页面池只负责所有权、lease 独占、容量、LRU 和生命周期转换；平台 Strategy 负责从已批准的 URL、DOM 和公开语义证据核验 pageRole，并声明允许的角色转换与复用亲和度。Strategy 至少返回 `verified role / unknown / drifted`，并提供 exact target、same role、same role family、generic navigable page 和 incompatible 等复用等级。
+
+页面池不得硬编码 `/search`、`/video`、`/dynamic` 等跨平台 URL 猜测，也不得把任意空闲页直接交给任意策略。Strategy 无法证明当前角色时，页面不能进入 `idle_reusable`；未声明的角色转换按上下文变化处理。
+
+### 122. 登录、扫码和验证码页面进入受保护的人类身份交互模式
+
+任务页面进入登录、扫码或验证码页面时，当前 `PageLease` 与 `StageLease` 失效，页面分别进入 `quarantined / authentication_required` 或 `quarantined / verification_required`，角色为 `user_authentication` 或 `user_verification`。这些页面由 Browser Host 保护，但永远不进入普通复用和回收池。
+
+身份交互模式中暂停 Collector 输入与证据观察，不截图凭据区域、不读取输入框、不记录二维码内容、不捕获认证请求，也不自动刷新或点击。用户本人进行的点击、扫码和密码输入属于该模式的预期人类动作，不重复归类为普通 `unexpected_user_activity`。用户完成后显式恢复，系统只核验非敏感登录状态、平台、账号类别和目标页面角色，再创建新的 PageLease 与 StageLease。
+
+### 123. 新页面采用 reserve、create、register、navigate 原子流程
+
+新建受管页面的顺序固定为：预留 Profile 容量，取得 `ForegroundActionPermit`，创建 `about:blank` target，立即取得 `targetId`，用 `browserSessionId + targetId` 登记所有权，创建状态为 `leased_pre_navigation` 的 PageLease，只发出一次批准目标导航，最后核验 document generation、pageRole 和目标身份。
+
+如果尚未发出外部导航，本地创建失败可以回滚容量并关闭纯 `about:blank` 页面；这不属于关闭任务页面。如果已经发出目标导航但结果未知，则页面进入 `quarantined / navigation_outcome_unknown`，不得关闭、重开或自动重试。所有权必须先于外部动作建立，且只有真正取得容量和前台许可后才创建 tab。
+
+### 124. 用户保留页面使用显式 retained、transfer 和 close 语义
+
+任务结束后的默认状态是 `idle_reusable`。用户可以选择：
+
+```text
+保留在页面池
+  -> idle_reusable
+
+固定供我查看
+  -> retained_for_review
+  -> Browser Host 保护，但不复用、不回收、不自动导航
+
+交给我
+  -> 删除 Collector 所有权
+  -> unmanaged / user_owned
+
+关闭
+  -> 无 active lease 且身份核验通过后显式关闭
+```
+
+`retained_for_review` 页面以后可以经重新核验返回页面池。用户在 idle 页面上交互但未显式选择时，页面进入 quarantine；系统不得从一次点击或滚动自动推断永久所有权转移。该决定在第 104 题的最小状态机上新增 `retained_for_review` 状态。
+
+### 125. 页面回收采用带版本快照的 Plan 与 Execute 两阶段协议
+
+用户选择 Profile 和期望释放数量后，Browser Host 先 reconcile 页面池，只选择 Collector-owned、`idle_reusable`、无 PageLease、无前台许可、非 Control、非 retained、非 quarantined 且身份仍匹配的页面；按低复用亲和度与最久未使用排序，标记 `reclaim_pending`，生成短时有效的 `reclaimPlanId`。计划只展示 page alias、pageRole、idle age、选择原因与预计释放数量。
+
+执行时逐页重新核验 browser session、record version、ownership、state、lease 和页面身份。未变化的页面才关闭；任一条件变化则跳过，并返回 `closed / skipped / changed` 的逐项结果。计划过期或取消时，仍满足条件的页面回到 `idle_reusable`。回收只关闭本地 tab，不导航、刷新或触发平台动作；MVP 不自动生成并执行无人值守回收。
+
+## 批次 126–130：Browser Host 控制协议、调度与迁移路径
+
+### 126. Browser Host 使用窄能力、认证的操作系统本地 IPC
+
+Windows 使用 Named Pipe，Linux/macOS 使用 Unix Domain Socket。Browser Host 只开放版本化、类型化的页面状态、lease、前台许可、批准动作、reconcile、回收和 Profile 生命周期命令；不暴露任意 Playwright Page、任意 CDP、任意 JavaScript evaluate、浏览器认证材料或文件系统能力。
+
+Browser Host 启动时生成 `hostInstanceId` 和本地 bootstrap secret，endpoint 与 secret 使用当前操作系统用户可读的 ACL。Gateway 通过固定身份和短时 handshake 建立 controller generation，后续命令携带认证摘要、nonce 和 deadline。不得提供无认证 localhost HTTP API或公开 raw remote-debugging port。
+
+### 127. Browser Host 是页面资源账本和状态机的唯一写入者
+
+Gateway 只能发送 acquire、release、action 和 reclaim 意图；扩展/content script 只能上报 document、route、用户活动和策略证据；Playwright/Chromium 事件只能报告 target 创建、关闭、导航和崩溃。只有 Browser Host 可以验证这些输入、执行合法状态转换、递增 `PageRecord.version` 并追加审计记录。
+
+Browser Host 保存当前 session 的内存索引和 append-only 本地 journal。journal 用于审计、崩溃诊断和确认旧 lease 失效；Browser Host 或 Chromium 换代后，历史记录不能用于自动认领新 session 页面。不得采用 Gateway 与 Host 最后写入者获胜、content script 直接改状态或每次按 URL 重算状态的多写者模型。
+
+### 128. Browser Host 在浏览器输入边界执行命令防重放
+
+每个命令 envelope 至少包含协议版本、host/browser session、controller generation、command ID/class、PageLease、预期 PageRecord version、task/run/stage、平台动作 action ID、nonce、签发/过期时间和认证摘要。Browser Host 在发出平台输入前持久记录 `attempted`，并维护有界去重账本。
+
+首次有效 command 才能执行；相同 command ID 再次到达只返回已有 outcome。IPC 响应丢失时 Gateway 只能查询 command outcome，不能重新提交平台动作；controller 断开后旧 generation 的命令全部拒绝。只读本地状态查询可以有界重试，导航、hover、click、scroll、筛选和展开不能通过更换 command ID 绕过去重。Host 崩溃时，attempted 但未确定结果的动作归类 outcome unknown。
+
+### 129. 多 Profile 使用 Gateway 全局调度与 Browser Host 本地硬门禁
+
+Gateway Scheduler 按任务优先级、批准时间和平台公平性排队；MVP 默认最多同时运行两个 Collection Profile，每个 Profile 同时最多一个平台动作，避免长账号归档永久饿死其他平台任务。Browser Host 独立核验每 Profile 三页上限、每窗口一个前台许可、PageLease 和 controller generation；即使 Gateway 调度错误也拒绝越界命令。Account Safety 继续按 Profile/platform/run 执行安全状态机。
+
+不同 Profile 可以在各自 Collection Window 中并行。某个 Profile 的 quarantine、登录失效或账号风险只阻断该 Profile；只有 Browser Host 自身完整性失败才升级为全局阻断。不得让 Host 仅凭空闲 tab 自主启动未计划任务，也不得开放无上限并发。
+
+### 130. 先构建 Browser Host 纵向切片，再以 B站 dynamic 迁移作 canary
+
+实施顺序为：Browser Host 进程与 IPC、PageRecord/PageLease/前台许可和去敏 inventory；随后用真实本地 Chromium 验证双 lease、空闲复用、用户导航隔离、Gateway 重启不关闭浏览器和显式回收，且声明 `livePlatformRequests=0`；再迁移已有真实 DOM/XHR/artifact 契约的 B站 dynamic runner，并执行一次低频真实平台闭环；通过后依次迁移账号档案、系列/文章、视频/字幕/讨论，最后删除旧单工作 tab 与 URL 摘要所有权实现。
+
+不设置旧 API 兼容期，也不允许用薄适配器维持旧 runner 调用。切换 checkpoint 必须一次性迁移所有调用点并删除旧 URL 认领、单 tab 状态和旧生命周期 API。真实本地 Chromium 生命周期验证只证明浏览器资源模型，不冒充平台能力验证；平台能力仍需真实站点证据。
+
+## 批次 131–135：Host 启动升级、运行日志、崩溃与 MVP 验收
+
+### 131. Browser Host 采用项目本地、按需启动、当前用户单实例
+
+Browser Host 与 Gateway 一起构建发布，但使用独立入口、进程和 state 目录；MVP 不注册系统服务、不要求管理员权限，也不默认开机自启。Gateway Launcher 先探测当前用户 Named Pipe：健康 Host 已存在就认证连接，不存在时只启动一次 detached hidden Host 并等待 endpoint ready。Gateway 退出后 Host 继续运行，只在用户明确 Exit Browser Host 时结束。
+
+Host 使用当前用户 state 目录单实例锁。第二个 Host 发现健康实例时退出，不能再启动一组 Chromium；只有对应 PID、Named Pipe 和 heartbeat 均不存在时才可清理陈旧锁。一个 Host 管理多个隔离 Collection Profile，不按 Profile 复制完整服务。
+
+### 132. 扩展升级使用不可见探测、空闲时一次 reload 和 generation 换代
+
+Browser Host 管理 `extensionGeneration`，先比较期望 build fingerprint、版本、control surface revision 与实际 worker runtime marker。完全匹配时不 reload、不打开扩展页；不匹配且存在 active PageLease 时进入 `extension_upgrade_pending`，停止接收新任务并等待当前动作安全结束；空闲后至多调用一次 extension runtime reload，再核验新 worker 的完整 marker。
+
+generation 改变会使旧 StageLease、document observer 和 action epoch 全部失效。平台 tab 保持打开，新扩展只能通过受控脚本重新建立当前文档观察绑定，不能刷新页面或重放动作。一次 reload 后仍不匹配则进入 `extension_adoption_failed`，禁止新平台动作、保持 Chromium 打开、不打开 `chrome://extensions`、不循环 reload；是否重启 Profile 属于显式开发生命周期操作。
+
+### 133. Runtime journal 只保存去敏状态事件，默认七天与 32 MiB 上限
+
+journal 允许保存 schema/timestamp、host/browser/controller/extension generation、Profile ID、session-local page alias、target identity digest、PageRecord version、pageRole/state、lease/task/run/stage ID 或摘要、selection/transition reason、command ID/class/outcome 和 quarantine/reclaim 结果。禁止保存 raw targetId、完整 URL/query/fragment、页面标题/正文/截图、DOM/XHR 原文、认证材料、请求头或请求体。
+
+当前 Browser Session journal 保留到 session 正常封存或崩溃处理完成；已结束 session 默认保留七天，并设 32 MiB 总上限，超限只删除最旧的已封存 runtime journal。该清理不影响 Research Evidence、coverage、长期账号档案和安全锁；需要长期保留的安全结论进入独立最小安全状态，不依赖滚动日志。
+
+### 134. Browser Host 崩溃时停止并诚实报告，不自动形成重启开窗循环
+
+Gateway 检测 Host 断线后停止所有 active run，将 attempted 但无确定结果的动作标记 outcome unknown，使对应 Profile 进入安全状态；不立即自动启动新 Host、不重新导航历史 URL、不恢复旧动作。Chromium 若随 Host 退出，则报告 `browser_session_lost`，专用 user-data-dir 继续保存正常浏览器登录数据，下一次明确启动建立新 Browser Session；Chromium 若意外留存，则视为 orphaned browser，不按 URL 或公开 CDP 自动接管，由用户保留或关闭。
+
+MVP 只承诺 Gateway 重启不关闭浏览器，不虚假承诺 Browser Host 进程崩溃后同一 Chromium 必然存活。Launcher 只能在用户下一次明确启动采集时启动一个新 Host，不能后台无限循环重启并反复开窗。
+
+### 135. 页面池 MVP 必须通过四组纵向门槛
+
+完成条件同时包括：Gateway、Browser Host、扩展构建与版本化 IPC/PageRecord/PageLease 契约通过，旧 URL 摘要和单工作 tab 路径删除；真实本地 Chromium 中验证同一 Host 跨 Gateway 重连、双 lease、空闲复用、三页上限、用户导航隔离、retained 保护、两阶段回收且 `livePlatformRequests=0`；验证 command 去重、响应丢失只查 outcome、controller 失联、扩展 mismatch 至多 reload 一次、无 `chrome://extensions` 和额外 Control 页、任务结束不关页；最后执行一次低频真实 B站 dynamic canary，保留真实 DOM/XHR/artifact 互证，release 后页面可见可复用，Gateway 重启后浏览器仍打开且没有重复平台动作、写操作或认证材料输出。
+
+MVP 不要求一次迁移全部平台，但不能用 typecheck、fake Gateway、fake tab 或合成页面冒充真实浏览器闭环。canary 结束后不为测试清理而自动关闭浏览器，必须通过 Host 状态、OS 进程和页面池摘要核验其仍存活。
+
+## 批次 136–140：代码边界、零兼容迁移、错误与验证治理
+
+### 136. Collector 采用明确的多包边界和单向依赖
+
+项目处于早期，不把 Browser Host 继续塞进 Gateway 大文件。建立以下清晰边界：
+
+```text
+@intelligence/collector-contracts
+  纯协议 DTO、schema、错误码和验证器
+  不依赖 Node、Playwright、Chrome 或平台代码
+
+@intelligence/collector-browser-host
+  Browser Host 进程、IPC server、Profile runtime
+  PageRecord/PageLease 状态机、前台许可、journal、回收、扩展采纳
+  唯一允许直接依赖 Playwright 并写页面账本的包
+
+@intelligence/collector-gateway
+  研究计划、调度、账号安全、artifact 和 Browser Host client
+  完成迁移后不直接持有 Playwright BrowserContext/Page
+
+@intelligence/collector-extension
+  MV3 控制、页面策略观察、DOM/XHR 证据和用户活动事件
+  不持有 Host journal、长期证据密钥或任意 CDP 能力
+```
+
+仓库建立 workspace 级构建顺序，依赖只从 Gateway/Host/Extension 指向 contracts，不形成循环。Host 内继续按 IPC、launcher、profile runtime、page ledger、lease、foreground、extension adoption、reclamation 和 journal 拆分；单文件出现多个状态机、协议和 I/O 责任时必须拆分，不能生成新的千行总管文件。
+
+### 137. 项目不提供旧页面生命周期 API 或状态格式兼容
+
+本题采用用户自定义决定：项目刚开始、自由空间足够，不需要任何兼容性。新 Browser Host 切换时一次性删除 `acquireManagedTargetPage`、`retainManagedTargetPage`、URL 摘要所有权、单工作 tab 遥测和相关 profile 字段；所有 runner、Console、构建脚本和文档在同一切换 checkpoint 改用 PageLease。不得保留 adapter、dual write、legacy endpoint、fallback path 或“新失败后退回旧实现”。
+
+旧 runtime JSON 中未知遗留字段只在读取边界丢弃，不能用于认领页面；专用浏览器 user-data-dir 与正常登录状态不删除。构建门禁显式扫描旧 symbol，任何重新引入都失败。本决定覆盖第 130 题原先允许薄适配器的候选方向。
+
+### 138. 使用结构化 BrowserHostError，不从 Error.message 猜状态
+
+跨 Host、Gateway、Console 和 runner 的失败统一为版本化 discriminated union，至少包含：
+
+```text
+code
+category
+scope: host | browser_session | profile | page | lease | action | stage
+terminality
+retryClass: never | local_query_only | new_run_required | user_action_required
+platformActionAttempted
+pageDisposition
+profileSafetyDisposition
+safeDetails
+occurredAt
+```
+
+错误类别覆盖 protocol/authentication、capacity、lease conflict/expiry、page identity/context、authentication/verification、platform risk、network outcome unknown、extension adoption、host/session loss、reclamation 和 internal invariant。HTTP、IPC 和 artifact 终态只能映射稳定 code；禁止用正则解析 `Error.message`、把异常堆栈发给 Console，或让调用方自行猜页面应当 idle、quarantine 还是关闭。
+
+### 139. 单元测试只限纯逻辑，其他验证全部使用真实执行面
+
+纯 reducer、schema validator、canonicalization 和预算计算可以使用单元测试。IPC、进程、Chromium、扩展加载、页面池、重连、前台许可、用户接管、回收和升级验证必须启动真实 Browser Host 与真实 Playwright Chromium；平台能力验证必须访问低频真实平台，不使用 fake Gateway、fake XHR、fixture 页面或合成 tab 冒充。
+
+验证由 CLI 全流程自动执行，包括构建、启动、连接、浏览器操作、OS PID/窗口核验、artifact 与去敏审计；除了扫码、密码和验证码等本人身份动作，不要求用户手工加载扩展、点击按钮或关闭页面。真实 canary 结束后浏览器保持打开。
+
+### 140. 采用四个可验证 Git checkpoint，不把整个重构压成一个提交
+
+checkpoint 顺序为：
+
+```text
+1. design: freeze managed page pool and browser host decisions
+   只提交权威决策、架构和验收文档
+
+2. feat: add contracts and browser host core
+   workspace、contracts、Host/IPC/ledger/lease/journal
+   真实本地 Chromium 生命周期门禁通过
+
+3. refactor: switch gateway and extension to browser host
+   一次性迁移全部现有 runner 调用
+   删除旧 API、单 tab、URL 所有权和直接 Playwright 持有
+
+4. feat: validate bilibili dynamic through managed page pool
+   低频真实 canary、去敏 artifact、重连与页面保持证据
+   修订实现状态和 B站侦察文档
+```
+
+每个 checkpoint 只能在其范围内 typecheck/build 和相应真实门禁通过后提交；不得提交明知破编译的中间态，也不得把当前工作树中无关用户修改混入。若某 checkpoint 暴露设计错误，修改当前实现而不是新增兼容分支。
+
+## 批次 141–145：扩展、Browser Host 与 Gateway 的真实执行分工
+
+### 141. 扩展负责平台语义，Browser Host 负责可信输入，Gateway 负责研究调度
+
+Gateway 生成并批准有预算的语义 `ActionCommand`，管理任务、账号安全和证据目标，不直接操作 Playwright Page。Extension Strategy 识别平台、pageRole、目标元素和状态，观察 DOM、SPA route、用户活动与批准 XHR，返回短时 `InteractionTargetTicket`，不使用 `HTMLElement.click()` 冒充可信输入。Browser Host 核验 PageLease、generation、action ID 与前台许可，使用 Playwright/Chromium 发出可信 mouse、keyboard 或 navigation，并执行动作 at-most-once；Host 不运行模型生成的任意脚本。
+
+动作链固定为 Gateway 批准语义动作、Extension 解析当前文档目标、Host 重新核验并发出一次可信输入、Extension 观察视觉/DOM/XHR 后置条件、Host 判定终态、Gateway 接收安全结果与证据。不得让 Gateway 绕过 Host 继续持有 Page，也不得把全部平台选择器和采集逻辑搬入 Host。
+
+### 142. Extension 通过 Chrome Native Messaging 接入 Browser Host
+
+扩展使用 `chrome.runtime.connectNative` 连接当前用户级 Native Messaging Bridge；manifest 绑定固定 extension ID，bridge 只负责版本化消息 framing、身份绑定和连接 Browser Host Named Pipe，不持有页面状态、不执行平台动作。Browser Host 验证 browser session、document binding、PageLease 和 generation，并在 Gateway 与 Extension 之间传递批准任务和去敏 observation。
+
+Native Messaging manifest、bridge 路径和扩展 ID 由本地构建/安装流程自动配置，不要求用户手工编辑注册表。不得继续维护扩展、Gateway、Host 三方各写一部分 lease 的 localhost 轮询模型，不允许网页 `postMessage` 或 raw CDP 成为控制通道。
+
+### 143. Extension 使用一次性 InteractionTargetTicket 交付实时交互目标
+
+ticket 至少绑定 ticket/strategy/page lease/browser session、document/route generation、action epoch、frame、semantic role、批准 locator descriptor、可见/可用/无遮挡状态、实时 bounding box、签发/过期时间和 one-time-use。Browser Host 真正输入前要求 Extension 再次核验 generation、语义节点、可见性、遮挡和位置；已经发出可信输入后 ticket 永久 consumed。
+
+ticket 在未发出平台输入前失效时，可以在同一 action deadline 内重新执行一次本地 DOM 解析；这不算重试平台动作。生产 Strategy 保存语义定位规则，不保存侦察时固定坐标。视觉用于侦察与交叉核验，最终输入必须绑定实时 DOM 目标和 generation。
+
+### 144. 已批准动作因果创建的新 target 可以建立 Collector 所有权
+
+Collector-owned 页面来源扩展为 `direct_created` 和 `action_created`。ActionCommand 必须预先声明 `same_tab / expect_one_new_tab / allow_same_or_one_new_tab / forbid_new_target`。在 action epoch 内，恰好一个具有当前受管 opener、匹配 action 和预期 origin/pageRole 的新 target 可以登记 action-created 所有权并创建 PageRecord/PageLease。
+
+未声明、多个或身份不明的新 target 仍记录为 Collector 动作导致，进入 `quarantined / unexpected_target_created`，不自动操作或关闭，也不伪装为用户页面。意外 target 即使临时突破三页容量也必须入账并隔离，再由用户检查、关闭或转交。本决定扩展第 102 题的“Collector 创建”含义，但仍禁止根据 URL 认领无因果关系的已有页面。
+
+### 145. XHR/fetch 观察由扩展精确投影，并经 Host 上下文核验后交 Gateway
+
+Browser Host 为当前 document/action 建立带批准 origin、pathname、MIME、尺寸和数量预算的 `ObserverBinding`。Extension main-world observer 只观察页面自身正常触发的 fetch/XHR，有界 clone response，在页面/扩展边界完成字段投影和去敏，不读取或保存请求头、请求体、Cookie 或 Token；ObservationBatch 通过 Native Messaging 返回。
+
+Host 核验 PageLease、documentGeneration、routeGeneration 和 actionEpoch，丢弃迟到、跨页、跨动作或超预算 observation，再交 Gateway 写 artifact、coverage 和证据索引。Host 可以观察主文档和目标网络成功/失败元数据，但 production 不用 raw CDP Network 全量抓包替代 route allowlist。DevTools/CDP 只在真实侦察中辅助识别 route，未经审查的响应不能进入生产 Strategy。
+
+## 批次 146–150：Strategy、动作协议、观察绑定与取消一致性
+
+### 146. Platform Strategy 作为扩展内已构建代码和声明式 manifest 发布
+
+Extension bundle 包含 strategy implementation、语义目标 resolver、pageRole classifier、DOM projector 和批准 response projector；Strategy manifest 记录 strategy ID/version、平台、pageRole、允许转换、ActionCommand 类型、response route ID、权限、认证前提、maturity、最近真实验证、侦察 dossier 和 build digest。Gateway 只能选择已安装 registry 中的精确版本，不能上传 JavaScript、selector、evaluate 或模型临时脚本。
+
+任何改变页面识别、动作或 response 投影的修改都递增 strategyVersion 和 extension build digest，触发 extensionGeneration 换代，使旧 StageLease/ObserverBinding 失效，并重新完成对应真实平台验证。不得把 Strategy 变成 Gateway 远程代码或 Browser Host 硬编码平台爬虫。
+
+### 147. ActionPlan 可完整审阅，但 Browser Host 逐个执行受限 Action AST 原语
+
+允许的原语包括已知 URL 导航、解析交互目标、取得/释放前台许可、hover/click、公开查询输入、声明选项选择、有界滚动、等待声明后置条件、DOM 投影、ObserverBinding 激活/封存。每个 ActionCommand 绑定 action/strategy/page lease、预期 record/document/route generation、语义目标、前置条件、输入机制、target behavior、deadline、后置条件、observer binding、预算影响和失败映射。
+
+Planner 可以展示完整 ActionPlan，但 Host 一次只接收执行点上的下一个原语；前一动作形成确定终态后 Gateway 才提交下一动作。同一前台 session 可以保持许可以避免频繁切 tab。`type_public_query` 只允许 Strategy 明确标记的公开搜索/筛选输入，禁止密码、验证码、私信、评论和发布字段。不得发送整段 Playwright 脚本、自由 evaluate、无界循环或自然语言给 Host 自主执行。
+
+### 148. ObserverBinding 必须在可能触发响应的输入前完成握手
+
+Binding 生命周期为 `pending -> ready -> active -> sealing -> sealed`，异常时进入 revoked/expired。Gateway 批准 action 与 route/projection 后，Host 创建 pending binding，Extension 安装精确 observer 并返回 ready；Host 核验 generation 和预算后才允许可信输入。首次导航使用 next-document binding，在 about:blank/当前 tab 预绑定目标 tab 与批准 origin，新文档于 document_start 建立 observer，ready 后才发出一次导航。
+
+动作完成、达到数量/大小预算、deadline、document/route 换代、lease 失效或用户接管时 binding sealing、输出最终批次并撤销。未 ready 时不得先点击或导航；安装失败返回 `observer_binding_unavailable`，不触发动作、不刷新页面。禁止全局长期观察全部 route 后再筛选。
+
+### 149. HostObservationReceipt 将去敏批次绑定到任务、页面和动作上下文
+
+Receipt 至少包含 batch ID/digest、host/browser/controller/extension generation、page alias/PageLease/StageLease、Strategy version/build digest、document/route generation、action epoch、ObserverBinding、projection、捕获时间、条目/字节数、截断与终止原因。Extension 生成去敏 batch 和 digest；Host 核验 binding、lease、generation、预算后出具 receipt；Gateway 再核验任务计划与 StageLease，按 batch ID + digest 幂等写入并更新 coverage。
+
+相同 ID/digest 重复只返回已接收；相同 ID 不同 digest 返回 `evidence_digest_conflict` 并停止证据流。迟到或上下文不符的批次记录拒绝原因，不混入 artifact。只有 action 与 binding 都形成终态后才能封存证据。不得让 Extension 直接写 artifact，也不得让 AI 按内容猜来源。
+
+### 150. 取消按是否越过可信输入提交点分流
+
+动作仍排队、ticket 未解析、binding 未 ready 或可信输入未发出时可以立即取消，撤销 ticket/binding，页面核验后 release。Host 已记录 attempted 且输入已发出时，只记录 `cancel_requested`、禁止任何后续动作，并在原 deadline 内等待当前动作后置条件；确定成功/失败后 task 为 `cancelled_after_inflight_action`，无法确认则 action outcome unknown、task 为 `cancelled_with_unknown_action`，页面隔离并进入对应 Profile 安全状态。
+
+取消不 reload、back、重复点击或立即关页。已完成 artifact 与 coverage 保留，并记录取消发生在输入前还是输入后；不能把已发生动作改写为未执行。
+
+## 批次 151–155：复杂文档、下载、弹窗、崩溃与输入坐标
+
+### 151. frame 与 Shadow DOM 必须进入 Strategy 身份契约
+
+同源 iframe 由 Strategy 声明 frameRole，ticket 绑定 frame ID/origin/document generation；跨域 iframe 必须声明精确 origin、host permission 和独立 resolver，否则返回 `cross_origin_frame_unsupported`。Open Shadow DOM 可以使用验证过的 shadow-aware resolver；Closed Shadow DOM 默认不可操作，只有真实侦察证明稳定 accessibility surface 且输入前可重新核验时才允许专门 resolver，否则返回 `target_not_observable`。
+
+ObserverBinding 同样绑定主 frame 或具体 child frame，一个 frame 的 observation 不能冒充另一个。不得注入所有跨域 frame、盲目穿透 closed shadow 或退回固定坐标。
+
+### 152. 下载必须由任务显式批准并在点击前建立 DownloadExpectation
+
+只有 `download_public_media` 或 `download_public_attachment` 获批时才允许下载。Expectation 绑定任务/stage/action/page/strategy、来源角色、允许 MIME/文件名类别、最大字节/文件数、artifact 临时目录和 deadline。Host 先监听 download，Extension 重核公开目标，再发出一次可信点击；恰好一个匹配事件才保存到任务临时目录，校验大小/MIME/文件名/预算、计算 hash，并原子纳入 manifest。
+
+文件永不自动执行、预览、解压、安装或打开，文件名安全规范化且不可覆盖或路径穿越；不持久化需要认证重放的临时签名 URL。未声明、多文件、类型不符或超预算下载尽早本地取消，记录明确终态，不重复点击。不得默认下载全部媒体或写入用户 Downloads。
+
+### 153. dialog 默认拒绝，只允许 Strategy 声明的最小安全策略
+
+允许的 policy 仅为 none、确认预期只读 alert、dismiss 预期 confirm。Confirm/prompt 默认 dismiss，禁止输入或自动确认；beforeunload 不自动接受离开，取消导航并使页面进入 `quarantined / navigation_blocked_by_beforeunload`；通知、位置、摄像头、麦克风、剪贴板等浏览器权限不自动授予，返回用户动作或能力未批准状态。意外 dialog 停止当前动作，并按是否已经输入判定 failed 或 outcome unknown。
+
+禁止全局 `dialog.accept()`、用关 tab 消除弹窗或在 modal 阻塞时继续发后续输入。产品安装权限通过正式流程管理，平台 Strategy 不点击浏览器 UI 临时提权。
+
+### 154. renderer、target 与 browser session crash 按故障范围分流
+
+单页面 renderer crash 且无在途动作时，lease 失效、页面 `quarantined / renderer_crashed`，其他安全页面可继续，不 reload 或建替代页；有在途动作时 action outcome unknown、页面为 `renderer_crashed_during_action`、run 终止并进入对应账号安全状态。Target 被关闭时记录 closed，active lease 终止 `window_closed`，不自动重建。
+
+Chromium/browser context crash 使整个 browserSessionId、所有 PageLease/StageLease/binding/permit 失效，运行任务停止并报告 `browser_session_lost`，不自动开新浏览器和重放。诊断只保存去敏状态和动作类别，不默认保存 crash dump、内存、完整 URL 或页面内容。
+
+### 155. 坐标只属于一次性 ticket，输入前核验实时窗口与布局
+
+Ticket 记录 viewport、device scale factor、browser zoom、window state、scroll position、frame transform 和 bounding box。Host 输入前确认窗口可见非最小化、目标 tab 有前台许可、布局没有未解释变化、目标仍在可点区域且无遮挡。输入前 resize/zoom/scroll 使 ticket stale，可以重新本地解析；输入后布局变化不得触发再次点击，只核验原动作后置条件，无法确认则 outcome unknown。
+
+Host 可以在取得许可后恢复专用最小化窗口并切到目标 tab，但不擅自改变窗口尺寸、缩放或显示器位置；无法获得可见前台时返回 `foreground_unavailable`。不得依赖固定 1920×1080、100% 缩放或侦察时绝对坐标。
+
+## 批次 156–160：文本、媒体、外部跳转、多窗口输入与用户关窗
+
+### 156. 公开查询输入与提交拆分，禁止读取或借用系统剪贴板
+
+`replace_public_query` 只作用于 Strategy 证明的 `public_search_input`，使用可信 focus、select-all 和 browser text input 支持中文，但不自动提交；`submit_public_query` 是独立 Enter/搜索按钮动作，提交前建立搜索结果 ObserverBinding，并使用独立 action ID。Ticket 必须证明输入框不是 password、验证码、私信、评论、发布或上传字段，且当前 pageRole 允许站内搜索。
+
+Gateway 传递用户批准的 query，runtime journal 只记录 digest 和长度；Research Plan、coverage 与 evidence 按查询溯源规则保存必要文本。Host/Extension 不读取或写入系统剪贴板。搜索建议只有计划声明具体选择规则时才能作为新的动作执行，不能静默采用平台推荐词。
+
+### 157. Collection Profile 默认浏览器层静音，媒体控制属于显式 Strategy 动作
+
+默认 `audioPolicy = muted_during_collection`，页面可按平台正常逻辑加载/播放，但 Host 在浏览器或 tab 层静音，不通过点击播放器静音，也不自动暂停、播放、seek、切清晰度或全屏。依赖播放器状态的字幕、截图等能力必须声明并批准 `play_media / pause_media / seek_media_bounded / open_caption_menu / select_declared_caption`，进入预算与 action ledger。
+
+自动播放产生的普通媒体请求不自动成为 evidence，只有批准 route/ObserverBinding 可采集。页面转为 retained_for_review 时 Console 显示静音状态，用户可以自行解除；任务结束不自动突然放声。
+
+### 158. 未批准 origin、外部协议和系统通知默认阻断
+
+普通导航仅允许 ActionPlan 已批准的 HTTP(S) origin；未批准外站返回 `external_origin_required`，等待新站点权限与 Strategy。`mailto:`、`tel:`、`sms:`、`intent:`、平台客户端 scheme 等外部协议一律阻止并返回 `external_protocol_blocked`；blob/data 只在批准 DownloadExpectation 中允许。浏览器或系统通知不点击、不回复、不打开，也不自动作为证据。
+
+意外外部跳转已发生时页面 quarantine，不后退或关闭。公开外链可以保存为引用，但保存链接不授权访问新 origin 或启动本地应用。
+
+### 159. 两个 Profile 可并发等待和处理，但全 Host 同时只发出一个可信输入
+
+保留最多两个并发 Profile，它们可以重叠页面加载等待、已触发 XHR 接收、DOM 投影、artifact 写入和后置条件等待。Browser Host 增加全局 `TrustedInputPermit = 1`：任一时刻只有一个 Profile 可以发出 navigation、mouse、keyboard、hover、click、scroll 或 select。
+
+全局许可只覆盖实际输入阶段，输入发出后立即释放，不占用整个网络等待期；每个窗口仍有自己的前台许可和 active tab。使用批准顺序与公平队列，不随机切换或添加随机延迟。多显示器不移动窗口，逐窗口核验 bounds/缩放/可见性；无法操作时返回 `foreground_unavailable`，不把输入误发给其他窗口。
+
+### 160. 用户关闭 Collection Window 是外部终止信号，不自动重开
+
+关闭时没有在途输入，则该窗口所有 lease 失效、页面 closed、任务为 `cancelled_by_window_close`，保留已完成 evidence；存在已发输入时 action outcome unknown、任务为 `window_closed_with_unknown_action`，Profile 进入对应安全状态。关闭 Profile 最后窗口会结束其 browser context/session，但 Browser Host 与其他 Profile 不受影响。
+
+Host 不重新创建窗口、打开历史 URL、恢复动作或弹出 Control 页。Console 显示关闭时间、受影响 task 和 unknown 状态。单个 tab 关闭仍使用 target-closed 语义，不升级为整个 Profile 关闭。
+
+## 批次 161–165：任务公平性、用户接管、空闲可信度与账号安全
+
+### 161. Scheduler 按 Profile 公平轮转，并只在封存动作边界让出
+
+全局最多两个 active Profile，不同 Profile 使用 weighted round-robin；同一 Profile 内按用户显式启动/恢复、普通批准任务、定时增量、Validation 的优先级排队，同级 FIFO。Blocked Profile 立即释放全局名额。长任务在完成一页目录、一个详情、一个评论批次、一个 ActionCommand 或一个 EvidenceBatch 后 yield，但保留 Enumeration Coordinator 对同一账号 cursor 的唯一所有权。
+
+不得在可信输入已发出、binding sealing 或 artifact 原子封存中间抢占。Console 展示队列位置、阻塞原因、当前动作和下一个安全让出点；不能按 tab 数量分配优先级或用固定秒级中断切碎动作。
+
+### 162. 被动观察不影响任务，用户通过显式 Take Over 安全接管
+
+切到 tab、窗口聚焦、鼠标移动和阅读页面属于观察，不影响 lease。扩展图标、Control 页和 Console 提供“接管此页面”：无在途输入时停止后续动作、释放前台/全局输入许可、撤销 binding、结束 PageLease，并将页面转为 retained_for_review；已有输入时记录 takeover_requested，禁止后续动作，等待当前动作确定或 unknown 后再交给用户。
+
+不在平台 DOM 注入阻断遮罩，也不锁住用户输入。用户未经入口直接 click/wheel/keyboard 时按第 108 题的意外用户活动处理：输入前良性隔离，输入后可能 outcome unknown。仅查看页面不能被误判为接管。
+
+### 163. idle_reusable 超过 Strategy 信任窗口后转为 idle_stale
+
+Strategy 声明 `maxIdleTrustMs`，默认十五分钟。正常 release 记录 lastReconciledAt；超过窗口只做本地状态转换为 `idle_stale`，不导航、刷新或关闭。Extension generation、document/route generation、主 frame 自刷新、target crash、identity observer 失联和用户活动也会使空闲页 stale 或 quarantine。
+
+Acquire 遇到 idle_stale 时先执行无平台输入 reconcile，核验 session/target、document/route、规范页面身份、Strategy pageRole 和非敏感登录状态；全部通过才恢复 idle_reusable，否则 quarantine。retained_for_review 不因时间自动回池、回收或 reconcile。不得把永久 idle 信任、定时关页或复用前强制刷新作为替代。
+
+### 164. 登录账号身份在首次绑定和每次认证 run 的关键边界核验
+
+首次绑定由用户确认平台账号，保存稳定账号 ID 或安全 digest 与用户别名。每个 authenticated run 第一个平台动作前、登录恢复后、extension/document generation 换代后的下一动作前，以及出现账号切换/退出信号时重新核验。Strategy 只使用公开可见非敏感标识或经真实验证的只读身份投影，不读取 Cookie、Token、storage、认证请求或无关私有 myinfo response。
+
+无法稳定证明身份时不开始平台动作，要求用户在可见页确认。账号不匹配返回 `account_identity_mismatch`，页面 quarantine、Profile 阻断动作，等待重新绑定、切回原账号或取消；不得凭昵称或头像相似度自动合并。
+
+### 165. Page Pool 管页面可用性，Account Safety 管 Profile 动作许可
+
+结构化错误同时携带 `pageDisposition` 与 `profileSafetyDisposition`。容量、lease conflict、stale version 不锁账号；无在途输入的用户导航、identity unverified 和 renderer crash 隔离页面并停止对应 run，但 Profile 可保持 ready；登录失效进入 authentication required；账号不匹配阻断 Profile；验证码、风控和限流使页面 risk quarantine 并持久锁定；断网/导航结果未知隔离页面、终止本 run 后回 ready，但绝不自动重试；存在在途输入的 renderer/window/Host crash 锁定当前认证 run；extension mismatch 阻断 Host 能力但不锁平台账号。
+
+原则是页面 quarantine 不自动等于账号锁定，账号锁定也不能通过关页解除。普通断网不引入固定冷却，容量或 selector 漂移不升级为账号风险；真正的验证码、风控、账号错配和崩溃中在途动作不能被页面复用绕过。
+
+## 批次 166–170：状态恢复、漂移治理、真实提交与 Console MVP
+
+### 166. Gateway 通过版本化 Snapshot 与 Event Cursor 恢复页面池读模型
+
+Browser Host 输出去敏 `PagePoolSnapshot`，包含 schema、host/browser session、snapshot revision、捕获时间、Host/Profile/Page 安全摘要、队列容量和 extension generation。每次合法状态转换递增 revision 并生成短期事件。Gateway 重连时提交上次 host/session/revision：同一 generation 且事件完整时增量回放，事件缺口时获取全量 Snapshot，Host 或 Browser Session 换代时丢弃旧缓存并重新同步。
+
+Gateway 缓存只是 Console 读模型，不能修改 PageRecord。Snapshot 不包含 raw targetId、完整 URL、页面内容或认证材料，只使用 session-local page alias。不得把 Gateway 持久 JSON 写回 Host，也不得根据 URL 重建所有权。
+
+### 167. Console 以状态、原因和唯一安全下一步呈现 stale 与 quarantine
+
+idle_reusable 展示可复用与最后核验时间；idle_stale 默认不通知，Acquire 自动本地 reconcile，也允许用户手工本地核验；context changed 提供聚焦、重新规划、retain、transfer 和安全关闭；authentication required 引导用户本人登录后重新核验；verification/risk 只提供账号安全允许的人工处理；network outcome unknown 明确本 run 已停止且不会重试；retained_for_review 明确不调度不回收。
+
+扩展 badge 只显示 active/needs-action/risk 计数，详细原因进入 Console。桌面通知仅用于登录、验证码、新权限、账号不匹配、风险锁和关键任务缺口，不为 stale、正常复用、翻页或 artifact 成功制造通知风暴。
+
+### 168. Strategy 漂移使用独立 capability circuit breaker，不升级为账号风险
+
+可信输入前 pageRole、target resolver 或 postcondition 稳定不变量失败时，action not attempted，返回 `strategy_drift_suspected`，页面 `quarantined / strategy_context_unverified`，Profile Account Safety 保持 ready。由同一真实页面的两类独立证据确认漂移后，按 platform/strategy/version/pageRole 打开本地 capability breaker，将能力降为 `degraded / live_revalidation_required`，阻止该精确能力的新 run，其他能力不受影响。
+
+恢复必须重新完成视觉、DOM、XHR 侦察，修订 Strategy version，换代扩展 generation，并通过低频真实验证。禁止 selector 猜测、generic extractor、固定坐标或历史 API fallback；失败 artifact 与 drift dossier 保留。
+
+### 169. Git checkpoint 只声明自身已验证能力，失败 canary 不冒充成功
+
+Contracts/Browser Host core 通过真实本地 Chromium 门禁后可以独立提交，不因 B站暂时不可用否定本地能力。B站 dynamic 迁移只有真实 canary 通过才提交并标记 live verified；authentication required 暂停等待用户本人登录，不算代码失败；Strategy drift/代码失败保留失败 artifact、修复并重新验证；平台临时不可用时保持 build_ready/degraded，不宣称 live 完成；验证码/风控/限流立即停止，不为完成 Git checkpoint 重试。
+
+失败证据不能删除或由成功结果覆盖。可以独立提交诊断文档或安全修复，但不能把失败 canary 包装为成功，也不需要回滚已经独立验证的 Host foundation。
+
+### 170. Console MVP 提供完整浏览器运营面，不扩张为分析产品
+
+现有本地 Gateway Console 增加 Host 连接/generation/扩展采纳与显式启动退出，Profile 平台/账号/窗口/session/安全与页面计数，Page alias/role/state/task/age/permit/reason 及 focus/take-over/retain/transfer/reconcile/close，Queue 当前动作/位置/pause/cancel/resume/block/yield，以及两阶段 Reclamation 和安全 Authentication/Risk 状态。Console 通过 Gateway Snapshot/Event 获取数据，不直连 Named Pipe。
+
+Control 页仅保留连接状态、当前页状态、暂停、接管和紧急停止，不复制 Console。MVP 不做远程 Web 控制、云账号、团队协作、复杂分析看板、Evidence Explorer 重写或拖拽 tab 管理；目标是让用户看见状态、理解停机原因并执行安全操作。
+
+## 最终一致性审计结论
+
+2026-07-20 对第 1–170 题、产品规格、账号安全设计和当前分支实现进行了交叉审计。没有无法由“用户显式自定义 > 较晚决定 > 较早决定 > 旧规格 > 当前 POC”解决的阻塞冲突。权威覆盖关系为：
+
+```text
+139 覆盖 56 的“禁止纯逻辑单元测试”，但继续禁止 fixture 平台验证
+101 覆盖 77 的“每任务一个 OS 窗口”
+114 细化 80 的 Gateway restart 与 Browser Session restart
+144 扩展 102 的 Collector-created 页面来源
+124 / 163 扩展 104 的页面状态集合
+141–149 覆盖早期扩展单体执行图和 Gateway 直接 Page ownership
+137 覆盖 130 曾允许薄适配器的候选方向
+165 固化 Page Pool 与 Account Safety 的职责边界
+```
+
+实现不再需要继续产品 Grill。当前权威实现规格为 [Browser Host 与受管页面池 MVP](managed-page-pool-browser-host-mvp.md)；只有真实平台验证暴露现有规则无法决定的新选择时，才追加下一批问题。
