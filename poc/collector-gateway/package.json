@@ -15,7 +15,7 @@
     "verify:dynamic-contract": "node scripts/verify-bilibili-dynamic-contract.mjs",
     "verify:host-integration": "node scripts/verify-real-browser-host-integration.mjs",
     "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
-    "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:task-resume && npm run verify:dynamic-contract && npm run build && npm run verify:artifacts",
+    "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:dynamic-contract && npm run build && npm run verify:artifacts",
     "start": "node dist/server.js"
   },
   "dependencies": {

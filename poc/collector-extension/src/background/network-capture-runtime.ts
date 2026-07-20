@@ -1,4 +1,3 @@
-import { nativeSearchPlatform } from '../shared/native-search';
 import {
   NETWORK_CAPTURE_MAX_PER_PAGE,
   sanitiseNetworkCaptureObservation,
@@ -7,11 +6,15 @@ import {
   type NetworkCaptureRouteId
 } from '../shared/network-capture';
 import { isSupportedPlatform, type SupportedPlatform } from '../shared/collection-contracts';
-import { canonicalBilibiliVideoUrl, type BilibiliVideoUrlMode } from '../shared/bilibili-video-url';
 
 const MAXIMUM_ARM_LIFETIME_MS = 60_000;
 
-export type NetworkCaptureArmPurpose = 'formal_collection' | 'transcript_validation';
+/**
+ * An arm is deliberately narrower than a task: it represents one exact
+ * document that an already-bound strategy may observe for at most one minute.
+ * There is no generic collection or transcript arm in the Extension runtime.
+ */
+export type NetworkCaptureArmPurpose = 'dynamic_strategy';
 
 export interface NetworkCaptureArm {
   platform: SupportedPlatform;
@@ -19,6 +22,9 @@ export interface NetworkCaptureArm {
   runId: string;
   navigationUrlDigest: string;
   routeIds: readonly NetworkCaptureRouteId[];
+  maximumObservations: number;
+  observerBindingId: string;
+  contentScriptId: string;
   documentId?: string;
   expiresAt: number;
 }
@@ -41,26 +47,16 @@ async function sha256(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function canonicalCapturePageUrl(
-  value: string,
-  platform: SupportedPlatform,
-  purpose: NetworkCaptureArmPurpose,
-  bilibiliVideoMode: BilibiliVideoUrlMode = 'strict_input'
-): string | null {
+function canonicalDynamicUrl(value: string): string | null {
   try {
     const url = new URL(value);
-    if (url.protocol !== 'https:' || url.username || url.password || url.hash) return null;
-    if (purpose === 'transcript_validation') {
-      return platform === 'bilibili' ? canonicalBilibiliVideoUrl(value, bilibiliVideoMode) : null;
-    }
-    return nativeSearchPlatform(url) === platform ? url.href : null;
+    const match = url.protocol === 'https:' && url.hostname === 'space.bilibili.com'
+      ? url.pathname.match(/^\/(\d{1,20})\/dynamic\/?$/)
+      : null;
+    return match?.[1] ? `https://space.bilibili.com/${match[1]}/dynamic` : null;
   } catch {
     return null;
   }
-}
-
-function routeAdmissionForPurpose(purpose: NetworkCaptureArmPurpose): 'production' | 'research_validation' {
-  return purpose === 'formal_collection' ? 'production' : 'research_validation';
 }
 
 export async function armNetworkCapture(input: {
@@ -70,30 +66,38 @@ export async function armNetworkCapture(input: {
   runId: string;
   navigationUrl: string;
   routeIds: readonly string[];
+  maximumObservations: number;
+  observerBindingId: string;
+  contentScriptId: string;
   expiresAt: number;
 }): Promise<NetworkCaptureArm> {
-  const canonicalUrl = canonicalCapturePageUrl(input.navigationUrl, input.platform, input.purpose);
-  const routeIds = validateNetworkCaptureRouteIds(
-    input.platform,
-    input.routeIds,
-    routeAdmissionForPurpose(input.purpose)
-  );
+  const canonicalUrl = input.platform === 'bilibili' ? canonicalDynamicUrl(input.navigationUrl) : null;
+  const routeIds = validateNetworkCaptureRouteIds(input.platform, input.routeIds, 'research_validation');
   if (
     !Number.isInteger(input.tabId) ||
     input.tabId < 0 ||
     !/^[0-9a-f-]{36}$/i.test(input.runId) ||
     !canonicalUrl ||
     !routeIds ||
+    !Number.isInteger(input.maximumObservations) ||
+    input.maximumObservations < 1 ||
+    input.maximumObservations > NETWORK_CAPTURE_MAX_PER_PAGE ||
+    !/^[0-9a-f-]{36}$/i.test(input.observerBindingId) ||
+    !/^collector-dynamic-[a-z0-9-]{1,80}$/.test(input.contentScriptId) ||
     !Number.isFinite(input.expiresAt) ||
     input.expiresAt <= Date.now() ||
     input.expiresAt > Date.now() + MAXIMUM_ARM_LIFETIME_MS
   ) throw new Error('network_capture_arm_invalid');
+
   const arm: NetworkCaptureArm = {
     platform: input.platform,
     purpose: input.purpose,
     runId: input.runId,
     navigationUrlDigest: await sha256(canonicalUrl),
     routeIds,
+    maximumObservations: input.maximumObservations,
+    observerBindingId: input.observerBindingId,
+    contentScriptId: input.contentScriptId,
     expiresAt: input.expiresAt
   };
   await chrome.storage.session.remove(networkCaptureStorageKey(input.tabId));
@@ -109,32 +113,36 @@ export async function getActiveNetworkCaptureArm(tabId: number): Promise<Network
     : typeof candidate.documentId === 'string' && candidate.documentId.length > 0
       ? candidate.documentId
       : null;
-  const purpose = candidate?.purpose === 'formal_collection' || candidate?.purpose === 'transcript_validation'
-    ? candidate.purpose
+  const routeIds = isSupportedPlatform(candidate?.platform) && Array.isArray(candidate?.routeIds)
+    ? validateNetworkCaptureRouteIds(candidate.platform, candidate.routeIds, 'research_validation')
     : null;
-  const routeIds = purpose && isSupportedPlatform(candidate?.platform) && Array.isArray(candidate?.routeIds)
-    ? validateNetworkCaptureRouteIds(candidate.platform, candidate.routeIds, routeAdmissionForPurpose(purpose))
+  const maximumObservations = typeof candidate?.maximumObservations === 'number'
+    ? candidate.maximumObservations
     : null;
   if (
     candidate &&
     isSupportedPlatform(candidate.platform) &&
-    purpose &&
-    typeof candidate.runId === 'string' &&
-    /^[0-9a-f-]{36}$/i.test(candidate.runId) &&
-    typeof candidate.navigationUrlDigest === 'string' &&
-    /^[0-9a-f]{64}$/.test(candidate.navigationUrlDigest) &&
+    candidate.purpose === 'dynamic_strategy' &&
+    typeof candidate.runId === 'string' && /^[0-9a-f-]{36}$/i.test(candidate.runId) &&
+    typeof candidate.navigationUrlDigest === 'string' && /^[0-9a-f]{64}$/.test(candidate.navigationUrlDigest) &&
     routeIds &&
-    typeof candidate.expiresAt === 'number' &&
-    Number.isFinite(candidate.expiresAt) &&
-    candidate.expiresAt > Date.now() &&
+    maximumObservations !== null &&
+    Number.isInteger(maximumObservations) &&
+    maximumObservations >= 1 && maximumObservations <= NETWORK_CAPTURE_MAX_PER_PAGE &&
+    typeof candidate.observerBindingId === 'string' && /^[0-9a-f-]{36}$/i.test(candidate.observerBindingId) &&
+    typeof candidate.contentScriptId === 'string' && /^collector-dynamic-[a-z0-9-]{1,80}$/.test(candidate.contentScriptId) &&
+    typeof candidate.expiresAt === 'number' && Number.isFinite(candidate.expiresAt) && candidate.expiresAt > Date.now() &&
     documentId !== null
   ) {
     return {
       platform: candidate.platform,
-      purpose,
+      purpose: 'dynamic_strategy',
       runId: candidate.runId,
       navigationUrlDigest: candidate.navigationUrlDigest,
       routeIds,
+      maximumObservations,
+      observerBindingId: candidate.observerBindingId,
+      contentScriptId: candidate.contentScriptId,
       expiresAt: candidate.expiresAt,
       ...(documentId === undefined ? {} : { documentId })
     };
@@ -147,7 +155,7 @@ async function activeArmForNavigation(tabId: number, senderUrl: string | undefin
   if (!senderUrl) return null;
   const arm = await getActiveNetworkCaptureArm(tabId);
   if (!arm) return null;
-  const canonicalUrl = canonicalCapturePageUrl(senderUrl, arm.platform, arm.purpose, 'observed_document');
+  const canonicalUrl = canonicalDynamicUrl(senderUrl);
   return canonicalUrl && (await sha256(canonicalUrl)) === arm.navigationUrlDigest ? arm : null;
 }
 
@@ -182,14 +190,14 @@ export async function storeNetworkCapture(
   const observation = sanitiseNetworkCaptureObservation(candidate, arm.routeIds);
   if (!observation || observation.platform !== arm.platform) return { stored: false };
   const key = networkCaptureStorageKey(tabId);
-  const current = (await chrome.storage.session.get(key))[key];
-  const captures = Array.isArray(current)
-    ? current
-        .map((value) => sanitiseNetworkCaptureObservation(value, arm.routeIds))
-        .filter((value): value is NetworkCaptureObservation => value !== null)
-        .slice(0, NETWORK_CAPTURE_MAX_PER_PAGE)
+  const stored = (await chrome.storage.session.get(key))[key];
+  const captures = Array.isArray(stored)
+    ? stored
+      .map((value) => sanitiseNetworkCaptureObservation(value, arm.routeIds))
+      .filter((value): value is NetworkCaptureObservation => value !== null)
+      .slice(0, arm.maximumObservations)
     : [];
-  if (captures.length >= NETWORK_CAPTURE_MAX_PER_PAGE) return { stored: false };
+  if (captures.length >= arm.maximumObservations) return { stored: false };
   captures.push(observation);
   await chrome.storage.session.set({ [key]: captures });
   return { stored: true };
@@ -202,9 +210,9 @@ export async function readNetworkCaptures(
   const value = (await chrome.storage.session.get(networkCaptureStorageKey(tabId)))[networkCaptureStorageKey(tabId)];
   return Array.isArray(value)
     ? value
-        .map((candidate) => sanitiseNetworkCaptureObservation(candidate, arm.routeIds))
-        .filter((candidate): candidate is NetworkCaptureObservation => candidate !== null)
-        .slice(0, NETWORK_CAPTURE_MAX_PER_PAGE)
+      .map((candidate) => sanitiseNetworkCaptureObservation(candidate, arm.routeIds))
+      .filter((candidate): candidate is NetworkCaptureObservation => candidate !== null)
+      .slice(0, arm.maximumObservations)
     : [];
 }
 

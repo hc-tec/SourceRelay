@@ -10,7 +10,7 @@ import {
   isJsonContentType,
   type NetworkCaptureObservation
 } from '../shared/network-capture';
-import type { SupportedPlatform } from '../shared/protocol';
+import type { SupportedPlatform } from '../shared/collection-contracts';
 
 const observerInstalledAttribute = 'collectorNetworkCaptureObserverInstalled';
 const observerExpiryProperty = '__personalIntelligenceNetworkCaptureExpiresAt';
@@ -22,6 +22,36 @@ interface RequestMetadata {
   method: string;
 }
 
+function queryKeyNames(value: string): string[] {
+  try {
+    const url = new URL(value);
+    const keys = new Set<string>();
+    url.searchParams.forEach((_entry, key) => {
+      if (key.length > 0 && key.length <= 100) keys.add(key.replace(/[^A-Za-z0-9_.\-\[\]]/g, '_'));
+    });
+    return [...keys].sort();
+  } catch {
+    return [];
+  }
+}
+
+async function withBodyEvidence(
+  observation: NetworkCaptureObservation | null,
+  responseText: string,
+  responseUrl: string
+): Promise<NetworkCaptureObservation | null> {
+  if (!observation) return null;
+  const bytes = new TextEncoder().encode(responseText);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const bodySha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return {
+    ...observation,
+    bodyBytes: bytes.byteLength,
+    bodySha256,
+    queryKeyNames: queryKeyNames(responseUrl)
+  };
+}
+
 function platformForCurrentPage(): SupportedPlatform | null {
   const url = new URL(window.location.href);
   const nativePlatform = nativeSearchPlatform(url);
@@ -30,8 +60,8 @@ function platformForCurrentPage(): SupportedPlatform | null {
   if (
     platform === 'bilibili' &&
     url.protocol === 'https:' &&
-    url.hostname === 'www.bilibili.com' &&
-    /^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname)
+    ((url.hostname === 'www.bilibili.com' && /^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname)) ||
+      (url.hostname === 'space.bilibili.com' && /^\/\d{1,20}\/dynamic\/?$/.test(url.pathname)))
   ) return 'bilibili';
   return null;
 }
@@ -150,7 +180,9 @@ function installObserver(): void {
       return;
     }
     const text = await readResponseTextWithinLimit(response, route.maximumBodyBytes);
-    emit(text === null ? createNetworkCaptureRejection(input, 'payload_too_large') : createNetworkCaptureFromText(input, text));
+    emit(text === null
+      ? createNetworkCaptureRejection(input, 'payload_too_large')
+      : await withBodyEvidence(createNetworkCaptureFromText(input, text), text, responseUrl));
   }
 
   const originalFetch = window.fetch;
@@ -236,11 +268,11 @@ function installObserver(): void {
         }
         try {
           const text = this.responseType === 'json' ? JSON.stringify(this.response) : this.responseText;
-          emit(
-            typeof text === 'string' && new TextEncoder().encode(text).byteLength <= route.maximumBodyBytes
-              ? createNetworkCaptureFromText(input, text)
-              : createNetworkCaptureRejection(input, 'payload_too_large')
-          );
+          if (typeof text !== 'string' || new TextEncoder().encode(text).byteLength > route.maximumBodyBytes) {
+            emit(createNetworkCaptureRejection(input, 'payload_too_large'));
+            return;
+          }
+          void withBodyEvidence(createNetworkCaptureFromText(input, text), text, responseUrl).then(emit);
         } catch {
           emit(createNetworkCaptureRejection(input, 'unreadable_response'));
         }

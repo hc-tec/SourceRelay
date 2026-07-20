@@ -10,7 +10,11 @@ import {
   type ReclaimExecutionResult,
   type ReclaimPlan,
   type ReconcilePageRequest,
-  type ReleasePageRequest
+  type ReleasePageRequest,
+  type StrategyObservationReadRequest,
+  type StrategyObservationResult,
+  type StrategyObserverBindingRequest,
+  type StrategyObserverBindingResult
 } from '@intelligence/collector-contracts';
 import type { NativeBridgeRegistry } from '../native-bridge/native-bridge-registry.js';
 import type { NativeBridgeServer } from '../native-bridge/native-bridge-server.js';
@@ -26,6 +30,7 @@ export class ProfileRuntime {
   readonly #ledger: PageLedger;
   readonly #reclamation: PageReclamationManager;
   readonly #nativeBridgeRegistry: NativeBridgeRegistry;
+  readonly #nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
   readonly #nativeHostRegistration: NativeMessagingHostRegistration | null;
   readonly #extensionRuntime: ExtensionRuntimeSummary | null;
   #browserProcessId: number | null = null;
@@ -41,6 +46,7 @@ export class ProfileRuntime {
     ledger: PageLedger;
     reclamation: PageReclamationManager;
     nativeBridgeRegistry: NativeBridgeRegistry;
+    nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
     nativeHostRegistration: NativeMessagingHostRegistration | null;
     extensionRuntime: ExtensionRuntimeSummary | null;
   }) {
@@ -51,6 +57,7 @@ export class ProfileRuntime {
     this.#ledger = input.ledger;
     this.#reclamation = input.reclamation;
     this.#nativeBridgeRegistry = input.nativeBridgeRegistry;
+    this.#nativeBridgeCommands = input.nativeBridgeCommands;
     this.#nativeHostRegistration = input.nativeHostRegistration;
     this.#extensionRuntime = input.extensionRuntime;
   }
@@ -132,6 +139,7 @@ export class ProfileRuntime {
         ledger,
         reclamation,
         nativeBridgeRegistry: input.nativeBridgeRegistry,
+        nativeBridgeCommands: input.nativeBridgeCommands,
         nativeHostRegistration,
         extensionRuntime
       });
@@ -155,6 +163,52 @@ export class ProfileRuntime {
 
   navigate(request: NavigatePageRequest) {
     return this.#ledger.navigate(request);
+  }
+
+  async bindStrategyObserver(request: StrategyObserverBindingRequest): Promise<StrategyObserverBindingResult> {
+    const context = this.#ledger.extensionCommandContext(request);
+    const result = await this.#nativeBridgeCommands.command(
+      this.profileId,
+      this.browserSessionId,
+      {
+        type: 'collector_bind_strategy_observer',
+        tabId: context.extensionTabId,
+        nextDocumentGeneration: context.documentGeneration + 1,
+        binding: request
+      },
+      5_000
+    );
+    if (result.type !== 'collector_strategy_observer_binding' ||
+      result.observerBindingId !== request.observerBindingId ||
+      result.pageAlias !== request.pageAlias ||
+      result.nextDocumentGeneration !== context.documentGeneration + 1) {
+      throw new Error('strategy_observer_binding_result_invalid');
+    }
+    return result;
+  }
+
+  async readStrategyObservation(request: StrategyObservationReadRequest): Promise<StrategyObservationResult> {
+    const context = this.#ledger.extensionCommandContext(request);
+    const result = await this.#nativeBridgeCommands.command(
+      this.profileId,
+      this.browserSessionId,
+      {
+        type: 'collector_read_strategy_observation',
+        tabId: context.extensionTabId,
+        documentGeneration: context.documentGeneration,
+        routeGeneration: context.routeGeneration,
+        request
+      },
+      request.deadlineMs + 2_000
+    );
+    if (result.type !== 'collector_strategy_observation' ||
+      result.observerBindingId !== request.observerBindingId ||
+      result.pageAlias !== request.pageAlias ||
+      result.documentGeneration !== context.documentGeneration ||
+      result.routeGeneration !== context.routeGeneration) {
+      throw new Error('strategy_observation_result_invalid');
+    }
+    return result;
   }
 
   reconcile(request: ReconcilePageRequest) {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BrowserHostClient, launchBrowserHost } from '../dist/client.js';
@@ -34,7 +34,7 @@ const profileId = 'real-browser-lifecycle';
 await mkdir(stateDirectory, { recursive: true });
 await mkdir(profileRoot, { recursive: true });
 const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-assert.equal(extensionManifest.version, '0.6.0');
+assert.equal(extensionManifest.version, '0.7.0');
 
 let endpoint = null;
 let client = null;
@@ -72,7 +72,7 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 4,
+        controlSurfaceRevision: 5,
         runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
       }
     }
@@ -86,7 +86,7 @@ try {
   assert.ok(initialProfile.browserProcessId, 'real Chromium process id must be observable');
   assert.ok(initialProfile.extensionPages <= 1, 'Browser Session must not accumulate extension pages');
   assert.equal(initialProfile.extensionRuntime?.finalRuntimeVersion, extensionManifest.version);
-  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 4);
+  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 5);
   assert.equal(initialProfile.extensionRuntime?.nativeBridgeConnected, true);
 
   const reusedEndpoint = await launchBrowserHost({
@@ -291,8 +291,7 @@ try {
     commandReplayDidNotRepeatNavigation: true,
     commandIdPayloadConflictRejected: true,
     extensionPagesAtMostOne: true,
-    testScopedExplicitCleanup: true,
-    runtimeRoot
+    testScopedExplicitCleanup: true
   }, null, 2));
 } finally {
   client?.close();
@@ -307,6 +306,16 @@ try {
       process.kill(endpoint.processId, 'SIGTERM');
     }
   }
+  cleanupClient?.close();
+  if (endpoint && await processAlive(endpoint.processId)) {
+    try {
+      await waitForExit(endpoint.processId, endpointPath, 5_000);
+    } catch {
+      process.kill(endpoint.processId, 'SIGTERM');
+      await waitForExit(endpoint.processId, endpointPath, 5_000).catch(() => undefined);
+    }
+  }
+  await rm(runtimeRoot, { recursive: true, force: true });
 }
 
 async function registryKeyExists(key) {

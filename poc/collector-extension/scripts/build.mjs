@@ -34,11 +34,6 @@ const bundles = [
     format: 'iife'
   },
   {
-    input: resolve(root, 'src', 'content', 'index.ts'),
-    output: resolve(outputDirectory, 'content.js'),
-    format: 'iife'
-  },
-  {
     input: resolve(root, 'src', 'control', 'index.ts'),
     output: resolve(outputDirectory, 'control.js'),
     format: 'iife'

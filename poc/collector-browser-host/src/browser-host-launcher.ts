@@ -31,14 +31,31 @@ export async function launchBrowserHost(options: LaunchBrowserHostOptions): Prom
     stdio: 'ignore'
   });
   child.unref();
+  const ownedProcessId = child.pid ?? null;
 
   const deadline = Date.now() + (options.timeoutMs ?? 20_000);
-  while (Date.now() < deadline) {
-    const endpoint = await readReusableEndpoint(options.endpointPath);
-    if (endpoint) return endpoint;
-    await delay(100);
+  try {
+    while (Date.now() < deadline) {
+      const endpoint = await readReusableEndpoint(options.endpointPath);
+      if (endpoint) return endpoint;
+      await delay(100);
+    }
+    throw new Error('browser_host_start_timeout');
+  } catch (error) {
+    // A version-skewed launcher can observe its own freshly started Host as
+    // incompatible.  It must not leave that detached process behind.  The
+    // PID came from this exact spawn call; no existing Host is terminated.
+    await stopOwnedHost(ownedProcessId);
+    throw error;
   }
-  throw new Error('browser_host_start_timeout');
+}
+
+async function stopOwnedHost(processId: number | null): Promise<void> {
+  if (!processId || !processIsAlive(processId)) return;
+  process.kill(processId, 'SIGTERM');
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline && processIsAlive(processId)) await delay(50);
+  if (processIsAlive(processId)) process.kill(processId, 'SIGKILL');
 }
 
 async function readReusableEndpoint(endpointPath: string): Promise<BrowserHostEndpointRecord | null> {

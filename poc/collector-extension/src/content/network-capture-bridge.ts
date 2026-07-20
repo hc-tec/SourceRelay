@@ -1,11 +1,11 @@
 import {
+  NETWORK_CAPTURE_BRIDGE_READY_MESSAGE,
   NETWORK_CAPTURE_OBSERVER_READY,
   NETWORK_CAPTURE_OBSERVED,
   NETWORK_CAPTURE_WINDOW_CHANNEL,
   NETWORK_CAPTURE_WINDOW_OBSERVED,
   sanitiseNetworkCaptureObservation
 } from '../shared/network-capture';
-import { NETWORK_CAPTURE_BRIDGE_READY_MESSAGE } from '../shared/protocol';
 
 const observerReadyAttribute = 'collectorNetworkCaptureObserver';
 

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Collector Control</title>
+    <title>Collector Extension</title>
     <link rel="stylesheet" href="control.css">
   </head>
   <body>
@@ -11,39 +11,33 @@
       <header>
         <div>
           <p class="eyebrow">PERSONAL INTELLIGENCE</p>
-          <h1>Collector Core</h1>
+          <h1>Collector Extension</h1>
         </div>
-        <span id="runtime-status" class="status">正在连接</span>
+        <span id="runtime-status" class="status">读取中</span>
       </header>
 
-      <section aria-labelledby="gateway-title">
+      <section>
         <div class="section-heading">
           <div>
-            <h2 id="gateway-title">本地 Gateway</h2>
-            <p>只允许显式配对的 loopback 实例控制任务。</p>
+            <h2>Browser Host Bridge</h2>
+            <p>扩展只接受当前 Collection Profile 的 Native Messaging 命令。</p>
           </div>
         </div>
-        <div id="pairing-state" class="empty-state">读取配对状态中…</div>
+        <div id="bridge-state" class="empty-state">读取连接状态中…</div>
       </section>
 
-      <section aria-labelledby="capability-title">
+      <section>
         <div class="section-heading">
           <div>
-            <h2 id="capability-title">平台权限与能力</h2>
-            <p>站点权限按策略单独授予；构建就绪不等于真实平台已验证。</p>
+            <h2>已编译 Strategy</h2>
+            <p>当前只开放 B站动态页 DOM/XHR 观察；不提供任意脚本或 loopback Gateway 连接。</p>
           </div>
         </div>
-        <div id="strategy-list" class="strategy-list" aria-live="polite"></div>
-      </section>
-
-      <section aria-labelledby="lease-title">
-        <div class="section-heading">
-          <div>
-            <h2 id="lease-title">Collection Window</h2>
-            <p>每个活动页面必须属于一个短时 stage lease。</p>
-          </div>
+        <div class="strategy-card">
+          <p class="strategy-title">bilibili.dynamic.account-feed.response-dom.v1</p>
+          <p class="strategy-meta">短时 ObserverBinding · 精确 PageLease · bounded public projection</p>
+          <p class="origins">https://space.bilibili.com/* · https://api.bilibili.com/*</p>
         </div>
-        <div id="lease-state" class="empty-state">当前没有活动阶段。</div>
       </section>
 
       <p id="control-error" class="error" role="alert" hidden></p>

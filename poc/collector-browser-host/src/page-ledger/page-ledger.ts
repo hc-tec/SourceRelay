@@ -27,6 +27,13 @@ import {
 
 export type { PageLedgerEvent } from './page-events.js';
 
+export interface LeasedExtensionPageContext {
+  extensionTabId: number;
+  recordVersion: number;
+  documentGeneration: number;
+  routeGeneration: number;
+}
+
 export class PageLedger {
   readonly #context: BrowserContext;
   readonly #profileId: string;
@@ -193,6 +200,45 @@ export class PageLedger {
         safeDetails: { errorType: error instanceof Error ? error.name : 'unknown' }
       });
     }
+  }
+
+  extensionCommandContext(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    expectedRecordVersion: number;
+    runId: string;
+  }): LeasedExtensionPageContext {
+    const record = this.#leasedRecord(input.profileId, input.pageAlias, input.pageLeaseId);
+    if (record.activeLease?.runId !== input.runId) {
+      throw hostError({
+        code: 'managed_page_run_mismatch',
+        category: 'lease',
+        scope: 'lease',
+        retryClass: 'local_query_only'
+      });
+    }
+    if (record.recordVersion !== input.expectedRecordVersion) {
+      throw hostError({
+        code: 'managed_page_record_version_mismatch',
+        category: 'page_identity',
+        scope: 'page',
+        retryClass: 'local_query_only'
+      });
+    }
+    if (record.extensionTabId === null) {
+      throw hostError({
+        code: 'managed_page_extension_binding_missing',
+        category: 'extension_runtime',
+        scope: 'page'
+      });
+    }
+    return {
+      extensionTabId: record.extensionTabId,
+      recordVersion: record.recordVersion,
+      documentGeneration: record.documentGeneration,
+      routeGeneration: record.routeGeneration
+    };
   }
 
   release(request: ReleasePageRequest): ManagedPageSummary {

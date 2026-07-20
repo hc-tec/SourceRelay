@@ -11,6 +11,7 @@ import {
 // and service worker all apply the same route and redaction contract.
 
 export const NETWORK_CAPTURE_OBSERVED = 'collector.networkCaptureObserved' as const;
+export const NETWORK_CAPTURE_BRIDGE_READY_MESSAGE = 'collector.networkCaptureBridgeReady' as const;
 export const NETWORK_CAPTURE_WINDOW_CHANNEL = 'personal-intelligence.collector.network-capture.v1' as const;
 export const NETWORK_CAPTURE_BRIDGE_READY = 'bridge-ready' as const;
 export const NETWORK_CAPTURE_OBSERVER_READY = 'observer-ready' as const;
@@ -21,6 +22,7 @@ export const NETWORK_CAPTURE_WINDOW_OBSERVED = 'response-observed' as const;
 // later, explicitly paired local gateway.
 export const NETWORK_CAPTURE_MAX_BODY_BYTES = 96 * 1024;
 export const NETWORK_CAPTURE_MAX_PER_PAGE = 3;
+export const BILIBILI_DYNAMIC_FEED_ROUTE_ID = 'bilibili.dynamic.account-feed.response.v1' as const;
 
 const MAX_JSON_DEPTH = 8;
 const MAX_OBJECT_PROPERTIES = 80;
@@ -90,6 +92,9 @@ export interface NetworkCaptureObservation {
   httpStatus: number;
   capturedAt: number;
   admission: NetworkCaptureRoute['admission'];
+  bodyBytes?: number;
+  bodySha256?: string;
+  queryKeyNames?: string[];
   body?: JsonValue;
   rejectionReason?: NetworkCaptureRejectionReason;
 }
@@ -116,6 +121,16 @@ const productionRoutes: readonly NetworkCaptureRoute[] = [];
 
 const researchValidationRoutes: readonly NetworkCaptureRoute[] = [
   {
+    id: BILIBILI_DYNAMIC_FEED_ROUTE_ID,
+    platform: 'bilibili',
+    origin: 'https://api.bilibili.com',
+    pathname: '/x/polymer/web-dynamic/v1/feed/space',
+    pathnameMatch: 'exact',
+    maximumBodyBytes: 2 * 1024 * 1024,
+    projector: 'bounded_json',
+    admission: 'research_validation'
+  },
+  {
     id: BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
     platform: 'bilibili',
     origin: 'https://api.bilibili.com',
@@ -141,6 +156,10 @@ const allKnownRoutes: readonly NetworkCaptureRoute[] = [...productionRoutes, ...
 
 export function bilibiliTranscriptResearchRouteIds(): readonly NetworkCaptureRouteId[] {
   return [...BILIBILI_TRANSCRIPT_RESEARCH_ROUTE_IDS];
+}
+
+export function bilibiliDynamicResearchRouteIds(): readonly NetworkCaptureRouteId[] {
+  return [BILIBILI_DYNAMIC_FEED_ROUTE_ID];
 }
 
 export function approvedNetworkCaptureRouteIds(platform: SupportedPlatform): readonly NetworkCaptureRouteId[] {
@@ -377,15 +396,26 @@ export function sanitiseNetworkCaptureObservation(
     capturedAt: typeof value.capturedAt === 'number' && Number.isFinite(value.capturedAt) ? Math.trunc(value.capturedAt) : Date.now(),
     admission: route.admission
   };
+  const bodyEvidence = Number.isSafeInteger(value.bodyBytes) && Number(value.bodyBytes) >= 0 &&
+    Number(value.bodyBytes) <= route.maximumBodyBytes &&
+    typeof value.bodySha256 === 'string' && /^[0-9a-f]{64}$/.test(value.bodySha256) &&
+    Array.isArray(value.queryKeyNames) && value.queryKeyNames.length <= 100 &&
+    value.queryKeyNames.every((key) => typeof key === 'string' && /^[A-Za-z0-9_.\-\[\]]{1,100}$/.test(key))
+    ? {
+        bodyBytes: Number(value.bodyBytes),
+        bodySha256: value.bodySha256,
+        queryKeyNames: [...new Set(value.queryKeyNames as string[])].sort()
+      }
+    : {};
 
   if (value.status === 'payload_rejected') {
     if (!isRejectionReason(value.rejectionReason)) return null;
-    return { ...base, status: 'payload_rejected', rejectionReason: value.rejectionReason };
+    return { ...base, ...bodyEvidence, status: 'payload_rejected', rejectionReason: value.rejectionReason };
   }
 
   const body = route.projector === 'bilibili_transcript'
     ? projectBilibiliTranscriptRouteBody(route.id, value.body) as unknown as JsonValue | null
     : sanitiseNetworkJson(value.body);
   if (body === undefined) return null;
-  return { ...base, status: 'captured', body };
+  return { ...base, ...bodyEvidence, status: 'captured', body };
 }

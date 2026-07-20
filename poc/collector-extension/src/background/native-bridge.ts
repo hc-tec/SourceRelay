@@ -1,4 +1,6 @@
 import {
+  COLLECTOR_CONTROL_SURFACE_REVISION,
+  COLLECTOR_EXTENSION_VERSION,
   COLLECTOR_NATIVE_BRIDGE_CONFIG_KEY,
   COLLECTOR_NATIVE_BRIDGE_STATUS_KEY,
   NATIVE_BRIDGE_PROTOCOL_VERSION,
@@ -13,8 +15,10 @@ import {
   type CollectorHostBridgeCommand,
   type CollectorNativeBridgeConfig
 } from '@intelligence/collector-contracts';
-import { COLLECTOR_CONTROL_SURFACE_REVISION } from '../shared/control-plane';
-import { COLLECTOR_CORE_VERSION } from '../shared/protocol';
+import {
+  bindBilibiliDynamicObserver,
+  readBilibiliDynamicObservation
+} from './strategies/bilibili-dynamic-strategy';
 
 let activePort: chrome.runtime.Port | null = null;
 let activeConfig: CollectorNativeBridgeConfig | null = null;
@@ -82,7 +86,7 @@ async function connectConfiguredBridge(value: unknown): Promise<void> {
     profileId: value.profileId,
     browserSessionId: value.browserSessionId,
     extensionId: chrome.runtime.id,
-    collectorVersion: COLLECTOR_CORE_VERSION,
+    collectorVersion: COLLECTOR_EXTENSION_VERSION,
     controlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION,
     nonce: randomNonce()
   };
@@ -105,6 +109,10 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
         .sort((left, right) => left - right);
       return { type: 'collector_extension_tab_inventory', schemaVersion: 1, tabIds };
     }
+    case 'collector_bind_strategy_observer':
+      return await bindBilibiliDynamicObserver(command.command);
+    case 'collector_read_strategy_observation':
+      return await readBilibiliDynamicObservation(command.command);
   }
 }
 

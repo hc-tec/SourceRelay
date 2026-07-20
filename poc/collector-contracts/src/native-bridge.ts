@@ -1,6 +1,15 @@
 import { canonicalJson } from './ipc.js';
+import {
+  BILIBILI_DYNAMIC_STRATEGY_ID,
+  STRATEGY_OBSERVATION_SCHEMA_VERSION,
+  isBridgeJsonValue,
+  type StrategyObservationReadRequest,
+  type StrategyObservationResult,
+  type StrategyObserverBindingRequest,
+  type StrategyObserverBindingResult
+} from './strategy-observation.js';
 
-export const NATIVE_BRIDGE_PROTOCOL_VERSION = 2 as const;
+export const NATIVE_BRIDGE_PROTOCOL_VERSION = 3 as const;
 export const NATIVE_BRIDGE_MAX_MESSAGE_BYTES = 256 * 1024;
 export const COLLECTOR_NATIVE_BRIDGE_CONFIG_KEY = 'collector.native-bridge-config.v1' as const;
 export const COLLECTOR_NATIVE_BRIDGE_STATUS_KEY = 'collector.native-bridge-status.v1' as const;
@@ -36,7 +45,25 @@ export interface CollectorListExtensionTabsCommand {
   type: 'collector_list_extension_tabs';
 }
 
-export type CollectorHostExtensionCommand = CollectorListExtensionTabsCommand;
+export interface CollectorBindStrategyObserverCommand {
+  type: 'collector_bind_strategy_observer';
+  tabId: number;
+  nextDocumentGeneration: number;
+  binding: StrategyObserverBindingRequest;
+}
+
+export interface CollectorReadStrategyObservationCommand {
+  type: 'collector_read_strategy_observation';
+  tabId: number;
+  documentGeneration: number;
+  routeGeneration: number;
+  request: StrategyObservationReadRequest;
+}
+
+export type CollectorHostExtensionCommand =
+  | CollectorListExtensionTabsCommand
+  | CollectorBindStrategyObserverCommand
+  | CollectorReadStrategyObservationCommand;
 
 export interface CollectorExtensionTabInventory {
   type: 'collector_extension_tab_inventory';
@@ -44,7 +71,10 @@ export interface CollectorExtensionTabInventory {
   tabIds: readonly number[];
 }
 
-export type CollectorExtensionCommandResult = CollectorExtensionTabInventory;
+export type CollectorExtensionCommandResult =
+  | CollectorExtensionTabInventory
+  | StrategyObserverBindingResult
+  | StrategyObservationResult;
 
 export interface CollectorHostBridgeCommand {
   type: 'collector_host_bridge_command';
@@ -226,17 +256,99 @@ export function isCollectorHostBridgeCommandReceipt(
 }
 
 function isCollectorHostExtensionCommand(value: unknown): value is CollectorHostExtensionCommand {
-  return Boolean(value && typeof value === 'object' &&
-    (value as Partial<CollectorHostExtensionCommand>).type === 'collector_list_extension_tabs');
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<CollectorHostExtensionCommand> & {
+    tabId?: unknown;
+    nextDocumentGeneration?: unknown;
+    documentGeneration?: unknown;
+    routeGeneration?: unknown;
+    binding?: unknown;
+    request?: unknown;
+  };
+  if (candidate.type === 'collector_list_extension_tabs') return true;
+  if (!Number.isSafeInteger(candidate.tabId) || Number(candidate.tabId) < 0) return false;
+  if (candidate.type === 'collector_bind_strategy_observer') {
+    return Number.isSafeInteger(candidate.nextDocumentGeneration) &&
+      Number(candidate.nextDocumentGeneration) > 0 &&
+      isStrategyObserverBindingRequest(candidate.binding);
+  }
+  return candidate.type === 'collector_read_strategy_observation' &&
+    Number.isSafeInteger(candidate.documentGeneration) && Number(candidate.documentGeneration) > 0 &&
+    Number.isSafeInteger(candidate.routeGeneration) && Number(candidate.routeGeneration) >= 0 &&
+    isStrategyObservationReadRequest(candidate.request);
 }
 
 function isCollectorExtensionCommandResult(value: unknown): value is CollectorExtensionCommandResult {
   if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<CollectorExtensionTabInventory>;
-  if (candidate.type !== 'collector_extension_tab_inventory' || candidate.schemaVersion !== 1 ||
-    !Array.isArray(candidate.tabIds) || candidate.tabIds.length > 10_000) return false;
-  return candidate.tabIds.every((tabId) => Number.isSafeInteger(tabId) && Number(tabId) >= 0) &&
-    new Set(candidate.tabIds).size === candidate.tabIds.length;
+  const type = (value as { type?: unknown }).type;
+  if (type === 'collector_extension_tab_inventory') {
+    const candidate = value as Partial<CollectorExtensionTabInventory>;
+    return candidate.schemaVersion === 1 && Array.isArray(candidate.tabIds) && candidate.tabIds.length <= 10_000 &&
+      candidate.tabIds.every((tabId) => Number.isSafeInteger(tabId) && Number(tabId) >= 0) &&
+      new Set(candidate.tabIds).size === candidate.tabIds.length;
+  }
+  if (type === 'collector_strategy_observer_binding') {
+    const candidate = value as Partial<StrategyObserverBindingResult>;
+    return candidate.schemaVersion === STRATEGY_OBSERVATION_SCHEMA_VERSION &&
+      candidate.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID &&
+      boundedCommandId(candidate.observerBindingId) &&
+      typeof candidate.pageAlias === 'string' && candidate.pageAlias.length <= 128 &&
+      candidate.state === 'ready' &&
+      Number.isSafeInteger(candidate.nextDocumentGeneration) && Number(candidate.nextDocumentGeneration) > 0 &&
+      typeof candidate.expiresAt === 'string' && Number.isFinite(Date.parse(candidate.expiresAt));
+  }
+  const candidate = value as Partial<StrategyObservationResult>;
+  return candidate.type === 'collector_strategy_observation' &&
+    candidate.schemaVersion === STRATEGY_OBSERVATION_SCHEMA_VERSION &&
+    candidate.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID &&
+    boundedCommandId(candidate.observerBindingId) &&
+    typeof candidate.pageAlias === 'string' && candidate.pageAlias.length <= 128 &&
+    Number.isSafeInteger(candidate.documentGeneration) && Number(candidate.documentGeneration) > 0 &&
+    Number.isSafeInteger(candidate.routeGeneration) && Number(candidate.routeGeneration) >= 0 &&
+    typeof candidate.capturedAt === 'string' && Number.isFinite(Date.parse(candidate.capturedAt)) &&
+    Number.isSafeInteger(candidate.payloadBytes) && Number(candidate.payloadBytes) >= 0 &&
+    Number(candidate.payloadBytes) <= NATIVE_BRIDGE_MAX_MESSAGE_BYTES &&
+    isBridgeJsonValue(candidate.payload);
+}
+
+function isStrategyObserverBindingRequest(value: unknown): value is StrategyObserverBindingRequest {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<StrategyObserverBindingRequest>;
+  return candidate.schemaVersion === STRATEGY_OBSERVATION_SCHEMA_VERSION &&
+    boundedContextIdentifier(candidate.profileId) &&
+    typeof candidate.pageAlias === 'string' && candidate.pageAlias.length > 0 && candidate.pageAlias.length <= 128 &&
+    boundedCommandId(candidate.pageLeaseId) &&
+    Number.isSafeInteger(candidate.expectedRecordVersion) && Number(candidate.expectedRecordVersion) > 0 &&
+    boundedCommandId(candidate.runId) &&
+    boundedCommandId(candidate.observerBindingId) &&
+    candidate.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID &&
+    validDynamicTarget(candidate.target) &&
+    typeof candidate.expiresAt === 'string' && Date.parse(candidate.expiresAt) > Date.now() &&
+    Number.isSafeInteger(candidate.maximumResponseObservations) &&
+    Number(candidate.maximumResponseObservations) >= 1 && Number(candidate.maximumResponseObservations) <= 10 &&
+    Number.isSafeInteger(candidate.maximumPayloadBytes) &&
+    Number(candidate.maximumPayloadBytes) >= 1_024 && Number(candidate.maximumPayloadBytes) <= 192 * 1024;
+}
+
+function isStrategyObservationReadRequest(value: unknown): value is StrategyObservationReadRequest {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<StrategyObservationReadRequest>;
+  return candidate.schemaVersion === STRATEGY_OBSERVATION_SCHEMA_VERSION &&
+    boundedContextIdentifier(candidate.profileId) &&
+    typeof candidate.pageAlias === 'string' && candidate.pageAlias.length > 0 && candidate.pageAlias.length <= 128 &&
+    boundedCommandId(candidate.pageLeaseId) &&
+    Number.isSafeInteger(candidate.expectedRecordVersion) && Number(candidate.expectedRecordVersion) > 0 &&
+    boundedCommandId(candidate.runId) &&
+    boundedCommandId(candidate.observerBindingId) &&
+    candidate.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID &&
+    Number.isSafeInteger(candidate.deadlineMs) && Number(candidate.deadlineMs) >= 100 && Number(candidate.deadlineMs) <= 20_000;
+}
+
+function validDynamicTarget(value: unknown): value is StrategyObserverBindingRequest['target'] {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<StrategyObserverBindingRequest['target']>;
+  if (typeof candidate.stableAccountId !== 'string' || !/^\d{1,20}$/.test(candidate.stableAccountId)) return false;
+  return candidate.canonicalUrl === `https://space.bilibili.com/${candidate.stableAccountId}/dynamic`;
 }
 
 function boundedContextIdentifier(value: unknown): value is string {

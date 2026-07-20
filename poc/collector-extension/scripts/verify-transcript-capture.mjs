@@ -8,7 +8,6 @@ import { build } from 'esbuild';
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'collector-transcript-capture-'));
 const bundlePath = join(temporaryDirectory, 'network-capture.mjs');
 const urlBundlePath = join(temporaryDirectory, 'bilibili-video-url.mjs');
-const protocolBundlePath = join(temporaryDirectory, 'protocol.mjs');
 
 try {
   await Promise.all([
@@ -29,20 +28,10 @@ try {
       format: 'esm',
       target: 'node22',
       logLevel: 'silent'
-    }),
-    build({
-      entryPoints: [fileURLToPath(new URL('../src/shared/protocol.ts', import.meta.url))],
-      outfile: protocolBundlePath,
-      bundle: true,
-      platform: 'node',
-      format: 'esm',
-      target: 'node22',
-      logLevel: 'silent'
     })
   ]);
   const capture = await import(pathToFileURL(bundlePath).href);
   const urls = await import(pathToFileURL(urlBundlePath).href);
-  const protocol = await import(pathToFileURL(protocolBundlePath).href);
   const canonicalVideoUrl = 'https://www.bilibili.com/video/BV1qZSLBYEpa';
   assert.equal(urls.canonicalBilibiliVideoUrl(canonicalVideoUrl), canonicalVideoUrl);
   assert.equal(urls.canonicalBilibiliVideoUrl(`${canonicalVideoUrl}?vd_source=${'a'.repeat(32)}`), null);
@@ -55,49 +44,6 @@ try {
   );
   assert.equal(urls.canonicalBilibiliVideoUrl(`${canonicalVideoUrl}?foo=bar`, 'observed_document'), null);
   assert.equal(urls.canonicalBilibiliVideoUrl(`${canonicalVideoUrl}?vd_source=short`, 'observed_document'), null);
-  const interaction = {
-    schemaVersion: 1,
-    canonicalUrl: canonicalVideoUrl,
-    state: 'completed',
-    objective: {
-      status: 'satisfied',
-      requiredActions: ['reveal_player_controls', 'open_caption_menu', 'select_caption_language'],
-      completedActions: ['reveal_player_controls', 'open_caption_menu', 'select_caption_language']
-    },
-    actions: [
-      {
-        action: 'reveal_player_controls', attempted: true, outcome: 'completed',
-        visibleLabels: ['字幕'], selectedLabel: null, postconditionAcknowledged: true
-      },
-      {
-        action: 'open_caption_menu', attempted: true, outcome: 'completed',
-        visibleLabels: ['关闭', '中文'], selectedLabel: null, postconditionAcknowledged: true
-      },
-      {
-        action: 'select_caption_language', attempted: true, outcome: 'completed',
-        visibleLabels: ['中文'], selectedLabel: '中文', postconditionAcknowledged: true
-      }
-    ],
-    errorCode: null,
-    completedAt: '2026-07-19T00:00:05.000Z'
-  };
-  assert.equal(protocol.COLLECTOR_CORE_VERSION, '0.6.0');
-  assert.equal(protocol.isTranscriptInteractionResult(interaction), true);
-  assert.equal(protocol.isCompleteTranscriptCapabilityValidationMessage({
-    type: 'collector.completeTranscriptCapabilityValidation',
-    runId: '11111111-1111-4111-8111-111111111111',
-    result: interaction
-  }), true);
-  assert.equal(protocol.isCompleteTranscriptCapabilityValidationMessage({
-    type: 'collector.completeTranscriptCapabilityValidation',
-    runId: '11111111-1111-4111-8111-111111111111',
-    result: { ...interaction, actions: interaction.actions.slice(1) }
-  }), false);
-  assert.equal(protocol.isCompleteTranscriptCapabilityValidationMessage({
-    type: 'collector.transcriptInteractionResult',
-    runId: '11111111-1111-4111-8111-111111111111',
-    result: interaction
-  }), false);
   const routeIds = capture.bilibiliTranscriptResearchRouteIds();
   assert.deepEqual(routeIds, [
     'bilibili.video.transcript.track-directory.response.v1',
@@ -245,7 +191,6 @@ try {
     researchRouteCount: routeIds.length,
     directoryFieldsWhitelisted: true,
     publicSubtitleSegmentsPreserved: 2,
-    gatewayOwnedCompletionProtocolValidated: true,
     observedDocumentTrackingQueryCanonicalized: true,
     queryValuesDiscarded: true,
     unknownAndSensitiveFieldsDiscarded: true,

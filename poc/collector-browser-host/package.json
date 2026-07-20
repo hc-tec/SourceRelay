@@ -11,7 +11,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
-    "verify:lifecycle": "node scripts/verify-real-browser-lifecycle.mjs"
+    "verify:lifecycle": "node scripts/verify-real-browser-lifecycle.mjs",
+    "verify:strategy-binding": "node scripts/verify-real-strategy-binding.mjs"
   },
   "dependencies": {
     "@intelligence/collector-contracts": "0.1.0",

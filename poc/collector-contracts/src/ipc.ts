@@ -13,8 +13,14 @@ import type {
   ReleasePageRequest
 } from './page-pool.js';
 import type { BrowserHostErrorRecord } from './errors.js';
+import type {
+  StrategyObservationReadRequest,
+  StrategyObservationResult,
+  StrategyObserverBindingRequest,
+  StrategyObserverBindingResult
+} from './strategy-observation.js';
 
-export const BROWSER_HOST_PROTOCOL_VERSION = 2 as const;
+export const BROWSER_HOST_PROTOCOL_VERSION = 3 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
 
 export interface BrowserHostEndpointRecord {
@@ -51,6 +57,8 @@ export type BrowserHostCommandBody =
   | { type: 'acquire_page'; request: AcquirePageRequest }
   | { type: 'release_page'; request: ReleasePageRequest }
   | { type: 'navigate_page'; request: NavigatePageRequest }
+  | { type: 'bind_strategy_observer'; request: StrategyObserverBindingRequest }
+  | { type: 'read_strategy_observation'; request: StrategyObservationReadRequest }
   | { type: 'reconcile_page'; request: ReconcilePageRequest }
   | { type: 'create_reclaim_plan'; request: CreateReclaimPlanRequest }
   | { type: 'execute_reclaim_plan'; request: ExecuteReclaimPlanRequest }
@@ -77,6 +85,8 @@ export type BrowserHostCommandResult =
   | ManagedPageSummary
   | ReclaimPlan
   | ReclaimExecutionResult
+  | StrategyObserverBindingResult
+  | StrategyObservationResult
   | { ok: true; profileId?: string; pageAlias?: string; state?: string }
   | { ok: true; shuttingDown: true };
 

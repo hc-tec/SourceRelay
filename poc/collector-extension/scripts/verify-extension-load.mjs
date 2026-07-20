@@ -17,40 +17,34 @@ try {
     extensionName: chrome.runtime.getManifest().name,
     permissions: await chrome.permissions.getAll(),
     registeredContentScripts: await chrome.scripting.getRegisteredContentScripts(),
-    runtimeBootstrap: (await chrome.storage.session.get('collector.runtime-bootstrap.v1'))['collector.runtime-bootstrap.v1']
+    runtimeBootstrap: (await chrome.storage.session.get('collector.runtime-bootstrap.v1'))['collector.runtime-bootstrap.v1'],
+    nativeBridgeStatus: (await chrome.storage.session.get('collector.native-bridge-status.v1'))['collector.native-bridge-status.v1']
   }));
-
-  const grantedPermissions = runtime.permissions;
-  const registeredContentScripts = runtime.registeredContentScripts;
 
   assert.match(runtime.extensionId, /^[a-p]{32}$/);
   assert.equal(runtime.manifestVersion, 3);
   assert.equal(runtime.extensionName, 'Personal Intelligence Collector');
-  assert.deepEqual(grantedPermissions.origins ?? [], [], 'fresh Profile must not grant optional host permissions');
-  assert.deepEqual(registeredContentScripts, [], 'fresh Profile must not register persistent platform scripts');
+  assert.deepEqual(
+    [...(runtime.permissions.origins ?? [])].sort(),
+    ['https://api.bilibili.com/*', 'https://space.bilibili.com/*'],
+    'fresh Profile must grant only the required Bilibili observer origins'
+  );
+  assert.deepEqual(runtime.registeredContentScripts, [], 'fresh Profile must not register a platform observer');
   assert.deepEqual(runtime.runtimeBootstrap, {
     schemaVersion: 1,
     collectorVersion: runtime.extensionVersion,
-    controlSurfaceRevision: 4
+    controlSurfaceRevision: 5
   }, 'service worker must publish its compiled runtime identity');
+  assert.equal(runtime.nativeBridgeStatus?.state, 'unconfigured', 'fresh Profile must not invent a Browser Host bridge');
 
   const controlPage = await context.newPage();
   await controlPage.goto(`chrome-extension://${runtime.extensionId}/control.html`);
   await controlPage.locator('html[data-collector-control-ready="true"]').waitFor();
-  assert.equal(await controlPage.locator('h1').textContent(), 'Collector Core');
-  const controlResponse = await controlPage.evaluate(() => chrome.runtime.sendMessage({
-    type: 'collector.getControlSnapshot'
-  }));
-  assert.equal(controlResponse?.ok, true, 'control snapshot must be available');
-  assert.equal(
-    controlResponse?.snapshot?.controlSurfaceRevision,
-    2,
-    'runtime must expose the current control-surface revision'
-  );
-  assert.equal(
-    controlResponse?.snapshot?.collectorVersion,
-    runtime.extensionVersion,
-    'runtime and manifest versions must agree'
+  assert.equal(await controlPage.locator('h1').textContent(), 'Collector Extension');
+  assert.match(
+    await controlPage.locator('body').innerText(),
+    /bilibili\.dynamic\.account-feed\.response-dom\.v1/,
+    'control page must describe the compiled narrow Strategy'
   );
 
   console.log(JSON.stringify({
@@ -59,11 +53,12 @@ try {
     browser: 'playwright-managed-chromium',
     mode: launched.mode,
     manifestVersion: runtime.manifestVersion,
-    optionalHostOriginsGranted: grantedPermissions.origins?.length ?? 0,
-    registeredPlatformScripts: registeredContentScripts.length,
+    requiredHostOriginsGranted: runtime.permissions.origins?.length ?? 0,
+    registeredPlatformScripts: runtime.registeredContentScripts.length,
     runtimeBootstrapPublished: true,
+    nativeBridgeStartsUnconfigured: true,
     controlSurfaceLoaded: true,
-    controlSurfaceRevision: controlResponse.snapshot.controlSurfaceRevision
+    controlSurfaceRevision: runtime.runtimeBootstrap.controlSurfaceRevision
   }, null, 2));
 } finally {
   await launched?.close();

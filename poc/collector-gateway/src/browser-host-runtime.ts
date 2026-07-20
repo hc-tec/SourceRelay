@@ -5,16 +5,27 @@ import {
   launchBrowserHost
 } from '@intelligence/collector-browser-host/client';
 import {
+  COLLECTOR_CONTROL_SURFACE_REVISION,
+  COLLECTOR_EXTENSION_VERSION,
   PAGE_POOL_SCHEMA_VERSION,
+  type AcquirePageRequest,
+  type AcquirePageResult,
   type BrowserHostCommandBody,
   type BrowserHostCommandResult,
-  type PagePoolSnapshot
+  type ManagedPageSummary,
+  type NavigatePageRequest,
+  type PagePoolSnapshot,
+  type ReleasePageRequest,
+  type StrategyObservationReadRequest,
+  type StrategyObservationResult,
+  type StrategyObserverBindingRequest,
+  type StrategyObserverBindingResult
 } from '@intelligence/collector-contracts';
 import type { GatewayConfig } from './config';
 
 const EXTENSION_RUNTIME_EXPECTATION = {
-  version: '0.6.0',
-  controlSurfaceRevision: 4,
+  version: COLLECTOR_EXTENSION_VERSION,
+  controlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION,
   runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
 } as const;
 
@@ -55,6 +66,41 @@ export class GatewayBrowserHostRuntime {
   async closeProfile(profileId: string): Promise<void> {
     const result = await this.#command({ type: 'close_profile', profileId }, false);
     if (!isOkState(result, profileId, 'closed')) throw new Error('browser_host_close_profile_response_invalid');
+  }
+
+  async acquirePage(request: AcquirePageRequest): Promise<AcquirePageResult> {
+    const result = await this.#command({ type: 'acquire_page', request }, false);
+    if (!result || typeof result !== 'object' ||
+      !('lease' in result) || !('page' in result) || !('selection' in result)) {
+      throw new Error('browser_host_acquire_page_response_invalid');
+    }
+    return structuredClone(result as AcquirePageResult);
+  }
+
+  async navigatePage(request: NavigatePageRequest): Promise<ManagedPageSummary> {
+    return managedPageResult(await this.#command({ type: 'navigate_page', request }, false));
+  }
+
+  async releasePage(request: ReleasePageRequest): Promise<ManagedPageSummary> {
+    return managedPageResult(await this.#command({ type: 'release_page', request }, false));
+  }
+
+  async bindStrategyObserver(request: StrategyObserverBindingRequest): Promise<StrategyObserverBindingResult> {
+    const result = await this.#command({ type: 'bind_strategy_observer', request }, false);
+    if (!result || typeof result !== 'object' ||
+      (result as { type?: unknown }).type !== 'collector_strategy_observer_binding') {
+      throw new Error('browser_host_strategy_binding_response_invalid');
+    }
+    return structuredClone(result as StrategyObserverBindingResult);
+  }
+
+  async readStrategyObservation(request: StrategyObservationReadRequest): Promise<StrategyObservationResult> {
+    const result = await this.#command({ type: 'read_strategy_observation', request }, false);
+    if (!result || typeof result !== 'object' ||
+      (result as { type?: unknown }).type !== 'collector_strategy_observation') {
+      throw new Error('browser_host_strategy_observation_response_invalid');
+    }
+    return structuredClone(result as StrategyObservationResult);
   }
 
   async shutdownHost(): Promise<void> {
@@ -151,4 +197,13 @@ function isOkState(
   if (!value || typeof value !== 'object') return false;
   const candidate = value as { ok?: unknown; profileId?: unknown; state?: unknown };
   return candidate.ok === true && candidate.profileId === profileId && candidate.state === state;
+}
+
+function managedPageResult(value: BrowserHostCommandResult): ManagedPageSummary {
+  if (!value || typeof value !== 'object') throw new Error('browser_host_managed_page_response_invalid');
+  const candidate = value as Partial<ManagedPageSummary>;
+  if (candidate.schemaVersion !== 1 || typeof candidate.pageAlias !== 'string' || typeof candidate.state !== 'string') {
+    throw new Error('browser_host_managed_page_response_invalid');
+  }
+  return structuredClone(value as ManagedPageSummary);
 }
