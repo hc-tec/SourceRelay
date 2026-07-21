@@ -126,6 +126,7 @@ Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git
 
 权威产品文档：
 
+- [受管浏览器采集开发规范](docs/development/managed-browser-collection-development-standard-v0.1.md)
 - [Collector 决策审计](docs/design/collector-decision-audit.md)
 - [平台采集策略产品规格](docs/design/platform-strategy-product-spec.md)
 - [Browser Host 与受管页面池 MVP](docs/design/managed-page-pool-browser-host-mvp.md)
