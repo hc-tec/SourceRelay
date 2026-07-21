@@ -16,9 +16,22 @@
     "typecheck:contracts": "npm run typecheck --workspace @intelligence/collector-contracts",
     "typecheck:browser-host": "npm run typecheck:contracts && npm run typecheck --workspace @intelligence/collector-browser-host",
     "verify:browser-host": "npm run build:browser-host && npm run build:extension && npm run verify:lifecycle --workspace @intelligence/collector-browser-host",
-    "verify:local": "node scripts/verify-local-validation-suite.mjs"
+    "verify:local": "node scripts/verify-local-validation-suite.mjs",
+    "build:collector-runtime": "npm run build:contracts && npm run build:extension && npm run build --workspace @intelligence/collector-browser-host && npm run build --workspace @intelligence/collector-gateway",
+    "test:typecheck": "tsc --noEmit -p tsconfig.tests.json",
+    "test:unit": "npm run test:typecheck && vitest run --project governance --project contracts --project gateway-domain",
+    "test:unit:coverage": "npm run test:typecheck && vitest run --project governance --project contracts --project gateway-domain --coverage",
+    "test:real-local": "npm run build:collector-runtime && playwright test --config playwright.real-local.config.ts",
+    "test:all-local": "npm run test:unit && npm run test:real-local"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/chrome": "^0.0.330",
+    "@vitest/coverage-v8": "^4.1.10",
+    "fast-check": "^4.9.0",
+    "vitest": "^4.1.10"
   }
 }

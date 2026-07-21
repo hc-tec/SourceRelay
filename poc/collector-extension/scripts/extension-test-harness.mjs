@@ -9,8 +9,8 @@ async function waitForServiceWorker(context) {
   return context.waitForEvent('serviceworker', { timeout: 15_000 });
 }
 
-async function launch(extensionPath, userDataDirectory, headless) {
-  return chromium.launchPersistentContext(userDataDirectory, {
+async function launch(extensionPath, userDataDirectory, headless, onContext) {
+  const context = await chromium.launchPersistentContext(userDataDirectory, {
     channel: 'chromium',
     headless,
     args: [
@@ -20,6 +20,8 @@ async function launch(extensionPath, userDataDirectory, headless) {
       `--load-extension=${extensionPath}`
     ]
   });
+  await onContext?.(context);
+  return context;
 }
 
 export async function launchProductionExtension(extensionPath, temporaryPrefix, options = {}) {
@@ -28,7 +30,7 @@ export async function launchProductionExtension(extensionPath, temporaryPrefix, 
   let context;
   try {
     if (options.forceHeaded === true) {
-      context = await launch(extensionPath, userDataDirectory, false);
+      context = await launch(extensionPath, userDataDirectory, false, options.onContext);
       const worker = await waitForServiceWorker(context);
       return {
         context,
@@ -42,7 +44,7 @@ export async function launchProductionExtension(extensionPath, temporaryPrefix, 
       };
     }
     try {
-      context = await launch(extensionPath, userDataDirectory, true);
+      context = await launch(extensionPath, userDataDirectory, true, options.onContext);
       const worker = await waitForServiceWorker(context);
       return {
         context,
@@ -56,7 +58,7 @@ export async function launchProductionExtension(extensionPath, temporaryPrefix, 
       };
     } catch (headlessError) {
       await context?.close().catch(() => undefined);
-      context = await launch(extensionPath, userDataDirectory, false);
+      context = await launch(extensionPath, userDataDirectory, false, options.onContext);
       try {
         const worker = await waitForServiceWorker(context);
         return {

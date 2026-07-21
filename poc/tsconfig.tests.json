@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "types": ["node", "chrome"]
+  },
+  "include": [
+    "testing/**/*.ts",
+    "collector-contracts/test/**/*.ts",
+    "collector-gateway/test/**/*.ts",
+    "collector-extension/scripts/extension-test-harness.mjs"
+  ]
+}
