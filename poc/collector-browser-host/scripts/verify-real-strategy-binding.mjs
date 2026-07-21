@@ -32,6 +32,10 @@ const videoTarget = {
   bvid: 'BV1qZSLBYEpa',
   canonicalUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa'
 };
+const accountVideoInventoryTarget = {
+  stableAccountId: '7481602',
+  canonicalUrl: 'https://space.bilibili.com/7481602/upload/video'
+};
 
 if (relative(runtimeParent, runtimeRoot).startsWith('..')) {
   throw new Error('strategy_binding_runtime_path_rejected');
@@ -48,7 +52,7 @@ let browserProcessId = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.5');
+  assert.equal(extensionManifest.version, '0.7.6');
 
   endpoint = await launchBrowserHost({
     mainModulePath,
@@ -72,7 +76,7 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 9,
+        controlSurfaceRevision: 10,
         runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
       }
     }
@@ -130,6 +134,23 @@ try {
   assert.equal(videoBinding.observerBindingId, videoBindingRequest.observerBindingId);
   assert.equal(videoBinding.pageAlias, acquired.page.pageAlias);
   assert.equal(videoBinding.nextDocumentGeneration, acquired.page.documentGeneration + 1);
+
+  const accountVideoInventoryBindingRequest = {
+    ...bindingRequest,
+    observerBindingId: randomUUID(),
+    strategyId: 'bilibili.account.video-inventory.dom.v1',
+    target: accountVideoInventoryTarget,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 128 * 1024
+  };
+  const accountVideoInventoryBinding = await client.command({
+    type: 'bind_strategy_observer',
+    request: accountVideoInventoryBindingRequest
+  });
+  assert.equal(accountVideoInventoryBinding.type, 'collector_strategy_observer_binding');
+  assert.equal(accountVideoInventoryBinding.observerBindingId, accountVideoInventoryBindingRequest.observerBindingId);
+  assert.equal(accountVideoInventoryBinding.pageAlias, acquired.page.pageAlias);
+  assert.equal(accountVideoInventoryBinding.nextDocumentGeneration, acquired.page.documentGeneration + 1);
 
   const visual = await client.command({
     type: 'capture_page_visual_evidence',
@@ -204,6 +225,7 @@ try {
     hostCreatedPageBoundToOneExtensionTab: true,
     hostToExtensionStrategyCommandRoundTripCompleted: true,
     videoDetailDomOnlyBindingRoundTripCompleted: true,
+    accountVideoInventoryDomOnlyBindingRoundTripCompleted: true,
     priorBindingReplacedWithoutPlatformNavigation: true,
     observerBindingCorrelationVerified: true,
     postObservationVisualEvidenceCaptured: true,

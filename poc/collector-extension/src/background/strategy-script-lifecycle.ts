@@ -1,3 +1,4 @@
+import { cleanupExpiredBilibiliAccountVideoInventoryObserverBindings } from './strategies/bilibili-account-video-inventory-strategy';
 import { cleanupExpiredBilibiliDynamicObserverBindings } from './strategies/bilibili-dynamic-strategy';
 import { cleanupExpiredBilibiliVideoDetailObserverBindings } from './strategies/bilibili-video-detail-strategy';
 
@@ -19,6 +20,7 @@ export async function cleanupStrategyScriptRegistrations(): Promise<void> {
   if (retiredIds.length > 0) {
     await chrome.scripting.unregisterContentScripts({ ids: retiredIds });
   }
+  await cleanupExpiredBilibiliAccountVideoInventoryObserverBindings();
   await cleanupExpiredBilibiliDynamicObserverBindings();
   await cleanupExpiredBilibiliVideoDetailObserverBindings();
 }

@@ -1,5 +1,6 @@
 import { canonicalJson } from './ipc.js';
 import {
+  BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
   BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
   STRATEGY_OBSERVATION_SCHEMA_VERSION,
@@ -344,7 +345,9 @@ function isStrategyObservationReadRequest(value: unknown): value is StrategyObse
 }
 
 function isCollectorStrategyId(value: unknown): value is StrategyObserverBindingRequest['strategyId'] {
-  return value === BILIBILI_DYNAMIC_STRATEGY_ID || value === BILIBILI_VIDEO_DETAIL_STRATEGY_ID;
+  return value === BILIBILI_DYNAMIC_STRATEGY_ID ||
+    value === BILIBILI_VIDEO_DETAIL_STRATEGY_ID ||
+    value === BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID;
 }
 
 function validStrategyBindingTargetAndBudget(
@@ -356,6 +359,9 @@ function validStrategyBindingTargetAndBudget(
   }
   if (candidate.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
     return validVideoDetailTarget(candidate.target) && candidate.maximumResponseObservations === 0;
+  }
+  if (candidate.strategyId === BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID) {
+    return validAccountVideoInventoryTarget(candidate.target) && candidate.maximumResponseObservations === 0;
   }
   return false;
 }
@@ -372,6 +378,13 @@ function validVideoDetailTarget(value: unknown): boolean {
   const candidate = value as Partial<{ canonicalUrl: string; bvid: string }>;
   return typeof candidate.bvid === 'string' && /^BV[0-9A-Za-z]{10}$/.test(candidate.bvid) &&
     candidate.canonicalUrl === `https://www.bilibili.com/video/${candidate.bvid}`;
+}
+
+function validAccountVideoInventoryTarget(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<{ canonicalUrl: string; stableAccountId: string }>;
+  if (typeof candidate.stableAccountId !== 'string' || !/^\d{1,20}$/.test(candidate.stableAccountId)) return false;
+  return candidate.canonicalUrl === `https://space.bilibili.com/${candidate.stableAccountId}/upload/video`;
 }
 
 function boundedContextIdentifier(value: unknown): value is string {

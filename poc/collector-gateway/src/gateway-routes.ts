@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AccountSafetyRegistry } from './account-safety';
 import { accountSafetyUnlockInput } from './account-safety';
+import type { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
+import type { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account-video-inventory-host-runner';
 import type { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import type { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
@@ -19,6 +21,8 @@ export interface GatewayRouteContext {
   browserManager: CollectionBrowserManager;
   profileRegistry: BrowserProfileRegistry;
   accountSafety: AccountSafetyRegistry;
+  accountVideoInventoryArtifacts: BilibiliAccountVideoInventoryArtifactStore;
+  accountVideoInventoryRunner: BilibiliAccountVideoInventoryHostRunner;
   dynamicArtifacts: BilibiliDynamicArtifactStore;
   dynamicRunner: BilibiliDynamicHostRunner;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
@@ -124,6 +128,10 @@ export async function handleGatewayRoute(
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.dynamicArtifacts.list() });
     return true;
   }
+  if (request.method === 'GET' && url.pathname === '/v1/account-video-inventory-artifacts') {
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.accountVideoInventoryArtifacts.list() });
+    return true;
+  }
   if (request.method === 'GET' && url.pathname === '/v1/video-detail-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.videoDetailArtifacts.list() });
     return true;
@@ -139,6 +147,33 @@ export async function handleGatewayRoute(
     ) throw new Error('bilibili_dynamic_run_input_invalid');
     const result = await context.dynamicRunner.run({
       profileId: dynamicRun[1]!,
+      canonicalProfileUrl: (body as { canonicalProfileUrl: string }).canonicalProfileUrl
+    });
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
+  const accountVideoInventoryRun = url.pathname.match(
+    new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/account/video-inventory$`, 'i')
+  );
+  if (request.method === 'POST' && accountVideoInventoryRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const body = await readJsonBody(request);
+    if (
+      !body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).length !== 1 ||
+      typeof (body as { canonicalProfileUrl?: unknown }).canonicalProfileUrl !== 'string'
+    ) throw new Error('bilibili_account_video_inventory_run_input_invalid');
+    const result = await context.accountVideoInventoryRunner.run({
+      profileId: accountVideoInventoryRun[1]!,
       canonicalProfileUrl: (body as { canonicalProfileUrl: string }).canonicalProfileUrl
     });
     sendJson(response, 201, {
@@ -182,6 +217,15 @@ export async function handleGatewayRoute(
   if (request.method === 'GET' && dynamicArtifact) {
     const artifact = await context.dynamicArtifacts.get(dynamicArtifact[1]!);
     if (!artifact) throw new Error('bilibili_dynamic_artifact_not_found');
+    sendJson(response, 200, { schemaVersion: 1, artifact });
+    return true;
+  }
+  const accountVideoInventoryArtifact = url.pathname.match(
+    new RegExp(`^/v1/account-video-inventory-artifacts/(${PROFILE_ID})$`, 'i')
+  );
+  if (request.method === 'GET' && accountVideoInventoryArtifact) {
+    const artifact = await context.accountVideoInventoryArtifacts.get(accountVideoInventoryArtifact[1]!);
+    if (!artifact) throw new Error('bilibili_account_video_inventory_artifact_not_found');
     sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }

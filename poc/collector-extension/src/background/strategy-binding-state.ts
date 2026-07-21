@@ -2,10 +2,13 @@ import { clearNetworkCaptureState } from './network-capture-runtime';
 
 export const DYNAMIC_OBSERVER_BINDING_STORAGE_PREFIX = 'collector.strategy-observer.' as const;
 export const VIDEO_DETAIL_OBSERVER_BINDING_STORAGE_PREFIX = 'collector.video-detail-observer.' as const;
+export const ACCOUNT_VIDEO_INVENTORY_OBSERVER_BINDING_STORAGE_PREFIX =
+  'collector.account-video-inventory-observer.' as const;
 
 const OBSERVER_BINDING_STORAGE_PREFIXES = [
   DYNAMIC_OBSERVER_BINDING_STORAGE_PREFIX,
-  VIDEO_DETAIL_OBSERVER_BINDING_STORAGE_PREFIX
+  VIDEO_DETAIL_OBSERVER_BINDING_STORAGE_PREFIX,
+  ACCOUNT_VIDEO_INVENTORY_OBSERVER_BINDING_STORAGE_PREFIX
 ] as const;
 
 interface StoredBindingReference {

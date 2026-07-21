@@ -33,7 +33,7 @@ try {
   assert.deepEqual(runtime.runtimeBootstrap, {
     schemaVersion: 1,
     collectorVersion: runtime.extensionVersion,
-    controlSurfaceRevision: 9
+    controlSurfaceRevision: 10
   }, 'service worker must publish its compiled runtime identity');
   assert.equal(runtime.nativeBridgeStatus?.state, 'unconfigured', 'fresh Profile must not invent a Browser Host bridge');
 
@@ -50,6 +50,11 @@ try {
     await controlPage.locator('body').innerText(),
     /bilibili\.video\.detail\.dom\.v2/,
     'control page must describe the compiled DOM-only video-detail Strategy'
+  );
+  assert.match(
+    await controlPage.locator('body').innerText(),
+    /bilibili\.account\.video-inventory\.dom\.v1/,
+    'control page must describe the compiled DOM-only account-video inventory Strategy'
   );
 
   console.log(JSON.stringify({

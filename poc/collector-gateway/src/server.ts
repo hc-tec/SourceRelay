@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import { AccountSafetyRegistry } from './account-safety';
+import { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
+import { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account-video-inventory-host-runner';
 import { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
 import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
@@ -16,6 +18,7 @@ const identity = await loadGatewayIdentity(config);
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
 const accountSafety = await AccountSafetyRegistry.create(config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
+const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const dynamicRunner = new BilibiliDynamicHostRunner({
@@ -23,6 +26,12 @@ const dynamicRunner = new BilibiliDynamicHostRunner({
   browserManager,
   profiles: profileRegistry,
   artifacts: dynamicArtifacts
+});
+const accountVideoInventoryRunner = new BilibiliAccountVideoInventoryHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: accountVideoInventoryArtifacts
 });
 const videoDetailRunner = new BilibiliVideoDetailHostRunner({
   accountSafety,
@@ -44,6 +53,8 @@ const server = createServer(async (request, response) => {
       browserManager,
       profileRegistry,
       accountSafety,
+      accountVideoInventoryArtifacts,
+      accountVideoInventoryRunner,
       dynamicArtifacts,
       dynamicRunner,
       videoDetailArtifacts,

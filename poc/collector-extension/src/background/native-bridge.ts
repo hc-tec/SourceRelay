@@ -1,4 +1,5 @@
 import {
+  BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
   BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
   COLLECTOR_CONTROL_SURFACE_REVISION,
@@ -17,6 +18,10 @@ import {
   type CollectorHostBridgeCommand,
   type CollectorNativeBridgeConfig
 } from '@intelligence/collector-contracts';
+import {
+  bindBilibiliAccountVideoInventoryObserver,
+  readBilibiliAccountVideoInventoryObservation
+} from './strategies/bilibili-account-video-inventory-strategy';
 import {
   bindBilibiliDynamicObserver,
   readBilibiliDynamicObservation
@@ -129,6 +134,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
       if (command.command.binding.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
         return await bindBilibiliVideoDetailObserver(command.command);
       }
+      if (command.command.binding.strategyId === BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID) {
+        return await bindBilibiliAccountVideoInventoryObserver(command.command);
+      }
       throw new Error('collector_strategy_id_rejected');
     case 'collector_read_strategy_observation':
       if (command.command.request.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID) {
@@ -136,6 +144,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
       }
       if (command.command.request.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
         return await readBilibiliVideoDetailObservation(command.command);
+      }
+      if (command.command.request.strategyId === BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID) {
+        return await readBilibiliAccountVideoInventoryObservation(command.command);
       }
       throw new Error('collector_strategy_id_rejected');
   }
