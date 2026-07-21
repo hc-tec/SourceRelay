@@ -1,5 +1,7 @@
 import type { BrowserContext } from 'playwright';
 import {
+  type BilibiliAccountVideoPageClickRequest,
+  type BilibiliAccountVideoPageClickResult,
   type AcquirePageRequest,
   type AcquirePageResult,
   type BrowserProfilePagePoolSummary,
@@ -176,6 +178,12 @@ export class ProfileRuntime {
 
   scroll(request: ScrollPageRequest): Promise<PageScrollResult> {
     return this.#ledger.scroll(request);
+  }
+
+  clickBilibiliAccountVideoPage(
+    request: BilibiliAccountVideoPageClickRequest
+  ): Promise<BilibiliAccountVideoPageClickResult> {
+    return this.#ledger.clickBilibiliAccountVideoPage(request, this.#visualEvidenceDirectory);
   }
 
   async bindStrategyObserver(request: StrategyObserverBindingRequest): Promise<StrategyObserverBindingResult> {

@@ -5,6 +5,8 @@ import {
   launchBrowserHost
 } from '@intelligence/collector-browser-host/client';
 import {
+  type BilibiliAccountVideoPageClickRequest,
+  type BilibiliAccountVideoPageClickResult,
   COLLECTOR_CONTROL_SURFACE_REVISION,
   COLLECTOR_EXTENSION_VERSION,
   BrowserHostError,
@@ -97,6 +99,21 @@ export class GatewayBrowserHostRuntime {
       throw new Error('browser_host_scroll_page_response_invalid');
     }
     return structuredClone(result as PageScrollResult);
+  }
+
+  async clickBilibiliAccountVideoPage(
+    request: BilibiliAccountVideoPageClickRequest
+  ): Promise<BilibiliAccountVideoPageClickResult> {
+    const result = await this.#command({ type: 'click_bilibili_account_video_page', request }, false);
+    if (!result || typeof result !== 'object' ||
+      (result as { schemaVersion?: unknown }).schemaVersion !== 1 ||
+      (result as { clickAttempted?: unknown }).clickAttempted !== true ||
+      typeof (result as { pageAlias?: unknown }).pageAlias !== 'string' ||
+      typeof (result as { actionId?: unknown }).actionId !== 'string' ||
+      !('before' in result) || !('after' in result) || !('network' in result)) {
+      throw new Error('browser_host_bilibili_page_click_response_invalid');
+    }
+    return structuredClone(result as BilibiliAccountVideoPageClickResult);
   }
 
   async capturePageVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {

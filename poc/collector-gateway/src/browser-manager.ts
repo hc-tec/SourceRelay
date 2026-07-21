@@ -1,4 +1,6 @@
 import type {
+  BilibiliAccountVideoPageClickRequest,
+  BilibiliAccountVideoPageClickResult,
   AcquirePageRequest,
   AcquirePageResult,
   CapturePageVisualEvidenceRequest,
@@ -75,6 +77,13 @@ export class CollectionBrowserManager {
   async scrollPage(request: ScrollPageRequest): Promise<PageScrollResult> {
     this.#registry.get(request.profileId);
     return await this.#runtime.scrollPage(request);
+  }
+
+  async clickBilibiliAccountVideoPage(
+    request: BilibiliAccountVideoPageClickRequest
+  ): Promise<BilibiliAccountVideoPageClickResult> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.clickBilibiliAccountVideoPage(request);
   }
 
   async capturePageVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {

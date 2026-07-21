@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import { AccountSafetyRegistry } from './account-safety';
+import { BilibiliAccountVideoPageTwoArtifactStore } from './bilibili-account-video-page-two-artifacts';
+import { BilibiliAccountVideoPageTwoHostRunner } from './bilibili-account-video-page-two-host-runner';
 import { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
 import { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account-video-inventory-host-runner';
 import { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
@@ -18,6 +20,7 @@ const identity = await loadGatewayIdentity(config);
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
 const accountSafety = await AccountSafetyRegistry.create(config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
+const accountVideoPageTwoArtifacts = await BilibiliAccountVideoPageTwoArtifactStore.create(config.stateDirectory);
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
@@ -32,6 +35,12 @@ const accountVideoInventoryRunner = new BilibiliAccountVideoInventoryHostRunner(
   browserManager,
   profiles: profileRegistry,
   artifacts: accountVideoInventoryArtifacts
+});
+const accountVideoPageTwoRunner = new BilibiliAccountVideoPageTwoHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: accountVideoPageTwoArtifacts
 });
 const videoDetailRunner = new BilibiliVideoDetailHostRunner({
   accountSafety,
@@ -53,6 +62,8 @@ const server = createServer(async (request, response) => {
       browserManager,
       profileRegistry,
       accountSafety,
+      accountVideoPageTwoArtifacts,
+      accountVideoPageTwoRunner,
       accountVideoInventoryArtifacts,
       accountVideoInventoryRunner,
       dynamicArtifacts,

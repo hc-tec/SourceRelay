@@ -21,8 +21,12 @@ import type {
   StrategyObserverBindingRequest,
   StrategyObserverBindingResult
 } from './strategy-observation.js';
+import type {
+  BilibiliAccountVideoPageClickRequest,
+  BilibiliAccountVideoPageClickResult
+} from './bilibili-account-video-pagination.js';
 
-export const BROWSER_HOST_PROTOCOL_VERSION = 4 as const;
+export const BROWSER_HOST_PROTOCOL_VERSION = 5 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
 
 export interface BrowserHostEndpointRecord {
@@ -60,6 +64,7 @@ export type BrowserHostCommandBody =
   | { type: 'release_page'; request: ReleasePageRequest }
   | { type: 'navigate_page'; request: NavigatePageRequest }
   | { type: 'scroll_page'; request: ScrollPageRequest }
+  | { type: 'click_bilibili_account_video_page'; request: BilibiliAccountVideoPageClickRequest }
   | { type: 'capture_page_visual_evidence'; request: CapturePageVisualEvidenceRequest }
   | { type: 'bind_strategy_observer'; request: StrategyObserverBindingRequest }
   | { type: 'read_strategy_observation'; request: StrategyObservationReadRequest }
@@ -88,6 +93,7 @@ export type BrowserHostCommandResult =
   | AcquirePageResult
   | ManagedPageSummary
   | PageScrollResult
+  | BilibiliAccountVideoPageClickResult
   | PageVisualEvidence
   | ReclaimPlan
   | ReclaimExecutionResult
