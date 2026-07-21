@@ -118,8 +118,7 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
   let actionAttempted = false;
   try {
     let beforeScroll = await readTrustedScrollPosition(record.page, remaining(deadline));
-    let initial = await readPaginationProbe(record.page, request.targetPage, remaining(deadline));
-    assertInitialPrecondition(initial, request.targetPage);
+    let initial = await waitForInitialPaginationPrecondition(record.page, request.targetPage, deadline);
 
     let afterScroll = beforeScroll;
     let scrollAttempted = false;
@@ -250,8 +249,7 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
 }
 
 function assertInitialPrecondition(probe: PaginationProbe, targetPage: number): void {
-  if (probe.activePage !== 1 || !probe.target || probe.target.page !== targetPage ||
-    !probe.target.rendered || !probe.target.enabled) {
+  if (!hasInitialPrecondition(probe, targetPage)) {
     throw hostError({
       code: 'bilibili_page_click_precondition_unmet',
       category: 'action',
@@ -259,6 +257,12 @@ function assertInitialPrecondition(probe: PaginationProbe, targetPage: number): 
       retryClass: 'local_query_only'
     });
   }
+}
+
+function hasInitialPrecondition(probe: PaginationProbe, targetPage: number): boolean {
+  return probe.activePage === 1 && Boolean(
+    probe.target && probe.target.page === targetPage && probe.target.rendered && probe.target.enabled
+  );
 }
 
 function assertClickableTarget(probe: PaginationProbe, targetPage: number): void {
@@ -424,6 +428,24 @@ async function waitForPageTwoPostcondition(
     await delay(Math.min(100, Math.max(1, deadline - Date.now())));
   }
   if (!latest) throw new Error('bilibili_page_click_postcondition_unavailable');
+  return latest;
+}
+
+async function waitForInitialPaginationPrecondition(
+  page: Page,
+  targetPage: number,
+  deadline: number
+): Promise<PaginationProbe> {
+  let latest: PaginationProbe | null = null;
+  while (Date.now() < deadline) {
+    const available = deadline - Date.now();
+    if (available < 100) break;
+    latest = await readPaginationProbe(page, targetPage, available);
+    if (hasInitialPrecondition(latest, targetPage)) return latest;
+    await delay(Math.min(100, Math.max(1, deadline - Date.now())));
+  }
+  if (!latest) throw new Error('bilibili_page_click_initial_precondition_unavailable');
+  assertInitialPrecondition(latest, targetPage);
   return latest;
 }
 
