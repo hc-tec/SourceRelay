@@ -1,7 +1,7 @@
 # B 站视频详情首屏：DOM-only MVP 契约 v0.1
 
 - 日期：2026-07-21
-- 状态：已完成独立匿名实网可行性侦察；待实现受管 Profile 的产品闭环
+- 状态：已完成独立匿名实网可行性侦察与受管 Profile 产品闭环
 - 示例页面：`https://www.bilibili.com/video/BV1qZSLBYEpa`
 
 ## 1. 要解决的问题
@@ -92,3 +92,50 @@ Gateway
 ```
 
 只有本 MVP 的真实闭环被证明后，才开始下一个表面；不能因为首屏 DOM 成功而默认字幕、评论或多 P 切换已经可用。
+
+## 7. 受管 Profile 产品闭环（2026-07-21）
+
+该 run 与第 2 节的匿名可行性侦察严格分开。它使用项目管理的、已登录 B 站 Collection Profile，并由 Browser Host 独占该 Profile。
+
+在 run 前，扩展做了一次明确记录的版本升级：旧 `0.7.3 / revision 7` 会话在无 active lease 时关闭，Browser Host 与 Profile 随后以 `0.7.4 / revision 8` 重新启动。这个生命周期升级不是页面失败后的重试，也没有触发 B 站导航。
+
+```text
+runId       f2468a92-778c-4eea-9b0e-6559070cfaa1
+artifactId  94bc3d7e-33c3-4f67-a5b1-44be5a8af4a9
+strategy    bilibili.video.detail.dom.v2
+state       completed
+reason      detail_ready
+```
+
+### 动作与证据
+
+```text
+导航                         1 次（完成）
+hover / click / scroll        0 次
+response / XHR 观察           0 条
+自动平台重试                  0 次
+视觉证据                      1 份 runtime 截图（1280 × 720 CSS viewport）
+终态页面                      retained_for_review
+```
+
+截图仅保留在 ignored runtime；本文和 Git 不含图片、用户身份信息、请求头、Cookie、Token、query 值或 response body。
+
+### 有界 DOM 投影结果
+
+| 字段 | 结果 |
+| --- | --- |
+| BVID、可见标题、可见播放器 | 已验证并捕获 |
+| 标题信息、公开视频简介 | 已捕获 |
+| 标签 | 已捕获 10 个 |
+| 视频选集摘要 | 已捕获 |
+| 登录浮层、验证码、限流、不可用 | 均未出现 |
+| UP 主显示名 / 公开数字账号 ID | 本次投影未命中；作为可选字段如实记录，不影响 `detail_ready` |
+
+### 终态安全检查
+
+- Account Safety：`ready`，没有 active run、cooldown 或人工解锁要求；
+- 受管 `video_detail` 页：`retained_for_review`，没有 active lease；
+- artifact 的 manifest 与详情文件摘要均已核验；
+- safeguards 明确记录 request header/body、Cookie/Token、网络 query/fragment 与 response body 均为 `not_read`。
+
+结论：**proved（首屏详情 MVP）**。这证明了 Browser Host → MV3 精确 document binding → Gateway artifact 的真实闭环可用，但不扩大到字幕、全量多 P、评论、楼中楼、推荐或创作者字段的完整性承诺。下一轮应先单独对创作者 DOM 结构做真实页面侦察，再决定是否修订该可选投影。
