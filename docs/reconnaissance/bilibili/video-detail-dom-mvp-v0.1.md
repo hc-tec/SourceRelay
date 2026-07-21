@@ -150,3 +150,21 @@ response / XHR 观察           0 条
 - Network：本次只验证公开 DOM 形状，未读取或保存网络请求、query、response 或认证材料。
 
 因此后续投影应优先选取可见的 `.up-info-container a.up-name[href]`，再以同一容器内公开 profile 链接作兼容性回退；不能继续把已不存在的 `#v_upinfo` 当作当前桌面页面的唯一假设。
+
+## 9. 创作者投影产品闭环（2026-07-21）
+
+第 8 节的实证结论被实现为一次独立的扩展升级：`0.7.4 / revision 8` 会话在无 active lease 时按计划关闭，Browser Host 与 Profile 随后以 `0.7.5 / revision 9` 启动。新 session 的 initial marker 仍为旧版本，最终 marker 为新版本，且 Native Messaging 已连接；这证明本轮没有把旧 worker 误当作新代码。
+
+```text
+runId       0e7e9d1a-6b9e-4e92-bda9-755a56ff4e06
+artifactId  2b6937d6-b470-4953-b526-841a7f71b35d
+strategy    bilibili.video.detail.dom.v2
+state       completed
+reason      detail_ready
+```
+
+本 run 与第 7 节一样只有一次导航、零 hover/click/scroll、零 response 观察和零自动重试。视觉证据存在于 ignored runtime，终态页面保留为 `retained_for_review`，Account Safety 回到 `ready`。
+
+新的 artifact 再次捕获标题、简介、10 个标签和选集摘要；并且创作者显示名与公开数字账号 ID 都已存在。manifest/detail 摘要、截图引用和所有 `not_read` safeguards 均已核验：没有读取 request header/body、Cookie/Token、网络 query/fragment 或 response body。
+
+结论：**proved（当前桌面首屏完整投影）**。在这个已验证样本上，MVP 定义的全部首屏公开字段均可用。该结论仍不延伸到字幕正文、全量选集、评论/楼中楼、推荐内容或任何未独立实证的交互能力。
