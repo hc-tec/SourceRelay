@@ -240,7 +240,7 @@ export class BilibiliAccountVideoPageTwoHostRunner {
       releaseReason = 'account_video_page_two_initial_binding_not_completed';
       deadline = Date.now() + RUN_DEADLINE_MS;
 
-      const initialBindingId = await this.#bindInventoryObserver({
+      const inventoryBindingId = await this.#bindInventoryObserver({
         profileId: permit.profileId,
         pageAlias: acquired.page.pageAlias,
         pageLeaseId: acquired.lease.pageLeaseId,
@@ -271,7 +271,7 @@ export class BilibiliAccountVideoPageTwoHostRunner {
         pageAlias: acquired.page.pageAlias,
         pageLeaseId: acquired.lease.pageLeaseId,
         runId: permit.runId,
-        observerBindingId: initialBindingId,
+        observerBindingId: inventoryBindingId,
         stableAccountId,
         deadline
       });
@@ -337,21 +337,16 @@ export class BilibiliAccountVideoPageTwoHostRunner {
           click.outcome = 'postcondition_unmet';
           click.errorCode = errorCode;
         } else {
-          const pageTwoBindingId = await this.#bindInventoryObserver({
-            profileId: permit.profileId,
-            pageAlias: acquired.page.pageAlias,
-            pageLeaseId: acquired.lease.pageLeaseId,
-            runId: permit.runId,
-            canonicalInventoryUrl,
-            stableAccountId,
-            deadline
-          });
+          // The trusted click proves that pagination stays in the same main
+          // document. Reuse its already-bound document observer instead of
+          // arming a second observer for a document navigation that will not
+          // occur.
           const observedPageTwo = await this.#observeInventoryChange({
             profileId: permit.profileId,
             pageAlias: acquired.page.pageAlias,
             pageLeaseId: acquired.lease.pageLeaseId,
             runId: permit.runId,
-            observerBindingId: pageTwoBindingId,
+            observerBindingId: inventoryBindingId,
             stableAccountId,
             beforeBvidSetDigest,
             deadline
