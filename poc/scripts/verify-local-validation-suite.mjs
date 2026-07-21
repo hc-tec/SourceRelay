@@ -28,6 +28,11 @@ const lanes = Object.freeze([
     npmArgs: ['run', 'verify:build', '--workspace', '@intelligence/collector-extension']
   },
   {
+    id: 'extension-research-projectors',
+    scope: 'research-only transcript projector regression without platform requests',
+    npmArgs: ['run', 'verify:research-projectors', '--workspace', '@intelligence/collector-extension']
+  },
+  {
     id: 'browser-host-typecheck',
     scope: 'Browser Host and shared contract typecheck',
     npmArgs: ['run', 'typecheck:browser-host']
@@ -56,6 +61,11 @@ const lanes = Object.freeze([
     id: 'gateway-task-resume',
     scope: 'task safety resume state machine',
     npmArgs: ['run', 'verify:task-resume', '--workspace', '@intelligence/collector-gateway']
+  },
+  {
+    id: 'gateway-research-contracts',
+    scope: 'research-only account, article, series and transcript contract regression',
+    npmArgs: ['run', 'verify:research-contracts', '--workspace', '@intelligence/collector-gateway']
   },
   {
     id: 'gateway-host-integration',
