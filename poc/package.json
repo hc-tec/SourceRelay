@@ -15,7 +15,8 @@
     "build:browser-host": "npm run build:contracts && npm run build --workspace @intelligence/collector-browser-host",
     "typecheck:contracts": "npm run typecheck --workspace @intelligence/collector-contracts",
     "typecheck:browser-host": "npm run typecheck:contracts && npm run typecheck --workspace @intelligence/collector-browser-host",
-    "verify:browser-host": "npm run build:browser-host && npm run build:extension && npm run verify:lifecycle --workspace @intelligence/collector-browser-host"
+    "verify:browser-host": "npm run build:browser-host && npm run build:extension && npm run verify:lifecycle --workspace @intelligence/collector-browser-host",
+    "verify:local": "node scripts/verify-local-validation-suite.mjs"
   },
   "engines": {
     "node": ">=22"

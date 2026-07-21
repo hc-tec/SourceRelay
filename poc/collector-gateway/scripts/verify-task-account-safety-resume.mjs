@@ -9,6 +9,7 @@ import { build } from 'esbuild';
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'collector-task-safety-resume-'));
 const tasksBundle = join(temporaryDirectory, 'tasks.mjs');
 const safetyBundle = join(temporaryDirectory, 'account-safety.mjs');
+const protocolBundle = join(temporaryDirectory, 'protocol.mjs');
 const extensionInstanceId = 'fixture-extension-instance';
 const profileId = '11111111-1111-4111-8111-111111111111';
 const sourceTaskId = '22222222-2222-4222-8222-222222222222';
@@ -132,7 +133,7 @@ async function createApprovedTask(queue, now) {
   return { taskId: summary.taskId, approved: await queue.approve(summary.taskId, now) };
 }
 
-async function acceptAndSubmit(queue, dispatchWork, leaseId, capturedAt, title) {
+async function acceptAndSubmit(queue, dispatchWork, leaseId, capturedAt, title, collectorVersion) {
   assert.equal(dispatchWork?.kind, 'approved_dispatch');
   const dispatch = dispatchWork.dispatch;
   const stage = dispatch.plan.stages.find((candidate) => candidate.stageId === dispatch.stageId);
@@ -146,9 +147,23 @@ async function acceptAndSubmit(queue, dispatchWork, leaseId, capturedAt, title) 
     recordedAt: capturedAt.toISOString()
   }, extensionInstanceId);
   const result = detailResult(stage, title);
+  await assert.rejects(
+    () => queue.submitEvidence({
+      schemaVersion: 1,
+      collectorVersion: collectorVersion + '.mismatch',
+      taskId: dispatch.taskId,
+      stageId: dispatch.stageId,
+      leaseId,
+      platform: 'bilibili',
+      strategy: stage.strategy,
+      capturedAt: capturedAt.toISOString(),
+      result
+    }, extensionInstanceId, capturedAt),
+    (error) => error instanceof Error && error.message === 'task_collector_version_mismatch'
+  );
   return queue.submitEvidence({
     schemaVersion: 1,
-    collectorVersion: '0.4.24',
+    collectorVersion,
     taskId: dispatch.taskId,
     stageId: dispatch.stageId,
     leaseId,
@@ -178,10 +193,20 @@ try {
       format: 'esm',
       target: 'node22',
       logLevel: 'silent'
+    }),
+    build({
+      entryPoints: [fileURLToPath(new URL('../../collector-extension/src/shared/protocol.ts', import.meta.url))],
+      outfile: protocolBundle,
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      target: 'node22',
+      logLevel: 'silent'
     })
   ]);
   const { GatewayTaskQueue } = await import(pathToFileURL(tasksBundle).href);
   const { AccountSafetyRegistry } = await import(pathToFileURL(safetyBundle).href);
+  const { COLLECTOR_CORE_VERSION } = await import(pathToFileURL(protocolBundle).href);
   const accountSafety = await AccountSafetyRegistry.create(temporaryDirectory, base);
   const batches = [];
   const evidenceRegistry = {
@@ -234,7 +259,8 @@ try {
     stageOneDispatch,
     '55555555-5555-4555-8555-555555555555',
     at(2_000),
-    'fixture detail 1'
+    'fixture detail 1',
+    COLLECTOR_CORE_VERSION
   );
   assert.equal(afterStageOne.state, 'waiting_for_user_resume');
   assert.match(afterStageOne.statusMessage, /^user_resume_required:/);
@@ -261,7 +287,8 @@ try {
     stageTwoDispatch,
     '66666666-6666-4666-8666-666666666666',
     at(6_000),
-    'fixture detail 2'
+    'fixture detail 2',
+    COLLECTOR_CORE_VERSION
   );
   assert.equal(completed.state, 'completed');
   assert.equal(completed.stageProgress.every((stage) => stage.state === 'completed'), true);
