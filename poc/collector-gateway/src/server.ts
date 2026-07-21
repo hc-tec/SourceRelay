@@ -2,6 +2,8 @@ import { createServer } from 'node:http';
 import { AccountSafetyRegistry } from './account-safety';
 import { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
+import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
+import { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
 import { CollectionBrowserManager } from './browser-manager';
 import { loadGatewayConfig } from './config';
 import { handleGatewayRoute } from './gateway-routes';
@@ -15,11 +17,18 @@ const profileRegistry = await BrowserProfileRegistry.create(config.profileDirect
 const accountSafety = await AccountSafetyRegistry.create(config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
+const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const dynamicRunner = new BilibiliDynamicHostRunner({
   accountSafety,
   browserManager,
   profiles: profileRegistry,
   artifacts: dynamicArtifacts
+});
+const videoDetailRunner = new BilibiliVideoDetailHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: videoDetailArtifacts
 });
 const expectedHost = `${config.host}:${config.port}`;
 
@@ -36,7 +45,9 @@ const server = createServer(async (request, response) => {
       profileRegistry,
       accountSafety,
       dynamicArtifacts,
-      dynamicRunner
+      dynamicRunner,
+      videoDetailArtifacts,
+      videoDetailRunner
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 1, ok: false, error: 'route_not_found' });
   } catch (error) {

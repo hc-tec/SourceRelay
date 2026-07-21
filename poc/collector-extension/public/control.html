@@ -30,13 +30,18 @@
         <div class="section-heading">
           <div>
             <h2>已编译 Strategy</h2>
-            <p>当前只开放 B站动态页 DOM/XHR 观察；不提供任意脚本或 loopback Gateway 连接。</p>
+            <p>只开放两个有界 B 站能力；不提供任意脚本、任意 selector 或 loopback Gateway 连接。</p>
           </div>
         </div>
         <div class="strategy-card">
           <p class="strategy-title">bilibili.dynamic.account-feed.response-dom.v1</p>
           <p class="strategy-meta">短时 ObserverBinding · 精确 PageLease · bounded public projection</p>
           <p class="origins">https://space.bilibili.com/* · https://api.bilibili.com/*</p>
+        </div>
+        <div class="strategy-card">
+          <p class="strategy-title">bilibili.video.detail.dom.v2</p>
+          <p class="strategy-meta">一次导航 · 零页面交互 · 固定首屏 DOM 投影 · 不读取 response</p>
+          <p class="origins">https://www.bilibili.com/*</p>
         </div>
       </section>
 

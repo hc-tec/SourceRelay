@@ -5,6 +5,7 @@ import {
   type CollectorBindStrategyObserverCommand,
   type CollectorReadStrategyObservationCommand,
   type StrategyObservationResult,
+  type StrategyObserverBindingRequest,
   type StrategyObserverBindingResult
 } from '@intelligence/collector-contracts';
 import {
@@ -13,17 +14,24 @@ import {
 } from '../../shared/network-capture';
 import {
   armNetworkCapture,
-  clearNetworkCaptureState,
   getActiveNetworkCaptureArm,
   readNetworkCaptures
 } from '../network-capture-runtime';
+import {
+  clearStrategyBindingsForTab,
+  DYNAMIC_OBSERVER_BINDING_STORAGE_PREFIX
+} from '../strategy-binding-state';
+
+type DynamicBinding = Extract<StrategyObserverBindingRequest, {
+  strategyId: typeof BILIBILI_DYNAMIC_STRATEGY_ID;
+}>;
 
 interface StoredDynamicBinding {
   schemaVersion: 1;
   tabId: number;
   nextDocumentGeneration: number;
   contentScriptId: string;
-  binding: CollectorBindStrategyObserverCommand['binding'];
+  binding: DynamicBinding;
 }
 
 export async function bindBilibiliDynamicObserver(
@@ -43,7 +51,7 @@ export async function bindBilibiliDynamicObserver(
   if (tab.url && tab.url !== 'about:blank' && canonicalDynamicUrl(tab.url) !== binding.target.canonicalUrl) {
     throw new Error('dynamic_strategy_tab_context_rejected');
   }
-  await removeBindingsForTab(tabId);
+  await clearStrategyBindingsForTab(tabId);
   const contentScriptId = `collector-dynamic-${binding.observerBindingId.replace(/-/g, '')}`;
   await chrome.scripting.unregisterContentScripts({ ids: [contentScriptId] }).catch(() => undefined);
   await chrome.scripting.registerContentScripts([{
@@ -145,7 +153,7 @@ export async function readBilibiliDynamicObservation(
 }
 
 function bindingStorageKey(observerBindingId: string): string {
-  return `collector.strategy-observer.${observerBindingId}`;
+  return `${DYNAMIC_OBSERVER_BINDING_STORAGE_PREFIX}${observerBindingId}`;
 }
 
 async function storedBinding(observerBindingId: string): Promise<StoredDynamicBinding | null> {
@@ -162,7 +170,7 @@ export async function cleanupExpiredBilibiliDynamicObserverBindings(): Promise<v
   const expiredKeys: string[] = [];
   const expiredScriptIds: string[] = [];
   for (const [key, value] of Object.entries(values)) {
-    if (!key.startsWith('collector.strategy-observer.')) continue;
+    if (!key.startsWith(DYNAMIC_OBSERVER_BINDING_STORAGE_PREFIX)) continue;
     const candidate = value as Partial<StoredDynamicBinding>;
     if (typeof candidate.binding?.expiresAt === 'string' && Date.parse(candidate.binding.expiresAt) > Date.now()) continue;
     expiredKeys.push(key);
@@ -172,24 +180,6 @@ export async function cleanupExpiredBilibiliDynamicObserverBindings(): Promise<v
     await chrome.scripting.unregisterContentScripts({ ids: expiredScriptIds }).catch(() => undefined);
   }
   if (expiredKeys.length > 0) await chrome.storage.session.remove(expiredKeys);
-}
-
-async function removeBindingsForTab(tabId: number): Promise<void> {
-  const values = await chrome.storage.session.get(null);
-  const keys: string[] = [];
-  const scriptIds: string[] = [];
-  for (const [key, value] of Object.entries(values)) {
-    if (!key.startsWith('collector.strategy-observer.')) continue;
-    const candidate = value as Partial<StoredDynamicBinding>;
-    if (candidate.tabId !== tabId) continue;
-    keys.push(key);
-    if (typeof candidate.contentScriptId === 'string') scriptIds.push(candidate.contentScriptId);
-  }
-  if (scriptIds.length > 0) {
-    await chrome.scripting.unregisterContentScripts({ ids: scriptIds }).catch(() => undefined);
-  }
-  if (keys.length > 0) await chrome.storage.session.remove(keys);
-  await clearNetworkCaptureState(tabId);
 }
 
 function canonicalDynamicUrl(value: string): string | null {

@@ -1,6 +1,7 @@
 import { canonicalJson } from './ipc.js';
 import {
   BILIBILI_DYNAMIC_STRATEGY_ID,
+  BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
   STRATEGY_OBSERVATION_SCHEMA_VERSION,
   isBridgeJsonValue,
   type StrategyObservationReadRequest,
@@ -291,7 +292,7 @@ function isCollectorExtensionCommandResult(value: unknown): value is CollectorEx
   if (type === 'collector_strategy_observer_binding') {
     const candidate = value as Partial<StrategyObserverBindingResult>;
     return candidate.schemaVersion === STRATEGY_OBSERVATION_SCHEMA_VERSION &&
-      candidate.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID &&
+      isCollectorStrategyId(candidate.strategyId) &&
       boundedCommandId(candidate.observerBindingId) &&
       typeof candidate.pageAlias === 'string' && candidate.pageAlias.length <= 128 &&
       candidate.state === 'ready' &&
@@ -301,7 +302,7 @@ function isCollectorExtensionCommandResult(value: unknown): value is CollectorEx
   const candidate = value as Partial<StrategyObservationResult>;
   return candidate.type === 'collector_strategy_observation' &&
     candidate.schemaVersion === STRATEGY_OBSERVATION_SCHEMA_VERSION &&
-    candidate.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID &&
+    isCollectorStrategyId(candidate.strategyId) &&
     boundedCommandId(candidate.observerBindingId) &&
     typeof candidate.pageAlias === 'string' && candidate.pageAlias.length <= 128 &&
     Number.isSafeInteger(candidate.documentGeneration) && Number(candidate.documentGeneration) > 0 &&
@@ -322,13 +323,10 @@ function isStrategyObserverBindingRequest(value: unknown): value is StrategyObse
     Number.isSafeInteger(candidate.expectedRecordVersion) && Number(candidate.expectedRecordVersion) > 0 &&
     boundedCommandId(candidate.runId) &&
     boundedCommandId(candidate.observerBindingId) &&
-    candidate.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID &&
-    validDynamicTarget(candidate.target) &&
     typeof candidate.expiresAt === 'string' && Date.parse(candidate.expiresAt) > Date.now() &&
-    Number.isSafeInteger(candidate.maximumResponseObservations) &&
-    Number(candidate.maximumResponseObservations) >= 1 && Number(candidate.maximumResponseObservations) <= 2 &&
     Number.isSafeInteger(candidate.maximumPayloadBytes) &&
-    Number(candidate.maximumPayloadBytes) >= 1_024 && Number(candidate.maximumPayloadBytes) <= 192 * 1024;
+    Number(candidate.maximumPayloadBytes) >= 1_024 && Number(candidate.maximumPayloadBytes) <= 192 * 1024 &&
+    validStrategyBindingTargetAndBudget(candidate);
 }
 
 function isStrategyObservationReadRequest(value: unknown): value is StrategyObservationReadRequest {
@@ -341,15 +339,39 @@ function isStrategyObservationReadRequest(value: unknown): value is StrategyObse
     Number.isSafeInteger(candidate.expectedRecordVersion) && Number(candidate.expectedRecordVersion) > 0 &&
     boundedCommandId(candidate.runId) &&
     boundedCommandId(candidate.observerBindingId) &&
-    candidate.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID &&
+    isCollectorStrategyId(candidate.strategyId) &&
     Number.isSafeInteger(candidate.deadlineMs) && Number(candidate.deadlineMs) >= 100 && Number(candidate.deadlineMs) <= 20_000;
 }
 
-function validDynamicTarget(value: unknown): value is StrategyObserverBindingRequest['target'] {
+function isCollectorStrategyId(value: unknown): value is StrategyObserverBindingRequest['strategyId'] {
+  return value === BILIBILI_DYNAMIC_STRATEGY_ID || value === BILIBILI_VIDEO_DETAIL_STRATEGY_ID;
+}
+
+function validStrategyBindingTargetAndBudget(
+  candidate: Partial<StrategyObserverBindingRequest>
+): boolean {
+  if (candidate.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID) {
+    return validDynamicTarget(candidate.target) &&
+      (candidate.maximumResponseObservations === 1 || candidate.maximumResponseObservations === 2);
+  }
+  if (candidate.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
+    return validVideoDetailTarget(candidate.target) && candidate.maximumResponseObservations === 0;
+  }
+  return false;
+}
+
+function validDynamicTarget(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<StrategyObserverBindingRequest['target']>;
+  const candidate = value as Partial<{ canonicalUrl: string; stableAccountId: string }>;
   if (typeof candidate.stableAccountId !== 'string' || !/^\d{1,20}$/.test(candidate.stableAccountId)) return false;
   return candidate.canonicalUrl === `https://space.bilibili.com/${candidate.stableAccountId}/dynamic`;
+}
+
+function validVideoDetailTarget(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<{ canonicalUrl: string; bvid: string }>;
+  return typeof candidate.bvid === 'string' && /^BV[0-9A-Za-z]{10}$/.test(candidate.bvid) &&
+    candidate.canonicalUrl === `https://www.bilibili.com/video/${candidate.bvid}`;
 }
 
 function boundedContextIdentifier(value: unknown): value is string {

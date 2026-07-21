@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Personal Intelligence Collector",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Runs explicitly approved, read-only collection tasks in the user's browser context.",
   "background": {
     "service_worker": "background.js",
@@ -18,11 +18,11 @@
   ],
   "host_permissions": [
     "https://space.bilibili.com/*",
-    "https://api.bilibili.com/*"
+    "https://api.bilibili.com/*",
+    "https://www.bilibili.com/*"
   ],
   "optional_host_permissions": [
     "https://search.bilibili.com/*",
-    "https://www.bilibili.com/*",
     "https://www.zhihu.com/*",
     "https://zhuanlan.zhihu.com/*",
     "https://s.weibo.com/*",

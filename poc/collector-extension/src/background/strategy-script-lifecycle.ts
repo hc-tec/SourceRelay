@@ -1,4 +1,5 @@
 import { cleanupExpiredBilibiliDynamicObserverBindings } from './strategies/bilibili-dynamic-strategy';
+import { cleanupExpiredBilibiliVideoDetailObserverBindings } from './strategies/bilibili-video-detail-strategy';
 
 const RETIRED_SCRIPT_PREFIXES = [
   'collector-strategy-',
@@ -19,4 +20,5 @@ export async function cleanupStrategyScriptRegistrations(): Promise<void> {
     await chrome.scripting.unregisterContentScripts({ ids: retiredIds });
   }
   await cleanupExpiredBilibiliDynamicObserverBindings();
+  await cleanupExpiredBilibiliVideoDetailObserverBindings();
 }

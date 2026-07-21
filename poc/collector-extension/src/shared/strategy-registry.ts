@@ -164,6 +164,11 @@ function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStr
   };
 }
 
+/**
+ * Historical validation metadata only. This suspended v1 strategy is not the
+ * Browser Host / Native Messaging implementation. The active DOM-only detail
+ * binding is the separately contracted `bilibili.video.detail.dom.v2`.
+ */
 function bilibiliVideoDetailDomStrategy(): StaticPlatformStrategy {
   const admittedValidation: LiveValidationReference = {
     category: 'anonymous',

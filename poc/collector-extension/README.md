@@ -2,7 +2,10 @@
 
 这是个人情报产品在用户自己浏览器 Profile 内的只读观察层。它不是传统爬虫，也不是一个把 Cookie、任意 selector 或任意请求转发给本地服务的代理。浏览器自然保留用户正常登录状态；扩展不导出凭证、不绕过验证码/限流，也不执行点赞、关注、评论、私信、发布或删除。
 
-当前版本为 `0.7.3`。正在实现的唯一编译期 Strategy 是 B 站账号动态页的两页以内 DOM/XHR 观察：
+当前版本为 `0.7.4`。已编译的 Strategy 均是源专属、短时绑定的能力：
+
+- `bilibili.dynamic.account-feed.response-dom.v1`：B 站账号动态页，两页以内的 DOM/XHR 观察；
+- `bilibili.video.detail.dom.v2`：B 站视频详情首屏，一次导航、零页面交互、零 response 观察的有界 DOM 投影。
 
 ```text
 Gateway
@@ -14,7 +17,7 @@ Browser Host
 
 MV3 Extension
   exact tab + document ObserverBinding /
-  bounded DOM projection / route-bound XHR observation
+  bounded DOM projection / route-bound XHR observation (dynamic only)
 ```
 
 ## 当前边界
@@ -23,14 +26,16 @@ MV3 Extension
 - Browser Host 只把它自己新建、精确绑定到 Extension tab 的 `PageLease` 交给 Strategy。
 - Extension 只接受 Native Messaging 的三种窄命令：tab inventory、绑定唯一 Strategy、读取唯一 Strategy 的观察结果。
 - B 站动态页只允许 `https://space.bilibili.com/<mid>/dynamic`，当前 route 仅是研究验证中的 `https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space`。
+- B 站视频详情只允许无 query/hash 的 `https://www.bilibili.com/video/<BVID>`；它只保存公开首屏字段，不读取 XHR、response body、字幕、评论或推荐内容。
 - 绑定在下一个精确 document 上短时生效；页面世界只能回传经过路由、大小、深度和敏感字段清洗后的 JSON 投影。
+- 同一受管 tab 同时只能保留一个 Strategy binding；切换绑定时会清除前一 binding 与其 route-bound network arm。
 - 观察 payload、response 数量、绑定有效期和 document/route generation 都有明确上限；读操作无法传入任意 JS、selector、CDP 方法或 response route。
 
-`research_validation` 只表示 route 有历史实证并允许做低频 canary，不等于 production admission。只有新的 Browser Host → Extension 闭环在真实 B 站页面中完成视觉、DOM、Network 三面互证后，才会更新 capability 状态。
+`research_validation` 只表示 route 有历史实证并允许做低频 canary，不等于 production admission。每个 Strategy 都必须在真实 B 站页面完成自己的闭环：动态页需要视觉、DOM、Network 三面互证；视频详情刻意排除 Network，至少需要视觉和 DOM 的独立证据。
 
 ## 已移除的旧路径
 
-`0.7.3` 不再包含以下 Extension runtime：
+`0.7.4` 不再包含以下 Extension runtime：
 
 - Extension 到 `127.0.0.1` Gateway 的配对、轮询、fetch、签名任务 envelope 和 evidence 回传；
 - stage lease、单工作 tab、URL digest 认领、静态 `content.js` 和旧的 capability-validation runner；
@@ -60,7 +65,7 @@ npm run verify:browser-host
 
 ## 权限与数据安全
 
-Manifest 固定使用 `nativeMessaging`、`storage`、`scripting`，不申请 `cookies`、`debugger`、`downloads`、`webRequest`、`webRequestBlocking` 或 `<all_urls>`。B 站动态页当前要求的两个精确 origin 是 required host permission；其他平台 origin 仍仅是未来独立 Strategy 的 optional 候选，尚未获得运行时采集能力。
+Manifest 固定使用 `nativeMessaging`、`storage`、`scripting`，不申请 `cookies`、`debugger`、`downloads`、`webRequest`、`webRequestBlocking` 或 `<all_urls>`。B 站动态页所需的 `space`/`api` origin 与视频详情所需的 `www` origin 都是 required host permission；其他平台 origin 仍仅是未来独立 Strategy 的 optional 候选，尚未获得运行时采集能力。
 
 扩展不会把页面 URL query/hash、认证字段、Cookie、Authorization、Token、密码、验证码或 Profile 路径写入观察结果。截图、原始运行材料和用户身份信息只留在 ignored runtime，不能提交进 Git。
 

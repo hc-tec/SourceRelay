@@ -28,6 +28,10 @@ const target = {
   stableAccountId: '7481602',
   canonicalUrl: 'https://space.bilibili.com/7481602/dynamic'
 };
+const videoTarget = {
+  bvid: 'BV1qZSLBYEpa',
+  canonicalUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa'
+};
 
 if (relative(runtimeParent, runtimeRoot).startsWith('..')) {
   throw new Error('strategy_binding_runtime_path_rejected');
@@ -44,7 +48,7 @@ let browserProcessId = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.3');
+  assert.equal(extensionManifest.version, '0.7.4');
 
   endpoint = await launchBrowserHost({
     mainModulePath,
@@ -68,7 +72,7 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 7,
+        controlSurfaceRevision: 8,
         runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
       }
     }
@@ -109,6 +113,23 @@ try {
   assert.equal(binding.observerBindingId, bindingRequest.observerBindingId);
   assert.equal(binding.pageAlias, acquired.page.pageAlias);
   assert.equal(binding.nextDocumentGeneration, acquired.page.documentGeneration + 1);
+
+  // This uses the real MV3 worker and the same blank managed page, but never
+  // navigates. It proves that the DOM-only strategy has its own fixed binding
+  // path and replaces the prior Strategy binding on that tab.
+  const videoBindingRequest = {
+    ...bindingRequest,
+    observerBindingId: randomUUID(),
+    strategyId: 'bilibili.video.detail.dom.v2',
+    target: videoTarget,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 96 * 1024
+  };
+  const videoBinding = await client.command({ type: 'bind_strategy_observer', request: videoBindingRequest });
+  assert.equal(videoBinding.type, 'collector_strategy_observer_binding');
+  assert.equal(videoBinding.observerBindingId, videoBindingRequest.observerBindingId);
+  assert.equal(videoBinding.pageAlias, acquired.page.pageAlias);
+  assert.equal(videoBinding.nextDocumentGeneration, acquired.page.documentGeneration + 1);
 
   const visual = await client.command({
     type: 'capture_page_visual_evidence',
@@ -182,6 +203,8 @@ try {
     nativeMessagingBridgeConnected: true,
     hostCreatedPageBoundToOneExtensionTab: true,
     hostToExtensionStrategyCommandRoundTripCompleted: true,
+    videoDetailDomOnlyBindingRoundTripCompleted: true,
+    priorBindingReplacedWithoutPlatformNavigation: true,
     observerBindingCorrelationVerified: true,
     postObservationVisualEvidenceCaptured: true,
     runLeaseMismatchRejectedBeforeExtensionDispatch: true,

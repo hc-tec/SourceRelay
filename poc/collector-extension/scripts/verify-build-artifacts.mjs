@@ -14,11 +14,11 @@ const approved = {
   permissions: ['nativeMessaging', 'storage', 'scripting'],
   hostPermissions: [
     'https://space.bilibili.com/*',
-    'https://api.bilibili.com/*'
+    'https://api.bilibili.com/*',
+    'https://www.bilibili.com/*'
   ],
   optionalHostPermissions: [
     'https://search.bilibili.com/*',
-    'https://www.bilibili.com/*',
     'https://www.zhihu.com/*',
     'https://zhuanlan.zhihu.com/*',
     'https://s.weibo.com/*',
@@ -77,6 +77,7 @@ assert.equal(manifest.action?.default_popup, 'control.html', 'the extension acti
 const requiredScripts = [
   manifest.background?.service_worker,
   'network-capture-bridge.js',
+  'bilibili-video-detail-document-bridge.js',
   'main-world-network-observer.js',
   'control.js'
 ];
@@ -100,18 +101,28 @@ assert.equal(
 
 const backgroundSource = await readFile(resolve(outputDirectory, manifest.background.service_worker), 'utf8');
 const bridgeSource = await readFile(resolve(outputDirectory, 'network-capture-bridge.js'), 'utf8');
+const videoDetailDocumentBridgeSource = await readFile(
+  resolve(outputDirectory, 'bilibili-video-detail-document-bridge.js'),
+  'utf8'
+);
 const mainWorldObserverSource = await readFile(resolve(outputDirectory, 'main-world-network-observer.js'), 'utf8');
 const controlSource = await readFile(resolve(outputDirectory, 'control.js'), 'utf8');
 
 assert.match(backgroundSource, /connectNative/, 'Native Messaging bridge connection is required');
 assert.match(backgroundSource, /collector_bind_strategy_observer/, 'exact Strategy bind command is required');
 assert.match(backgroundSource, /collector_read_strategy_observation/, 'exact Strategy read command is required');
-assert.match(backgroundSource, /bilibili\.dynamic\.account-feed\.response-dom\.v1/, 'only compiled Bilibili dynamic Strategy is required');
+assert.match(backgroundSource, /bilibili\.dynamic\.account-feed\.response-dom\.v1/, 'compiled Bilibili dynamic Strategy is required');
+assert.match(backgroundSource, /bilibili\.video\.detail\.dom\.v2/, 'compiled Bilibili DOM-only detail Strategy is required');
 assert.match(backgroundSource, /document_start/, 'observer bridge must be registered before document scripts run');
 assert.match(backgroundSource, /persistAcrossSessions:\s*false/, 'observer bridge registration must be short-lived');
+assert.match(
+  backgroundSource,
+  /collector_bilibili_video_detail_document_ready/,
+  'video-detail DOM projection must bind one exact Chrome document before reading it'
+);
 assert.match(backgroundSource, /collector\.native-bridge-config\.v1/, 'Browser Host bridge bootstrap key is required');
 assert.match(backgroundSource, /collector\.runtime-bootstrap\.v1/, 'worker runtime marker is required');
-assert.match(backgroundSource, /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*7|controlSurfaceRevision:\s*7/, 'runtime revision must be 7');
+assert.match(backgroundSource, /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*8|controlSurfaceRevision:\s*8/, 'runtime revision must be 8');
 assert.doesNotMatch(
   backgroundSource,
   /collector\.pollGatewayTasks|collector\.pairGateway|collector\.startCapabilityValidation|collector\.startDetailCapabilityValidation|collector\.startTranscriptCapabilityValidation|collector\.collectionResult|stageLease|127\.0\.0\.1|localhost/i,
@@ -121,6 +132,12 @@ assert.doesNotMatch(backgroundSource, /\bfetch\s*\(/, 'worker must not make arbi
 
 assert.match(bridgeSource, /armedRouteIds/, 'isolated bridge must revalidate exact armed route IDs');
 assert.match(bridgeSource, /collector\.networkCaptureBridgeReady/, 'isolated bridge must bind to the worker before forwarding');
+assert.match(videoDetailDocumentBridgeSource, /collector_bilibili_video_detail_document_ready/);
+assert.doesNotMatch(
+  videoDetailDocumentBridgeSource,
+  /querySelector|document\.(?:body|documentElement)|fetch\s*\(/,
+  'document-start detail bridge may send identity readiness only, never page data or a network request'
+);
 assert.match(mainWorldObserverSource, /maximumBodyBytes/, 'MAIN-world observer must enforce route-specific byte ceilings');
 assert.match(mainWorldObserverSource, /__personalIntelligenceNetworkCaptureRouteIds/, 'MAIN-world observer must remain route-bound');
 assert.match(controlSource, /collector\.native-bridge-status\.v1/, 'control page must expose bridge state only');

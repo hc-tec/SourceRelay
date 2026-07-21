@@ -3,6 +3,8 @@ import type { AccountSafetyRegistry } from './account-safety';
 import { accountSafetyUnlockInput } from './account-safety';
 import type { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import type { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
+import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
+import type { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
 import type { CollectionBrowserManager } from './browser-manager';
 import type { LoadedGatewayIdentity } from './identity';
 import type { BrowserProfileRegistry } from './profiles';
@@ -19,6 +21,8 @@ export interface GatewayRouteContext {
   accountSafety: AccountSafetyRegistry;
   dynamicArtifacts: BilibiliDynamicArtifactStore;
   dynamicRunner: BilibiliDynamicHostRunner;
+  videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
+  videoDetailRunner: BilibiliVideoDetailHostRunner;
 }
 
 export async function handleGatewayRoute(
@@ -120,6 +124,10 @@ export async function handleGatewayRoute(
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.dynamicArtifacts.list() });
     return true;
   }
+  if (request.method === 'GET' && url.pathname === '/v1/video-detail-artifacts') {
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.videoDetailArtifacts.list() });
+    return true;
+  }
   const dynamicRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/dynamic/two-page$`, 'i'));
   if (request.method === 'POST' && dynamicRun) {
     if (!sameOrigin(request, response, context)) return true;
@@ -145,10 +153,42 @@ export async function handleGatewayRoute(
     });
     return true;
   }
+  const videoDetailRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/video/detail$`, 'i'));
+  if (request.method === 'POST' && videoDetailRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const body = await readJsonBody(request);
+    if (
+      !body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).length !== 1 ||
+      typeof (body as { canonicalVideoUrl?: unknown }).canonicalVideoUrl !== 'string'
+    ) throw new Error('bilibili_video_detail_run_input_invalid');
+    const result = await context.videoDetailRunner.run({
+      profileId: videoDetailRun[1]!,
+      canonicalVideoUrl: (body as { canonicalVideoUrl: string }).canonicalVideoUrl
+    });
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
   const dynamicArtifact = url.pathname.match(new RegExp(`^/v1/dynamic-artifacts/(${PROFILE_ID})$`, 'i'));
   if (request.method === 'GET' && dynamicArtifact) {
     const artifact = await context.dynamicArtifacts.get(dynamicArtifact[1]!);
     if (!artifact) throw new Error('bilibili_dynamic_artifact_not_found');
+    sendJson(response, 200, { schemaVersion: 1, artifact });
+    return true;
+  }
+  const videoDetailArtifact = url.pathname.match(new RegExp(`^/v1/video-detail-artifacts/(${PROFILE_ID})$`, 'i'));
+  if (request.method === 'GET' && videoDetailArtifact) {
+    const artifact = await context.videoDetailArtifacts.get(videoDetailArtifact[1]!);
+    if (!artifact) throw new Error('bilibili_video_detail_artifact_not_found');
     sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }

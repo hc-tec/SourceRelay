@@ -29,6 +29,11 @@ const bundles = [
     format: 'iife'
   },
   {
+    input: resolve(root, 'src', 'content', 'bilibili-video-detail-document-bridge.ts'),
+    output: resolve(outputDirectory, 'bilibili-video-detail-document-bridge.js'),
+    format: 'iife'
+  },
+  {
     input: resolve(root, 'src', 'content', 'main-world-network-observer.ts'),
     output: resolve(outputDirectory, 'main-world-network-observer.js'),
     format: 'iife'

@@ -7,6 +7,7 @@ import {
 import { initialiseNativeBridge } from './native-bridge';
 import { initialiseNetworkObserverController } from './network-observer-controller';
 import { cleanupStrategyScriptRegistrations } from './strategy-script-lifecycle';
+import { initialiseBilibiliVideoDetailDocumentBridge } from './strategies/bilibili-video-detail-strategy';
 
 const runtimeBootstrap: CollectorRuntimeBootstrap = {
   schemaVersion: 1,
@@ -16,5 +17,6 @@ const runtimeBootstrap: CollectorRuntimeBootstrap = {
 
 void chrome.storage.session.set({ [COLLECTOR_RUNTIME_BOOTSTRAP_KEY]: runtimeBootstrap });
 initialiseNetworkObserverController();
+initialiseBilibiliVideoDetailDocumentBridge();
 void initialiseNativeBridge();
 void cleanupStrategyScriptRegistrations();

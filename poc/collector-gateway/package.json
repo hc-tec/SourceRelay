@@ -13,9 +13,10 @@
     "verify:safety": "node scripts/verify-account-safety.mjs",
     "verify:task-resume": "node scripts/verify-task-account-safety-resume.mjs",
     "verify:dynamic-contract": "node scripts/verify-bilibili-dynamic-contract.mjs",
+    "verify:video-detail-contract": "node scripts/verify-bilibili-video-detail-contract.mjs",
     "verify:host-integration": "node scripts/verify-real-browser-host-integration.mjs",
     "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
-    "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:dynamic-contract && npm run build && npm run verify:artifacts",
+    "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:dynamic-contract && npm run verify:video-detail-contract && npm run build && npm run verify:artifacts",
     "start": "node dist/server.js"
   },
   "dependencies": {

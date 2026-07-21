@@ -26,14 +26,14 @@ try {
   assert.equal(runtime.extensionName, 'Personal Intelligence Collector');
   assert.deepEqual(
     [...(runtime.permissions.origins ?? [])].sort(),
-    ['https://api.bilibili.com/*', 'https://space.bilibili.com/*'],
-    'fresh Profile must grant only the required Bilibili observer origins'
+    ['https://api.bilibili.com/*', 'https://space.bilibili.com/*', 'https://www.bilibili.com/*'],
+    'fresh Profile must grant only the required Bilibili Strategy origins'
   );
   assert.deepEqual(runtime.registeredContentScripts, [], 'fresh Profile must not register a platform observer');
   assert.deepEqual(runtime.runtimeBootstrap, {
     schemaVersion: 1,
     collectorVersion: runtime.extensionVersion,
-    controlSurfaceRevision: 7
+    controlSurfaceRevision: 8
   }, 'service worker must publish its compiled runtime identity');
   assert.equal(runtime.nativeBridgeStatus?.state, 'unconfigured', 'fresh Profile must not invent a Browser Host bridge');
 
@@ -45,6 +45,11 @@ try {
     await controlPage.locator('body').innerText(),
     /bilibili\.dynamic\.account-feed\.response-dom\.v1/,
     'control page must describe the compiled narrow Strategy'
+  );
+  assert.match(
+    await controlPage.locator('body').innerText(),
+    /bilibili\.video\.detail\.dom\.v2/,
+    'control page must describe the compiled DOM-only video-detail Strategy'
   );
 
   console.log(JSON.stringify({

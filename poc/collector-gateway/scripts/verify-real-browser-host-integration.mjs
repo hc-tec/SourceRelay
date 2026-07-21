@@ -53,7 +53,7 @@ try {
   });
   const first = launched.profile;
   assert.equal(first.running, true);
-  assert.equal(first.runtime?.extensionRuntime?.finalRuntimeVersion, '0.7.3');
+  assert.equal(first.runtime?.extensionRuntime?.finalRuntimeVersion, '0.7.4');
   assert.equal(first.runtime?.extensionRuntime?.nativeBridgeConnected, true);
   assert.equal(first.runtime?.livePlatformRequests, 0);
   hostPid = first.host?.hostProcessId ?? null;
