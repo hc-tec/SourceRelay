@@ -139,3 +139,14 @@ response / XHR 观察           0 条
 - safeguards 明确记录 request header/body、Cookie/Token、网络 query/fragment 与 response body 均为 `not_read`。
 
 结论：**proved（首屏详情 MVP）**。这证明了 Browser Host → MV3 精确 document binding → Gateway artifact 的真实闭环可用，但不扩大到字幕、全量多 P、评论、楼中楼、推荐或创作者字段的完整性承诺。下一轮应先单独对创作者 DOM 结构做真实页面侦察，再决定是否修订该可选投影。
+
+## 8. 创作者字段跟进侦察（2026-07-21）
+
+针对第 7 节的 `creatorCaptured=false`，在独立、匿名、无扩展的可见临时 Chromium 会话中做了一个新的窄侦察 run。它只有一次导航、零 hover/click/scroll，结束后临时浏览器、截图和 CLI 运行材料均已清理。
+
+- 视觉：首屏标题右侧存在可见的 UP 主卡片；
+- DOM：旧 `#v_upinfo` 不存在；可见 `.up-info-container` 与 `.up-panel-container` 存在；
+- DOM：`.up-info-container a.up-name[href]` 是可见的公开创作者名称入口，并链接到公开数字账号 profile；头像入口也指向同一公开 profile，但没有显示名；
+- Network：本次只验证公开 DOM 形状，未读取或保存网络请求、query、response 或认证材料。
+
+因此后续投影应优先选取可见的 `.up-info-container a.up-name[href]`，再以同一容器内公开 profile 链接作兼容性回退；不能继续把已不存在的 `#v_upinfo` 当作当前桌面页面的唯一假设。

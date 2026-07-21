@@ -294,10 +294,17 @@ async function captureVideoDetailDom(tabId: number, documentId: string): Promise
       const titleElement = Array.from(document.querySelectorAll<HTMLElement>('h1')).find(rendered) ?? null;
       const player = document.querySelector<HTMLElement>('[aria-label="哔哩哔哩播放器"]');
       const description = document.querySelector<HTMLElement>('#v_desc');
-      const upInfo = document.querySelector<HTMLElement>('#v_upinfo');
-      const creatorAnchor = upInfo
-        ? Array.from(upInfo.querySelectorAll<HTMLAnchorElement>('a[href]')).find(rendered) ?? null
-        : null;
+      const upInfo = document.querySelector<HTMLElement>('.up-info-container') ??
+        document.querySelector<HTMLElement>('#v_upinfo');
+      const creatorAnchors = upInfo
+        ? [
+          upInfo.querySelector<HTMLAnchorElement>('a.up-name[href]'),
+          ...Array.from(upInfo.querySelectorAll<HTMLAnchorElement>('a[href]'))
+        ]
+        : [];
+      const creatorAnchor = creatorAnchors.find((anchor): anchor is HTMLAnchorElement =>
+        anchor !== null && rendered(anchor)
+      ) ?? null;
       let creator: { displayName: string | null; publicAccountId: string | null } | null = null;
       if (creatorAnchor) {
         try {
