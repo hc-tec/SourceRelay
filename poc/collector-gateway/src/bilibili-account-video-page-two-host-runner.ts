@@ -247,7 +247,8 @@ export class BilibiliAccountVideoPageTwoHostRunner {
         runId: permit.runId,
         canonicalInventoryUrl,
         stableAccountId,
-        deadline
+        deadline,
+        allowPreNavigationState: true
       });
       await this.#accountSafety.recordActionAttempt(permit.profileId, 'bilibili', permit.runId, navigation.actionId);
       navigation.attempted = true;
@@ -466,9 +467,10 @@ export class BilibiliAccountVideoPageTwoHostRunner {
     canonicalInventoryUrl: string;
     stableAccountId: string;
     deadline: number;
+    allowPreNavigationState?: boolean;
   }): Promise<string> {
     const observerBindingId = randomUUID();
-    const context = await this.#leasedPageContext(input);
+    const context = await this.#leasedPageContext(input, input.allowPreNavigationState === true);
     await this.#browserManager.bindStrategyObserver({
       schemaVersion: 1,
       profileId: input.profileId,
@@ -566,13 +568,15 @@ export class BilibiliAccountVideoPageTwoHostRunner {
     pageAlias: string;
     pageLeaseId: string;
     runId: string;
-  }): Promise<LeasedPageContext> {
+  }, allowPreNavigationState = false): Promise<LeasedPageContext> {
     const snapshot = await this.#browserManager.snapshot();
     const profile = snapshot.profiles.find((candidate) => candidate.profileId === input.profileId);
     const page = profile?.pages.find((candidate) => candidate.pageAlias === input.pageAlias);
+    const stateAccepted = page?.state === 'leased' ||
+      (allowPreNavigationState && page?.state === 'leased_pre_navigation');
     if (
       !page ||
-      page.state !== 'leased' ||
+      !stateAccepted ||
       page.activeLease?.pageLeaseId !== input.pageLeaseId ||
       page.activeLease.runId !== input.runId
     ) throw new Error('account_video_page_two_managed_page_context_changed');
