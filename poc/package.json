@@ -19,10 +19,13 @@
     "verify:local": "node scripts/verify-local-validation-suite.mjs",
     "build:collector-runtime": "npm run build:contracts && npm run build:extension && npm run build --workspace @intelligence/collector-browser-host && npm run build --workspace @intelligence/collector-gateway",
     "test:typecheck": "tsc --noEmit -p tsconfig.tests.json",
-    "test:unit": "npm run test:typecheck && vitest run --project governance --project contracts --project gateway-domain",
-    "test:unit:coverage": "npm run test:typecheck && vitest run --project governance --project contracts --project gateway-domain --coverage",
-    "test:real-local": "npm run build:collector-runtime && playwright test --config playwright.real-local.config.ts",
-    "test:all-local": "npm run test:unit && npm run test:real-local"
+    "test:unit": "npm run test:typecheck && vitest run --project governance --project contracts --project extension-domain --project browser-host-domain --project gateway-domain",
+    "test:unit:coverage": "npm run test:typecheck && vitest run --project governance --project contracts --project extension-domain --project browser-host-domain --project gateway-domain --coverage",
+    "test:integration": "npm run build:collector-runtime && playwright test --config playwright.real-local.config.ts --project integration",
+    "test:e2e:local": "npm run build:collector-runtime && playwright test --config playwright.real-local.config.ts --project e2e-local",
+    "test:real-local": "npm run build:collector-runtime && playwright test --config playwright.real-local.config.ts --project integration --project e2e-local",
+    "test:all-local": "npm run test:unit && npm run test:real-local",
+    "verify:collector": "npm run test:all-local && npm run verify:local -- --skip-playwright-owned"
   },
   "engines": {
     "node": ">=22"

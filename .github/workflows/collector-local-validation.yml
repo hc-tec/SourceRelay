@@ -33,8 +33,9 @@ jobs:
       - name: Install isolated Chromium
         run: npx playwright install chromium
 
-      # This command is intentionally local-only. It runs real Chromium, MV3,
-      # Native Messaging and Gateway/Host lifecycle gates, but never a
-      # platform canary or a user-managed browser Profile.
-      - name: Run local validation spine
-        run: npm run verify:local
+      # This is intentionally local-only. It first runs the L1/L2 Vitest
+      # projects and the L3 production-dist Playwright suite, then preserves
+      # the existing local validation spine. It never runs a live platform
+      # Canary or loads a user-managed browser Profile.
+      - name: Run layered Collector validation
+        run: npm run verify:collector

@@ -48,7 +48,10 @@ export function canonicalUrlIdentity(value: string): string {
       url.searchParams.sort();
       return url.toString();
     }
-    if (url.protocol === 'chrome-extension:') return `${url.origin}${url.pathname}`;
+    // URL.origin is deliberately "null" for non-standard schemes such as
+    // chrome-extension:.  Preserve the actual extension host so distinct
+    // extensions cannot collapse into the same page-identity namespace.
+    if (url.protocol === 'chrome-extension:') return `${url.protocol}//${url.host}${url.pathname}`;
     return url.href;
   } catch {
     return value;

@@ -17,8 +17,6 @@ import {
   onlyProfile,
   processAlive,
   releaseRequest,
-  scrollRequest,
-  asScroll,
   waitForExit
 } from './lifecycle-gate-helpers.mjs';
 
@@ -140,94 +138,6 @@ try {
     'page_pool_capacity_exhausted'
   );
 
-  const scrollFixtureUrl = 'data:text/html,' + encodeURIComponent(`<!doctype html>
-    <meta charset="utf-8">
-    <style>html { scroll-behavior: auto; } body { height: 10000px; margin: 0; }</style>
-    <main style="height: 10000px">offline trusted-scroll validation</main>`);
-  const scrollablePage = await client.command({
-    type: 'navigate_page',
-    request: navigateRequest(profileId, pageB, scrollFixtureUrl, 'navigate-scroll-fixture')
-  });
-  await client.command({
-    type: 'navigate_page',
-    request: navigateRequest(profileId, pageC, 'about:blank#discussion', 'navigate-discussion')
-  });
-
-  let expectedScrollablePage = scrollablePage;
-  const firstScrollRequest = scrollRequest(profileId, pageB, expectedScrollablePage, 'scroll-once');
-  const firstScroll = asScroll(await client.command({ type: 'scroll_page', request: firstScrollRequest }));
-  assert.equal(firstScroll.before.scrollY, 0);
-  assert.ok(firstScroll.after.scrollY > firstScroll.before.scrollY, 'trusted wheel input must move the real Chromium page');
-  expectedScrollablePage = {
-    ...expectedScrollablePage,
-    recordVersion: firstScroll.recordVersion,
-    documentGeneration: firstScroll.documentGeneration
-  };
-  await expectHostError(
-    () => client.command({ type: 'scroll_page', request: firstScrollRequest }),
-    'action_already_attempted'
-  );
-
-  const rejectedLeaseScroll = scrollRequest(
-    profileId,
-    pageB,
-    expectedScrollablePage,
-    'scroll-after-lease-rejection',
-    { pageLeaseId: 'incorrect-page-lease' }
-  );
-  await expectHostError(
-    () => client.command({ type: 'scroll_page', request: rejectedLeaseScroll }),
-    'page_lease_mismatch'
-  );
-  const afterLeaseRejection = asScroll(await client.command({
-    type: 'scroll_page',
-    request: scrollRequest(profileId, pageB, expectedScrollablePage, 'scroll-after-lease-rejection')
-  }));
-  assert.equal(afterLeaseRejection.before.scrollY, firstScroll.after.scrollY);
-  expectedScrollablePage = {
-    ...expectedScrollablePage,
-    recordVersion: afterLeaseRejection.recordVersion,
-    documentGeneration: afterLeaseRejection.documentGeneration
-  };
-
-  const rejectedRecordScroll = scrollRequest(
-    profileId,
-    pageB,
-    expectedScrollablePage,
-    'scroll-after-record-rejection',
-    { expectedRecordVersion: expectedScrollablePage.recordVersion + 1 }
-  );
-  await expectHostError(
-    () => client.command({ type: 'scroll_page', request: rejectedRecordScroll }),
-    'managed_page_record_version_mismatch'
-  );
-  const afterRecordRejection = asScroll(await client.command({
-    type: 'scroll_page',
-    request: scrollRequest(profileId, pageB, expectedScrollablePage, 'scroll-after-record-rejection')
-  }));
-  assert.equal(afterRecordRejection.before.scrollY, afterLeaseRejection.after.scrollY);
-  expectedScrollablePage = {
-    ...expectedScrollablePage,
-    recordVersion: afterRecordRejection.recordVersion,
-    documentGeneration: afterRecordRejection.documentGeneration
-  };
-
-  const rejectedRunScroll = scrollRequest(
-    profileId,
-    pageB,
-    expectedScrollablePage,
-    'scroll-after-run-rejection',
-    { runId: 'incorrect-run' }
-  );
-  await expectHostError(
-    () => client.command({ type: 'scroll_page', request: rejectedRunScroll }),
-    'managed_page_run_mismatch'
-  );
-  const afterRunRejection = asScroll(await client.command({
-    type: 'scroll_page',
-    request: scrollRequest(profileId, pageB, expectedScrollablePage, 'scroll-after-run-rejection')
-  }));
-  assert.equal(afterRunRejection.before.scrollY, afterRecordRejection.after.scrollY);
   await client.command({
     type: 'release_page',
     request: releaseRequest(profileId, pageA, 'idle_reusable')
@@ -275,14 +185,13 @@ try {
   }));
   assert.equal(reclaimed.items.filter((item) => item.status === 'closed').length, 1);
 
-  const selfNavigating = asAcquire(await client.command({
+  const replayProbe = asAcquire(await client.command({
     type: 'acquire_page',
-    request: acquireRequest(profileId, 'task-self-nav', 'run-self-nav', 'inventory', null)
+    request: acquireRequest(profileId, 'task-command-replay', 'run-command-replay', 'inventory', null)
   }));
-  const selfNavigationUrl = 'data:text/html,<meta charset=utf-8><script>setTimeout(()=>location.href="about:blank%23unexpected",150)</script>';
   const navigationBody = {
     type: 'navigate_page',
-    request: navigateRequest(profileId, selfNavigating, selfNavigationUrl, 'navigate-self-changing')
+    request: navigateRequest(profileId, replayProbe, 'about:blank#command-replay', 'navigate-command-replay')
   };
   const navigationCommandId = randomUUID();
   const firstNavigation = await client.command(navigationBody, { commandId: navigationCommandId });
@@ -297,13 +206,8 @@ try {
   );
   await client.command({
     type: 'release_page',
-    request: releaseRequest(profileId, selfNavigating, 'idle_reusable')
+    request: releaseRequest(profileId, replayProbe, 'idle_reusable')
   });
-  await delay(500);
-  const afterUnexpectedNavigation = onlyProfile(asSnapshot(await client.command({ type: 'get_snapshot' })));
-  const changedPage = afterUnexpectedNavigation.pages.find((page) => page.pageAlias === selfNavigating.page.pageAlias);
-  assert.equal(changedPage?.state, 'quarantined');
-  assert.equal(changedPage?.quarantineReason, 'unexpected_navigation');
 
   const activeBeforeDisconnect = asAcquire(await client.command({
     type: 'acquire_page',
@@ -382,16 +286,10 @@ try {
     idleStaleReconciledWithoutPlatformInput: true,
     retainedPageProtected: true,
     exactRetainedPageReusedWithoutNewTab: true,
-    unexpectedNavigationQuarantined: true,
     activeLeaseQuarantinedOnControllerDisconnect: true,
     reclaimPlanExecutedExplicitly: true,
     commandReplayDidNotRepeatNavigation: true,
     commandIdPayloadConflictRejected: true,
-    trustedBrowserWheelMovedOfflinePage: true,
-    trustedScrollActionReplayRejected: true,
-    trustedScrollLeaseMismatchRejectedBeforeInput: true,
-    trustedScrollRecordMismatchRejectedBeforeInput: true,
-    trustedScrollRunMismatchRejectedBeforeInput: true,
     extensionPagesAtMostOne: true,
     testScopedExplicitCleanup: true
   }, null, 2));

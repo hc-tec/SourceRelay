@@ -1,4 +1,11 @@
-export const VALIDATION_TIERS = ['static', 'pure', 'contract', 'real_local', 'live_canary'] as const;
+export const VALIDATION_TIERS = [
+  'static',
+  'unit',
+  'integration',
+  'e2e_local',
+  'supporting',
+  'live_canary'
+] as const;
 export type ValidationTier = (typeof VALIDATION_TIERS)[number];
 
 export const PLATFORM_POLICIES = ['forbidden', 'managed_profile_low_frequency'] as const;
@@ -29,15 +36,26 @@ export const collectorValidationCatalog = [
     tier: 'static',
     owner: 'collector-core',
     runner: 'npm',
-    command: 'npm run verify:local',
+    command: 'npm run build:collector-runtime',
     timeoutMs: 180_000,
     platformPolicy: 'forbidden',
     ci: 'pull_request',
     capabilities: ['production-build', 'manifest-boundary', 'artifact-boundary']
   },
   {
+    id: 'collector-existing-local-validation-spine',
+    tier: 'supporting',
+    owner: 'collector-core',
+    runner: 'npm',
+    command: 'npm run verify:local',
+    timeoutMs: 180_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: ['legacy-validation-migration', 'artifact-contracts', 'local-safety']
+  },
+  {
     id: 'collector-contracts-native-bridge-guards',
-    tier: 'pure',
+    tier: 'unit',
     owner: 'collector-contracts',
     runner: 'vitest',
     command: 'npm run test:unit -- --project contracts',
@@ -47,8 +65,52 @@ export const collectorValidationCatalog = [
     capabilities: ['native-messaging', 'runtime-guard', 'canonical-json']
   },
   {
+    id: 'collector-contracts-strategy-observation-guards',
+    tier: 'unit',
+    owner: 'collector-contracts',
+    runner: 'vitest',
+    command: 'npm run test:unit -- --project contracts',
+    timeoutMs: 30_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: ['strategy-target-isolation', 'response-budget-guard', 'bridge-json-safety']
+  },
+  {
+    id: 'collector-extension-domain-safety-boundaries',
+    tier: 'unit',
+    owner: 'collector-extension',
+    runner: 'vitest',
+    command: 'npm run test:unit -- --project extension-domain',
+    timeoutMs: 30_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: ['canonical-input-url', 'loopback-origin-guard', 'strategy-registry', 'network-redaction']
+  },
+  {
+    id: 'collector-browser-host-page-ledger-domain',
+    tier: 'unit',
+    owner: 'collector-browser-host',
+    runner: 'vitest',
+    command: 'npm run test:unit -- --project browser-host-domain',
+    timeoutMs: 30_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: ['page-lease', 'identity-bound-reuse', 'explicit-reclamation']
+  },
+  {
+    id: 'collector-browser-host-security-contract',
+    tier: 'unit',
+    owner: 'collector-browser-host',
+    runner: 'vitest',
+    command: 'npm run test:unit -- --project browser-host-domain',
+    timeoutMs: 30_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: ['ipc-authentication', 'path-boundary', 'safe-error-wire-format']
+  },
+  {
     id: 'collector-gateway-account-safety-state-machine',
-    tier: 'pure',
+    tier: 'unit',
     owner: 'collector-gateway',
     runner: 'vitest',
     command: 'npm run test:unit -- --project gateway-domain',
@@ -58,8 +120,30 @@ export const collectorValidationCatalog = [
     capabilities: ['account-safety', 'at-most-once-action', 'restart-lock']
   },
   {
+    id: 'collector-gateway-evidence-and-profile-boundaries',
+    tier: 'unit',
+    owner: 'collector-gateway',
+    runner: 'vitest',
+    command: 'npm run test:unit -- --project gateway-domain',
+    timeoutMs: 30_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: ['visible-evidence-redaction', 'idempotent-local-persistence', 'profile-binding']
+  },
+  {
+    id: 'collector-gateway-task-input-state-machine',
+    tier: 'unit',
+    owner: 'collector-gateway',
+    runner: 'vitest',
+    command: 'npm run test:unit -- --project gateway-domain',
+    timeoutMs: 30_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: ['task-input-guard', 'extension-assignment', 'idempotent-preflight']
+  },
+  {
     id: 'collector-validation-catalog',
-    tier: 'contract',
+    tier: 'unit',
     owner: 'collector-core',
     runner: 'vitest',
     command: 'npm run test:unit -- --project governance',
@@ -70,25 +154,47 @@ export const collectorValidationCatalog = [
   },
   {
     id: 'collector-extension-production-boot',
-    tier: 'real_local',
+    tier: 'integration',
     owner: 'collector-extension',
     runner: 'playwright',
-    command: 'npm run test:real-local -- --grep "production MV3 boot"',
+    command: 'npm run test:integration -- --grep "production MV3 boot"',
     timeoutMs: 120_000,
     platformPolicy: 'forbidden',
     ci: 'pull_request',
     capabilities: ['production-extension', 'mv3-worker', 'control-surface']
   },
   {
-    id: 'collector-gateway-host-real-local-lifecycle',
-    tier: 'real_local',
+    id: 'collector-browser-host-production-lifecycle',
+    tier: 'integration',
+    owner: 'collector-browser-host',
+    runner: 'playwright',
+    command: 'npm run test:integration -- --grep "Browser Host manages"',
+    timeoutMs: 120_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: ['production-chromium', 'page-pool', 'lease-reuse', 'explicit-reclamation']
+  },
+  {
+    id: 'collector-browser-host-strategy-binding',
+    tier: 'integration',
+    owner: 'collector-browser-host',
+    runner: 'playwright',
+    command: 'npm run test:integration -- --grep "strategy binding round trip"',
+    timeoutMs: 120_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: ['native-messaging', 'mv3-command-round-trip', 'strategy-binding']
+  },
+  {
+    id: 'collector-gateway-host-local-e2e',
+    tier: 'e2e_local',
     owner: 'collector-gateway',
     runner: 'playwright',
-    command: 'npm run test:real-local -- --grep "Gateway and Browser Host lifecycle"',
+    command: 'npm run test:e2e:local',
     timeoutMs: 180_000,
     platformPolicy: 'forbidden',
     ci: 'pull_request',
-    capabilities: ['gateway-reconnect', 'browser-host', 'native-messaging', 'explicit-close']
+    capabilities: ['gateway-reconnect', 'browser-host', 'native-messaging', 'loopback-origin-guard', 'explicit-close']
   },
   {
     id: 'bilibili-account-video-page-two-live-canary',

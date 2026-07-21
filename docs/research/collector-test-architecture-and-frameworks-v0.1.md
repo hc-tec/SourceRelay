@@ -1,7 +1,7 @@
 # Collector 测试框架与分层调研 v0.1
 
 - 日期：2026-07-21
-- 状态：调研完成，**尚未安装或迁移任何测试框架**
+- 状态：调研完成；第一期框架已在 `763ab7b` 落地，CI 接入待本轮检查点提交
 - 目标：在继续扩大 Browser Host、MV3、Gateway 与平台策略之前，确定一个能长期扩展、又不会把假平台能力当成真能力的测试体系。
 - 范围：当前 Collector 正式路线；历史 `intelligence-gateway`、`deepresearch-gateway` 等 POC 只能作为隔离 sidecar 处理，不能借由测试绿灯获得 Collector 能力发布资格。
 
@@ -34,7 +34,7 @@
 
 ## 2. 仓库基线：问题具体在哪里
 
-2026-07-21 的只读审计结果如下。
+调研启动时（2026-07-21）的只读审计结果如下；第 10.1 节记录了随后落地的第一期变化。
 
 | 项目事实 | 当前状态 | 对大型项目的影响 |
 | --- | --- | --- |
@@ -46,7 +46,7 @@
 | 测试目录与命名 | 无统一约定 | 功能代码、build gate、纯逻辑验证和真实 Chromium 验证混在 `scripts/` 中。 |
 | 平台能力映射 | 文档分散 | 真实 Canary 记录、策略 maturity、本地回归与 CI 没有一个机器可读的共同目录。 |
 
-另一个必须正视的问题是：现有名为“真实 Chromium”的 Browser Host 生命周期脚本仍使用了 `data:text/html` 滚动和自导航页面。它确实驱动了真实浏览器，但该页面是合成夹具，不能证明任何真实网页或平台能力。根据本项目的产品约束，它不能再被称为 E2E 或平台验证。
+调研开始时，现有名为“真实 Chromium”的 Browser Host 生命周期脚本仍使用了 `data:text/html` 滚动和自导航页面。它确实驱动了真实浏览器，但该页面是合成夹具，不能证明任何真实网页或平台能力。根据本项目的产品约束，它不能再被称为 E2E 或平台验证。本轮已将这两段从生命周期 gate 移除；该 gate 只保留真实本地进程/租约/协议生命周期，页面滚动和页面自导航语义留给 L4 真实 Canary。
 
 后续处理规则应是：
 
@@ -68,7 +68,7 @@
 | `collector-extension/scripts/verify-extension-load.mjs` | L3 | 迁入 `@playwright/test`，加载 production `dist/` 并验证 MV3 worker/control surface；零平台请求。 |
 | `collector-browser-host/scripts/verify-real-strategy-binding.mjs` | L3 | 迁入 `@playwright/test`，继续验证真实 Chromium、MV3、Native Messaging 与 binding correlation。 |
 | `collector-gateway/scripts/verify-real-browser-host-integration.mjs` | L3 | 迁入 `@playwright/test`，继续验证真实 Gateway -> Host restart / explicit close。 |
-| `collector-browser-host/scripts/verify-real-browser-lifecycle.mjs` | L3，但须拆分 | Host/extension/process lifecycle 留在 L3；`data:` 滚动和自导航页面不再计为页面能力，能纯化的逻辑转 L1/L2，需要页面语义的部分改为 L4 Canary。 |
+| `collector-browser-host/scripts/verify-real-browser-lifecycle.mjs` | L3 | Host/extension/process lifecycle 留在 L3；原有 `data:` 滚动和自导航页面已经移除，页面语义只由 L4 Canary 覆盖。 |
 | `poc/intelligence-gateway/tests/*.py` | sidecar L1/L2 | 继续 pytest，但单独报告、单独 CI job，不进入 Collector maturity。 |
 | `poc/deepresearch-gateway/tests/*.py` | sidecar L1/L2 | 同上；只证明 DeepResearch adapter 的安全/审计行为。 |
 
@@ -219,7 +219,7 @@ L0  静态完整性                   ─ typecheck、build、manifest/制品审
 
 **目的**：证明正式构建的本地组件能真正协同：production extension、真实 Playwright Chromium、真实 MV3 worker、真实 Native Messaging host、真实 Browser Host、真实 loopback Gateway、真实进程重连和清理。
 
-**工具**：官方 `@playwright/test`，使用一个清晰命名的 `real-local` project；运行 Windows CI 和本地 Windows 环境。
+**工具**：官方 `@playwright/test`，在一个 `real-local` config 中使用两个明确 project：`integration` 测一个真实本地系统边界，`e2e-local` 测 Gateway API 到 Browser Host/Chromium 的完整本地产品旅程；运行 Windows CI 和本地 Windows 环境。
 
 **硬约束**：
 
@@ -262,17 +262,18 @@ poc/
     gateway-domain/                        # L1/L2
     browser-host-domain/                   # L1/L2
     extension-domain/                      # L1/L2
-    real-local/                            # L3 Playwright specs
-  collector-contracts/src/**/*.unit.test.ts
-  collector-gateway/src/**/*.unit.test.ts
-  collector-browser-host/src/**/*.unit.test.ts
-  collector-extension/src/**/*.unit.test.ts
+    integration/                           # L3-I Playwright specs，production dist + local subsystem boundary
+    e2e/                                   # L3-E Playwright specs，Gateway -> Host -> Chromium journey
+  collector-contracts/test/**/*.unit.test.ts
+  collector-gateway/test/**/*.unit.test.ts
+  collector-browser-host/test/**/*.unit.test.ts
 ```
 
 规则如下：
 
 - `*.unit.test.ts`：只能是 L1/L2；文件名明确表明它不代表平台能力；
-- `poc/testing/real-local/*.spec.ts`：必须由 `@playwright/test` 运行，且只能测真实本地组件；
+- `poc/testing/integration/*.spec.ts`：必须由 `@playwright/test` 的 `integration` project 运行，且只能测真实本地组件边界；
+- `poc/testing/e2e/*.spec.ts`：必须由 `@playwright/test` 的 `e2e-local` project 运行，且必须走真实 Gateway API、Host、Chromium 执行面；
 - `scripts/canary/*`：不归测试 runner 管理；必须由生产的 account safety、预算、PageLease、Evidence 机制运行；
 - 历史 Python POC 保留各自 `tests/`，在 catalog 中标为 `sidecar_pure`，不可成为 Collector release gate。
 
@@ -282,11 +283,11 @@ poc/
 
 ```ts
 {
-  id: 'browser-host-real-local-lifecycle',
-  tier: 'real_local',                 // static | pure | contract | real_local | live_canary
+  id: 'collector-browser-host-production-lifecycle',
+  tier: 'integration',                // static | unit | integration | e2e_local | supporting | live_canary
   owner: 'collector-browser-host',
   runner: 'playwright',
-  command: 'test:real-local',
+  command: 'npm run test:integration -- --grep "Browser Host manages"',
   timeoutMs: 120_000,
   platformPolicy: 'forbidden',        // live_canary 才允许 managed-profile 实网
   reports: ['browser-host-real-chromium-managed-page-lifecycle'],
@@ -378,7 +379,7 @@ Mutation testing 在 L1/L2 稳定后用于检查这些高风险模块的测试�
 | 把历史 Connector/sidecar pytest 结果当 Collector 发布证据 | 拒绝 | 产品执行面和安全模型不同。 |
 | Docker/Testcontainers 作为 Native Messaging 主测试面 | 暂不采用 | 无法证明 Windows Registry/Native Host/持久 Chromium 运行语义。 |
 
-## 10. 推荐的最小落地顺序（尚未执行）
+## 10. 推荐的最小落地顺序
 
 1. **先立规则，不迁一大堆脚本**：创建测试目录、catalog、报告契约、命名/禁止清单和 CI group；把现有验证按 L0-L4 标注，而不是立刻重写全部。
 2. **先让 Vitest 承担真正的纯代码**：从 Account Safety、Native Bridge runtime guard、PageLease/state reducer、canonicalisation/redaction 四类高风险模块开始；每类至少一组 fast-check 属性测试。
@@ -386,6 +387,81 @@ Mutation testing 在 L1/L2 稳定后用于检查这些高风险模块的测试�
 4. **把 CI 改成按 layer 选择，而非硬编码脚本列表**：PR 跑 L0-L3；sidecar pytest 单独跑；L4 永远不进入 CI。
 5. **最后接入策略/Canary 总账**：每个策略版本必须同时拥有纯合同、本地系统验证、recon dossier 和真实验证记录，才允许任何 maturity 变化。
 6. **稳定后再加 coverage trend 与 Stryker**：只针对安全/协议核心，避免把时间消耗在边角行覆盖。
+
+## 10.1 已落地的第一期（2026-07-21）
+
+以下内容已经实现并经本机真实验证，不是计划：
+
+```text
+Vitest v4.1.10
+  -> governance project：catalog 约束，禁止 live Canary 进入 CI
+  -> contracts project：Native Bridge runtime guard + fast-check 属性测试
+  -> gateway-domain project：Account Safety restart/lock/at-most-once/acknowledgement
+
+@playwright/test v1.61.1
+  -> production MV3 extension boot，真实 persistent Chromium，zero platform request
+  -> real Gateway -> Browser Host -> Native Messaging restart/explicit-close，真实 production process
+
+统一入口
+  npm run test:unit
+  npm run test:real-local
+  npm run test:all-local
+  npm run verify:collector
+```
+
+`verify:collector` 先执行 L1/L2/L3，再执行原有 `verify:local` 脊柱；GitHub Actions 只调用这个入口。完整本机执行已通过：3 个 Vitest 文件 / 10 个测试，以及 2 个 Playwright real-local system specs；所有新旧本地 gate 都报告零实网请求，测试专用 Chromium/Host/Gateway 进程复核为零残留。
+
+第一期刻意没有做的事：
+
+- 没有把现有全部 20 个独立 verifier 重写为 Vitest；它们仍被 `verify:local` 保留，按风险逐步迁入；
+- 已从 Browser Host lifecycle 移除 `data:` 浏览器夹具；不再用它们声明页面交互能力；
+- 没有对全仓库设置 coverage 百分比门槛；当前 coverage 只作为高风险纯模块的可见性工具；
+- 没有把历史 Python sidecar 或真实平台 Canary 自动接入 CI。
+
+## 10.2 已落地的第二期：明确 Unit / Integration / E2E（2026-07-22）
+
+第一期只是建立 runner 基座；第二期已经把“哪些绿灯能说明什么”落实到项目、目录、命令、catalog 和 CI 入口。
+
+```text
+Unit (Vitest, 5 projects)
+  governance
+    -> catalog 与 CI 入口不允许 Canary 进入自动执行
+  contracts
+    -> Native Bridge、策略目标/响应预算、Bridge JSON 与 protocol guards
+  extension-domain
+    -> canonical URL、loopback origin、静态策略边界、网络 observation 去敏与 route allowlist
+  browser-host-domain
+    -> PageLease、URL identity、retained-page reuse、reclaim、IPC HMAC、path/error boundary
+  gateway-domain
+    -> Account Safety、Evidence 去敏/幂等/重启恢复、Profile binding、Task preflight ownership
+
+Integration (@playwright/test project: integration)
+  -> production MV3 boot + control surface
+  -> production Browser Host + Chromium page pool / lease / reclaim lifecycle
+  -> production MV3 + Native Messaging + strategy binding round trip
+
+E2E (@playwright/test project: e2e-local)
+  -> real Gateway HTTP API -> Profile launch -> Browser Host -> Chromium
+  -> Gateway restart keeps Host/browser/session alive
+  -> cross-site profile mutation is rejected; explicit close is the only browser close path
+```
+
+当前命令分别是：
+
+```powershell
+npm run test:unit
+npm run test:unit:coverage
+npm run test:integration
+npm run test:e2e:local
+npm run test:real-local       # integration + e2e-local
+npm run verify:collector      # 上述测试 + supporting regression spine
+```
+
+`verify:collector` 中，Playwright 已经执行过的 `browser-host-lifecycle`、`strategy-binding`、`gateway-host-integration` 会从旧 `verify:local` 脊柱跳过，因此 aggregate 不会为了同一语义再启动一轮 Chromium。单独执行 `npm run verify:local` 时，这些 focused lane 仍可独立运行。
+
+本轮还通过 Unit 回归发现并修复了一个真实的 Browser Host 缺陷：Node 对 `chrome-extension://` URL 的 `origin` 返回 `"null"`。旧实现会把扩展页身份误记为 `null/path`；现在基于 `protocol + host + pathname` 生成身份，避免不同扩展页落入同一 identity namespace。
+
+验证边界保持不变：上述 45 个 Unit 测试和 4 个 Playwright 本地 spec 都没有访问平台页面；它们证明的是正式本地执行面和安全不变量。B站、小红书、知乎等页面的 DOM、可信鼠标输入、菜单、字幕、评论与 XHR 语义，仍只能由低频、可见、去敏、受预算的 L4 Canary 证明。
 
 ## 11. 本轮推荐决策
 

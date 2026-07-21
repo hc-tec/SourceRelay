@@ -32,9 +32,29 @@ const environment = {
 let gateway = null;
 let hostPid = null;
 let browserPid = null;
+let crossSiteProfileCreationRejected = false;
 try {
   await mkdir(runtimeRoot, { recursive: true });
   gateway = await startGateway(environment, origin);
+  const crossSiteResponse = await fetch(`${origin}/v1/profiles`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      origin: 'http://attacker.invalid',
+      'sec-fetch-site': 'cross-site'
+    },
+    body: JSON.stringify({
+      kind: 'collection',
+      platform: 'bilibili',
+      accountCategory: 'user_managed',
+      accountLabel: 'must never be created'
+    })
+  });
+  const crossSiteBody = await crossSiteResponse.json();
+  assert.equal(crossSiteResponse.status, 403);
+  assert.deepEqual(crossSiteBody, { ok: false, error: 'console_origin_rejected' });
+  crossSiteProfileCreationRejected = true;
+
   const created = await request(origin, '/v1/profiles', {
     method: 'POST',
     body: {
@@ -92,6 +112,7 @@ try {
     reconnectPreservedBrowserPid: true,
     reconnectPreservedBrowserSession: true,
     extensionNativeBridgeConnected: true,
+    crossSiteProfileCreationRejected,
     profileClosedOnlyByExplicitRequest: true,
     hostExitedOnlyByExplicitRequest: true,
     testScopedExplicitCleanup: true

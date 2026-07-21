@@ -23,6 +23,7 @@ test('Gateway and Browser Host lifecycle runs through actual production processe
     reconnectPreservedBrowserPid: true,
     reconnectPreservedBrowserSession: true,
     extensionNativeBridgeConnected: true,
+    crossSiteProfileCreationRejected: true,
     profileClosedOnlyByExplicitRequest: true,
     hostExitedOnlyByExplicitRequest: true,
     testScopedExplicitCleanup: true

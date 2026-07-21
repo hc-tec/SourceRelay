@@ -80,6 +80,37 @@ poc/intelligence-gateway/
 
 项目所有者已对本仓库范围内的低频真实平台侦察、能力验证和只读采集开发授予常设权限。代理不再逐次询问聊天授权；只有扫码、密码、验证码等必须由用户本人完成的身份动作才通知用户。该常设授权不删除产品面向最终用户的任务同意、预算和审计机制，也不授权导出浏览器凭据或绕过平台安全措施。
 
+## 分层本地验证
+
+从仓库根目录执行完整的 Collector 本地验证：
+
+```powershell
+Set-Location D:\AIProject\inteligence\poc
+npm ci
+npx playwright install chromium
+npm run verify:collector
+```
+
+该入口按顺序运行：
+
+```text
+L1/L2  Vitest + fast-check：协议、扩展 URL/网络去敏、状态机、去敏/持久化、PageLease 与 Profile 边界
+L3-I   @playwright/test integration：production dist、真实 Chromium、MV3、Native Messaging、Browser Host
+L3-E   @playwright/test e2e-local：Gateway API -> Browser Host -> Chromium 的完整本地产品链路
+L0/S   既有 typecheck、build、manifest、制品与研究合同门禁（支持性 regression spine）
+```
+
+需要定位某一层时，可以单独运行：
+
+```powershell
+npm run test:unit
+npm run test:unit:coverage
+npm run test:integration
+npm run test:e2e:local
+```
+
+`verify:collector` 会先运行四层的正式测试项目；随后执行既有支持性验证脊柱，并跳过已由 Playwright 项目执行的三条 Chromium lane，避免打开第二套重复的临时浏览器会话。所有这些测试只使用 test-scoped 临时状态和 Profile，并要求零实网请求。它们不代表任何平台策略已经通过；真实平台 Canary 仍遵循下节的低频、可见、受审计流程。完整分层和框架取舍见[测试架构调研](docs/research/collector-test-architecture-and-frameworks-v0.1.md)。
+
 ## 构建门禁
 
 扩展：

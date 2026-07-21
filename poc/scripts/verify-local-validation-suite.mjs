@@ -16,6 +16,8 @@ const npmCli = typeof process.env.npm_execpath === 'string' && process.env.npm_e
  * A real platform canary is deliberately excluded: it has its own bounded
  * action budget, account-safety preflight, and evidence record.
  */
+const skipPlaywrightOwned = process.argv.includes('--skip-playwright-owned');
+
 const lanes = Object.freeze([
   {
     id: 'contracts-build',
@@ -45,12 +47,14 @@ const lanes = Object.freeze([
   {
     id: 'browser-host-lifecycle',
     scope: 'real local Chromium page pool, lease, input and lifecycle',
-    npmArgs: ['run', 'verify:lifecycle', '--workspace', '@intelligence/collector-browser-host']
+    npmArgs: ['run', 'verify:lifecycle', '--workspace', '@intelligence/collector-browser-host'],
+    playwrightOwned: true
   },
   {
     id: 'strategy-binding',
     scope: 'real local Chromium MV3 and Native Messaging strategy binding',
-    npmArgs: ['run', 'verify:strategy-binding', '--workspace', '@intelligence/collector-browser-host']
+    npmArgs: ['run', 'verify:strategy-binding', '--workspace', '@intelligence/collector-browser-host'],
+    playwrightOwned: true
   },
   {
     id: 'gateway-build-and-contracts',
@@ -70,9 +74,19 @@ const lanes = Object.freeze([
   {
     id: 'gateway-host-integration',
     scope: 'real local Gateway to Browser Host reconnect lifecycle',
-    npmArgs: ['run', 'verify:host-integration', '--workspace', '@intelligence/collector-gateway']
+    npmArgs: ['run', 'verify:host-integration', '--workspace', '@intelligence/collector-gateway'],
+    playwrightOwned: true
   }
 ]);
+
+// The canonical Collector command runs these real Chromium processes through
+// Playwright first so their project classification, timeout and artifact rules
+// are recorded in one place. Keeping the original standalone lanes runnable
+// preserves their focused developer entry points without opening a second
+// identical browser session during the aggregate suite.
+const selectedLanes = skipPlaywrightOwned
+  ? lanes.filter((lane) => lane.playwrightOwned !== true)
+  : lanes;
 
 async function runLane(lane) {
   if (!npmCli) throw new Error('local_validation_npm_cli_unavailable');
@@ -97,19 +111,29 @@ async function runLane(lane) {
 }
 
 try {
-  for (const lane of lanes) await runLane(lane);
+  for (const lane of selectedLanes) await runLane(lane);
   console.log(JSON.stringify({
     ok: true,
     gate: 'collector-local-validation-suite',
     livePlatformRequests: 0,
-    realExecutionSurface: {
-      chromium: true,
-      mv3: true,
-      nativeMessaging: true,
-      gatewayHostReconnect: true
-    },
+    realExecutionSurface: skipPlaywrightOwned
+      ? {
+        chromium: 'delegated_to_playwright',
+        mv3: 'delegated_to_playwright',
+        nativeMessaging: 'delegated_to_playwright',
+        gatewayHostReconnect: 'delegated_to_playwright'
+      }
+      : {
+        chromium: true,
+        mv3: true,
+        nativeMessaging: true,
+        gatewayHostReconnect: true
+      },
     livePlatformCanaryExcluded: true,
-    lanes: lanes.map((lane) => ({ id: lane.id, scope: lane.scope }))
+    lanes: selectedLanes.map((lane) => ({ id: lane.id, scope: lane.scope })),
+    skippedPlaywrightOwnedLanes: skipPlaywrightOwned
+      ? lanes.filter((lane) => lane.playwrightOwned === true).map((lane) => lane.id)
+      : []
   }, null, 2));
 } catch (error) {
   const message = error instanceof Error ? error.message : 'local_validation_suite_failed';

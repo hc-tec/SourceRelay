@@ -1,0 +1,63 @@
+import { describe, expect, test } from 'vitest';
+import { canonicalBilibiliAccountVideoInventoryUrl } from '../src/shared/bilibili-account-video-inventory-url.js';
+import { canonicalBilibiliVideoUrl } from '../src/shared/bilibili-video-url.js';
+import { normaliseLoopbackGatewayOrigin } from '../src/shared/control-plane.js';
+import {
+  resolveDetailStrategy,
+  resolveNativeSearchStrategy,
+  strategiesFor,
+  strategyProvenance
+} from '../src/shared/strategy-registry.js';
+
+describe('Extension canonical URL and loopback boundaries', () => {
+  test('accepts only a canonical Bilibili video identity and discards the one allowed observed-document query', () => {
+    const canonical = 'https://www.bilibili.com/video/BV1qZSLBYEpa';
+    expect(canonicalBilibiliVideoUrl(canonical)).toBe(canonical);
+    expect(canonicalBilibiliVideoUrl(`${canonical}?from=search`)).toBeNull();
+    expect(canonicalBilibiliVideoUrl(`${canonical}#comments`)).toBeNull();
+    expect(canonicalBilibiliVideoUrl('https://user:secret@www.bilibili.com/video/BV1qZSLBYEpa')).toBeNull();
+    expect(canonicalBilibiliVideoUrl(
+      `${canonical}?vd_source=0123456789abcdef0123456789abcdef`,
+      'observed_document'
+    )).toBe(canonical);
+    expect(canonicalBilibiliVideoUrl(`${canonical}?vd_source=not-a-digest`, 'observed_document')).toBeNull();
+  });
+
+  test('keeps account inventory input strict but discards platform-added observed-document query values', () => {
+    const canonical = 'https://space.bilibili.com/7481602/upload/video';
+    expect(canonicalBilibiliAccountVideoInventoryUrl(canonical)).toBe(canonical);
+    expect(canonicalBilibiliAccountVideoInventoryUrl(`${canonical}?from=space`)).toBeNull();
+    expect(canonicalBilibiliAccountVideoInventoryUrl(`${canonical}?from=space`, 'observed_document')).toBe(canonical);
+    expect(canonicalBilibiliAccountVideoInventoryUrl(`${canonical}#tab`, 'observed_document')).toBeNull();
+    expect(canonicalBilibiliAccountVideoInventoryUrl('https://www.bilibili.com/7481602/upload/video')).toBeNull();
+  });
+
+  test('admits only a ported HTTP loopback origin with no credentials, path, query, or fragment', () => {
+    expect(normaliseLoopbackGatewayOrigin('http://127.0.0.1:38123')).toBe('http://127.0.0.1:38123');
+    expect(normaliseLoopbackGatewayOrigin('http://[::1]:38123')).toBe('http://[::1]:38123');
+    expect(normaliseLoopbackGatewayOrigin('http://localhost:38123')).toBeNull();
+    expect(normaliseLoopbackGatewayOrigin('https://127.0.0.1:38123')).toBeNull();
+    expect(normaliseLoopbackGatewayOrigin('http://127.0.0.1:80')).toBeNull();
+    expect(normaliseLoopbackGatewayOrigin('http://user:secret@127.0.0.1:38123')).toBeNull();
+    expect(normaliseLoopbackGatewayOrigin('http://127.0.0.1:38123/v1/status')).toBeNull();
+  });
+});
+
+describe('Static strategy registry boundary', () => {
+  test('exposes compiled strategies without granting response capture or dormant detail capability', () => {
+    const bilibiliSearch = resolveNativeSearchStrategy('bilibili');
+    expect(bilibiliSearch).toMatchObject({
+      strategyId: 'bilibili.search.breadth.dom.v1',
+      maturity: 'live_anonymous_verified',
+      approvedResponseRouteIds: []
+    });
+    expect(strategyProvenance(bilibiliSearch)).toMatchObject({
+      platform: 'bilibili',
+      evidenceObjectives: ['breadth_search'],
+      acquisition: ['native_navigation', 'visible_dom']
+    });
+    expect(strategiesFor('xiaohongshu', 'breadth_search')).toHaveLength(1);
+    expect(resolveDetailStrategy('bilibili')).toMatchObject({ maturity: 'suspended' });
+    expect(() => resolveDetailStrategy('zhihu')).toThrow('No static detail strategy is registered for zhihu.');
+  });
+});

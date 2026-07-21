@@ -87,4 +87,43 @@ describe('Account safety state machine', () => {
     );
     expect(locked).toMatchObject({ state: 'locked', manualUnlockRequired: true, reasonCode: 'verification_required' });
   });
+
+  test('keeps action budgets and locks isolated to one profile-platform pair', async () => {
+    const { registry } = await createRegistry('2026-07-21T00:00:00.000Z');
+    const permit = await registry.beginAuthenticatedRun(
+      profileId,
+      'bilibili',
+      'authenticated_interaction_reconnaissance',
+      new Date('2026-07-21T00:00:01.000Z')
+    );
+    for (let index = 0; index < 20; index += 1) {
+      await registry.recordActionAttempt(
+        profileId,
+        'bilibili',
+        permit.runId,
+        `bounded_action_${index}`,
+        new Date(`2026-07-21T00:00:${String(index + 2).padStart(2, '0')}.000Z`)
+      );
+    }
+    await expect(registry.recordActionAttempt(
+      profileId,
+      'bilibili',
+      permit.runId,
+      'action_after_budget',
+      new Date('2026-07-21T00:01:00.000Z')
+    )).rejects.toThrow('account_safety_action_budget_exceeded');
+
+    await registry.finishAuthenticatedRun(
+      profileId,
+      'bilibili',
+      permit.runId,
+      'completed',
+      new Date('2026-07-21T00:01:01.000Z')
+    );
+    await registry.pause(profileId, 'bilibili', 'user_safety_pause', new Date('2026-07-21T00:01:02.000Z'));
+    await expect(registry.assertPlatformNavigationAllowed(profileId, 'bilibili')).rejects.toThrow(
+      'account_safety_manual_unlock_required'
+    );
+    await expect(registry.assertPlatformNavigationAllowed(profileId, 'zhihu')).resolves.toBeUndefined();
+  });
 });

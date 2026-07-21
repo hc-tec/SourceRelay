@@ -9,6 +9,8 @@
   "include": [
     "testing/**/*.ts",
     "collector-contracts/test/**/*.ts",
+    "collector-extension/test/**/*.ts",
+    "collector-browser-host/test/**/*.ts",
     "collector-gateway/test/**/*.ts",
     "collector-extension/scripts/extension-test-harness.mjs"
   ]
