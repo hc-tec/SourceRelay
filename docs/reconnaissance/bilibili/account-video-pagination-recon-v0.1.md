@@ -1,7 +1,7 @@
 # B 站 UP 主投稿目录分页：真实交互侦察 v0.1
 
 - 日期：2026-07-21
-- 状态：匿名人类流程已证明；数据替换未证明；**尚未实现产品策略**
+- 状态：匿名人类流程已证明；匿名数据替换未证明；受管登录态产品闭环另见[第 2 页 validation](../../validation/bilibili-account-video-page-two-v0.1.md)
 - 目标角色：`account_video_inventory.pagination`
 - 示例页面：`https://space.bilibili.com/7481602/upload/video`
 
@@ -101,7 +101,8 @@ trusted page-2 click             proved
 DOM active-page change           proved
 page-2 data replacement          not proved
 network route metadata           observed, 412 after action
-production pagination strategy   not admitted
+anonymous production pagination  not admitted
+managed authenticated page 1->2  admitted for the exact v0.1 scope
 ```
 
-下一步不是写“全量分页爬虫”，而是在受管登录 Profile 中先完成一次同样严格的、单点击、三面证据闭环；只有成功后，才实现 `bilibili.account.video-inventory.pagination.dom.v1` 的最小策略。
+受管登录 Profile 已完成一次同样严格的单点击、三面证据闭环；精确结果、前驱失败和边界见[第 2 页 validation](../../validation/bilibili-account-video-page-two-v0.1.md)。下一步仍不是写“全量分页爬虫”：第 3 页及以后必须单独建模、单独验证并单独配置预算。

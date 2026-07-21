@@ -1,7 +1,8 @@
 # B 站账号投稿分页 MVP：登录态单点击证明设计 v0.1
 
 - 日期：2026-07-21
-- 状态：设计已冻结，等待实现与真实闭环
+- 状态：已实现；受管登录态真实闭环 completed
+- 真实验证：[受管登录态第 2 页闭环](../validation/bilibili-account-video-page-two-v0.1.md)
 - 前置事实：[匿名分页侦察](../reconnaissance/bilibili/account-video-pagination-recon-v0.1.md) 已证明控件和浏览器点击；匿名数据替换未证明（`412`）
 
 ## 1. 目标与刻意不做的事
@@ -98,5 +99,11 @@ acquire exact retained page
 
 1. 离线门禁证明新 Host 原语不允许任意坐标、任意 selector、重复 action 或越租约调用。
 2. 独立真实 Chromium 本地门禁证明原语走真实鼠标而非 Extension synthetic click。
-3. 受管登录 Profile 进行**一次**真实 page-2 canary；成功、partial 或 risk stop 均记录为独立 artifact。
+3. 受管登录 Profile 的独立真实 page-2 canary 已完成为 page_two_ready；成功、partial 或 risk stop 均记录为独立 artifact。
 4. 真实结果和约束追加到分页侦察文档；截图、Profile、原始运行材料一律不进 Git。
+
+## 9. v0.1 实网闭环结果
+
+受管登录态 canary 已满足视觉、DOM 与 metadata-only Network 三面完成条件：页码由第 1 页变为第 2 页、稳定 ID 集合变化、第 2 页固定投影得到 40 张合规卡片、目标目录 route 为成功状态。导航与分页点击各尝试一次，未读取 response body、query 或认证材料；目标页在完成后 retained_for_review。
+
+精确证据、失败前驱和未覆盖范围见[受管登录态第 2 页闭环](../validation/bilibili-account-video-page-two-v0.1.md)。这不会自动扩大到第 3 页、全量分页或其他账号。
