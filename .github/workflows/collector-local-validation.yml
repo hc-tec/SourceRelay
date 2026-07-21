@@ -1,0 +1,40 @@
+name: Collector local validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-validation:
+    name: Local execution spine
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: poc
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: poc/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Install isolated Chromium
+        run: npx playwright install chromium
+
+      # This command is intentionally local-only. It runs real Chromium, MV3,
+      # Native Messaging and Gateway/Host lifecycle gates, but never a
+      # platform canary or a user-managed browser Profile.
+      - name: Run local validation spine
+        run: npm run verify:local
