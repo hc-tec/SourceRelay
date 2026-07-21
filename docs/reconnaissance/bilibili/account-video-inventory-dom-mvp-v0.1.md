@@ -1,4 +1,4 @@
-# B 站 UP 主视频清单首屏：DOM-only MVP 契约 v0.1
+# B 站 UP 主视频清单第 1 页：DOM-only MVP 契约 v0.1
 
 - 日期：2026-07-21
 - 状态：已完成独立匿名实网侦察与受管 Profile 产品闭环
@@ -7,7 +7,7 @@
 
 ## 1. 要解决的问题
 
-当用户给出一个规范 B 站 UP 主主页时，系统能否在受管浏览器的**同一精确投稿目录页面**中，以一次导航、零页面交互的方式，保存当前首屏可见的视频投稿卡片，作为“某博主的所有视频”场景的安全入口。
+当用户给出一个规范 B 站 UP 主主页时，系统能否在受管浏览器的**同一精确投稿目录页面**中，以一次导航、零页面交互的方式，保存当前第 1 页已经渲染的视频投稿卡片，作为“某博主的所有视频”场景的安全入口。
 
 这不是全量枚举承诺。它只回答“该账号此刻第一页公开可见的投稿是什么”；第 2 页及以后、排序、筛选、图文、音频、合集与系列都必须另建策略和动作预算。
 
@@ -42,7 +42,7 @@ response / XHR 采集             0 条
 ```text
 规范 MID 与规范主页
 规范投稿视频目录身份（不带 query）
-首屏可见视频卡片：BVID、规范视频 URL、标题、bounded visible text、公开封面引用（若可见）
+第 1 页已渲染视频卡片：BVID、规范视频 URL、标题、bounded visible text、公开封面引用（若已渲染）
 可见卡片数、登录浮层 / 验证 / 限流 / 不可用布尔状态
 ```
 
@@ -56,7 +56,7 @@ response / XHR 采集             0 条
 2. source-specific Extension binding 得到的确切 Chrome document ID；
 3. 当前 URL 规范化后仍等于目标 `/upload/video` 页面；
 4. 页面 URL MID 与 DOM 提取 MID 相同；
-5. 可见 `.video-list` 与至少一张可见、可规范化 BVID 的卡片；
+5. 已渲染 `.video-list` 与至少一张已渲染、可规范化 BVID 的卡片；
 6. 一份导航后的视觉证据。
 
 登录浮层本身不是失败；只有页面没有卡片且登录/验证/风险信号阻止页面完成时，才记录相应 partial / failed 终态。若页面身份、document 或导航结果未知，立即结束当前 run，不重放导航。
@@ -117,7 +117,7 @@ active leases before product run  0
 ```text
 state                            completed
 terminal reason                  page_one_ready
-captured visible cards           40
+captured rendered cards          40
 unresolved cards                 0
 navigation                       1
 hover / click / scroll           0 / 0 / 0
@@ -141,12 +141,12 @@ response bodies                  not_read
 
 ### 7.3 结论与不能越过的边界
 
-结论是 `proved`：在当前真实页面上，产品能以固定 DOM 投影、安全 document binding 和一次受控导航，可靠取得**当前首屏可见**的公开视频卡片。登录浮层并不自动阻断这项页面能力。
+结论是 `proved`：在当前真实页面上，产品能以固定 DOM 投影、安全 document binding 和一次受控导航，可靠取得**当前第 1 页已渲染**的公开视频卡片。登录浮层并不自动阻断这项页面能力。
 
 这次结果**不**证明以下命题：
 
 - “该 UP 主所有投稿均已获取”；
-- 当前 40 张卡片等于其总投稿数；
+- 当前 40 张已渲染卡片等于其总投稿数；
 - 第 2 页、排序、筛选、图文、音频、合集或系列可用；
 - 评论、字幕、播放器操作或任何主动交互已可自动化。
 
