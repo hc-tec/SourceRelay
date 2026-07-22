@@ -212,4 +212,4 @@ reason      detail_ready
 - `video_detail` 仍可投影标题、公开元数据、作者和标签；但后续媒体、字幕、弹幕或其他需完整播放权限的能力必须以访问状态为独立前置条件并另做实网证明。
 - `BV136K36TEa8` 同样没有可投影简介，故“充电专属”不是此前两条 `descriptionCaptured=false` 的充分或必要解释。
 
-基于此侦察，`0.7.9` 详情投影新增 `chargeExclusiveTrialVisible` 的受限 DOM 事实，并在 Gateway artifact 中映射为 `accessStatus = charge_exclusive_trial | login_required | indeterminate`。该实现仍须由受管登录 Collection Profile 的独立真实闭环验证；匿名人工侦察不能替代产品闭环。
+基于此侦察，`0.7.10` 详情投影新增 `chargeExclusiveTrialVisible` 的受限 DOM 事实，并在 Gateway artifact 中映射为 `accessStatus = charge_exclusive_trial | login_required | indeterminate`。该实现还要求 document-start 后的固定首屏稳定窗口和可见播放器控制层，避免把骨架屏误判为完成；仍须由受管登录 Collection Profile 的独立真实闭环验证，匿名人工侦察不能替代产品闭环。

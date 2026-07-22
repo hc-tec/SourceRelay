@@ -69,7 +69,7 @@ describe('Bilibili account-video pagination domain contract', () => {
     const pages = [page(1, 'BV1qZSLBYEpa'), page(2, 'BV1xx411c7mD')];
     const run = createBilibiliAccountVideoPaginationRunRecord({
       runId: '11111111-1111-4111-8111-111111111111',
-      collectorVersion: '0.7.9',
+      collectorVersion: '0.7.10',
       canonicalInventoryUrl: 'https://space.bilibili.com/7481602/upload/video',
       stableAccountId: '7481602',
       startedAt: '2026-07-22T00:00:00.000Z',

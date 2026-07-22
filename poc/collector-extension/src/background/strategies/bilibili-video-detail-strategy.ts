@@ -32,11 +32,13 @@ const observer = createDomOnlyDocumentObserver<VideoDetailBinding, BilibiliVideo
   canonicalTargetUrl: (binding) => binding.target.canonicalUrl,
   canonicalObservedUrl: (value) => canonicalBilibiliVideoUrl(value, 'observed_document'),
   capture: ({ tabId, documentId }) => captureBilibiliVideoDetailDom(tabId, documentId),
+  minimumDocumentSettleMs: 2_000,
   isReady: (dom, binding) =>
     dom.risk.verificationRequired ||
     dom.risk.rateLimited ||
     dom.risk.sourceUnavailable ||
-    (dom.bvid === binding.target.bvid && dom.titleVisible && dom.playerVisible && Boolean(dom.title)),
+    (dom.bvid === binding.target.bvid && dom.titleVisible && dom.playerVisible && dom.playerControlsVisible &&
+      Boolean(dom.title)),
   toPayload: ({ documentId, binding, dom }) => ({
     schemaVersion: 1,
     strategyId: BILIBILI_VIDEO_DETAIL_STRATEGY_ID,

@@ -20,6 +20,7 @@ function dom(overrides: Partial<BilibiliVideoDetailDomSnapshot> = {}): BilibiliV
     episodeSummaryText: null,
     titleVisible: true,
     playerVisible: true,
+    playerControlsVisible: true,
     chargeExclusiveTrialVisible: false,
     loginOverlayVisible: false,
     risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false },
@@ -57,6 +58,10 @@ describe('Bilibili video-detail access-status contract', () => {
       playerVisible: true,
       accessStatus: 'indeterminate'
     });
+  });
+
+  test('refuses to project a title plus a pre-hydration player shell', () => {
+    expect(projectBilibiliVideoDetailDom(dom({ playerControlsVisible: false }), bvid, capturedAt)).toBeNull();
   });
 
   test('projects the positively observed charge-trial gate and does not let a player shell hide it', () => {

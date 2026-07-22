@@ -26,7 +26,7 @@ function validHello() {
     profileId: 'profile-123',
     browserSessionId: 'browser-session-123',
     extensionId: 'a'.repeat(32),
-    collectorVersion: '0.7.9',
+    collectorVersion: '0.7.10',
     controlSurfaceRevision: 10,
     nonce: 'nonce-which-is-long-enough'
   };

@@ -10,11 +10,12 @@ import {
 import { clearStrategyBindingsForTab } from '../strategy-binding-state';
 
 interface StoredDomOnlyBinding<TBinding extends StrategyObserverBindingRequest> {
-  schemaVersion: 1;
+  schemaVersion: 2;
   tabId: number;
   nextDocumentGeneration: number;
   contentScriptId: string;
   documentId: string | null;
+  documentBoundAt: number | null;
   excludedDocumentId: string | null;
   binding: TBinding;
 }
@@ -39,6 +40,12 @@ export interface DomOnlyDocumentObserverConfig<
     documentId: string;
     binding: TBinding;
   }) => Promise<TDomSnapshot>;
+  /**
+   * A source-specific first-render settle window. This is not an interaction
+   * delay or retry: it prevents a document-start binding from treating a
+   * title and an empty player shell as the finished visible first screen.
+   */
+  minimumDocumentSettleMs?: number;
   isReady: (snapshot: TDomSnapshot, binding: TBinding) => boolean;
   toPayload: (input: {
     documentId: string;
@@ -63,6 +70,10 @@ export function createDomOnlyDocumentObserver<
   TBinding extends StrategyObserverBindingRequest,
   TDomSnapshot
 >(config: DomOnlyDocumentObserverConfig<TBinding, TDomSnapshot>): DomOnlyDocumentObserver<TBinding> {
+  const minimumDocumentSettleMs = config.minimumDocumentSettleMs ?? 0;
+  if (!Number.isSafeInteger(minimumDocumentSettleMs) || minimumDocumentSettleMs < 0 || minimumDocumentSettleMs > 10_000) {
+    throw new Error(`${config.errorPrefix}_document_settle_window_invalid`);
+  }
   let documentBridgeInitialised = false;
   const error = (suffix: string): string => `${config.errorPrefix}_${suffix}`;
   const bindingStorageKey = (observerBindingId: string): string =>
@@ -71,8 +82,9 @@ export function createDomOnlyDocumentObserver<
   async function storedBinding(observerBindingId: string): Promise<StoredDomOnlyBinding<TBinding> | null> {
     const key = bindingStorageKey(observerBindingId);
     const value = (await chrome.storage.session.get(key))[key] as StoredDomOnlyBinding<TBinding> | undefined;
-    return value?.schemaVersion === 1 &&
+    return value?.schemaVersion === 2 &&
       value.binding?.observerBindingId === observerBindingId &&
+      (value.documentId === null || (typeof value.documentId === 'string' && Number.isSafeInteger(value.documentBoundAt))) &&
       value.binding.strategyId === config.strategyId &&
       Date.parse(value.binding.expiresAt) > Date.now()
       ? value
@@ -85,6 +97,7 @@ export function createDomOnlyDocumentObserver<
       if (!key.startsWith(config.storageKeyPrefix)) continue;
       const candidate = value as StoredDomOnlyBinding<TBinding>;
       if (
+        candidate.schemaVersion === 2 &&
         candidate.tabId === tabId &&
         candidate.documentId === null &&
         candidate.binding?.strategyId === config.strategyId &&
@@ -126,7 +139,7 @@ export function createDomOnlyDocumentObserver<
       stored.excludedDocumentId === documentId ||
       config.canonicalObservedUrl(senderUrl ?? '') !== config.canonicalTargetUrl(stored.binding)
     ) return false;
-    const updated: StoredDomOnlyBinding<TBinding> = { ...stored, documentId };
+    const updated: StoredDomOnlyBinding<TBinding> = { ...stored, documentId, documentBoundAt: Date.now() };
     await chrome.storage.session.set({ [bindingStorageKey(updated.binding.observerBindingId)]: updated });
     await chrome.scripting.unregisterContentScripts({ ids: [updated.contentScriptId] }).catch(() => undefined);
     return true;
@@ -206,11 +219,12 @@ export function createDomOnlyDocumentObserver<
       world: 'ISOLATED'
     }]);
     const stored: StoredDomOnlyBinding<TBinding> = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       tabId: command.tabId,
       nextDocumentGeneration: command.nextDocumentGeneration,
       contentScriptId,
       documentId: null,
+      documentBoundAt: null,
       excludedDocumentId,
       binding: structuredClone(binding)
     };
@@ -252,6 +266,11 @@ export function createDomOnlyDocumentObserver<
       if (!matchesReadContext(stored, command)) throw new Error(error('binding_context_rejected'));
       if (!stored.documentId) {
         await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+      const earliestCaptureAt = (stored.documentBoundAt ?? Date.now()) + minimumDocumentSettleMs;
+      if (Date.now() < earliestCaptureAt) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(250, earliestCaptureAt - Date.now())));
         continue;
       }
       const tab = await chrome.tabs.get(command.tabId);

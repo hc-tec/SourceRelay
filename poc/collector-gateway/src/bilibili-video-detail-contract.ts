@@ -29,6 +29,7 @@ export interface BilibiliVideoDetailDomSnapshot {
   episodeSummaryText: string | null;
   titleVisible: boolean;
   playerVisible: boolean;
+  playerControlsVisible: boolean;
   chargeExclusiveTrialVisible: boolean;
   loginOverlayVisible: boolean;
   risk: {
@@ -109,7 +110,7 @@ export interface BilibiliVideoDetailRunRecord {
   bvid: string;
   strategyCandidate: {
     strategyId: 'bilibili.video.detail.dom.v2';
-    version: '0.2.0';
+    version: '0.3.0';
     admissionEligible: false;
   };
   state: 'completed' | 'partial' | 'failed';
@@ -221,6 +222,7 @@ export function projectBilibiliVideoDetailDom(
     dom.bvid !== expectedBvid ||
     !dom.titleVisible ||
     !dom.playerVisible ||
+    !dom.playerControlsVisible ||
     typeof dom.chargeExclusiveTrialVisible !== 'boolean' ||
     typeof dom.loginOverlayVisible !== 'boolean' ||
     !dom.risk ||

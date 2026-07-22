@@ -52,7 +52,7 @@ let browserProcessId = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.9');
+  assert.equal(extensionManifest.version, '0.7.10');
 
   endpoint = await launchBrowserHost({
     mainModulePath,
