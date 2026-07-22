@@ -31,7 +31,6 @@ export interface BilibiliVideoDetailDomSnapshot {
   episodeSummaryText: string | null;
   titleVisible: boolean;
   playerVisible: boolean;
-  playerControlsVisible: boolean;
   chargeExclusiveTrialVisible: boolean;
   loginOverlayVisible: boolean;
   risk: {
@@ -229,7 +228,6 @@ export function projectBilibiliVideoDetailDom(
     dom.bvid !== expectedBvid ||
     !dom.titleVisible ||
     !dom.playerVisible ||
-    !dom.playerControlsVisible ||
     typeof dom.chargeExclusiveTrialVisible !== 'boolean' ||
     typeof dom.loginOverlayVisible !== 'boolean' ||
     !dom.risk ||

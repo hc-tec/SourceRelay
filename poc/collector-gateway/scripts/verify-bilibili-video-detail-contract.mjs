@@ -66,7 +66,6 @@ try {
         episodeSummaryText: '视频选集 （1/10）',
         titleVisible: true,
         playerVisible: true,
-        playerControlsVisible: true,
         chargeExclusiveTrialVisible: false,
         loginOverlayVisible: true,
         risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }

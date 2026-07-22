@@ -20,7 +20,6 @@ function dom(overrides: Partial<BilibiliVideoDetailDomSnapshot> = {}): BilibiliV
     episodeSummaryText: null,
     titleVisible: true,
     playerVisible: true,
-    playerControlsVisible: true,
     chargeExclusiveTrialVisible: false,
     loginOverlayVisible: false,
     risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false },
@@ -50,7 +49,7 @@ function observation(domValue: unknown): StrategyObservationResult {
 }
 
 describe('Bilibili video-detail access-status contract', () => {
-  test('keeps an unmarked visible player indeterminate rather than claiming public playback', () => {
+  test('projects a visible title and player without coupling metadata readiness to player controls', () => {
     const detail = projectBilibiliVideoDetailDom(dom(), bvid, capturedAt);
 
     expect(detail).toMatchObject({
@@ -58,10 +57,7 @@ describe('Bilibili video-detail access-status contract', () => {
       playerVisible: true,
       accessStatus: 'indeterminate'
     });
-  });
-
-  test('refuses to project a title plus a pre-hydration player shell', () => {
-    expect(projectBilibiliVideoDetailDom(dom({ playerControlsVisible: false }), bvid, capturedAt)).toBeNull();
+    expect(detail).not.toHaveProperty('playerControlsVisible');
   });
 
   test('projects the positively observed charge-trial gate and does not let a player shell hide it', () => {

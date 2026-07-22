@@ -34,7 +34,7 @@ const profileId = 'real-browser-lifecycle';
 await mkdir(stateDirectory, { recursive: true });
 await mkdir(profileRoot, { recursive: true });
 const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-assert.equal(extensionManifest.version, '0.7.13');
+assert.equal(extensionManifest.version, '0.7.14');
 
 let endpoint = null;
 let client = null;
@@ -75,7 +75,7 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 11,
+        controlSurfaceRevision: 12,
         runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
       }
     }

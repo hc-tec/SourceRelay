@@ -11,7 +11,6 @@ export interface BilibiliVideoDetailDomSnapshot {
   episodeSummaryText: string | null;
   titleVisible: boolean;
   playerVisible: boolean;
-  playerControlsVisible: boolean;
   chargeExclusiveTrialVisible: boolean;
   loginOverlayVisible: boolean;
   risk: {
@@ -52,11 +51,6 @@ export async function captureBilibiliVideoDetailDom(
           : null;
         const titleElement = Array.from(document.querySelectorAll<HTMLElement>('h1')).find(rendered) ?? null;
         const player = document.querySelector<HTMLElement>('[aria-label="哔哩哔哩播放器"]');
-        // A visible player container alone can still be the initial skeleton.
-        // Use the presence of a visible native player control as a bounded
-        // hydration signal before the strategy declares this first screen ready.
-        const playerControlsVisible = Boolean(player &&
-          Array.from(player.querySelectorAll<HTMLElement>('button')).some((control) => rendered(control)));
         // A charge-exclusive trial is a positive, visible access restriction.
         // It is intentionally not inferred from the creator's generic “充电”
         // entry, a black player, or the absence of a description. The current
@@ -143,7 +137,6 @@ export async function captureBilibiliVideoDetailDom(
           episodeSummaryText,
           titleVisible: rendered(titleElement),
           playerVisible: rendered(player),
-          playerControlsVisible,
           chargeExclusiveTrialVisible,
           loginOverlayVisible,
           risk: {

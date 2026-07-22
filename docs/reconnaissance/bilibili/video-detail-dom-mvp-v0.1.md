@@ -212,7 +212,7 @@ reason      detail_ready
 - `video_detail` 仍可投影标题、公开元数据、作者和标签；但后续媒体、字幕、弹幕或其他需完整播放权限的能力必须以访问状态为独立前置条件并另做实网证明。
 - `BV136K36TEa8` 同样没有可投影简介，故“充电专属”不是此前两条 `descriptionCaptured=false` 的充分或必要解释。
 
-基于此侦察，`0.7.11` 详情投影新增 `chargeExclusiveTrialVisible` 的受限 DOM 事实，并在 Gateway artifact 中映射为 `accessStatus = charge_exclusive_trial | login_required | indeterminate`。该实现还要求 document-start 后的固定首屏稳定窗口和可见播放器控制层，避免把骨架屏误判为完成；若同一规范 URL 在首屏加载中被站点再次替换，Observer 只会以 Chrome 返回的当前主文档 ID 重新绑定，不会再次导航或接受调用方的 document ID。仍须由受管登录 Collection Profile 的独立真实闭环验证，匿名人工侦察不能替代产品闭环。
+基于此侦察，`0.7.11` 详情投影新增 `chargeExclusiveTrialVisible` 的受限 DOM 事实，并在 Gateway artifact 中映射为 `accessStatus = charge_exclusive_trial | login_required | indeterminate`。首屏完成应以 document-start 后的固定稳定窗口、规范 BVID、可见标题和可见播放器为界；播放器控制条属于字幕或播放等后续交互能力，不能成为零交互元数据采集的完成前置条件。若同一规范 URL 在首屏加载中被站点再次替换，Observer 只会以 Chrome 返回的当前主文档 ID 重新绑定，不会再次导航或接受调用方的 document ID。仍须由受管登录 Collection Profile 的独立真实闭环验证，匿名人工侦察不能替代产品闭环。
 
 ## 12. 同 URL 主文档替换：故障复盘与 `0.7.12` 修复（2026-07-22）
 
@@ -274,3 +274,13 @@ currentMainFrameState     not_checked | unavailable | target_mismatch |
 它明确不返回 tab ID、document ID、URL、DOM、截图、页面文本、请求/响应、storage、Cookie、Token 或任何认证材料。失败诊断只写入该次 ignored runtime artifact 的 manifest，不进入摘要索引，也不构成采集字段。
 
 新的 L1 单元和 L3 生产 Chromium/MV3/Native Messaging/Browser Host/Gateway real-local 闭环均已验证该命令（6/6、零实网请求）。下一条 L4 canary 必须改为正常公开视频；验证目标是“同 URL 主文档替换后能否稳定完成详情投影”，而非测试充电门禁。访问状态仍是详情投影的一项停止/标记分支，不再是开发主线。
+
+## 14. 正常公开视频失败根因与详情 MVP 纠偏（2026-07-22）
+
+`0.7.13 / revision 11` 对 `BV1qZSLBYEpa` 执行了一次独立的受管 Profile 产品 run。该 run 只有一次导航、零 hover/click/scroll、零 response body 与零自动平台重试；导航本身完成，随后约 56 秒因 `document_context_changed` 终止，目标页按未知结果隔离，未重跑。
+
+失败 artifact 的去敏诊断为：`bindingState=expired`、`documentBindingState=bound`、`bridgeRegistration=registered`、`currentMainFrameState=matches_bound_document`。因此当前 document 仍与 binding 匹配；问题不再是同 URL 的 document replacement，也不是登录、验证码、限流或充电门禁。
+
+同一 run 的 runtime 截图已由人工视觉复核：标题、播放器和选集首屏均已可见。随后以独立、匿名、无扩展、可见 Chromium 对同一规范页进行了新的窄 DOM 侦察：一次导航、零 hover/click/scroll、未读网络请求/response 或认证材料。稳定后得到的结构事实是：规范路径匹配、可见 `H1`、可见播放器、简介、UP 主容器和“视频选集”标题都已存在；但播放器容器内只有一个普通 DOM `button`，且其可见性为 false。可访问性树中可见的播放器控件不能等同于隔离世界中可见的原生 `button`。
+
+根因是详情策略额外要求 `playerControlsVisible` 才宣布首屏 ready。这个条件源自播放器/访问状态研究，却与详情 MVP 的零 hover 边界不相容，并且不是详情字段的必要证据。`0.7.14 / revision 12` 因此删除该字段和所有 contract gating：首屏 ready 只要求规范 BVID、非空可见标题、可见播放器和既有 3 秒 document 稳定窗口。访问限制仍由正向、可见的门禁 DOM 单独记录；播放器控制条、字幕、播放、评论和多 P 操作继续属于独立能力，不再阻塞详情元数据。

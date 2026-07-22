@@ -40,7 +40,7 @@ const observer = createDomOnlyDocumentObserver<VideoDetailBinding, BilibiliVideo
     dom.risk.verificationRequired ||
     dom.risk.rateLimited ||
     dom.risk.sourceUnavailable ||
-    (dom.bvid === binding.target.bvid && dom.titleVisible && dom.playerVisible && dom.playerControlsVisible &&
+    (dom.bvid === binding.target.bvid && dom.titleVisible && dom.playerVisible &&
       Boolean(dom.title)),
   toPayload: ({ documentId, binding, dom }) => ({
     schemaVersion: 1,
