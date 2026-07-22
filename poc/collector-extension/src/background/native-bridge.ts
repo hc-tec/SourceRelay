@@ -28,6 +28,7 @@ import {
 } from './strategies/bilibili-dynamic-strategy';
 import {
   bindBilibiliVideoDetailObserver,
+  diagnoseBilibiliVideoDetailObserver,
   readBilibiliVideoDetailObservation
 } from './strategies/bilibili-video-detail-strategy';
 
@@ -149,6 +150,11 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
         return await readBilibiliAccountVideoInventoryObservation(command.command);
       }
       throw new Error('collector_strategy_id_rejected');
+    case 'collector_read_strategy_binding_diagnostics':
+      if (command.command.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
+        return await diagnoseBilibiliVideoDetailObserver(command.command);
+      }
+      throw new Error('collector_strategy_binding_diagnostics_not_supported');
   }
 }
 

@@ -55,7 +55,7 @@ function sourceArtifact(): BilibiliAccountVideoPaginationArtifactView {
       uniqueBvidCount: 2,
       duplicateBvidCount: 0,
       terminalReason: 'requested_page_budget_reached',
-      collectorVersion: '0.7.12',
+      collectorVersion: '0.7.13',
       strategyCandidate: {
         strategyId: 'bilibili.account.video-inventory.pagination.dom.v2',
         version: '0.2.0',

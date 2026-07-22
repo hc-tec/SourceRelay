@@ -105,6 +105,8 @@ export class BrowserHostRuntime {
         return await this.#profile(body.request.profileId).bindStrategyObserver(body.request);
       case 'read_strategy_observation':
         return await this.#profile(body.request.profileId).readStrategyObservation(body.request);
+      case 'read_strategy_binding_diagnostics':
+        return await this.#profile(body.request.profileId).readStrategyBindingDiagnostics(body.request);
       case 'reconcile_page':
         return this.#profile(body.request.profileId).reconcile(body.request);
       case 'create_reclaim_plan':

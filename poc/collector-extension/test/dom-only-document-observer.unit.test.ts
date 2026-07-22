@@ -95,6 +95,9 @@ describe('DOM-only document observer', () => {
     ) => boolean | void) | null = null;
     const unregisterContentScripts = vi.fn(async () => undefined);
     const registerContentScripts = vi.fn(async () => undefined);
+    const getRegisteredContentScripts = vi.fn(async () => [{
+      id: `test-dom-only-${bindingId.replace(/-/g, '')}`
+    }]);
     const capture = vi.fn(async ({ documentId }: { documentId: string }) => ({ documentId }));
 
     const sessionArea = {
@@ -121,6 +124,7 @@ describe('DOM-only document observer', () => {
         scripting: {
           unregisterContentScripts,
           registerContentScripts,
+          getRegisteredContentScripts,
           executeScript: vi.fn(async () => [])
         },
         webNavigation: {
@@ -191,6 +195,22 @@ describe('DOM-only document observer', () => {
       schemaVersion: 3,
       documentId: 'document-b',
       documentBindCount: 2
+    });
+    await expect(observer.diagnose({
+      type: 'collector_read_strategy_binding_diagnostics',
+      tabId,
+      observerBindingId: bindingId,
+      strategyId: BILIBILI_VIDEO_DETAIL_STRATEGY_ID
+    })).resolves.toEqual({
+      schemaVersion: 1,
+      type: 'collector_strategy_binding_diagnostics',
+      strategyId: BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
+      observerBindingId: bindingId,
+      bindingState: 'active',
+      documentBindingState: 'bound',
+      documentBindCount: 2,
+      bridgeRegistration: 'registered',
+      currentMainFrameState: 'matches_bound_document'
     });
     // The bridge remains registered across the first document handoff; its
     // cleanup is owned by binding expiry or a subsequent task, never by the

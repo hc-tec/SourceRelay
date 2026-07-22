@@ -5,6 +5,8 @@ import {
   BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
   STRATEGY_OBSERVATION_SCHEMA_VERSION,
   isBridgeJsonValue,
+  type CollectorStrategyId,
+  type StrategyBindingDiagnostics,
   type StrategyObservationReadRequest,
   type StrategyObservationResult,
   type StrategyObserverBindingRequest,
@@ -63,10 +65,22 @@ export interface CollectorReadStrategyObservationCommand {
   request: StrategyObservationReadRequest;
 }
 
+/**
+ * A short-lived, de-sensitised lifecycle read after an observer failure.  The
+ * command cannot carry a URL, a selector, page JavaScript, or a response arm.
+ */
+export interface CollectorReadStrategyBindingDiagnosticsCommand {
+  type: 'collector_read_strategy_binding_diagnostics';
+  tabId: number;
+  observerBindingId: string;
+  strategyId: CollectorStrategyId;
+}
+
 export type CollectorHostExtensionCommand =
   | CollectorListExtensionTabsCommand
   | CollectorBindStrategyObserverCommand
-  | CollectorReadStrategyObservationCommand;
+  | CollectorReadStrategyObservationCommand
+  | CollectorReadStrategyBindingDiagnosticsCommand;
 
 export interface CollectorExtensionTabInventory {
   type: 'collector_extension_tab_inventory';
@@ -77,7 +91,8 @@ export interface CollectorExtensionTabInventory {
 export type CollectorExtensionCommandResult =
   | CollectorExtensionTabInventory
   | StrategyObserverBindingResult
-  | StrategyObservationResult;
+  | StrategyObservationResult
+  | StrategyBindingDiagnostics;
 
 export interface CollectorHostBridgeCommand {
   type: 'collector_host_bridge_command';
@@ -265,6 +280,8 @@ function isCollectorHostExtensionCommand(value: unknown): value is CollectorHost
     nextDocumentGeneration?: unknown;
     documentGeneration?: unknown;
     routeGeneration?: unknown;
+    observerBindingId?: unknown;
+    strategyId?: unknown;
     binding?: unknown;
     request?: unknown;
   };
@@ -274,6 +291,9 @@ function isCollectorHostExtensionCommand(value: unknown): value is CollectorHost
     return Number.isSafeInteger(candidate.nextDocumentGeneration) &&
       Number(candidate.nextDocumentGeneration) > 0 &&
       isStrategyObserverBindingRequest(candidate.binding);
+  }
+  if (candidate.type === 'collector_read_strategy_binding_diagnostics') {
+    return boundedCommandId(candidate.observerBindingId) && isCollectorStrategyId(candidate.strategyId);
   }
   return candidate.type === 'collector_read_strategy_observation' &&
     Number.isSafeInteger(candidate.documentGeneration) && Number(candidate.documentGeneration) > 0 &&
@@ -299,6 +319,25 @@ function isCollectorExtensionCommandResult(value: unknown): value is CollectorEx
       candidate.state === 'ready' &&
       Number.isSafeInteger(candidate.nextDocumentGeneration) && Number(candidate.nextDocumentGeneration) > 0 &&
       typeof candidate.expiresAt === 'string' && Number.isFinite(Date.parse(candidate.expiresAt));
+  }
+  if (type === 'collector_strategy_binding_diagnostics') {
+    const candidate = value as Partial<StrategyBindingDiagnostics>;
+    return candidate.schemaVersion === STRATEGY_OBSERVATION_SCHEMA_VERSION &&
+      isCollectorStrategyId(candidate.strategyId) &&
+      boundedCommandId(candidate.observerBindingId) &&
+      (candidate.bindingState === 'missing' || candidate.bindingState === 'invalid' ||
+        candidate.bindingState === 'expired' || candidate.bindingState === 'active') &&
+      (candidate.documentBindingState === 'not_bound' || candidate.documentBindingState === 'bound') &&
+      (candidate.documentBindCount === 0 || candidate.documentBindCount === 1 ||
+        candidate.documentBindCount === 2 || candidate.documentBindCount === 3) &&
+      (candidate.bridgeRegistration === 'registered' || candidate.bridgeRegistration === 'missing' ||
+        candidate.bridgeRegistration === 'unavailable') &&
+      (candidate.currentMainFrameState === 'not_checked' || candidate.currentMainFrameState === 'unavailable' ||
+        candidate.currentMainFrameState === 'target_mismatch' ||
+        candidate.currentMainFrameState === 'current_document_unbound' ||
+        candidate.currentMainFrameState === 'matches_bound_document' ||
+        candidate.currentMainFrameState === 'different_document' ||
+        candidate.currentMainFrameState === 'excluded_document');
   }
   const candidate = value as Partial<StrategyObservationResult>;
   return candidate.type === 'collector_strategy_observation' &&

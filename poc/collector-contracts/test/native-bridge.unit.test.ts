@@ -2,6 +2,7 @@ import * as fc from 'fast-check';
 import { describe, expect, test } from 'vitest';
 import {
   canonicalJson,
+  isCollectorExtensionBridgeCommandResult,
   isCollectorExtensionBridgeHello,
   isCollectorHostBridgeCommand,
   isCollectorNativeBridgeConfig,
@@ -26,8 +27,8 @@ function validHello() {
     profileId: 'profile-123',
     browserSessionId: 'browser-session-123',
     extensionId: 'a'.repeat(32),
-    collectorVersion: '0.7.12',
-    controlSurfaceRevision: 10,
+    collectorVersion: '0.7.13',
+    controlSurfaceRevision: 11,
     nonce: 'nonce-which-is-long-enough'
   };
 }
@@ -50,6 +51,42 @@ describe('Native bridge runtime guards', () => {
     expect(isCollectorNativeBridgeConfig(validConfig())).toBe(true);
     expect(isCollectorExtensionBridgeHello(validHello())).toBe(true);
     expect(isCollectorHostBridgeCommand(validHostCommand())).toBe(true);
+  });
+
+  test('accepts only the de-sensitised strategy-binding diagnostic surface', () => {
+    const diagnosticCommand = {
+      ...validHostCommand(),
+      command: {
+        type: 'collector_read_strategy_binding_diagnostics',
+        tabId: 17,
+        observerBindingId: 'observer-binding-id-123',
+        strategyId: 'bilibili.video.detail.dom.v2'
+      }
+    };
+    expect(isCollectorHostBridgeCommand(diagnosticCommand)).toBe(true);
+    expect(isCollectorHostBridgeCommand({
+      ...diagnosticCommand,
+      command: { ...diagnosticCommand.command, tabId: -1 }
+    })).toBe(false);
+    expect(isCollectorExtensionBridgeCommandResult({
+      type: 'collector_extension_bridge_command_result',
+      protocolVersion: NATIVE_BRIDGE_PROTOCOL_VERSION,
+      profileId: 'profile-123',
+      browserSessionId: 'browser-session-123',
+      commandId: 'command-id-is-long-enough',
+      ok: true,
+      result: {
+        schemaVersion: 1,
+        type: 'collector_strategy_binding_diagnostics',
+        strategyId: 'bilibili.video.detail.dom.v2',
+        observerBindingId: 'observer-binding-id-123',
+        bindingState: 'expired',
+        documentBindingState: 'not_bound',
+        documentBindCount: 0,
+        bridgeRegistration: 'registered',
+        currentMainFrameState: 'current_document_unbound'
+      }
+    })).toBe(true);
   });
 
   test('reject every generated non-current protocol version', () => {

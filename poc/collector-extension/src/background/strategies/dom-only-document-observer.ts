@@ -2,7 +2,9 @@ import {
   STRATEGY_OBSERVATION_SCHEMA_VERSION,
   type BridgeJsonValue,
   type CollectorBindStrategyObserverCommand,
+  type CollectorReadStrategyBindingDiagnosticsCommand,
   type CollectorReadStrategyObservationCommand,
+  type StrategyBindingDiagnostics,
   type StrategyObservationResult,
   type StrategyObserverBindingRequest,
   type StrategyObserverBindingResult
@@ -64,6 +66,7 @@ export interface DomOnlyDocumentObserver<TBinding extends StrategyObserverBindin
   initialiseDocumentBridge(): void;
   bind(command: CollectorBindStrategyObserverCommand): Promise<StrategyObserverBindingResult>;
   read(command: CollectorReadStrategyObservationCommand): Promise<StrategyObservationResult>;
+  diagnose(command: CollectorReadStrategyBindingDiagnosticsCommand): Promise<StrategyBindingDiagnostics>;
   cleanupExpiredBindings(): Promise<void>;
 }
 
@@ -84,6 +87,16 @@ export function createDomOnlyDocumentObserver<
   const error = (suffix: string): string => `${config.errorPrefix}_${suffix}`;
   const bindingStorageKey = (observerBindingId: string): string =>
     `${config.storageKeyPrefix}${observerBindingId}`;
+
+  type StoredBindingLookup =
+    | { state: 'missing' | 'invalid' }
+    | { state: 'expired' | 'active'; binding: StoredDomOnlyBinding<TBinding> };
+
+  function hasStoredBinding(
+    value: StoredBindingLookup
+  ): value is { state: 'expired' | 'active'; binding: StoredDomOnlyBinding<TBinding> } {
+    return value.state === 'expired' || value.state === 'active';
+  }
 
   function validStoredBinding(value: unknown): value is StoredDomOnlyBinding<TBinding> {
     const candidate = value as Partial<StoredDomOnlyBinding<TBinding>> | null;
@@ -112,10 +125,21 @@ export function createDomOnlyDocumentObserver<
       : null;
   }
 
-  async function storedBinding(observerBindingId: string): Promise<StoredDomOnlyBinding<TBinding> | null> {
+  async function storedBindingLookup(observerBindingId: string): Promise<StoredBindingLookup> {
     const key = bindingStorageKey(observerBindingId);
-    const value = currentBinding((await chrome.storage.session.get(key))[key]);
-    return value?.binding.observerBindingId === observerBindingId ? value : null;
+    const value = (await chrome.storage.session.get(key))[key];
+    if (value === undefined) return { state: 'missing' };
+    if (!validStoredBinding(value) || value.binding.observerBindingId !== observerBindingId) {
+      return { state: 'invalid' };
+    }
+    return Date.parse(value.binding.expiresAt) > Date.now()
+      ? { state: 'active', binding: value }
+      : { state: 'expired', binding: value };
+  }
+
+  async function storedBinding(observerBindingId: string): Promise<StoredDomOnlyBinding<TBinding> | null> {
+    const lookup = await storedBindingLookup(observerBindingId);
+    return lookup.state === 'active' ? lookup.binding : null;
   }
 
   async function storedBindingForTab(tabId: number): Promise<StoredDomOnlyBinding<TBinding> | null> {
@@ -218,6 +242,91 @@ export function createDomOnlyDocumentObserver<
     };
     await chrome.storage.session.set({ [bindingStorageKey(updated.binding.observerBindingId)]: updated });
     return updated;
+  }
+
+  function cappedDocumentBindCount(value: number): 0 | 1 | 2 | 3 {
+    if (value <= 0) return 0;
+    if (value === 1) return 1;
+    if (value === 2) return 2;
+    return 3;
+  }
+
+  async function bridgeRegistration(stored: StoredDomOnlyBinding<TBinding>): Promise<
+    StrategyBindingDiagnostics['bridgeRegistration']
+  > {
+    try {
+      const registrations = await chrome.scripting.getRegisteredContentScripts({ ids: [stored.contentScriptId] });
+      return registrations.some((registration) => registration.id === stored.contentScriptId)
+        ? 'registered'
+        : 'missing';
+    } catch {
+      return 'unavailable';
+    }
+  }
+
+  async function currentMainFrameState(stored: StoredDomOnlyBinding<TBinding>): Promise<
+    StrategyBindingDiagnostics['currentMainFrameState']
+  > {
+    const expectedUrl = config.canonicalTargetUrl(stored.binding);
+    try {
+      const tab = await chrome.tabs.get(stored.tabId);
+      if (config.canonicalObservedUrl(tab.url ?? '') !== expectedUrl) return 'target_mismatch';
+      const frame = await chrome.webNavigation.getFrame({ tabId: stored.tabId, frameId: 0 });
+      if (!frame?.documentId) return 'unavailable';
+      if (config.canonicalObservedUrl(frame.url) !== expectedUrl) return 'target_mismatch';
+      if (stored.documentId === null) return 'current_document_unbound';
+      if (frame.documentId === stored.excludedDocumentId) return 'excluded_document';
+      return frame.documentId === stored.documentId
+        ? 'matches_bound_document'
+        : 'different_document';
+    } catch {
+      return 'unavailable';
+    }
+  }
+
+  async function diagnose(
+    command: CollectorReadStrategyBindingDiagnosticsCommand
+  ): Promise<StrategyBindingDiagnostics> {
+    if (command.strategyId !== config.strategyId) throw new Error(error('id_rejected'));
+    const lookup = await storedBindingLookup(command.observerBindingId);
+    if (!hasStoredBinding(lookup)) {
+      return {
+        schemaVersion: STRATEGY_OBSERVATION_SCHEMA_VERSION,
+        type: 'collector_strategy_binding_diagnostics',
+        strategyId: config.strategyId,
+        observerBindingId: command.observerBindingId,
+        bindingState: lookup.state === 'invalid' ? 'invalid' : 'missing',
+        documentBindingState: 'not_bound',
+        documentBindCount: 0,
+        bridgeRegistration: 'unavailable',
+        currentMainFrameState: 'not_checked'
+      };
+    }
+    const stored = lookup.binding;
+    if (stored.tabId !== command.tabId) {
+      return {
+        schemaVersion: STRATEGY_OBSERVATION_SCHEMA_VERSION,
+        type: 'collector_strategy_binding_diagnostics',
+        strategyId: config.strategyId,
+        observerBindingId: command.observerBindingId,
+        bindingState: 'missing',
+        documentBindingState: 'not_bound',
+        documentBindCount: 0,
+        bridgeRegistration: 'unavailable',
+        currentMainFrameState: 'not_checked'
+      };
+    }
+    return {
+      schemaVersion: STRATEGY_OBSERVATION_SCHEMA_VERSION,
+      type: 'collector_strategy_binding_diagnostics',
+      strategyId: config.strategyId,
+      observerBindingId: command.observerBindingId,
+      bindingState: lookup.state,
+      documentBindingState: stored.documentId === null ? 'not_bound' : 'bound',
+      documentBindCount: cappedDocumentBindCount(stored.documentBindCount),
+      bridgeRegistration: await bridgeRegistration(stored),
+      currentMainFrameState: await currentMainFrameState(stored)
+    };
   }
 
   function initialiseDocumentBridge(): void {
@@ -375,5 +484,5 @@ export function createDomOnlyDocumentObserver<
     };
   }
 
-  return { initialiseDocumentBridge, bind, read, cleanupExpiredBindings };
+  return { initialiseDocumentBridge, bind, read, diagnose, cleanupExpiredBindings };
 }

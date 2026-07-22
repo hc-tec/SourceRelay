@@ -40,6 +40,7 @@ export interface BilibiliVideoDetailArtifactManifest
   detailFile: typeof DETAIL_FILE | null;
   detailFileSha256: string | null;
   visualEvidence: BilibiliVideoDetailRunRecord['visualEvidence'];
+  bindingDiagnostics?: BilibiliVideoDetailRunRecord['bindingDiagnostics'];
   safeguards: BilibiliVideoDetailRunRecord['safeguards'];
 }
 
@@ -177,6 +178,7 @@ export class BilibiliVideoDetailArtifactStore {
       detailFile,
       detailFileSha256,
       visualEvidence: run.visualEvidence,
+      ...(run.bindingDiagnostics ? { bindingDiagnostics: structuredClone(run.bindingDiagnostics) } : {}),
       safeguards: run.safeguards
     };
     const manifestSha256 = sha256(canonicalJson(manifest));

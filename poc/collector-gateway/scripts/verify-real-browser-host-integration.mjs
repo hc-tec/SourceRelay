@@ -169,7 +169,7 @@ try {
 
 function assertLaunchedProfile(profile) {
   assert.equal(profile.running, true);
-  assert.equal(profile.runtime?.extensionRuntime?.finalRuntimeVersion, '0.7.12');
+  assert.equal(profile.runtime?.extensionRuntime?.finalRuntimeVersion, '0.7.13');
   assert.equal(profile.runtime?.extensionRuntime?.nativeBridgeConnected, true);
   assert.equal(profile.runtime?.livePlatformRequests, 0);
 }

@@ -18,6 +18,8 @@ import {
   type ScrollPageRequest,
   type StrategyObservationReadRequest,
   type StrategyObservationResult,
+  type StrategyBindingDiagnostics,
+  type StrategyBindingDiagnosticsRequest,
   type StrategyObserverBindingRequest,
   type StrategyObserverBindingResult,
   type PageVisualEvidence
@@ -228,6 +230,29 @@ export class ProfileRuntime {
       result.documentGeneration !== context.documentGeneration ||
       result.routeGeneration !== context.routeGeneration) {
       throw new Error('strategy_observation_result_invalid');
+    }
+    return result;
+  }
+
+  async readStrategyBindingDiagnostics(
+    request: StrategyBindingDiagnosticsRequest
+  ): Promise<StrategyBindingDiagnostics> {
+    const context = this.#ledger.extensionCommandContext(request);
+    const result = await this.#nativeBridgeCommands.command(
+      this.profileId,
+      this.browserSessionId,
+      {
+        type: 'collector_read_strategy_binding_diagnostics',
+        tabId: context.extensionTabId,
+        observerBindingId: request.observerBindingId,
+        strategyId: request.strategyId
+      },
+      5_000
+    );
+    if (result.type !== 'collector_strategy_binding_diagnostics' ||
+      result.observerBindingId !== request.observerBindingId ||
+      result.strategyId !== request.strategyId) {
+      throw new Error('strategy_binding_diagnostics_result_invalid');
     }
     return result;
   }

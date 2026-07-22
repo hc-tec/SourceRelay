@@ -11,7 +11,7 @@ const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const packageMetadata = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
 
 const approved = {
-  permissions: ['nativeMessaging', 'storage', 'scripting'],
+  permissions: ['nativeMessaging', 'storage', 'scripting', 'webNavigation'],
   hostPermissions: [
     'https://space.bilibili.com/*',
     'https://api.bilibili.com/*',
@@ -114,8 +114,13 @@ const mainWorldObserverSource = await readFile(resolve(outputDirectory, 'main-wo
 const controlSource = await readFile(resolve(outputDirectory, 'control.js'), 'utf8');
 
 assert.match(backgroundSource, /connectNative/, 'Native Messaging bridge connection is required');
-assert.match(backgroundSource, /collector_bind_strategy_observer/, 'exact Strategy bind command is required');
-assert.match(backgroundSource, /collector_read_strategy_observation/, 'exact Strategy read command is required');
+  assert.match(backgroundSource, /collector_bind_strategy_observer/, 'exact Strategy bind command is required');
+  assert.match(backgroundSource, /collector_read_strategy_observation/, 'exact Strategy read command is required');
+  assert.match(
+    backgroundSource,
+    /collector_read_strategy_binding_diagnostics/,
+    'failure-only strategy binding diagnostics are required'
+  );
 assert.match(backgroundSource, /bilibili\.dynamic\.account-feed\.response-dom\.v1/, 'compiled Bilibili dynamic Strategy is required');
 assert.match(backgroundSource, /bilibili\.video\.detail\.dom\.v2/, 'compiled Bilibili DOM-only detail Strategy is required');
 assert.match(backgroundSource, /bilibili\.account\.video-inventory\.dom\.v1/, 'compiled Bilibili DOM-only inventory Strategy is required');
@@ -133,7 +138,7 @@ assert.match(
 );
 assert.match(backgroundSource, /collector\.native-bridge-config\.v1/, 'Browser Host bridge bootstrap key is required');
 assert.match(backgroundSource, /collector\.runtime-bootstrap\.v1/, 'worker runtime marker is required');
-assert.match(backgroundSource, /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*10|controlSurfaceRevision:\s*10/, 'runtime revision must be 10');
+  assert.match(backgroundSource, /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*11|controlSurfaceRevision:\s*11/, 'runtime revision must be 11');
 assert.doesNotMatch(
   backgroundSource,
   /collector\.pollGatewayTasks|collector\.pairGateway|collector\.startCapabilityValidation|collector\.startDetailCapabilityValidation|collector\.startTranscriptCapabilityValidation|collector\.collectionResult|stageLease|127\.0\.0\.1|localhost/i,

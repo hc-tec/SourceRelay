@@ -26,6 +26,8 @@ import {
   type ScrollPageRequest,
   type StrategyObservationReadRequest,
   type StrategyObservationResult,
+  type StrategyBindingDiagnostics,
+  type StrategyBindingDiagnosticsRequest,
   type StrategyObserverBindingRequest,
   type StrategyObserverBindingResult
 } from '@intelligence/collector-contracts';
@@ -139,6 +141,17 @@ export class GatewayBrowserHostRuntime {
       throw new Error('browser_host_strategy_observation_response_invalid');
     }
     return structuredClone(result as StrategyObservationResult);
+  }
+
+  async readStrategyBindingDiagnostics(
+    request: StrategyBindingDiagnosticsRequest
+  ): Promise<StrategyBindingDiagnostics> {
+    const result = await this.#command({ type: 'read_strategy_binding_diagnostics', request }, false);
+    if (!result || typeof result !== 'object' ||
+      (result as { type?: unknown }).type !== 'collector_strategy_binding_diagnostics') {
+      throw new Error('browser_host_strategy_binding_diagnostics_response_invalid');
+    }
+    return structuredClone(result as StrategyBindingDiagnostics);
   }
 
   async shutdownHost(): Promise<void> {

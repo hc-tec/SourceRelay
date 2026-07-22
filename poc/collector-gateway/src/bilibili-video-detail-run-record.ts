@@ -1,4 +1,7 @@
-import { BILIBILI_VIDEO_DETAIL_STRATEGY_ID } from '@intelligence/collector-contracts';
+import {
+  BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
+  type StrategyBindingDiagnostics
+} from '@intelligence/collector-contracts';
 import { createHash } from 'node:crypto';
 import type {
   BilibiliVideoDetailAction,
@@ -23,6 +26,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
   errorCode: string | null;
   detail: BilibiliVideoDetailProjection | null;
   visualEvidence: BilibiliVideoDetailVisualEvidence | null;
+  bindingDiagnostics?: StrategyBindingDiagnostics | null;
   actions: BilibiliVideoDetailAction[];
   terminalReason: BilibiliVideoDetailTerminalReason;
   targetTabSelection: BilibiliVideoDetailRunRecord['safeguards']['targetTabSelection'];
@@ -49,6 +53,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
     completedAt: input.completedAt,
     detail,
     visualEvidence: input.visualEvidence,
+    ...(input.bindingDiagnostics ? { bindingDiagnostics: structuredClone(input.bindingDiagnostics) } : {}),
     actions: input.actions,
     coverage: {
       capturedDetails: detail ? 1 : 0,

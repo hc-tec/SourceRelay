@@ -1,7 +1,7 @@
 # B 站视频详情首屏：DOM-only MVP 契约 v0.1
 
 - 日期：2026-07-21
-- 状态：已完成独立匿名实网可行性侦察；历史受管闭环见第 7–10 节，`0.7.12` 文档替换修复的重新验证进行中（第 12 节）
+- 状态：已完成独立匿名实网可行性侦察；历史受管闭环见第 7–10 节，通用 document-binding 诊断与正常公开视频重新验证进行中（第 12–13 节）
 - 示例页面：`https://www.bilibili.com/video/BV1qZSLBYEpa`
 
 ## 1. 要解决的问题
@@ -253,4 +253,24 @@ L3  real-local：生产 Chromium + MV3 + Native Messaging + Browser Host + Gatew
 L4  live canary：待执行；只允许一个 BVID、一次导航、零点击、零自动重试。
 ```
 
-L1/L3 仅证明浏览器/扩展基础框架，不能冒充 B 站能力。`0.7.12` 仍必须以独立受管登录 Profile canary 验证：视觉非骨架、DOM 投影、document lifecycle 与访问状态三者同时成立后，才可以把这条详情闭环重新标为 `proved`。
+L1/L3 仅证明浏览器/扩展基础框架，不能冒充 B 站能力。`0.7.12` 随后对同一受限样本执行的单次 canary 仍在约 55 秒后以 `video_detail_strategy_binding_context_rejected` 结束，且 Browser Host 又一次记录到同 URL 的第二次 main-frame navigation。它证明第一轮修复不足，但**不**支持把故障归因成“充电视频”或平台访问限制。
+
+## 13. 去敏 binding 诊断与验证样本纠偏（2026-07-22）
+
+`BV1BoKD6ZEir` 最初仅用作“播放器存在不等于可访问”的受限负向样本。它不应成为详情页框架开发的中心，更不应被重复导航来掩盖基础问题。该样本的第二次失败已经完整保留为一次导航、零 click/hover/scroll、零自动重试的 runtime artifact；后续不会自动重跑它。
+
+为让下一次验证回答**通用**问题，`0.7.13 / revision 11` 新增了失败时的本地 binding 诊断命令。它只能在当前 managed page 仍由同一 run lease 持有时调用，并且只返回以下枚举/布尔型生命周期事实：
+
+```text
+bindingState              missing | invalid | expired | active
+documentBindingState      not_bound | bound
+documentBindCount         0 | 1 | 2 | 3（3 表示三次或更多）
+bridgeRegistration        registered | missing | unavailable
+currentMainFrameState     not_checked | unavailable | target_mismatch |
+                          current_document_unbound | matches_bound_document |
+                          different_document | excluded_document
+```
+
+它明确不返回 tab ID、document ID、URL、DOM、截图、页面文本、请求/响应、storage、Cookie、Token 或任何认证材料。失败诊断只写入该次 ignored runtime artifact 的 manifest，不进入摘要索引，也不构成采集字段。
+
+新的 L1 单元和 L3 生产 Chromium/MV3/Native Messaging/Browser Host/Gateway real-local 闭环均已验证该命令（6/6、零实网请求）。下一条 L4 canary 必须改为正常公开视频；验证目标是“同 URL 主文档替换后能否稳定完成详情投影”，而非测试充电门禁。访问状态仍是详情投影的一项停止/标记分支，不再是开发主线。

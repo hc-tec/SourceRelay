@@ -3,7 +3,8 @@ import {
   BrowserHostError,
   COLLECTOR_EXTENSION_VERSION,
   type AcquirePageResult,
-  type PageReleaseDisposition
+  type PageReleaseDisposition,
+  type StrategyBindingDiagnostics
 } from '@intelligence/collector-contracts';
 import { randomUUID } from 'node:crypto';
 import type { AccountSafetyRegistry, AccountSafetyRunPermit } from './account-safety';
@@ -43,6 +44,21 @@ export interface BilibiliVideoDetailHostRunResult {
 
 interface LeasedPageContext {
   recordVersion: number;
+}
+
+/**
+ * Carries a bounded, local-only binding diagnosis from the exact leased page
+ * that failed to observe.  The underlying error string remains the terminal
+ * error code; diagnostics never change platform-action semantics.
+ */
+class VideoDetailObservationError extends Error {
+  readonly bindingDiagnostics: StrategyBindingDiagnostics | null;
+
+  constructor(cause: unknown, bindingDiagnostics: StrategyBindingDiagnostics | null) {
+    super(cause instanceof Error ? cause.message : 'video_detail_strategy_observation_failed');
+    this.name = 'VideoDetailObservationError';
+    this.bindingDiagnostics = bindingDiagnostics;
+  }
 }
 
 function input(value: BilibiliVideoDetailHostRunInput): BilibiliVideoDetailHostRunInput {
@@ -175,6 +191,7 @@ export class BilibiliVideoDetailHostRunner {
     let state: BilibiliVideoDetailRunRecord['state'] = 'failed';
     let terminalReason: BilibiliVideoDetailTerminalReason = 'dom_projection_failed';
     let errorCode: string | null = null;
+    let bindingDiagnostics: StrategyBindingDiagnostics | null = null;
     let releaseDisposition: PageReleaseDisposition = 'quarantined';
     let releaseReason = 'video_detail_run_not_started';
     let uncertainPageOutcome = false;
@@ -263,6 +280,7 @@ export class BilibiliVideoDetailHostRunner {
         }
       }
     } catch (error) {
+      if (error instanceof VideoDetailObservationError) bindingDiagnostics = error.bindingDiagnostics;
       const failure = failureFor(error);
       state = failure.state;
       terminalReason = failure.terminalReason;
@@ -313,6 +331,7 @@ export class BilibiliVideoDetailHostRunner {
       errorCode,
       detail,
       visualEvidence,
+      bindingDiagnostics,
       actions,
       terminalReason,
       targetTabSelection,
@@ -372,11 +391,31 @@ export class BilibiliVideoDetailHostRunner {
         });
       } catch (error) {
         if (!(error instanceof BrowserHostError) || error.record.code !== 'managed_page_record_version_mismatch' || attempt === 1) {
-          throw error;
+          const diagnostics = await this.#readStrategyBindingDiagnostics(input, context).catch(() => null);
+          throw new VideoDetailObservationError(error, diagnostics);
         }
       }
     }
     throw new Error('video_detail_strategy_local_version_unavailable');
+  }
+
+  async #readStrategyBindingDiagnostics(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    runId: string;
+    observerBindingId: string;
+  }, context: LeasedPageContext): Promise<StrategyBindingDiagnostics> {
+    return await this.#browserManager.readStrategyBindingDiagnostics({
+      schemaVersion: 1,
+      profileId: input.profileId,
+      pageAlias: input.pageAlias,
+      pageLeaseId: input.pageLeaseId,
+      expectedRecordVersion: context.recordVersion,
+      runId: input.runId,
+      observerBindingId: input.observerBindingId,
+      strategyId: BILIBILI_VIDEO_DETAIL_STRATEGY_ID
+    });
   }
 
   async #captureVisualEvidence(input: {

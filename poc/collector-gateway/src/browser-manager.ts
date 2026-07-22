@@ -13,6 +13,8 @@ import type {
   ScrollPageRequest,
   StrategyObservationReadRequest,
   StrategyObservationResult,
+  StrategyBindingDiagnostics,
+  StrategyBindingDiagnosticsRequest,
   StrategyObserverBindingRequest,
   StrategyObserverBindingResult
 } from '@intelligence/collector-contracts';
@@ -99,6 +101,13 @@ export class CollectionBrowserManager {
   async readStrategyObservation(request: StrategyObservationReadRequest): Promise<StrategyObservationResult> {
     this.#registry.get(request.profileId);
     return await this.#runtime.readStrategyObservation(request);
+  }
+
+  async readStrategyBindingDiagnostics(
+    request: StrategyBindingDiagnosticsRequest
+  ): Promise<StrategyBindingDiagnostics> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.readStrategyBindingDiagnostics(request);
   }
 
   async releasePage(request: ReleasePageRequest): Promise<ManagedPageSummary> {

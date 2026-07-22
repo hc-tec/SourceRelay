@@ -42,7 +42,7 @@ test('production MV3 boot uses the actual extension and makes zero platform requ
     expect(runtime.runtimeBootstrap).toEqual({
       schemaVersion: 1,
       collectorVersion: runtime.manifest.version,
-      controlSurfaceRevision: 10
+      controlSurfaceRevision: 11
     });
     expect(runtime.nativeBridgeStatus?.state).toBe('unconfigured');
 

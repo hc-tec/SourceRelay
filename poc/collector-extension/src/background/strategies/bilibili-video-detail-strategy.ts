@@ -54,4 +54,5 @@ const observer = createDomOnlyDocumentObserver<VideoDetailBinding, BilibiliVideo
 export const initialiseBilibiliVideoDetailDocumentBridge = observer.initialiseDocumentBridge;
 export const bindBilibiliVideoDetailObserver = observer.bind;
 export const readBilibiliVideoDetailObservation = observer.read;
+export const diagnoseBilibiliVideoDetailObserver = observer.diagnose;
 export const cleanupExpiredBilibiliVideoDetailObserverBindings = observer.cleanupExpiredBindings;

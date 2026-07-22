@@ -89,6 +89,47 @@ export interface StrategyObservationReadRequest {
   deadlineMs: number;
 }
 
+/**
+ * Local-only request used after an observation failure while the managed page
+ * is still leased.  It deliberately carries no target URL, selector, page
+ * JavaScript, or content request.
+ */
+export interface StrategyBindingDiagnosticsRequest {
+  schemaVersion: typeof STRATEGY_OBSERVATION_SCHEMA_VERSION;
+  profileId: string;
+  pageAlias: string;
+  pageLeaseId: string;
+  expectedRecordVersion: number;
+  runId: string;
+  observerBindingId: string;
+  strategyId: CollectorStrategyId;
+}
+
+/**
+ * A de-sensitised explanation of the extension's binding lifecycle.  It
+ * contains no tab ID, document ID, URL, page text, request metadata, storage
+ * content, or authentication material.  `documentBindCount` is capped at 3,
+ * where 3 means "three or more".
+ */
+export interface StrategyBindingDiagnostics {
+  schemaVersion: typeof STRATEGY_OBSERVATION_SCHEMA_VERSION;
+  type: 'collector_strategy_binding_diagnostics';
+  strategyId: CollectorStrategyId;
+  observerBindingId: string;
+  bindingState: 'missing' | 'invalid' | 'expired' | 'active';
+  documentBindingState: 'not_bound' | 'bound';
+  documentBindCount: 0 | 1 | 2 | 3;
+  bridgeRegistration: 'registered' | 'missing' | 'unavailable';
+  currentMainFrameState:
+    | 'not_checked'
+    | 'unavailable'
+    | 'target_mismatch'
+    | 'current_document_unbound'
+    | 'matches_bound_document'
+    | 'different_document'
+    | 'excluded_document';
+}
+
 export interface StrategyObserverBindingResult {
   schemaVersion: typeof STRATEGY_OBSERVATION_SCHEMA_VERSION;
   type: 'collector_strategy_observer_binding';

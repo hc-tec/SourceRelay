@@ -1,3 +1,5 @@
+import type { StrategyBindingDiagnostics } from '@intelligence/collector-contracts';
+
 export const BILIBILI_VIDEO_DETAIL_MAX_TAGS = 20;
 
 export interface BilibiliVideoDetailInput {
@@ -119,6 +121,11 @@ export interface BilibiliVideoDetailRunRecord {
   completedAt: string;
   detail: BilibiliVideoDetailProjection | null;
   visualEvidence: BilibiliVideoDetailVisualEvidence | null;
+  /**
+   * Failure-only, de-sensitised extension lifecycle evidence.  It intentionally
+   * excludes document IDs, URLs, page text, request metadata and credentials.
+   */
+  bindingDiagnostics?: StrategyBindingDiagnostics;
   actions: BilibiliVideoDetailAction[];
   coverage: {
     capturedDetails: number;

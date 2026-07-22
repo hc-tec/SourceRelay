@@ -18,6 +18,8 @@ import type { BrowserHostErrorRecord } from './errors.js';
 import type {
   StrategyObservationReadRequest,
   StrategyObservationResult,
+  StrategyBindingDiagnostics,
+  StrategyBindingDiagnosticsRequest,
   StrategyObserverBindingRequest,
   StrategyObserverBindingResult
 } from './strategy-observation.js';
@@ -68,6 +70,7 @@ export type BrowserHostCommandBody =
   | { type: 'capture_page_visual_evidence'; request: CapturePageVisualEvidenceRequest }
   | { type: 'bind_strategy_observer'; request: StrategyObserverBindingRequest }
   | { type: 'read_strategy_observation'; request: StrategyObservationReadRequest }
+  | { type: 'read_strategy_binding_diagnostics'; request: StrategyBindingDiagnosticsRequest }
   | { type: 'reconcile_page'; request: ReconcilePageRequest }
   | { type: 'create_reclaim_plan'; request: CreateReclaimPlanRequest }
   | { type: 'execute_reclaim_plan'; request: ExecuteReclaimPlanRequest }
@@ -99,6 +102,7 @@ export type BrowserHostCommandResult =
   | ReclaimExecutionResult
   | StrategyObserverBindingResult
   | StrategyObservationResult
+  | StrategyBindingDiagnostics
   | { ok: true; profileId?: string; pageAlias?: string; state?: string }
   | { ok: true; shuttingDown: true };
 

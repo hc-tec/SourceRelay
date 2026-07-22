@@ -52,7 +52,7 @@ let browserProcessId = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.12');
+  assert.equal(extensionManifest.version, '0.7.13');
 
   endpoint = await launchBrowserHost({
     mainModulePath,
@@ -76,7 +76,7 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 10,
+        controlSurfaceRevision: 11,
         runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
       }
     }
@@ -134,6 +134,34 @@ try {
   assert.equal(videoBinding.observerBindingId, videoBindingRequest.observerBindingId);
   assert.equal(videoBinding.pageAlias, acquired.page.pageAlias);
   assert.equal(videoBinding.nextDocumentGeneration, acquired.page.documentGeneration + 1);
+
+  // A real MV3/native-messaging round trip for the failure-only diagnostic
+  // surface. This stays on about:blank and proves no platform page, DOM, URL,
+  // document ID, response metadata, or credentials are returned.
+  const videoBindingDiagnostics = await client.command({
+    type: 'read_strategy_binding_diagnostics',
+    request: {
+      schemaVersion: 1,
+      profileId,
+      pageAlias: acquired.page.pageAlias,
+      pageLeaseId: acquired.lease.pageLeaseId,
+      expectedRecordVersion: acquired.page.recordVersion,
+      runId,
+      observerBindingId: videoBindingRequest.observerBindingId,
+      strategyId: videoBindingRequest.strategyId
+    }
+  });
+  assert.deepEqual(videoBindingDiagnostics, {
+    schemaVersion: 1,
+    type: 'collector_strategy_binding_diagnostics',
+    strategyId: videoBindingRequest.strategyId,
+    observerBindingId: videoBindingRequest.observerBindingId,
+    bindingState: 'active',
+    documentBindingState: 'not_bound',
+    documentBindCount: 0,
+    bridgeRegistration: 'registered',
+    currentMainFrameState: 'target_mismatch'
+  });
 
   const accountVideoInventoryBindingRequest = {
     ...bindingRequest,
@@ -225,6 +253,7 @@ try {
     hostCreatedPageBoundToOneExtensionTab: true,
     hostToExtensionStrategyCommandRoundTripCompleted: true,
     videoDetailDomOnlyBindingRoundTripCompleted: true,
+    videoDetailBindingDiagnosticRoundTripCompleted: true,
     accountVideoInventoryDomOnlyBindingRoundTripCompleted: true,
     priorBindingReplacedWithoutPlatformNavigation: true,
     observerBindingCorrelationVerified: true,
