@@ -104,18 +104,22 @@ describe('Evidence Plan control-plane', () => {
 
     const [bilibiliSearch, zhihuSearch, bilibiliAccount] = plan.stages;
     expect(bilibiliSearch?.preflight).toMatchObject({
-      status: 'ready',
-      releaseTrack: 'formal',
+      status: 'live_validation_required',
+      releaseTrack: 'experimental',
       budgetStatus: 'accepted',
       requiredUserActions: []
     });
+    expect(bilibiliSearch?.preflight.knownGaps).toContain('No user-controlled live-platform validation record is admitted.');
     expect(zhihuSearch?.preflight).toMatchObject({
       status: 'live_validation_required',
       releaseTrack: 'experimental',
       budgetStatus: 'accepted'
     });
     expect(zhihuSearch?.preflight.knownGaps).toContain('No user-controlled live-platform validation record is admitted.');
-    expect(bilibiliAccount?.preflight.status).toBe('ready');
+    expect(bilibiliAccount?.preflight).toMatchObject({
+      status: 'live_validation_required',
+      releaseTrack: 'experimental'
+    });
     expect(permissionChecks).toEqual([
       ['https://search.bilibili.com/*', 'https://www.bilibili.com/*'],
       ['https://www.zhihu.com/*', 'https://zhuanlan.zhihu.com/*'],
@@ -178,12 +182,12 @@ describe('Evidence Plan control-plane', () => {
 
     const suspended = await planFor(task({
       targets: [{ type: 'known_url', url: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }],
-      evidenceObjectives: ['detail_read'],
+      evidenceObjectives: ['transcript_read'],
       consent: {
         approvedBy: 'user',
         approvedAt: '2026-07-22T00:00:00.000Z',
-        approvedActions: ['detail_navigation', 'visible_dom'],
-        approvedObjectives: ['detail_read'],
+        approvedActions: ['detail_navigation', 'visible_dom', 'bounded_interaction', 'approved_response'],
+        approvedObjectives: ['transcript_read'],
         escalationPolicy: 'explicit_approval_required'
       }
     }), true);

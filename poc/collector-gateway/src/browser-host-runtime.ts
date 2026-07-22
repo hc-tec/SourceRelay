@@ -6,8 +6,11 @@ import {
 } from '@intelligence/collector-browser-host/client';
 import {
   BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_SCHEMA_VERSION,
+  BILIBILI_TRANSCRIPT_CHINESE_SELECTION_SCHEMA_VERSION,
   type BilibiliAccountVideoPageClickRequest,
   type BilibiliAccountVideoPageClickResult,
+  type BilibiliTranscriptChineseSelectionRequest,
+  type BilibiliTranscriptChineseSelectionResult,
   COLLECTOR_CONTROL_SURFACE_REVISION,
   COLLECTOR_EXTENSION_VERSION,
   BrowserHostError,
@@ -109,6 +112,14 @@ export class GatewayBrowserHostRuntime {
   ): Promise<BilibiliAccountVideoPageClickResult> {
     return bilibiliAccountVideoPageClickResponse(
       await this.#command({ type: 'click_bilibili_account_video_page', request }, false)
+    );
+  }
+
+  async selectBilibiliTranscriptChinese(
+    request: BilibiliTranscriptChineseSelectionRequest
+  ): Promise<BilibiliTranscriptChineseSelectionResult> {
+    return bilibiliTranscriptChineseSelectionResponse(
+      await this.#command({ type: 'select_bilibili_transcript_chinese', request }, false)
     );
   }
 
@@ -238,6 +249,18 @@ export function bilibiliAccountVideoPageClickResponse(value: unknown): BilibiliA
     throw new Error('browser_host_bilibili_page_click_response_invalid');
   }
   return structuredClone(value as BilibiliAccountVideoPageClickResult);
+}
+
+export function bilibiliTranscriptChineseSelectionResponse(value: unknown): BilibiliTranscriptChineseSelectionResult {
+  if (!value || typeof value !== 'object' ||
+    (value as { schemaVersion?: unknown }).schemaVersion !== BILIBILI_TRANSCRIPT_CHINESE_SELECTION_SCHEMA_VERSION ||
+    typeof (value as { pageAlias?: unknown }).pageAlias !== 'string' ||
+    typeof (value as { actionId?: unknown }).actionId !== 'string' ||
+    !Array.isArray((value as { actions?: unknown }).actions) ||
+    !('dom' in value) || !('visualEvidence' in value)) {
+    throw new Error('browser_host_bilibili_transcript_selection_response_invalid');
+  }
+  return structuredClone(value as BilibiliTranscriptChineseSelectionResult);
 }
 
 async function fileExists(path: string): Promise<boolean> {
