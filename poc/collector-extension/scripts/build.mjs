@@ -1,11 +1,13 @@
 import { build } from 'esbuild';
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outputDirectory = resolve(root, 'dist');
 const manifestPath = resolve(root, 'public', 'manifest.json');
+const buildFingerprint = await computeBuildFingerprint();
 
 await rm(outputDirectory, { recursive: true, force: true });
 await mkdir(outputDirectory, { recursive: true });
@@ -68,6 +70,9 @@ for (const bundle of bundles) {
     outfile: bundle.output,
     target: 'chrome120',
     sourcemap: true,
+    define: {
+      __COLLECTOR_EXTENSION_BUILD_FINGERPRINT__: JSON.stringify(buildFingerprint)
+    },
     logLevel: 'info'
   });
 }
@@ -85,4 +90,42 @@ try {
   if (error?.code !== 'ENOENT') throw error;
 }
 
-console.log(`Built production extension at ${outputDirectory}`);
+await writeFile(
+  resolve(outputDirectory, 'runtime-build.json'),
+  `${JSON.stringify({ schemaVersion: 1, buildFingerprint }, null, 2)}\n`,
+  'utf8'
+);
+
+console.log(`Built production extension at ${outputDirectory} (build ${buildFingerprint})`);
+
+async function computeBuildFingerprint() {
+  const files = [
+    ...(await collectFiles(resolve(root, 'src'))),
+    ...(await collectFiles(resolve(root, 'public'))),
+    resolve(root, 'package.json'),
+    resolve(root, 'scripts', 'build.mjs')
+  ].sort();
+  const hash = createHash('sha256');
+  for (const file of files) {
+    hash.update(relativePath(file));
+    hash.update('\0');
+    hash.update(await readFile(file));
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
+async function collectFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) files.push(...await collectFiles(path));
+    else if (entry.isFile()) files.push(path);
+  }
+  return files;
+}
+
+function relativePath(path) {
+  return path.slice(root.length + 1).replaceAll('\\', '/');
+}

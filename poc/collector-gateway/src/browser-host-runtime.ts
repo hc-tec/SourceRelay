@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import {
   BrowserHostClient,
   launchBrowserHost
@@ -13,6 +14,7 @@ import {
   type BilibiliTranscriptChineseSelectionResult,
   COLLECTOR_CONTROL_SURFACE_REVISION,
   COLLECTOR_EXTENSION_VERSION,
+  COLLECTOR_RUNTIME_BUILD_METADATA_FILENAME,
   BrowserHostError,
   PAGE_POOL_SCHEMA_VERSION,
   type AcquirePageRequest,
@@ -32,15 +34,10 @@ import {
   type StrategyBindingDiagnostics,
   type StrategyBindingDiagnosticsRequest,
   type StrategyObserverBindingRequest,
-  type StrategyObserverBindingResult
+  type StrategyObserverBindingResult,
+  type ExtensionRuntimeExpectation
 } from '@intelligence/collector-contracts';
 import type { GatewayConfig } from './config';
-
-const EXTENSION_RUNTIME_EXPECTATION = {
-  version: COLLECTOR_EXTENSION_VERSION,
-  controlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION,
-  runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
-} as const;
 
 export class GatewayBrowserHostRuntime {
   readonly #config: GatewayConfig;
@@ -64,6 +61,7 @@ export class GatewayBrowserHostRuntime {
   }
 
   async launchProfile(profileId: string): Promise<PagePoolSnapshot> {
+    const extensionRuntime = await readExtensionRuntimeExpectation(this.#config.extensionDirectory);
     return snapshotResult(await this.#command({
       type: 'launch_profile',
       request: {
@@ -71,7 +69,7 @@ export class GatewayBrowserHostRuntime {
         maximumManagedPages: 3,
         headless: this.#config.browserHeadless,
         offlineOnly: false,
-        extensionRuntime: EXTENSION_RUNTIME_EXPECTATION
+        extensionRuntime
       }
     }, true));
   }
@@ -232,6 +230,30 @@ export class GatewayBrowserHostRuntime {
       if (this.#connecting === connecting) this.#connecting = null;
     }
   }
+}
+
+async function readExtensionRuntimeExpectation(extensionDirectory: string): Promise<ExtensionRuntimeExpectation> {
+  let value: unknown;
+  try {
+    value = JSON.parse(await readFile(
+      resolve(extensionDirectory, COLLECTOR_RUNTIME_BUILD_METADATA_FILENAME),
+      'utf8'
+    ));
+  } catch {
+    throw new Error('collector_extension_build_metadata_missing');
+  }
+  if (!value || typeof value !== 'object' ||
+    (value as { schemaVersion?: unknown }).schemaVersion !== 1 ||
+    typeof (value as { buildFingerprint?: unknown }).buildFingerprint !== 'string' ||
+    !/^[a-f0-9]{64}$/.test((value as { buildFingerprint: string }).buildFingerprint)) {
+    throw new Error('collector_extension_build_metadata_invalid');
+  }
+  return {
+    version: COLLECTOR_EXTENSION_VERSION,
+    controlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION,
+    runtimeBootstrapKey: 'collector.runtime-bootstrap.v1',
+    buildFingerprint: (value as { buildFingerprint: string }).buildFingerprint
+  };
 }
 
 /**

@@ -94,18 +94,22 @@ export interface ExtensionRuntimeExpectation {
   version: string;
   controlSurfaceRevision: number;
   runtimeBootstrapKey: string;
+  buildFingerprint: string;
 }
 
 export interface ExtensionRuntimeSummary {
   extensionId: string;
   expectedVersion: string;
   expectedControlSurfaceRevision: number;
+  expectedBuildFingerprint: string;
   initialManifestVersion: string;
   initialRuntimeVersion: string | null;
   initialControlSurfaceRevision: number | null;
+  initialBuildFingerprint: string | null;
   finalManifestVersion: string;
   finalRuntimeVersion: string;
   finalControlSurfaceRevision: number;
+  finalBuildFingerprint: string;
   headlessProbePerformed: true;
   headlessProbeNetworkMode: 'offline';
   reloadAttempted: boolean;

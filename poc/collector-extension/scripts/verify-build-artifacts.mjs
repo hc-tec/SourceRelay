@@ -9,6 +9,7 @@ const outputDirectory = resolve(root, 'dist');
 const manifestPath = resolve(outputDirectory, 'manifest.json');
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const packageMetadata = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+const runtimeBuild = JSON.parse(await readFile(resolve(outputDirectory, 'runtime-build.json'), 'utf8'));
 
 const approved = {
   permissions: ['nativeMessaging', 'storage', 'scripting', 'webNavigation'],
@@ -30,6 +31,8 @@ const approved = {
 
 assert.equal(manifest.manifest_version, 3, 'build artifact must be Manifest V3');
 assert.equal(manifest.version, packageMetadata.version, 'manifest and package versions must match');
+assert.equal(runtimeBuild.schemaVersion, 1, 'runtime build metadata schema must be 1');
+assert.match(runtimeBuild.buildFingerprint, /^[a-f0-9]{64}$/, 'runtime build fingerprint must be a SHA-256 hex digest');
 assert.equal(/\btest\b/i.test(manifest.name), false, 'production artifact must not be test-branded');
 assert.deepEqual(manifest.permissions ?? [], approved.permissions, 'core permissions changed without approval');
 assert.deepEqual(manifest.optional_permissions ?? [], [], 'optional API permissions changed without approval');
@@ -91,6 +94,7 @@ for (const script of requiredScripts) {
 for (const pageArtifact of ['control.html', 'control.css']) {
   await access(resolve(outputDirectory, pageArtifact));
 }
+await access(resolve(outputDirectory, 'runtime-build.json'));
 
 const outputNames = await readdir(outputDirectory);
 for (const retiredArtifact of ['content.js', 'transcript-validation.js']) {
@@ -160,7 +164,12 @@ assert.match(
 );
 assert.match(backgroundSource, /collector\.native-bridge-config\.v1/, 'Browser Host bridge bootstrap key is required');
 assert.match(backgroundSource, /collector\.runtime-bootstrap\.v1/, 'worker runtime marker is required');
-assert.match(backgroundSource, /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*16|controlSurfaceRevision:\s*16/, 'runtime revision must be 16');
+assert.match(
+  backgroundSource,
+  /(?:COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*15|controlSurfaceRevision:\s*15)/,
+  'runtime revision must remain the public revision 15'
+);
+assert.match(backgroundSource, new RegExp(runtimeBuild.buildFingerprint), 'worker must publish the current build fingerprint');
 assert.doesNotMatch(
   backgroundSource,
   /collector\.pollGatewayTasks|collector\.pairGateway|collector\.startCapabilityValidation|collector\.startDetailCapabilityValidation|collector\.startTranscriptCapabilityValidation|collector\.collectionResult|stageLease|127\.0\.0\.1|localhost/i,

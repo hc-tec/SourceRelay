@@ -27,8 +27,8 @@ function validHello() {
     profileId: 'profile-123',
     browserSessionId: 'browser-session-123',
     extensionId: 'a'.repeat(32),
-    collectorVersion: '0.7.18',
-    controlSurfaceRevision: 16,
+    collectorVersion: '0.7.17',
+    controlSurfaceRevision: 15,
     nonce: 'nonce-which-is-long-enough'
   };
 }

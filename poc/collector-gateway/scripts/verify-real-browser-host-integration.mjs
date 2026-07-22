@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { access, mkdir, rm } from 'node:fs/promises';
+import { access, mkdir, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +20,7 @@ if (!runtimeRoot.startsWith(`${runtimeParent}\\`) && !runtimeRoot.startsWith(`${
 const gatewayMain = resolve(gatewayRoot, 'dist', 'server.js');
 const browserHostMain = resolve(workspaceRoot, 'collector-browser-host', 'dist', 'main.js');
 const extensionDirectory = resolve(workspaceRoot, 'collector-extension', 'dist');
+const runtimeBuild = JSON.parse(await readFile(resolve(extensionDirectory, 'runtime-build.json'), 'utf8'));
 const port = await availablePort();
 const origin = `http://127.0.0.1:${port}`;
 const environment = {
@@ -169,7 +170,8 @@ try {
 
 function assertLaunchedProfile(profile) {
   assert.equal(profile.running, true);
-  assert.equal(profile.runtime?.extensionRuntime?.finalRuntimeVersion, '0.7.18');
+  assert.equal(profile.runtime?.extensionRuntime?.finalRuntimeVersion, '0.7.17');
+  assert.equal(profile.runtime?.extensionRuntime?.finalBuildFingerprint, runtimeBuild.buildFingerprint);
   assert.equal(profile.runtime?.extensionRuntime?.nativeBridgeConnected, true);
   assert.equal(profile.runtime?.livePlatformRequests, 0);
 }

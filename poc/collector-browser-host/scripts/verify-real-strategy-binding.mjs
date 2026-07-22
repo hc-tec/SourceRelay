@@ -56,7 +56,9 @@ let browserProcessId = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.18');
+  const runtimeBuild = JSON.parse(await readFile(resolve(extensionDirectory, 'runtime-build.json'), 'utf8'));
+  assert.equal(extensionManifest.version, '0.7.17');
+  assert.match(runtimeBuild.buildFingerprint, /^[a-f0-9]{64}$/);
 
   endpoint = await launchBrowserHost({
     mainModulePath,
@@ -80,8 +82,9 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 16,
-        runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
+        controlSurfaceRevision: 15,
+        runtimeBootstrapKey: 'collector.runtime-bootstrap.v1',
+        buildFingerprint: runtimeBuild.buildFingerprint
       }
     }
   }));

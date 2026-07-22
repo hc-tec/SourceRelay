@@ -32,7 +32,7 @@
 - 只有显式选择 `schema_only` 时，认证勘察才会对四条精确 B站 API route 和路径含 subtitle 的平台 CDN 响应做内存映射；单响应上限 512 KiB、总上限 1 MiB，JSON 只返回去敏字段路径/类型/数组规模，非 JSON 只返回类型、大小和摘要，原始正文不落盘；
 - 认证交互结果原子保存为 ignored runtime artifact；artifact 不保存 Profile ID、原始 URL、原始 response body 或未知 DOM 字段。`GET /v1/reconnaissance/interactions` 只列 compact summary 与 `schemaPathCount`，`GET /v1/reconnaissance/interactions/<record-id>` 才返回完整安全结构投影；
 - 运行结果不能自动改策略；只有仓库内显式 live-validation reference 才会让 Gateway 将 accepted 记录标记为 admitted；
-- 持久 Profile 保存的最后成功版本只用于历史遥测，不能决定是否检查 worker。冷启动先在 headless context A 同时核对 manifest、运行时代码发布的 `collectorVersion` 和 `controlSurfaceRevision`；全部匹配就直接关闭 A 并启动可见浏览器，不匹配才对旧 worker 发送一次 `chrome.runtime.reload()`、关闭 A，并在 headless context B 精确复核；
+- 持久 Profile 保存的最后成功版本只用于历史遥测，不能决定是否检查 worker。公开扩展版本与控制面 revision 不因普通内部改动升级；冷启动先在 headless context A 同时核对 manifest、运行时代码发布的 `collectorVersion`、`controlSurfaceRevision` 和稳定 `buildFingerprint`；全部匹配就直接关闭 A 并启动可见浏览器，不匹配才对旧 worker 发送一次 `chrome.runtime.reload()`、关闭 A，并在 headless context B 精确复核；
 - manifest 文件版本不能替代运行时代码版本。启动器不再打开 `chrome://extensions`、不再点击 unpacked Reload，也不再因版本失败自动重启可见 context；Control 页创建和只读版本核验保持 single-flight，并合并同扩展的重复 Control tab。若无界面复核仍失败，API 返回 failure phase 与 expected/observed version、control revision，而不是只给无上下文 mismatch；
 - 只有所有 stage 同时为 `ready + formal` 时才允许用户批准；未 admission 的 `build_ready` 策略会被明确阻断；
 - 非最终 stage 完成后任务进入 `waiting_for_user_resume`，扩展轮询不能后台取得下一 stage；Console 的 `/v1/tasks/<task-id>/resume` 只核对既有 approved plan / pending stage / Profile binding，不启动浏览器、不导航，也不能代替 locked Profile 的 manual unlock；没有任何计时冷却；

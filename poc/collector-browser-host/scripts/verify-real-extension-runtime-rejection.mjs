@@ -26,7 +26,7 @@ const extensionDirectory = resolve(workspaceRoot, 'collector-extension', 'dist')
 const mainModulePath = resolve(root, 'dist', 'main.js');
 const profileId = 'extension-runtime-rejection';
 const expectedVersion = '999.999.999';
-const expectedControlSurfaceRevision = 16;
+const expectedControlSurfaceRevision = 15;
 
 if (relative(runtimeParent, runtimeRoot).startsWith('..')) {
   throw new Error('extension_runtime_rejection_path_rejected');
@@ -42,7 +42,9 @@ let report = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.18');
+  const runtimeBuild = JSON.parse(await readFile(resolve(extensionDirectory, 'runtime-build.json'), 'utf8'));
+  assert.equal(extensionManifest.version, '0.7.17');
+  assert.match(runtimeBuild.buildFingerprint, /^[a-f0-9]{64}$/);
   assert.notEqual(extensionManifest.version, expectedVersion);
 
   endpoint = await launchBrowserHost({
@@ -69,7 +71,8 @@ try {
         extensionRuntime: {
           version: expectedVersion,
           controlSurfaceRevision: expectedControlSurfaceRevision,
-          runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
+          runtimeBootstrapKey: 'collector.runtime-bootstrap.v1',
+          buildFingerprint: runtimeBuild.buildFingerprint
         }
       }
     }, { timeoutMs: 45_000 }),
@@ -81,9 +84,11 @@ try {
   assert.equal(rejection.pageDisposition, 'unchanged');
   assert.equal(rejection.safeDetails.expectedVersion, expectedVersion);
   assert.equal(rejection.safeDetails.expectedControlSurfaceRevision, expectedControlSurfaceRevision);
+  assert.equal(rejection.safeDetails.expectedBuildFingerprint, runtimeBuild.buildFingerprint);
   assert.equal(rejection.safeDetails.observedManifestVersion, extensionManifest.version);
   assert.equal(rejection.safeDetails.observedRuntimeVersion, extensionManifest.version);
   assert.equal(rejection.safeDetails.observedControlSurfaceRevision, expectedControlSurfaceRevision);
+  assert.equal(rejection.safeDetails.observedBuildFingerprint, runtimeBuild.buildFingerprint);
 
   const afterRejection = asSnapshot(await client.command({ type: 'get_snapshot' }));
   assert.equal(afterRejection.hostProcessId, endpoint.processId);

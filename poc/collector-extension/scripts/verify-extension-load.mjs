@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchProductionExtension } from './extension-test-harness.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const extensionPath = resolve(root, 'dist');
+const runtimeBuild = JSON.parse(await readFile(resolve(extensionPath, 'runtime-build.json'), 'utf8'));
+assert.equal(runtimeBuild.schemaVersion, 1);
+assert.match(runtimeBuild.buildFingerprint, /^[a-f0-9]{64}$/);
 
 let launched;
 try {
@@ -33,7 +37,8 @@ try {
   assert.deepEqual(runtime.runtimeBootstrap, {
     schemaVersion: 1,
     collectorVersion: runtime.extensionVersion,
-    controlSurfaceRevision: 16
+    controlSurfaceRevision: 15,
+    buildFingerprint: runtimeBuild.buildFingerprint
   }, 'service worker must publish its compiled runtime identity');
   assert.equal(runtime.nativeBridgeStatus?.state, 'unconfigured', 'fresh Profile must not invent a Browser Host bridge');
 
@@ -78,7 +83,8 @@ try {
     runtimeBootstrapPublished: true,
     nativeBridgeStartsUnconfigured: true,
     controlSurfaceLoaded: true,
-    controlSurfaceRevision: runtime.runtimeBootstrap.controlSurfaceRevision
+    controlSurfaceRevision: runtime.runtimeBootstrap.controlSurfaceRevision,
+    buildFingerprint: runtime.runtimeBootstrap.buildFingerprint
   }, null, 2));
 } finally {
   await launched?.close();

@@ -34,7 +34,9 @@ const profileId = 'real-browser-lifecycle';
 await mkdir(stateDirectory, { recursive: true });
 await mkdir(profileRoot, { recursive: true });
 const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-assert.equal(extensionManifest.version, '0.7.18');
+const runtimeBuild = JSON.parse(await readFile(resolve(extensionDirectory, 'runtime-build.json'), 'utf8'));
+assert.equal(extensionManifest.version, '0.7.17');
+assert.match(runtimeBuild.buildFingerprint, /^[a-f0-9]{64}$/);
 
 let endpoint = null;
 let client = null;
@@ -75,8 +77,9 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 16,
-        runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
+        controlSurfaceRevision: 15,
+        runtimeBootstrapKey: 'collector.runtime-bootstrap.v1',
+        buildFingerprint: runtimeBuild.buildFingerprint
       }
     }
   });
@@ -89,7 +92,8 @@ try {
   assert.ok(initialProfile.browserProcessId, 'real Chromium process id must be observable');
   assert.ok(initialProfile.extensionPages <= 1, 'Browser Session must not accumulate extension pages');
   assert.equal(initialProfile.extensionRuntime?.finalRuntimeVersion, extensionManifest.version);
-  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 16);
+  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 15);
+  assert.equal(initialProfile.extensionRuntime?.finalBuildFingerprint, runtimeBuild.buildFingerprint);
   assert.equal(initialProfile.extensionRuntime?.nativeBridgeConnected, true);
 
   const reusedEndpoint = await launchBrowserHost({

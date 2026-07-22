@@ -2,7 +2,7 @@
 
 这是个人情报产品在用户自己浏览器 Profile 内的只读观察层。它不是传统爬虫，也不是一个把 Cookie、任意 selector 或任意请求转发给本地服务的代理。浏览器自然保留用户正常登录状态；扩展不导出凭证、不绕过验证码/限流，也不执行点赞、关注、评论、私信、发布或删除。
 
-当前版本为 `0.7.18`。已编译的 Strategy 均是源专属、短时绑定的能力：
+当前公开版本为 `0.7.17`。普通内部实现改动不会升级公开版本；生产构建会生成稳定的 `runtime-build.json` 指纹，Browser Host 只在指纹变化时最多刷新一次旧 MV3 worker。已编译的 Strategy 均是源专属、短时绑定的能力：
 
 - `bilibili.dynamic.account-feed.response-dom.v1`：B 站账号动态页，两页以内的 DOM/XHR 观察；
 - `bilibili.video.detail.dom.v2`：B 站视频详情首屏，一次导航、零页面交互、零 response 观察的有界 DOM 投影。
@@ -45,7 +45,7 @@ MV3 Extension
 
 ## 已移除的旧路径
 
-`0.7.18` 不再包含以下 Extension runtime：
+当前 Extension runtime 不包含以下旧路径：
 
 - Extension 到 `127.0.0.1` Gateway 的配对、轮询、fetch、签名任务 envelope 和 evidence 回传；
 - stage lease、单工作 tab、URL digest 认领、静态 `content.js` 和旧的 capability-validation runner；

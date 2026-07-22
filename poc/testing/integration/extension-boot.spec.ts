@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchProductionExtension } from '../../collector-extension/scripts/extension-test-harness.mjs';
@@ -8,7 +8,8 @@ const pocRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const extensionPath = resolve(pocRoot, 'collector-extension', 'dist');
 
 test('production MV3 boot uses the actual extension and makes zero platform requests', async () => {
-  await access(resolve(extensionPath, 'manifest.json'));
+await access(resolve(extensionPath, 'manifest.json'));
+const runtimeBuild = JSON.parse(await readFile(resolve(extensionPath, 'runtime-build.json'), 'utf8'));
   const platformRequests: string[] = [];
   const launched = await launchProductionExtension(extensionPath, 'collector-real-local-extension-', {
     onContext(context: { on(event: 'request', listener: (request: { url(): string }) => void): void }) {
@@ -43,7 +44,8 @@ test('production MV3 boot uses the actual extension and makes zero platform requ
     expect(runtime.runtimeBootstrap).toEqual({
       schemaVersion: 1,
       collectorVersion: runtime.manifest.version,
-      controlSurfaceRevision: 16
+      controlSurfaceRevision: 15,
+      buildFingerprint: runtimeBuild.buildFingerprint
     });
     expect(runtime.nativeBridgeStatus?.state).toBe('unconfigured');
 

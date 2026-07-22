@@ -18,6 +18,7 @@ interface ExtensionWorkerProbe {
   manifestVersion: string;
   runtimeVersion: string | null;
   controlSurfaceRevision: number | null;
+  buildFingerprint: string | null;
 }
 
 export interface ExtensionPreparation {
@@ -25,6 +26,7 @@ export interface ExtensionPreparation {
   initialManifestVersion: string;
   initialRuntimeVersion: string | null;
   initialControlSurfaceRevision: number | null;
+  initialBuildFingerprint: string | null;
   reloadAttempted: boolean;
 }
 
@@ -85,12 +87,15 @@ export async function adoptVisibleExtension(input: {
       extensionId: probe.extensionId,
       expectedVersion: input.expectation.version,
       expectedControlSurfaceRevision: input.expectation.controlSurfaceRevision,
+      expectedBuildFingerprint: input.expectation.buildFingerprint,
       initialManifestVersion: input.preparation.initialManifestVersion,
       initialRuntimeVersion: input.preparation.initialRuntimeVersion,
       initialControlSurfaceRevision: input.preparation.initialControlSurfaceRevision,
+      initialBuildFingerprint: input.preparation.initialBuildFingerprint,
       finalManifestVersion: probe.manifestVersion,
       finalRuntimeVersion: probe.runtimeVersion!,
       finalControlSurfaceRevision: probe.controlSurfaceRevision!,
+      finalBuildFingerprint: probe.buildFingerprint!,
       headlessProbePerformed: true,
       headlessProbeNetworkMode: 'offline',
       reloadAttempted: input.preparation.reloadAttempted,
@@ -145,7 +150,12 @@ async function probeWorker(worker: Worker, runtimeBootstrapKey: string): Promise
     typeof snapshot.extensionId !== 'string' || !/^[a-p]{32}$/.test(snapshot.extensionId) ||
     typeof snapshot.manifestVersion !== 'string') return null;
   const bootstrap = snapshot.runtimeBootstrap && typeof snapshot.runtimeBootstrap === 'object'
-    ? snapshot.runtimeBootstrap as { schemaVersion?: unknown; collectorVersion?: unknown; controlSurfaceRevision?: unknown }
+    ? snapshot.runtimeBootstrap as {
+        schemaVersion?: unknown;
+        collectorVersion?: unknown;
+        controlSurfaceRevision?: unknown;
+        buildFingerprint?: unknown;
+      }
     : null;
   return {
     worker,
@@ -156,6 +166,9 @@ async function probeWorker(worker: Worker, runtimeBootstrapKey: string): Promise
       : null,
     controlSurfaceRevision: bootstrap?.schemaVersion === 1 && typeof bootstrap.controlSurfaceRevision === 'number'
       ? bootstrap.controlSurfaceRevision
+      : null,
+    buildFingerprint: bootstrap?.schemaVersion === 1 && typeof bootstrap.buildFingerprint === 'string'
+      ? bootstrap.buildFingerprint
       : null
   };
 }
@@ -163,7 +176,8 @@ async function probeWorker(worker: Worker, runtimeBootstrapKey: string): Promise
 function workerMatches(probe: ExtensionWorkerProbe, expectation: ExtensionRuntimeExpectation): boolean {
   return probe.manifestVersion === expectation.version &&
     probe.runtimeVersion === expectation.version &&
-    probe.controlSurfaceRevision === expectation.controlSurfaceRevision;
+    probe.controlSurfaceRevision === expectation.controlSurfaceRevision &&
+    probe.buildFingerprint === expectation.buildFingerprint;
 }
 
 function preparation(probe: ExtensionWorkerProbe, reloadAttempted: boolean): ExtensionPreparation {
@@ -172,6 +186,7 @@ function preparation(probe: ExtensionWorkerProbe, reloadAttempted: boolean): Ext
     initialManifestVersion: probe.manifestVersion,
     initialRuntimeVersion: probe.runtimeVersion,
     initialControlSurfaceRevision: probe.controlSurfaceRevision,
+    initialBuildFingerprint: probe.buildFingerprint,
     reloadAttempted
   };
 }
@@ -196,9 +211,11 @@ function extensionError(
     safeDetails: {
       expectedVersion: expected?.version ?? null,
       expectedControlSurfaceRevision: expected?.controlSurfaceRevision ?? null,
+      expectedBuildFingerprint: expected?.buildFingerprint ?? null,
       observedManifestVersion: observed?.manifestVersion ?? null,
       observedRuntimeVersion: observed?.runtimeVersion ?? null,
-      observedControlSurfaceRevision: observed?.controlSurfaceRevision ?? null
+      observedControlSurfaceRevision: observed?.controlSurfaceRevision ?? null,
+      observedBuildFingerprint: observed?.buildFingerprint ?? null
     }
   });
 }
