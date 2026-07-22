@@ -10,6 +10,7 @@ import {
   acquireRequest,
   asAcquire,
   asSnapshot,
+  delay,
   expectHostError,
   processAlive,
   terminateTestScopedProcesses,
@@ -40,6 +41,7 @@ await mkdir(profileRoot, { recursive: true });
 
 let endpoint = null;
 let client = null;
+let replacementClient = null;
 let cleanupClient = null;
 let report = null;
 
@@ -125,24 +127,31 @@ try {
     'page_lease_mismatch'
   );
 
-  await client.command({
-    type: 'release_page',
-    request: {
-      profileId: alphaProfileId,
-      pageAlias: alphaAcquire.page.pageAlias,
-      pageLeaseId: alphaAcquire.lease.pageLeaseId,
-      disposition: 'idle_reusable'
-    }
-  });
-  await client.command({
-    type: 'release_page',
-    request: {
-      profileId: betaProfileId,
-      pageAlias: betaAcquire.page.pageAlias,
-      pageLeaseId: betaAcquire.lease.pageLeaseId,
-      disposition: 'idle_reusable'
-    }
-  });
+  // A Gateway/controller disconnect is a Host-level event. It must quarantine
+  // both active leases without closing either browser or re-pairing a bridge
+  // to the wrong Profile.
+  client.close();
+  client = null;
+  await delay(250);
+  replacementClient = await BrowserHostClient.connect(endpointPath, 'multi-profile-isolation-gateway-reconnected');
+  const afterControllerDisconnect = asSnapshot(await replacementClient.command({ type: 'get_snapshot' }));
+  for (const [profileId, original, acquired] of [
+    [alphaProfileId, alpha, alphaAcquire],
+    [betaProfileId, beta, betaAcquire]
+  ]) {
+    const disconnected = profileById(afterControllerDisconnect, profileId);
+    const disconnectedPage = disconnected.pages.find((page) => page.pageAlias === acquired.page.pageAlias);
+    assert.equal(disconnected.running, true);
+    assert.equal(disconnected.browserProcessId, original.browserProcessId);
+    assert.equal(disconnected.browserSessionId, original.browserSessionId);
+    assert.equal(disconnected.extensionRuntime?.nativeBridgeConnected, true);
+    assert.equal(disconnected.livePlatformRequests, 0);
+    assert.equal(disconnectedPage?.state, 'quarantined');
+    assert.equal(disconnectedPage?.activeLease, null);
+    assert.equal(disconnectedPage?.quarantineReason, 'controller_disconnected');
+  }
+  client = replacementClient;
+  replacementClient = null;
 
   await client.command({ type: 'close_profile', profileId: alphaProfileId });
   await waitForProcessExit(alpha.browserProcessId, 10_000);
@@ -183,6 +192,7 @@ try {
     browserSessionsAndProcessesIsolated: true,
     nativeMessagingRegistrationsIsolated: true,
     profileLocalPageAliasesRejectedForeignLease: true,
+    controllerDisconnectQuarantinedBothProfilesWithoutClosingBrowsers: true,
     closingOneProfileDidNotCloseTheOther: true,
     nativeMessagingRegistrationsCleanedPerProfile: true,
     testScopedProcessResidue: 0,
@@ -190,6 +200,7 @@ try {
   };
 } finally {
   client?.close();
+  replacementClient?.close();
   if (endpoint && await processAlive(endpoint.processId)) {
     try {
       cleanupClient = await BrowserHostClient.connect(endpointPath, 'multi-profile-isolation-cleanup');

@@ -109,7 +109,7 @@ npm run test:integration
 npm run test:e2e:local
 ```
 
-`verify:collector` 会先运行四层的正式测试项目；随后执行既有支持性验证脊柱，并跳过已由 Playwright 项目执行的 Chromium lane，避免打开第二套重复的临时浏览器会话。所有这些测试只使用 test-scoped 临时状态和 Profile，并要求零实网请求。Worker 版本不匹配的本地 Integration gate 还要求：没有注册 Managed Profile、没有安装 Native Messaging Host、没有写入 `profile_launched`，并且测试进程树归零；多 Profile gate 还要求两个真实 MV3 会话、Native Messaging 注册和 page lease 相互隔离，关闭其中一个不会关闭另一个。它们不代表任何平台策略已经通过；真实平台 Canary 仍遵循下节的低频、可见、受审计流程。完整分层和框架取舍见[测试架构调研](docs/research/collector-test-architecture-and-frameworks-v0.1.md)。
+`verify:collector` 会先运行四层的正式测试项目；随后执行既有支持性验证脊柱，并跳过已由 Playwright 项目执行的 Chromium lane，避免打开第二套重复的临时浏览器会话。所有这些测试只使用 test-scoped 临时状态和 Profile，并要求零实网请求。Worker 版本不匹配的本地 Integration gate 还要求：没有注册 Managed Profile、没有安装 Native Messaging Host、没有写入 `profile_launched`，并且测试进程树归零；多 Profile gate 还要求两个真实 MV3 会话、Native Messaging 注册和 page lease 相互隔离，控制连接断开时两边 lease 都会被 quarantine 但浏览器保持，关闭其中一个也不会关闭另一个。它们不代表任何平台策略已经通过；真实平台 Canary 仍遵循下节的低频、可见、受审计流程。完整分层和框架取舍见[测试架构调研](docs/research/collector-test-architecture-and-frameworks-v0.1.md)。
 
 ## 构建门禁
 

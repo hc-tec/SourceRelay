@@ -204,6 +204,7 @@ export const collectorValidationCatalog = [
       'multi-profile-browser-session-isolation',
       'native-messaging-registration-isolation',
       'profile-local-page-lease-namespace',
+      'multi-profile-controller-disconnect-containment',
       'independent-profile-close'
     ]
   },

@@ -21,6 +21,7 @@ test('Browser Host isolates two production MV3 Profiles and their Native Messagi
     browserSessionsAndProcessesIsolated: true,
     nativeMessagingRegistrationsIsolated: true,
     profileLocalPageAliasesRejectedForeignLease: true,
+    controllerDisconnectQuarantinedBothProfilesWithoutClosingBrowsers: true,
     closingOneProfileDidNotCloseTheOther: true,
     nativeMessagingRegistrationsCleanedPerProfile: true,
     testScopedProcessResidue: 0,
