@@ -65,7 +65,7 @@ coverage / terminal_reason / status
 
 | capability | 当前可证明状态 |
 |---|---|
-| `native_search` | 正式 admission 仅覆盖匿名首个渲染页、最多 20 条 |
+| `native_search` | 历史 v1 曾完成匿名首个渲染页、最多 20 条的 admission；当前编译路径为 `bilibili.search.breadth.dom.v2`，已收敛为综合相关性或视频相关性/最新发布、页码 1–2、每次一页最多 20 条的本地契约与 production MV3 DOM 投影。v1 的实证不会自动覆盖 v2，故当前 v2 为 `build_ready`，待与 account_profile 一并完成受管 Profile 的真实闭环后再决定 admission。 |
 | `video_detail` | `0.7.8` 已完成“完成的账号目录 artifact → 显式选中 BVID → 单条详情 artifact”的真实受管浏览器物化：来源 digest/页码、一次导航账本和子 artifact 已闭环。两个目录样本真实取得标题、可见元数据、播放器容器、标签与创作者（团队/标准作者布局），但无可投影简介；其中 `BV1BoKD6ZEir` 的目录卡明确标为“充电专属”，而未标该记号的样本也为空。匿名可见页面对照已直接证明该 BVID 的“专属视频 / 试看中 / 开通充电”播放器门禁；`0.7.11` 已把这个正向门禁事实建模为 `charge_exclusive_trial`。详情首屏完成只要求稳定 document、规范 BVID、可见标题和可见播放器；播放器控制条属于字幕/播放等独立交互能力，不得阻塞零交互元数据投影。`0.7.13` 的正常公开视频 canary 已证明 document binding 仍存在但被错误的控制条 gating 阻塞；修复后的 `0.7.14` 已在一次受管导航中真实完成标题、简介、创作者、8 个标签和选集摘要的闭环。未命中时只能是 `indeterminate`，空字段仍只能按 `present/absent` 解释，且 `playerVisible` 不等于可播放或已获受限内容。策略保持 `admissionEligible=false`；详情 response body、字幕、弹幕、评论和推荐继续排除。详见[目录到详情真实闭环](../validation/bilibili-account-video-detail-materialization-v0.1.md)与[详情 DOM 侦察](../reconnaissance/bilibili/video-detail-dom-mvp-v0.1.md)。 |
 | `transcript` | 登录态真实闭环两次取得 509/509 段；仍 research-only |
 | `discussion` | 已证明排序与楼中楼动作到 route 的因果；正文 projector 尚未 admission |

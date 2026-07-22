@@ -47,8 +47,9 @@ describe('Static strategy registry boundary', () => {
   test('exposes compiled strategies without granting response capture or dormant detail capability', () => {
     const bilibiliSearch = resolveNativeSearchStrategy('bilibili');
     expect(bilibiliSearch).toMatchObject({
-      strategyId: 'bilibili.search.breadth.dom.v1',
-      maturity: 'live_anonymous_verified',
+      strategyId: 'bilibili.search.breadth.dom.v2',
+      version: '0.2.0',
+      maturity: 'build_ready',
       approvedResponseRouteIds: []
     });
     expect(strategyProvenance(bilibiliSearch)).toMatchObject({
