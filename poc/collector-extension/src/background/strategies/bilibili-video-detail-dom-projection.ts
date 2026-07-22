@@ -11,6 +11,7 @@ export interface BilibiliVideoDetailDomSnapshot {
   episodeSummaryText: string | null;
   titleVisible: boolean;
   playerVisible: boolean;
+  chargeExclusiveTrialVisible: boolean;
   loginOverlayVisible: boolean;
   risk: {
     verificationRequired: boolean;
@@ -50,6 +51,21 @@ export async function captureBilibiliVideoDetailDom(
           : null;
         const titleElement = Array.from(document.querySelectorAll<HTMLElement>('h1')).find(rendered) ?? null;
         const player = document.querySelector<HTMLElement>('[aria-label="哔哩哔哩播放器"]');
+        // A charge-exclusive trial is a positive, visible access restriction.
+        // It is intentionally not inferred from the creator's generic “充电”
+        // entry, a black player, or the absence of a description. The current
+        // desktop observation requires both the scoped player toast structure
+        // and its human-visible “专属视频” / “试看中…充电” wording.
+        const chargeTrialToast = document.querySelector<HTMLElement>('.bpx-player-trial-watch-charging-toast');
+        const chargeTrialTitle = chargeTrialToast?.querySelector<HTMLElement>('.bpx-player-charging-toast-left-title') ?? null;
+        const chargeTrialLevel = chargeTrialToast?.querySelector<HTMLElement>('.bpx-player-charging-toast-left-level') ?? null;
+        const chargeTrialTitleText = clean(chargeTrialTitle?.innerText, 300) ?? '';
+        const chargeTrialLevelText = clean(chargeTrialLevel?.innerText, 300) ?? '';
+        const chargeExclusiveTrialVisible = rendered(chargeTrialToast) &&
+          rendered(chargeTrialTitle) &&
+          rendered(chargeTrialLevel) &&
+          /专属视频/.test(chargeTrialTitleText) &&
+          /(?:试看中|开通).{0,80}充电/.test(chargeTrialLevelText);
         // `#v_desc` is the legacy desktop container. Current pages commonly
         // expose the same public description below the title in
         // `.video-desc-container`; the candidates remain fixed and scoped to
@@ -121,6 +137,7 @@ export async function captureBilibiliVideoDetailDom(
           episodeSummaryText,
           titleVisible: rendered(titleElement),
           playerVisible: rendered(player),
+          chargeExclusiveTrialVisible,
           loginOverlayVisible,
           risk: {
             verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(bodyText),

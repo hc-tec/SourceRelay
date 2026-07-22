@@ -24,7 +24,7 @@ function bridge(profileId = 'profile-alpha', browserSessionId = 'session-alpha',
     browserSessionId,
     extensionId,
     extensionOrigin: `chrome-extension://${extensionId}/`,
-    collectorVersion: '0.7.8',
+    collectorVersion: '0.7.9',
     controlSurfaceRevision: 10
   };
 }

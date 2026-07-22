@@ -51,6 +51,7 @@ function domSnapshot(value: unknown, expectedBvid: string): BilibiliVideoDetailD
     !tagTexts ||
     typeof candidate.titleVisible !== 'boolean' ||
     typeof candidate.playerVisible !== 'boolean' ||
+    typeof candidate.chargeExclusiveTrialVisible !== 'boolean' ||
     typeof candidate.loginOverlayVisible !== 'boolean' ||
     !risk ||
     typeof risk.verificationRequired !== 'boolean' ||
@@ -79,6 +80,7 @@ function domSnapshot(value: unknown, expectedBvid: string): BilibiliVideoDetailD
     episodeSummaryText,
     titleVisible: candidate.titleVisible,
     playerVisible: candidate.playerVisible,
+    chargeExclusiveTrialVisible: candidate.chargeExclusiveTrialVisible,
     loginOverlayVisible: candidate.loginOverlayVisible,
     risk: {
       verificationRequired: risk.verificationRequired,

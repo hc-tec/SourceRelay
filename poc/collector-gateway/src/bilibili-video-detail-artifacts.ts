@@ -12,7 +12,7 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const DETAIL_FILE = 'detail.json';
 
 export interface BilibiliVideoDetailArtifactSummary {
-  schemaVersion: 1;
+  schemaVersion: 2;
   artifactId: string;
   runId: string;
   platform: 'bilibili';
@@ -25,6 +25,7 @@ export interface BilibiliVideoDetailArtifactSummary {
   creatorCaptured: boolean;
   tagCount: number;
   episodeSummaryCaptured: boolean;
+  accessStatus: BilibiliVideoDetailRunRecord['coverage']['accessStatus'];
   loginOverlayVisible: boolean;
   terminalReason: BilibiliVideoDetailRunRecord['coverage']['terminalReason'];
   manifestSha256: string;
@@ -61,7 +62,7 @@ async function atomicWrite(path: string, value: unknown): Promise<void> {
 function isSummary(value: unknown): value is BilibiliVideoDetailArtifactSummary {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const candidate = value as Partial<BilibiliVideoDetailArtifactSummary>;
-  return candidate.schemaVersion === 1 &&
+  return candidate.schemaVersion === 2 &&
     typeof candidate.artifactId === 'string' && UUID_PATTERN.test(candidate.artifactId) &&
     typeof candidate.runId === 'string' && UUID_PATTERN.test(candidate.runId) &&
     candidate.platform === 'bilibili' &&
@@ -74,6 +75,10 @@ function isSummary(value: unknown): value is BilibiliVideoDetailArtifactSummary 
     typeof candidate.creatorCaptured === 'boolean' &&
     typeof candidate.tagCount === 'number' && Number.isSafeInteger(candidate.tagCount) && candidate.tagCount >= 0 &&
     typeof candidate.episodeSummaryCaptured === 'boolean' &&
+    (candidate.accessStatus === null ||
+      candidate.accessStatus === 'charge_exclusive_trial' ||
+      candidate.accessStatus === 'login_required' ||
+      candidate.accessStatus === 'indeterminate') &&
     typeof candidate.loginOverlayVisible === 'boolean' &&
     typeof candidate.terminalReason === 'string' &&
     typeof candidate.manifestSha256 === 'string' && SHA256_PATTERN.test(candidate.manifestSha256);
@@ -97,6 +102,7 @@ function compactSummary(
     creatorCaptured: manifest.creatorCaptured,
     tagCount: manifest.tagCount,
     episodeSummaryCaptured: manifest.episodeSummaryCaptured,
+    accessStatus: manifest.accessStatus,
     loginOverlayVisible: manifest.loginOverlayVisible,
     terminalReason: manifest.terminalReason,
     manifestSha256
@@ -142,13 +148,13 @@ export class BilibiliVideoDetailArtifactStore {
     let detailFile: typeof DETAIL_FILE | null = null;
     let detailFileSha256: string | null = null;
     if (run.detail) {
-      const payload = { schemaVersion: 1, detail: run.detail };
+      const payload = { schemaVersion: 2, detail: run.detail };
       detailFile = DETAIL_FILE;
       detailFileSha256 = sha256(canonicalJson(payload));
       await atomicWrite(resolve(directory, detailFile), payload);
     }
     const manifest: BilibiliVideoDetailArtifactManifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       artifactId,
       runId: run.runId,
       platform: 'bilibili',
@@ -161,6 +167,7 @@ export class BilibiliVideoDetailArtifactStore {
       creatorCaptured: run.coverage.creatorCaptured,
       tagCount: run.coverage.tagCount,
       episodeSummaryCaptured: run.coverage.episodeSummaryCaptured,
+      accessStatus: run.coverage.accessStatus,
       loginOverlayVisible: run.coverage.loginOverlayVisible,
       terminalReason: run.coverage.terminalReason,
       collectorVersion: run.collectorVersion,
@@ -200,7 +207,7 @@ export class BilibiliVideoDetailArtifactStore {
         detail?: BilibiliVideoDetailProjection;
       };
       if (
-        payload.schemaVersion !== 1 ||
+        payload.schemaVersion !== 2 ||
         !payload.detail ||
         sha256(canonicalJson(payload)) !== manifest.detailFileSha256
       ) throw new Error('bilibili_video_detail_detail_digest_mismatch');

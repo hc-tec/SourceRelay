@@ -70,12 +70,12 @@ describe('Browser profile domain boundaries', () => {
         account: { category: 'user_managed', label: 'Primary collection profile' }
       }
     });
-    await registry.markLaunched(collection.profileId, '0.7.8', new Date('2026-07-22T00:01:00.000Z'));
+    await registry.markLaunched(collection.profileId, '0.7.9', new Date('2026-07-22T00:01:00.000Z'));
 
     const restarted = await BrowserProfileRegistry.create(profiles, state);
     expect(restarted.get(collection.profileId)).toMatchObject({
       profileId: collection.profileId,
-      lastExtensionVersion: '0.7.8',
+      lastExtensionVersion: '0.7.9',
       lastLaunchedAt: '2026-07-22T00:01:00.000Z'
     });
     expect(restarted.userDataDirectory(collection.profileId)).toContain(collection.profileId);

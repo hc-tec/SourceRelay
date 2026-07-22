@@ -66,6 +66,7 @@ try {
         episodeSummaryText: '视频选集 （1/10）',
         titleVisible: true,
         playerVisible: true,
+        chargeExclusiveTrialVisible: false,
         loginOverlayVisible: true,
         risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
       }
@@ -78,8 +79,17 @@ try {
   assert.equal(detail.titleVisible, true);
   assert.equal(detail.playerVisible, true);
   assert.deepEqual(detail.tagTexts, ['人工智能', '学习']);
+  assert.equal(detail.accessStatus, 'login_required');
   assert.equal(detail.loginOverlayVisible, true);
   assert.equal(detail.creator.publicAccountId, '123456');
+
+  const chargeExclusive = structuredClone(observed.dom);
+  chargeExclusive.loginOverlayVisible = false;
+  chargeExclusive.chargeExclusiveTrialVisible = true;
+  assert.equal(
+    contract.projectBilibiliVideoDetailDom(chargeExclusive, bvid, '2026-07-21T01:00:01.000Z')?.accessStatus,
+    'charge_exclusive_trial'
+  );
 
   const invalidIdentity = structuredClone(observed.dom);
   invalidIdentity.bvid = 'BV1xA411c7mD';
@@ -90,7 +100,7 @@ try {
 
   const run = runRecord.createBilibiliVideoDetailRunRecord({
     runId: '22222222-2222-4222-8222-222222222222',
-    collectorVersion: '0.7.8',
+    collectorVersion: '0.7.9',
     canonicalVideoUrl,
     bvid,
     startedAt: '2026-07-21T01:00:00.000Z',
@@ -121,6 +131,7 @@ try {
   });
   assert.equal(run.coverage.capturedDetails, 1);
   assert.equal(run.coverage.tagCount, 2);
+  assert.equal(run.coverage.accessStatus, 'login_required');
   assert.equal(run.coverage.loginOverlayVisible, true);
   assert.equal(run.safeguards.responseBodies, 'not_read');
 
@@ -130,6 +141,7 @@ try {
   assert.equal((await store.record(run)).artifactId, summary.artifactId);
   assert.equal(summary.titleCaptured, true);
   assert.equal(summary.tagCount, 2);
+  assert.equal(summary.accessStatus, 'login_required');
   const artifact = await store.get(summary.artifactId);
   assert.equal(artifact.detail.bvid, bvid);
   assert.equal(artifact.manifest.detailFile, 'detail.json');

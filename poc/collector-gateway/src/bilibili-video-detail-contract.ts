@@ -9,6 +9,16 @@ export interface BilibiliVideoDetailCreator {
   publicAccountId: string | null;
 }
 
+/**
+ * This is deliberately a positive-observation vocabulary. `indeterminate`
+ * does not mean public or playable: it only says that this bounded first-screen
+ * projection saw no supported, visible access gate.
+ */
+export type BilibiliVideoDetailAccessStatus =
+  | 'charge_exclusive_trial'
+  | 'login_required'
+  | 'indeterminate';
+
 export interface BilibiliVideoDetailDomSnapshot {
   bvid: string | null;
   title: string | null;
@@ -19,6 +29,7 @@ export interface BilibiliVideoDetailDomSnapshot {
   episodeSummaryText: string | null;
   titleVisible: boolean;
   playerVisible: boolean;
+  chargeExclusiveTrialVisible: boolean;
   loginOverlayVisible: boolean;
   risk: {
     verificationRequired: boolean;
@@ -33,7 +44,7 @@ export interface BilibiliVideoDetailDomSnapshot {
  * or arbitrary page field in this contract.
  */
 export interface BilibiliVideoDetailProjection {
-  schemaVersion: 1;
+  schemaVersion: 2;
   bvid: string;
   title: string;
   metadataVisibleText: string | null;
@@ -43,6 +54,7 @@ export interface BilibiliVideoDetailProjection {
   episodeSummaryText: string | null;
   titleVisible: true;
   playerVisible: true;
+  accessStatus: BilibiliVideoDetailAccessStatus;
   loginOverlayVisible: boolean;
   risk: BilibiliVideoDetailDomSnapshot['risk'];
   capturedAt: string;
@@ -87,7 +99,7 @@ export type BilibiliVideoDetailTerminalReason =
   | 'run_deadline_exceeded';
 
 export interface BilibiliVideoDetailRunRecord {
-  schemaVersion: 1;
+  schemaVersion: 2;
   runId: string;
   collectorVersion: string;
   platform: 'bilibili';
@@ -97,7 +109,7 @@ export interface BilibiliVideoDetailRunRecord {
   bvid: string;
   strategyCandidate: {
     strategyId: 'bilibili.video.detail.dom.v2';
-    version: '0.1.0';
+    version: '0.2.0';
     admissionEligible: false;
   };
   state: 'completed' | 'partial' | 'failed';
@@ -115,6 +127,7 @@ export interface BilibiliVideoDetailRunRecord {
     creatorCaptured: boolean;
     tagCount: number;
     episodeSummaryCaptured: boolean;
+    accessStatus: BilibiliVideoDetailAccessStatus | null;
     loginOverlayVisible: boolean;
     terminalReason: BilibiliVideoDetailTerminalReason;
   };
@@ -163,6 +176,12 @@ function stableAccountId(value: unknown): string | null {
   return typeof value === 'string' && /^\d{1,20}$/.test(value) && value !== '0' ? value : null;
 }
 
+function accessStatus(dom: BilibiliVideoDetailDomSnapshot): BilibiliVideoDetailAccessStatus {
+  if (dom.loginOverlayVisible) return 'login_required';
+  if (dom.chargeExclusiveTrialVisible) return 'charge_exclusive_trial';
+  return 'indeterminate';
+}
+
 export function canonicalBilibiliVideoDetailUrl(value: string): string | null {
   try {
     const url = new URL(value);
@@ -202,6 +221,7 @@ export function projectBilibiliVideoDetailDom(
     dom.bvid !== expectedBvid ||
     !dom.titleVisible ||
     !dom.playerVisible ||
+    typeof dom.chargeExclusiveTrialVisible !== 'boolean' ||
     typeof dom.loginOverlayVisible !== 'boolean' ||
     !dom.risk ||
     typeof dom.risk.verificationRequired !== 'boolean' ||
@@ -235,7 +255,7 @@ export function projectBilibiliVideoDetailDom(
     creator = { displayName, publicAccountId };
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     bvid: expectedBvid,
     title,
     metadataVisibleText,
@@ -245,6 +265,7 @@ export function projectBilibiliVideoDetailDom(
     episodeSummaryText,
     titleVisible: true,
     playerVisible: true,
+    accessStatus: accessStatus(dom),
     loginOverlayVisible: dom.loginOverlayVisible,
     risk: { ...dom.risk },
     capturedAt

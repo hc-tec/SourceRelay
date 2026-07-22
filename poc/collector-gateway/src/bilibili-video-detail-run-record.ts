@@ -30,7 +30,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
 }): BilibiliVideoDetailRunRecord {
   const detail = input.detail;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId: input.runId,
     collectorVersion: input.collectorVersion,
     platform: 'bilibili',
@@ -40,7 +40,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
     bvid: input.bvid,
     strategyCandidate: {
       strategyId: BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
-      version: '0.1.0',
+      version: '0.2.0',
       admissionEligible: false
     },
     state: input.state,
@@ -58,6 +58,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
       creatorCaptured: detail?.creator !== null && detail?.creator !== undefined,
       tagCount: detail?.tagTexts.length ?? 0,
       episodeSummaryCaptured: detail?.episodeSummaryText !== null && detail?.episodeSummaryText !== undefined,
+      accessStatus: detail?.accessStatus ?? null,
       loginOverlayVisible: detail?.loginOverlayVisible ?? false,
       terminalReason: input.terminalReason
     },

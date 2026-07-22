@@ -178,3 +178,38 @@ reason      detail_ready
 - 为确认这不是描述 selector 回归，已知 URL `BV1qZSLBYEpa` 在同一 `0.7.8` 运行时以一次导航真实取得简介、创作者显示名/账号、10 个标签和选集摘要。
 
 描述读取现在只在固定候选 `#v_desc`、`.video-desc-container .basic-desc-info`、`.video-desc-container .desc-info-text` 与 `.video-desc-container` 间选择，仍受可见性、长度和控制字符校验。已知有简介的对照页面已在同版本命中这些候选；又因未标“充电专属”的目录样本也没有简介，付费限制不是空简介的充分或必要解释。首屏策略仍把简介/创作者/选集视为独立 present/absent 字段；访问状态另行侦察，不能为所有视频承诺完整性。
+
+## 11. 充电专属访问状态：匿名页面对照侦察（2026-07-22）
+
+### 可行性问题
+
+目录卡中的“充电专属”是否只是创作者开通充电的泛入口，还是当前视频的实际访问限制；若是限制，首屏策略应如何诚实表达，而不把播放器容器误写为“可播放”。
+
+### 独立人工式基线
+
+本轮暂时忘掉现有 Extension、Gateway runner 和旧 selector，在两个**新建、可见、匿名、持久但临时**的 Chromium Profile 中各做一次规范视频详情导航。两轮均未加载待验证的 Collector 交互逻辑，未读取 Cookie、Token、storage、请求头/体、query/fragment 或 response body；不点击“去开通”、不支付、不解锁、不点赞/关注/评论，也不滚动。
+
+| 对照 | 规范页 | 导航 | 视觉与 DOM 事实 | 结论 |
+|---|---|---:|---|---|
+| 受限样本 | `BV1BoKD6ZEir` | 1 | 播放器内可见“该视频为『中书门下平章事』专属视频”“试看中・开通『12元档包月充电』即可观看”与“去开通”；弹幕输入区可见“充电后即可发送弹幕”。 | 已证明为充电专属的试看状态。 |
+| 未标记对照 | `BV136K36TEa8` | 1 | 同一可见播放器角色存在，但未找到 `.bpx-player-trial-watch-charging-toast`、`.bpx-player-charging-toast-left-title` 或“充电后即可发送弹幕”的可见语义。 | 未观察到这一类门禁；这**不**被解释为“永久公开”或“已证明可访问所有内容”。 |
+
+受限样本的 DOM 证据来自可见播放器区域：
+
+```text
+[aria-label="哔哩哔哩播放器"]
+  .bpx-player-trial-watch-charging-toast
+    .bpx-player-charging-toast-left-title  -> 含“专属视频”
+    .bpx-player-charging-toast-left-level  -> 含“试看中”与“充电”
+```
+
+每个节点均在当时具有非零边界，且 `display`、`visibility`、`opacity` 都满足可见条件。class 不是永久稳定性的单独承诺：生产判定同时要求上述受限播放器容器、两个可见子节点和中文语义文本。此轮不存在 UI 动作，因此没有需要归因的动作后网络请求；Network 未作为结论依据。临时浏览器、临时 Profile、截图和调试输出都在记录结构事实后关闭/清理，未将原始页面材料提交入库。
+
+### 对产品的约束
+
+- `charge_exclusive_trial` 是**正向观察**状态，表示只看到试看和开通提示；它不是支付流程的入口，也不授权任何绕过。
+- 未命中门禁时只能保存 `indeterminate`，不能仅凭播放器可见、黑屏、目录没有标签或创作者侧栏含“充电”就写成 `public`、`playable` 或“可抓字幕”。
+- `video_detail` 仍可投影标题、公开元数据、作者和标签；但后续媒体、字幕、弹幕或其他需完整播放权限的能力必须以访问状态为独立前置条件并另做实网证明。
+- `BV136K36TEa8` 同样没有可投影简介，故“充电专属”不是此前两条 `descriptionCaptured=false` 的充分或必要解释。
+
+基于此侦察，`0.7.9` 详情投影新增 `chargeExclusiveTrialVisible` 的受限 DOM 事实，并在 Gateway artifact 中映射为 `accessStatus = charge_exclusive_trial | login_required | indeterminate`。该实现仍须由受管登录 Collection Profile 的独立真实闭环验证；匿名人工侦察不能替代产品闭环。
