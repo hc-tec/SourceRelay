@@ -338,6 +338,37 @@ Gateway 退出或重启不应关闭健康的 Browser Host / Chromium。只有显
 
 每次受管 Profile 冷启动都必须读真实 worker marker；持久记录或 manifest 文件版本都不能单独证明实际 MV3 worker 已经升级。
 
+### 8.4 扩展发布批次：代码迭代不等于升级
+
+**修改工作树、运行本地测试、提交代码，都不是对 Collection Profile 的扩展升级。** 受管登录态是稀缺且有风险的真实验证环境；不能把每一个小修复都变成一次 Browser Host 退出、Chromium 重启、MV3 重新加载和实网 run。
+
+以下三个概念必须分开记录：
+
+| 概念 | 含义 | 是否接触已登录 Collection Profile |
+|---|---|---|
+| 本地开发批次 | 策略、projector、Gateway 或纯函数代码的连续修改；可运行 typecheck、unit、integration 和隔离的本地基础设施验证 | 否 |
+| 部署批次 | 已收敛的一组改动准备交给受管 Profile；一次构建、一次明确的 Host 生命周期切换、一次计划内真实验证 | 是，且只能按计划一次 |
+| 兼容性升级 | MV3 runtime / Native Bridge / control-surface 的兼容性身份发生实际变化 | 仅在部署批次中发生 |
+
+因此，以下情况**不得**单独触发版本或 control-surface revision 递增，也不得为了“看看新代码”立即重启已登录浏览器：
+
+- 单个 DOM projector、字段投影、可见性判断、混合卡过滤或 artifact 映射修复；
+- 文档、测试、日志、诊断或本地构建脚本改动；
+- 尚未通过本地验证、仍可能与同一能力的其他问题一起收敛的代码；
+- 仅为了让一次临时真实 run 带上新的版本号或日志标签。
+
+`COLLECTOR_EXTENSION_VERSION` 不是逐 commit 计数器。它只在有意形成新的 MV3 部署兼容性边界时变更，例如 manifest / 权限 / runtime bootstrap 的兼容性变化，或明确发布新的受管扩展包。`COLLECTOR_CONTROL_SURFACE_REVISION` 更窄：只在 Browser Host 与 extension 的 Native Bridge、命令/结果形状或 control-surface 语义不兼容时递增。策略实现本身应由 strategy ID、strategy version、commit/build 证据和 artifact manifest 追踪，而不是滥用全局 revision。
+
+一个真实部署批次必须满足以下顺序：
+
+1. 先在 worktree 中收敛同一能力的改动，并完成相关本地验证；
+2. 明确写出本批次的能力边界、预期实网动作和停止条件；
+3. 在没有 active lease / active run 时，至多进行一次受控 Browser Host 生命周期切换；
+4. 使用该批次唯一的新运行时执行计划内的低频真实验证；
+5. 将结果、版本身份、artifact 与未覆盖范围写入验证记录。若发现新的非紧急缺陷，回到本地开发批次，而不是立刻串行发布下一版。
+
+Browser Host 的冷启动 marker-first probe 仍然必须存在：它解决的是“已部署版本的 worker 是否真的被 Chromium 执行”的正确性问题，不是发布触发器。版本匹配时它必须是零 reload 的本地预检；版本不匹配时最多一次无界面 reload。不得把它描述为、或扩展为，每次代码编辑后的自动升级流程。
+
 ## 9. 账号安全、失败模型与 at-most-once
 
 平台动作的韧性不是“失败后尽快重试”，而是“结果未知时不再扩大风险”。每个 Profile × 平台维护独立、持久的安全状态和 run/action ledger：
