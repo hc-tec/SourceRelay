@@ -33,7 +33,12 @@ try {
 
   const query = '人工智能';
   const canonicalSearchUrl = contract.canonicalBilibiliNativeSearchUrlForQuery(query);
-  assert.deepEqual(contract.bilibiliNativeSearchInput({ query: `  ${query}  ` }), { query });
+  assert.deepEqual(contract.bilibiliNativeSearchInput({ query: `  ${query}  ` }), {
+    query,
+    resultType: 'comprehensive',
+    sort: 'relevance',
+    page: 1
+  });
   assert.equal(canonicalSearchUrl, 'https://search.bilibili.com/all?keyword=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD');
   assert.throws(
     () => contract.bilibiliNativeSearchInput({ query: 'unsafe\u0000query' }),
@@ -58,6 +63,9 @@ try {
         searchInputVisible: true,
         resultListVisible: true,
         emptyStateVisible: false,
+        resultType: 'comprehensive',
+        sort: 'relevance',
+        semanticResultCardCount: 2,
         cards: [
           {
             bvid: 'BV1qZSLBYEpa',
@@ -78,7 +86,11 @@ try {
     }
   };
   const observed = observation.bilibiliNativeSearchStrategyObservation(result);
-  const projected = contract.projectBilibiliNativeSearchDom(observed.dom, '2026-07-22T02:00:01.000Z');
+  const projected = contract.projectBilibiliNativeSearchDom(observed.dom, '2026-07-22T02:00:01.000Z', {
+    resultType: 'comprehensive',
+    sort: 'relevance',
+    page: 1
+  });
   assert.ok(projected);
   assert.equal(projected.resultState, 'video_results');
   assert.deepEqual(projected.items.map((item) => [item.rank, item.bvid]), [
@@ -91,8 +103,13 @@ try {
     ...observed.dom,
     resultListVisible: false,
     emptyStateVisible: true,
+    semanticResultCardCount: 0,
     cards: []
-  }, '2026-07-22T02:00:02.000Z');
+  }, '2026-07-22T02:00:02.000Z', {
+    resultType: 'comprehensive',
+    sort: 'relevance',
+    page: 1
+  });
   assert.equal(empty?.resultState, 'no_video_results');
   const unsafePayload = structuredClone(result);
   unsafePayload.payload.query = query;
@@ -104,7 +121,7 @@ try {
   const run = runRecord.createBilibiliNativeSearchRunRecord({
     runId: '22222222-2222-4222-8222-222222222222',
     collectorVersion: '0.7.17',
-    query,
+    search: { query, resultType: 'comprehensive', sort: 'relevance', page: 1 },
     canonicalSearchUrl,
     startedAt: '2026-07-22T02:00:00.000Z',
     completedAt: '2026-07-22T02:00:03.000Z',

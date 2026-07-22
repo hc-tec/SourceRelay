@@ -1,6 +1,9 @@
 import {
   bilibiliNativeSearchUrl,
-  normaliseBilibiliNativeSearchQuery,
+  normaliseBilibiliNativeSearchRoute,
+  type BilibiliNativeSearchResultType,
+  type BilibiliNativeSearchRoute,
+  type BilibiliNativeSearchSort,
   type StrategyBindingDiagnostics
 } from '@intelligence/collector-contracts';
 
@@ -8,6 +11,9 @@ export const BILIBILI_NATIVE_SEARCH_MAX_RESULTS = 20;
 
 export interface BilibiliNativeSearchInput {
   query: string;
+  resultType: BilibiliNativeSearchResultType;
+  sort: BilibiliNativeSearchSort;
+  page: number;
 }
 
 export interface BilibiliNativeSearchDomCard {
@@ -21,6 +27,10 @@ export interface BilibiliNativeSearchDomSnapshot {
   searchInputVisible: boolean;
   resultListVisible: boolean;
   emptyStateVisible: boolean;
+  resultType: BilibiliNativeSearchResultType | 'unknown';
+  sort: BilibiliNativeSearchSort | 'unknown';
+  /** Visible cards with non-empty human-readable content, before BV filtering. */
+  semanticResultCardCount: number;
   cards: BilibiliNativeSearchDomCard[];
   loginOverlayVisible: boolean;
   risk: {
@@ -41,8 +51,12 @@ export interface BilibiliNativeSearchItem {
 
 export interface BilibiliNativeSearchProjection {
   schemaVersion: 1;
+  resultType: BilibiliNativeSearchResultType;
+  sort: BilibiliNativeSearchSort;
+  page: number;
   resultState: 'video_results' | 'no_video_results';
   items: BilibiliNativeSearchItem[];
+  semanticResultCardCount: number;
   visibleVideoCardCount: number;
   unresolvedCardCount: number;
   loginOverlayVisible: boolean;
@@ -98,11 +112,16 @@ export interface BilibiliNativeSearchRunRecord {
   platform: 'bilibili';
   accountCategory: 'user_managed';
   pageRole: 'native_search';
+  search: {
+    resultType: BilibiliNativeSearchResultType;
+    sort: BilibiliNativeSearchSort;
+    page: number;
+  };
   queryDigest: string;
   targetUrlDigest: string;
   strategyCandidate: {
     strategyId: 'bilibili.search.breadth.dom.v2';
-    version: '0.1.0';
+    version: '0.2.0';
     admissionEligible: false;
   };
   state: 'completed' | 'partial' | 'failed';
@@ -132,8 +151,8 @@ export interface BilibiliNativeSearchRunRecord {
     cookiesAndTokens: 'not_read';
     networkQueryAndFragmentValues: 'not_read';
     responseBodies: 'not_read';
-    sortAndFilter: 'default_comprehensive_only_separate_capability';
-    pagination: 'excluded_separate_capability';
+    sortAndFilter: 'reviewed_type_and_sort_via_native_url_filters_excluded';
+    pagination: 'single_reviewed_page_via_native_navigation';
     detailNavigation: 'excluded_separate_capability';
     mixedResultTypes: 'excluded_non_video_objects';
     semanticActionDelivery: 'at_most_once';
@@ -178,28 +197,50 @@ function safePublicImageUrl(value: unknown): string | null {
 
 export function bilibiliNativeSearchInput(value: unknown): BilibiliNativeSearchInput {
   const candidate = record(value);
-  if (!candidate || Object.keys(candidate).length !== 1 || typeof candidate.query !== 'string') {
+  if (
+    !candidate ||
+    Object.keys(candidate).some((key) => !['query', 'resultType', 'sort', 'page'].includes(key)) ||
+    typeof candidate.query !== 'string'
+  ) {
     throw new Error('bilibili_native_search_input_invalid');
   }
-  const query = normaliseBilibiliNativeSearchQuery(candidate.query);
-  if (!query) throw new Error('bilibili_native_search_input_invalid');
-  return { query };
+  const route = normaliseBilibiliNativeSearchRoute({
+    query: candidate.query,
+    ...(candidate.resultType === undefined ? {} : { resultType: candidate.resultType }),
+    ...(candidate.sort === undefined ? {} : { sort: candidate.sort }),
+    ...(candidate.page === undefined ? {} : { page: candidate.page })
+  });
+  if (!route) throw new Error('bilibili_native_search_input_invalid');
+  return route;
 }
 
 /** This URL is a transient navigation/binding value and must not be persisted. */
+export function canonicalBilibiliNativeSearchUrlForInput(route: BilibiliNativeSearchInput): string {
+  return bilibiliNativeSearchUrl(route);
+}
+
+/** Convenience for the existing default comprehensive first-page call site. */
 export function canonicalBilibiliNativeSearchUrlForQuery(query: string): string {
-  return bilibiliNativeSearchUrl(query);
+  const route = normaliseBilibiliNativeSearchRoute({ query });
+  if (!route) throw new Error('bilibili_native_search_input_invalid');
+  return canonicalBilibiliNativeSearchUrlForInput(route);
 }
 
 export function projectBilibiliNativeSearchDom(
   dom: BilibiliNativeSearchDomSnapshot,
-  capturedAt: string
+  capturedAt: string,
+  route: Pick<BilibiliNativeSearchRoute, 'resultType' | 'sort' | 'page'>
 ): BilibiliNativeSearchProjection | null {
   if (
     !dom.searchInputVisible ||
     (!dom.resultListVisible && !dom.emptyStateVisible) ||
+    dom.resultType !== route.resultType ||
+    dom.sort !== route.sort ||
+    !Number.isSafeInteger(dom.semanticResultCardCount) ||
+    dom.semanticResultCardCount < 0 || dom.semanticResultCardCount > 60 ||
     !Array.isArray(dom.cards) ||
     dom.cards.length > BILIBILI_NATIVE_SEARCH_MAX_RESULTS ||
+    dom.cards.length > dom.semanticResultCardCount ||
     typeof dom.loginOverlayVisible !== 'boolean' ||
     !dom.risk ||
     typeof dom.risk.verificationRequired !== 'boolean' ||
@@ -232,8 +273,12 @@ export function projectBilibiliNativeSearchDom(
   }
   return {
     schemaVersion: 1,
+    resultType: route.resultType,
+    sort: route.sort,
+    page: route.page,
     resultState: items.length > 0 ? 'video_results' : 'no_video_results',
     items,
+    semanticResultCardCount: dom.semanticResultCardCount,
     visibleVideoCardCount: dom.cards.length,
     unresolvedCardCount,
     loginOverlayVisible: dom.loginOverlayVisible,

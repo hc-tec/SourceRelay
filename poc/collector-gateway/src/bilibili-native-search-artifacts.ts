@@ -18,6 +18,7 @@ export interface BilibiliNativeSearchArtifactSummary {
   platform: 'bilibili';
   capturedAt: string;
   state: BilibiliNativeSearchRunRecord['state'];
+  search: BilibiliNativeSearchRunRecord['search'];
   queryDigest: string;
   targetUrlDigest: string;
   visibleVideoCardCount: number;
@@ -52,6 +53,14 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function isSearchSelection(value: unknown): value is BilibiliNativeSearchRunRecord['search'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as Partial<BilibiliNativeSearchRunRecord['search']>;
+  return (candidate.resultType === 'comprehensive' || candidate.resultType === 'video') &&
+    (candidate.sort === 'relevance' || candidate.sort === 'newest') &&
+    Number.isSafeInteger(candidate.page) && Number(candidate.page) >= 1 && Number(candidate.page) <= 2;
+}
+
 async function atomicWrite(path: string, value: unknown): Promise<void> {
   const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
@@ -67,6 +76,7 @@ function isSummary(value: unknown): value is BilibiliNativeSearchArtifactSummary
     candidate.platform === 'bilibili' &&
     typeof candidate.capturedAt === 'string' && Number.isFinite(Date.parse(candidate.capturedAt)) &&
     (candidate.state === 'completed' || candidate.state === 'partial' || candidate.state === 'failed') &&
+    isSearchSelection(candidate.search) &&
     typeof candidate.queryDigest === 'string' && SHA256_PATTERN.test(candidate.queryDigest) &&
     typeof candidate.targetUrlDigest === 'string' && SHA256_PATTERN.test(candidate.targetUrlDigest) &&
     typeof candidate.visibleVideoCardCount === 'number' && Number.isSafeInteger(candidate.visibleVideoCardCount) && candidate.visibleVideoCardCount >= 0 &&
@@ -89,6 +99,7 @@ function compactSummary(
     platform: manifest.platform,
     capturedAt: manifest.capturedAt,
     state: manifest.state,
+    search: manifest.search,
     queryDigest: manifest.queryDigest,
     targetUrlDigest: manifest.targetUrlDigest,
     visibleVideoCardCount: manifest.visibleVideoCardCount,
@@ -152,6 +163,7 @@ export class BilibiliNativeSearchArtifactStore {
       platform: 'bilibili',
       capturedAt: run.completedAt,
       state: run.state,
+      search: run.search,
       queryDigest: run.queryDigest,
       targetUrlDigest: run.targetUrlDigest,
       visibleVideoCardCount: run.coverage.visibleVideoCardCount,

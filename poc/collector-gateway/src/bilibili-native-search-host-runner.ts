@@ -14,7 +14,8 @@ import type {
 } from './bilibili-native-search-artifacts';
 import {
   bilibiliNativeSearchInput,
-  canonicalBilibiliNativeSearchUrlForQuery,
+  canonicalBilibiliNativeSearchUrlForInput,
+  type BilibiliNativeSearchInput,
   projectBilibiliNativeSearchDom,
   type BilibiliNativeSearchAction,
   type BilibiliNativeSearchProjection,
@@ -35,6 +36,9 @@ const OBSERVATION_DEADLINE_MS = 15_000;
 export interface BilibiliNativeSearchHostRunInput {
   profileId: string;
   query: string;
+  resultType?: BilibiliNativeSearchInput['resultType'];
+  sort?: BilibiliNativeSearchInput['sort'];
+  page?: BilibiliNativeSearchInput['page'];
 }
 
 export interface BilibiliNativeSearchHostRunResult {
@@ -63,7 +67,15 @@ class NativeSearchObservationError extends Error {
 
 function input(value: BilibiliNativeSearchHostRunInput): BilibiliNativeSearchHostRunInput {
   if (!PROFILE_ID.test(value.profileId)) throw new Error('bilibili_native_search_profile_invalid');
-  return { profileId: value.profileId, ...bilibiliNativeSearchInput({ query: value.query }) };
+  return {
+    profileId: value.profileId,
+    ...bilibiliNativeSearchInput({
+      query: value.query,
+      ...(value.resultType === undefined ? {} : { resultType: value.resultType }),
+      ...(value.sort === undefined ? {} : { sort: value.sort }),
+      ...(value.page === undefined ? {} : { page: value.page })
+    })
+  };
 }
 
 function navigationAction(runId: string): BilibiliNativeSearchAction {
@@ -179,14 +191,14 @@ export class BilibiliNativeSearchHostRunner {
     );
     return await this.#runWithPermit(
       permit,
-      request.query,
-      canonicalBilibiliNativeSearchUrlForQuery(request.query)
+      request,
+      canonicalBilibiliNativeSearchUrlForInput(request)
     );
   }
 
   async #runWithPermit(
     permit: AccountSafetyRunPermit,
-    query: string,
+    search: BilibiliNativeSearchInput,
     canonicalSearchUrl: string
   ): Promise<BilibiliNativeSearchHostRunResult> {
     const navigation = navigationAction(permit.runId);
@@ -265,9 +277,10 @@ export class BilibiliNativeSearchHostRunner {
         pageLeaseId: acquired.lease.pageLeaseId,
         runId: permit.runId,
         observerBindingId,
-        deadline
+        deadline,
+        search
       });
-      results = projectBilibiliNativeSearchDom(observed.dom, new Date().toISOString());
+      results = projectBilibiliNativeSearchDom(observed.dom, new Date().toISOString(), search);
       const risk = riskOutcome(observed.dom, results);
       if (risk) {
         state = risk.state;
@@ -334,7 +347,7 @@ export class BilibiliNativeSearchHostRunner {
     const run = createBilibiliNativeSearchRunRecord({
       runId: permit.runId,
       collectorVersion: COLLECTOR_EXTENSION_VERSION,
-      query,
+      search,
       canonicalSearchUrl,
       startedAt: permit.startedAt,
       completedAt: new Date().toISOString(),
@@ -364,12 +377,17 @@ export class BilibiliNativeSearchHostRunner {
     runId: string;
     observerBindingId: string;
     deadline: number;
+    search: Pick<BilibiliNativeSearchInput, 'resultType' | 'sort' | 'page'>;
   }): Promise<ReturnType<typeof bilibiliNativeSearchStrategyObservation>> {
     let observed: ReturnType<typeof bilibiliNativeSearchStrategyObservation> | null = null;
     while (Date.now() < input.deadline) {
       const result = await this.#readStrategyObservation(input);
       observed = bilibiliNativeSearchStrategyObservation(result);
-      const results = projectBilibiliNativeSearchDom(observed.dom, new Date().toISOString());
+      const results = projectBilibiliNativeSearchDom(observed.dom, new Date().toISOString(), {
+        resultType: input.search.resultType,
+        sort: input.search.sort,
+        page: input.search.page
+      });
       if (riskOutcome(observed.dom, results) || results) return observed;
       await new Promise<void>((resolve) => setTimeout(resolve, 250));
     }

@@ -36,7 +36,13 @@ const observer = createDomOnlyDocumentObserver<NativeSearchBinding, BilibiliNati
     dom.risk.verificationRequired ||
     dom.risk.rateLimited ||
     dom.risk.sourceUnavailable ||
-    (dom.searchInputVisible && (dom.resultListVisible || dom.emptyStateVisible)),
+    // A rendered list shell can retain stale BV anchors while the newly
+    // selected type/sort is still a skeleton. Require current non-empty card
+    // content (or a visible empty state) before Gateway treats it as ready.
+    (dom.searchInputVisible && (
+      dom.emptyStateVisible ||
+      (dom.resultListVisible && dom.semanticResultCardCount > 0)
+    )),
   toPayload: ({ documentId, binding, dom }) => ({
     schemaVersion: 1,
     strategyId: BILIBILI_NATIVE_SEARCH_STRATEGY_ID,

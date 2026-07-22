@@ -1,5 +1,7 @@
 import {
   BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
+  BILIBILI_NATIVE_SEARCH_RESULT_TYPES,
+  BILIBILI_NATIVE_SEARCH_SORTS,
   type StrategyObservationResult
 } from '@intelligence/collector-contracts';
 import type {
@@ -44,6 +46,10 @@ function domSnapshot(value: unknown): BilibiliNativeSearchDomSnapshot {
     typeof candidate.searchInputVisible !== 'boolean' ||
     typeof candidate.resultListVisible !== 'boolean' ||
     typeof candidate.emptyStateVisible !== 'boolean' ||
+    !BILIBILI_NATIVE_SEARCH_RESULT_TYPES.includes(candidate.resultType as 'comprehensive' | 'video') ||
+    !BILIBILI_NATIVE_SEARCH_SORTS.includes(candidate.sort as 'relevance' | 'newest') ||
+    !Number.isSafeInteger(candidate.semanticResultCardCount) ||
+    Number(candidate.semanticResultCardCount) < 0 || Number(candidate.semanticResultCardCount) > 60 ||
     !Array.isArray(candidate.cards) ||
     candidate.cards.length > 20 ||
     typeof candidate.loginOverlayVisible !== 'boolean' ||
@@ -58,6 +64,9 @@ function domSnapshot(value: unknown): BilibiliNativeSearchDomSnapshot {
     searchInputVisible: candidate.searchInputVisible,
     resultListVisible: candidate.resultListVisible,
     emptyStateVisible: candidate.emptyStateVisible,
+    resultType: candidate.resultType as BilibiliNativeSearchDomSnapshot['resultType'],
+    sort: candidate.sort as BilibiliNativeSearchDomSnapshot['sort'],
+    semanticResultCardCount: Number(candidate.semanticResultCardCount),
     cards: cards as BilibiliNativeSearchDomCard[],
     loginOverlayVisible: candidate.loginOverlayVisible,
     risk: {

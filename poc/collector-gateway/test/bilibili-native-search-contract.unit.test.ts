@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'vitest';
-import type { StrategyObservationResult } from '@intelligence/collector-contracts';
 import {
+  canonicalBilibiliNativeSearchUrl,
+  type StrategyObservationResult
+} from '@intelligence/collector-contracts';
+import {
+  bilibiliNativeSearchInput,
+  canonicalBilibiliNativeSearchUrlForInput,
   canonicalBilibiliNativeSearchUrlForQuery,
   projectBilibiliNativeSearchDom,
   type BilibiliNativeSearchDomSnapshot
@@ -12,6 +17,9 @@ function dom(overrides: Partial<BilibiliNativeSearchDomSnapshot> = {}): Bilibili
     searchInputVisible: true,
     resultListVisible: true,
     emptyStateVisible: false,
+    resultType: 'comprehensive',
+    sort: 'relevance',
+    semanticResultCardCount: 1,
     cards: [{
       bvid: 'BV1qZSLBYEpa',
       title: '公开搜索结果',
@@ -48,7 +56,11 @@ describe('Bilibili native-search contract', () => {
   test('keeps a normalized query transient and projects ordered canonical BV cards', () => {
     expect(canonicalBilibiliNativeSearchUrlForQuery(' 人工智能 '))
       .toBe('https://search.bilibili.com/all?keyword=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD');
-    const page = projectBilibiliNativeSearchDom(dom(), '2026-07-22T02:00:01.000Z');
+    const page = projectBilibiliNativeSearchDom(dom(), '2026-07-22T02:00:01.000Z', {
+      resultType: 'comprehensive',
+      sort: 'relevance',
+      page: 1
+    });
     expect(page).toMatchObject({
       resultState: 'video_results',
       visibleVideoCardCount: 1,
@@ -65,9 +77,34 @@ describe('Bilibili native-search contract', () => {
     const page = projectBilibiliNativeSearchDom(dom({
       resultListVisible: false,
       emptyStateVisible: true,
+      semanticResultCardCount: 0,
       cards: []
-    }), '2026-07-22T02:00:01.000Z');
+    }), '2026-07-22T02:00:01.000Z', {
+      resultType: 'comprehensive',
+      sort: 'relevance',
+      page: 1
+    });
     expect(page).toMatchObject({ resultState: 'no_video_results', items: [] });
+  });
+
+  test('uses only reviewed native video/newest/page-two URL semantics', () => {
+    const input = bilibiliNativeSearchInput({
+      query: ' 人工智能 ',
+      resultType: 'video',
+      sort: 'newest',
+      page: 2
+    });
+    expect(input).toEqual({ query: '人工智能', resultType: 'video', sort: 'newest', page: 2 });
+    expect(canonicalBilibiliNativeSearchUrlForInput(input))
+      .toBe('https://search.bilibili.com/video?keyword=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD&order=pubdate&page=2');
+    expect(() => bilibiliNativeSearchInput({ query: '人工智能', resultType: 'comprehensive', sort: 'newest' }))
+      .toThrow('bilibili_native_search_input_invalid');
+    expect(() => bilibiliNativeSearchInput({ query: '人工智能', page: 3 }))
+      .toThrow('bilibili_native_search_input_invalid');
+    const observed = 'https://search.bilibili.com/video?keyword=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD&page=2&o=1&vt=2';
+    expect(canonicalBilibiliNativeSearchUrl(observed, 'observed_document'))
+      .toBe('https://search.bilibili.com/video?keyword=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD&page=2');
+    expect(canonicalBilibiliNativeSearchUrl(observed, 'strict_input')).toBeNull();
   });
 
   test('rejects a bridge payload that tries to carry a raw query value', () => {

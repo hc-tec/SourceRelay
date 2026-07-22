@@ -12,6 +12,7 @@ import type { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account
 import type { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import type { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
+import { bilibiliNativeSearchInput } from './bilibili-native-search-contract';
 import type { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import type { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
@@ -199,14 +200,10 @@ export async function handleGatewayRoute(
   if (request.method === 'POST' && nativeSearchRun) {
     if (!sameOrigin(request, response, context)) return true;
     const body = await readJsonBody(request);
-    if (
-      !body || typeof body !== 'object' || Array.isArray(body) ||
-      Object.keys(body).length !== 1 ||
-      typeof (body as { query?: unknown }).query !== 'string'
-    ) throw new Error('bilibili_native_search_run_input_invalid');
+    const search = bilibiliNativeSearchInput(body);
     const result = await context.nativeSearchRunner.run({
       profileId: nativeSearchRun[1]!,
-      query: (body as { query: string }).query
+      ...search
     });
     sendJson(response, 201, {
       schemaVersion: 1,

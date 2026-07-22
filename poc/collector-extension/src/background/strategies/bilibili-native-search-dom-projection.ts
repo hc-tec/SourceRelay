@@ -9,6 +9,9 @@ export interface BilibiliNativeSearchDomSnapshot {
   searchInputVisible: boolean;
   resultListVisible: boolean;
   emptyStateVisible: boolean;
+  resultType: 'comprehensive' | 'video' | 'unknown';
+  sort: 'relevance' | 'newest' | 'unknown';
+  semanticResultCardCount: number;
   cards: BilibiliNativeSearchDomCard[];
   loginOverlayVisible: boolean;
   risk: {
@@ -68,6 +71,19 @@ export async function captureBilibiliNativeSearchDom(
           }
         };
         const searchInput = document.querySelector<HTMLInputElement>('input[placeholder="输入关键字搜索"]');
+        const resultType = location.pathname === '/all'
+          ? 'comprehensive'
+          : location.pathname === '/video'
+            ? 'video'
+            : 'unknown';
+        const activeSortButton = Array.from(document.querySelectorAll<HTMLButtonElement>('.search-condition-row button'))
+          .find((button) => rendered(button) && /vui_button--active|selected/.test(button.className)) ?? null;
+        const activeSortLabel = clean(activeSortButton?.innerText, 80);
+        const sort = activeSortLabel === '综合排序'
+          ? 'relevance'
+          : activeSortLabel === '最新发布'
+            ? 'newest'
+            : 'unknown';
         // On the current desktop page `.search-all-list` is a structural,
         // zero-size wrapper around the actual rendered `.video-list`. Prefer
         // the visibly rendered list, while retaining the wrapper only as a
@@ -89,6 +105,12 @@ export async function captureBilibiliNativeSearchDom(
           // a bounded prefix wide enough to skip ads/courses/live cards before
           // applying the public-video result budget below.
           .slice(0, 60);
+        const semanticCards = candidateCards.map((card) => {
+          const titleElement = Array.from(card.querySelectorAll<HTMLElement>('h3')).find(rendered) ?? null;
+          const title = clean(titleElement?.innerText, 500);
+          const visibleText = clean(card.innerText, 2_000);
+          return { card, titleElement, title, visibleText };
+        }).filter((candidate) => Boolean(candidate.titleElement && candidate.title && candidate.visibleText));
         const cards: Array<{
           bvid: string | null;
           title: string | null;
@@ -96,14 +118,12 @@ export async function captureBilibiliNativeSearchDom(
           thumbnailUrl: string | null;
         }> = [];
         const seenBvids = new Set<string>();
-        for (const card of candidateCards) {
+        for (const candidate of semanticCards) {
           if (cards.length >= 20) break;
+          const { card, titleElement, title, visibleText } = candidate;
           const anchors = Array.from(card.querySelectorAll<HTMLAnchorElement>('a[href]')).filter(rendered);
           const videoAnchor = anchors.find((anchor) => bvidFromLink(anchor) !== null) ?? null;
-          const titleElement = Array.from(card.querySelectorAll<HTMLElement>('h3')).find(rendered) ?? null;
           const bvid = bvidFromLink(videoAnchor);
-          const title = clean(titleElement?.innerText, 500);
-          const visibleText = clean(card.innerText, 2_000);
           // Only canonical, human-visible BV video cards enter this Strategy.
           // Other mixed result types have no stable BV identity and are not
           // "unresolved" videos; they are intentionally outside its scope.
@@ -128,6 +148,9 @@ export async function captureBilibiliNativeSearchDom(
           searchInputVisible: rendered(searchInput),
           resultListVisible: rendered(resultRoot),
           emptyStateVisible,
+          resultType,
+          sort,
+          semanticResultCardCount: semanticCards.length,
           cards,
           loginOverlayVisible,
           risk: {

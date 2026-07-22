@@ -5,6 +5,7 @@ import {
 import { createHash } from 'node:crypto';
 import type {
   BilibiliNativeSearchAction,
+  BilibiliNativeSearchInput,
   BilibiliNativeSearchProjection,
   BilibiliNativeSearchRunRecord,
   BilibiliNativeSearchTerminalReason,
@@ -18,7 +19,7 @@ function sha256(value: string): string {
 export function createBilibiliNativeSearchRunRecord(input: {
   runId: string;
   collectorVersion: string;
-  query: string;
+  search: BilibiliNativeSearchInput;
   canonicalSearchUrl: string;
   startedAt: string;
   completedAt: string;
@@ -40,11 +41,16 @@ export function createBilibiliNativeSearchRunRecord(input: {
     platform: 'bilibili',
     accountCategory: 'user_managed',
     pageRole: 'native_search',
-    queryDigest: sha256(input.query),
+    search: {
+      resultType: input.search.resultType,
+      sort: input.search.sort,
+      page: input.search.page
+    },
+    queryDigest: sha256(input.search.query),
     targetUrlDigest: sha256(input.canonicalSearchUrl),
     strategyCandidate: {
       strategyId: BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
-      version: '0.1.0',
+      version: '0.2.0',
       admissionEligible: false
     },
     state: input.state,
@@ -74,8 +80,8 @@ export function createBilibiliNativeSearchRunRecord(input: {
       cookiesAndTokens: 'not_read',
       networkQueryAndFragmentValues: 'not_read',
       responseBodies: 'not_read',
-      sortAndFilter: 'default_comprehensive_only_separate_capability',
-      pagination: 'excluded_separate_capability',
+      sortAndFilter: 'reviewed_type_and_sort_via_native_url_filters_excluded',
+      pagination: 'single_reviewed_page_via_native_navigation',
       detailNavigation: 'excluded_separate_capability',
       mixedResultTypes: 'excluded_non_video_objects',
       semanticActionDelivery: 'at_most_once',
