@@ -284,3 +284,5 @@ currentMainFrameState     not_checked | unavailable | target_mismatch |
 同一 run 的 runtime 截图已由人工视觉复核：标题、播放器和选集首屏均已可见。随后以独立、匿名、无扩展、可见 Chromium 对同一规范页进行了新的窄 DOM 侦察：一次导航、零 hover/click/scroll、未读网络请求/response 或认证材料。稳定后得到的结构事实是：规范路径匹配、可见 `H1`、可见播放器、简介、UP 主容器和“视频选集”标题都已存在；但播放器容器内只有一个普通 DOM `button`，且其可见性为 false。可访问性树中可见的播放器控件不能等同于隔离世界中可见的原生 `button`。
 
 根因是详情策略额外要求 `playerControlsVisible` 才宣布首屏 ready。这个条件源自播放器/访问状态研究，却与详情 MVP 的零 hover 边界不相容，并且不是详情字段的必要证据。`0.7.14 / revision 12` 因此删除该字段和所有 contract gating：首屏 ready 只要求规范 BVID、非空可见标题、可见播放器和既有 3 秒 document 稳定窗口。访问限制仍由正向、可见的门禁 DOM 单独记录；播放器控制条、字幕、播放、评论和多 P 操作继续属于独立能力，不再阻塞详情元数据。
+
+该修复后的新版受管闭环对同一正常公开视频执行了一次新的独立 run，并得到 `completed / detail_ready`：标题、简介、创作者、8 个标签和选集摘要均已捕获；登录浮层未出现，访问状态如实为 `indeterminate`。动作账本只有一次完成的导航，hover/click/scroll 均为零，response body 仍为 `not_read`；终态页保留供复核，Account Safety 回到 `ready` 且没有 active run。结论：**proved（当前桌面首屏详情 MVP）**。这次成功不扩大到字幕、播放、全量选集、评论或楼中楼；它只解除详情元数据对播放器控制条的错误耦合。
