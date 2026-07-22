@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import { AccountSafetyRegistry } from './account-safety';
+import { BilibiliAccountVideoDetailMaterializationArtifactStore } from './bilibili-account-video-detail-materialization-artifacts';
+import { BilibiliAccountVideoDetailMaterializationHostRunner } from './bilibili-account-video-detail-materialization-host-runner';
 import { BilibiliAccountVideoPageTwoArtifactStore } from './bilibili-account-video-page-two-artifacts';
 import { BilibiliAccountVideoPageTwoHostRunner } from './bilibili-account-video-page-two-host-runner';
 import { BilibiliAccountVideoPaginationArtifactStore } from './bilibili-account-video-pagination-artifacts';
@@ -22,6 +24,8 @@ const identity = await loadGatewayIdentity(config);
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
 const accountSafety = await AccountSafetyRegistry.create(config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
+const accountVideoDetailMaterializationArtifacts =
+  await BilibiliAccountVideoDetailMaterializationArtifactStore.create(config.stateDirectory);
 const accountVideoPageTwoArtifacts = await BilibiliAccountVideoPageTwoArtifactStore.create(config.stateDirectory);
 const accountVideoPaginationArtifacts = await BilibiliAccountVideoPaginationArtifactStore.create(config.stateDirectory);
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
@@ -57,6 +61,13 @@ const videoDetailRunner = new BilibiliVideoDetailHostRunner({
   profiles: profileRegistry,
   artifacts: videoDetailArtifacts
 });
+const accountVideoDetailMaterializationRunner = new BilibiliAccountVideoDetailMaterializationHostRunner({
+  accountSafety,
+  profiles: profileRegistry,
+  sourceArtifacts: accountVideoPaginationArtifacts,
+  detailRunner: videoDetailRunner,
+  artifacts: accountVideoDetailMaterializationArtifacts
+});
 const expectedHost = `${config.host}:${config.port}`;
 
 const server = createServer(async (request, response) => {
@@ -71,6 +82,8 @@ const server = createServer(async (request, response) => {
       browserManager,
       profileRegistry,
       accountSafety,
+      accountVideoDetailMaterializationArtifacts,
+      accountVideoDetailMaterializationRunner,
       accountVideoPageTwoArtifacts,
       accountVideoPageTwoRunner,
       accountVideoPaginationArtifacts,
