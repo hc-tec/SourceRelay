@@ -95,7 +95,7 @@ npm run verify:collector
 
 ```text
 L1/L2  Vitest + fast-check：协议、扩展 URL/网络去敏、状态机、去敏/持久化、PageLease 与 Profile 边界
-L3-I   @playwright/test integration：production dist、真实 Chromium、MV3、Native Messaging、Browser Host，以及 worker 版本不匹配的安全拒绝
+L3-I   @playwright/test integration：production dist、真实 Chromium、MV3、Native Messaging、Browser Host、worker 版本不匹配安全拒绝与多 Profile 隔离
 L3-E   @playwright/test e2e-local：Gateway API -> Browser Host -> Chromium 的完整本地产品链路
 L0/S   既有 typecheck、build、manifest、制品与研究合同门禁（支持性 regression spine）
 ```
@@ -109,7 +109,7 @@ npm run test:integration
 npm run test:e2e:local
 ```
 
-`verify:collector` 会先运行四层的正式测试项目；随后执行既有支持性验证脊柱，并跳过已由 Playwright 项目执行的 Chromium lane，避免打开第二套重复的临时浏览器会话。所有这些测试只使用 test-scoped 临时状态和 Profile，并要求零实网请求。Worker 版本不匹配的本地 Integration gate 还要求：没有注册 Managed Profile、没有安装 Native Messaging Host、没有写入 `profile_launched`，并且测试进程树归零。它们不代表任何平台策略已经通过；真实平台 Canary 仍遵循下节的低频、可见、受审计流程。完整分层和框架取舍见[测试架构调研](docs/research/collector-test-architecture-and-frameworks-v0.1.md)。
+`verify:collector` 会先运行四层的正式测试项目；随后执行既有支持性验证脊柱，并跳过已由 Playwright 项目执行的 Chromium lane，避免打开第二套重复的临时浏览器会话。所有这些测试只使用 test-scoped 临时状态和 Profile，并要求零实网请求。Worker 版本不匹配的本地 Integration gate 还要求：没有注册 Managed Profile、没有安装 Native Messaging Host、没有写入 `profile_launched`，并且测试进程树归零；多 Profile gate 还要求两个真实 MV3 会话、Native Messaging 注册和 page lease 相互隔离，关闭其中一个不会关闭另一个。它们不代表任何平台策略已经通过；真实平台 Canary 仍遵循下节的低频、可见、受审计流程。完整分层和框架取舍见[测试架构调研](docs/research/collector-test-architecture-and-frameworks-v0.1.md)。
 
 ## 构建门禁
 

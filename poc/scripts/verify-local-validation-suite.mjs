@@ -57,6 +57,12 @@ const lanes = Object.freeze([
     playwrightOwned: true
   },
   {
+    id: 'browser-host-multi-profile-isolation',
+    scope: 'two real production MV3 Profiles keep Native Messaging, leases and close lifecycles isolated',
+    npmArgs: ['run', 'verify:multi-profile-isolation', '--workspace', '@intelligence/collector-browser-host'],
+    playwrightOwned: true
+  },
+  {
     id: 'strategy-binding',
     scope: 'real local Chromium MV3 and Native Messaging strategy binding',
     npmArgs: ['run', 'verify:strategy-binding', '--workspace', '@intelligence/collector-browser-host'],

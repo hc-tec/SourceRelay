@@ -192,6 +192,22 @@ export const collectorValidationCatalog = [
     ]
   },
   {
+    id: 'collector-browser-host-multi-profile-isolation',
+    tier: 'integration',
+    owner: 'collector-browser-host',
+    runner: 'playwright',
+    command: 'npm run test:integration -- --grep "isolates two production MV3 Profiles"',
+    timeoutMs: 120_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: [
+      'multi-profile-browser-session-isolation',
+      'native-messaging-registration-isolation',
+      'profile-local-page-lease-namespace',
+      'independent-profile-close'
+    ]
+  },
+  {
     id: 'collector-browser-host-strategy-binding',
     tier: 'integration',
     owner: 'collector-browser-host',

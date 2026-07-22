@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "verify:lifecycle": "node scripts/verify-real-browser-lifecycle.mjs",
     "verify:extension-runtime-rejection": "node scripts/verify-real-extension-runtime-rejection.mjs",
+    "verify:multi-profile-isolation": "node scripts/verify-real-multi-profile-isolation.mjs",
     "verify:strategy-binding": "node scripts/verify-real-strategy-binding.mjs"
   },
   "dependencies": {

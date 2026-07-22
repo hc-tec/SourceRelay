@@ -122,6 +122,15 @@ export async function processAlive(processId) {
   }
 }
 
+export async function waitForProcessExit(processId, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!(await processAlive(processId))) return;
+    await delay(100);
+  }
+  throw new Error(`test_process_exit_timeout:${processId}`);
+}
+
 export function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
