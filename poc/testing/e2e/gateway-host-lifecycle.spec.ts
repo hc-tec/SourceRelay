@@ -22,10 +22,13 @@ test('Gateway and Browser Host lifecycle runs through actual production processe
     reconnectPreservedHostPid: true,
     reconnectPreservedBrowserPid: true,
     reconnectPreservedBrowserSession: true,
+    twoProfilesSurvivedGatewayRestart: true,
+    profilesRemainIsolatedThroughGatewayApi: true,
     extensionNativeBridgeConnected: true,
     crossSiteProfileCreationRejected: true,
     profileClosedOnlyByExplicitRequest: true,
     hostExitedOnlyByExplicitRequest: true,
+    testScopedProcessResidue: 0,
     testScopedExplicitCleanup: true
   });
 });

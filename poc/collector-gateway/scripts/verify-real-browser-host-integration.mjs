@@ -4,6 +4,10 @@ import { access, mkdir, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  terminateTestScopedProcesses,
+  waitForTestScopedProcessesToExit
+} from '../../collector-browser-host/scripts/lifecycle-gate-helpers.mjs';
 
 const gatewayRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoot = resolve(gatewayRoot, '..');
@@ -31,7 +35,7 @@ const environment = {
 
 let gateway = null;
 let hostPid = null;
-let browserPid = null;
+const browserPids = [];
 let crossSiteProfileCreationRejected = false;
 try {
   await mkdir(runtimeRoot, { recursive: true });
@@ -55,51 +59,83 @@ try {
   assert.deepEqual(crossSiteBody, { ok: false, error: 'console_origin_rejected' });
   crossSiteProfileCreationRejected = true;
 
-  const created = await request(origin, '/v1/profiles', {
+  const createdAlpha = await request(origin, '/v1/profiles', {
     method: 'POST',
     body: {
       kind: 'collection',
       platform: 'bilibili',
       accountCategory: 'user_managed',
-      accountLabel: 'Gateway Host integration profile'
+      accountLabel: 'Gateway Host integration profile alpha'
     }
   });
-  const profileId = created.profile?.profile?.profileId;
-  assert.match(profileId, /^[0-9a-f-]{36}$/i);
+  const createdBeta = await request(origin, '/v1/profiles', {
+    method: 'POST',
+    body: {
+      kind: 'collection',
+      platform: 'bilibili',
+      accountCategory: 'user_managed',
+      accountLabel: 'Gateway Host integration profile beta'
+    }
+  });
+  const alphaProfileId = createdAlpha.profile?.profile?.profileId;
+  const betaProfileId = createdBeta.profile?.profile?.profileId;
+  assert.match(alphaProfileId, /^[0-9a-f-]{36}$/i);
+  assert.match(betaProfileId, /^[0-9a-f-]{36}$/i);
+  assert.notEqual(alphaProfileId, betaProfileId);
 
-  const launched = await request(origin, `/v1/profiles/${profileId}/browser/launch`, {
+  const launchedAlpha = await request(origin, `/v1/profiles/${alphaProfileId}/browser/launch`, {
     method: 'POST',
     body: {}
   });
-  const first = launched.profile;
-  assert.equal(first.running, true);
-  assert.equal(first.runtime?.extensionRuntime?.finalRuntimeVersion, '0.7.6');
-  assert.equal(first.runtime?.extensionRuntime?.nativeBridgeConnected, true);
-  assert.equal(first.runtime?.livePlatformRequests, 0);
-  hostPid = first.host?.hostProcessId ?? null;
-  browserPid = first.runtime?.browserProcessId ?? null;
-  const browserSessionId = first.runtime?.browserSessionId;
+  const launchedBeta = await request(origin, `/v1/profiles/${betaProfileId}/browser/launch`, {
+    method: 'POST',
+    body: {}
+  });
+  const alphaFirst = launchedAlpha.profile;
+  const betaFirst = launchedBeta.profile;
+  assertLaunchedProfile(alphaFirst);
+  assertLaunchedProfile(betaFirst);
+  hostPid = alphaFirst.host?.hostProcessId ?? null;
+  const alphaBrowserPid = alphaFirst.runtime?.browserProcessId ?? null;
+  const betaBrowserPid = betaFirst.runtime?.browserProcessId ?? null;
+  const alphaBrowserSessionId = alphaFirst.runtime?.browserSessionId;
+  const betaBrowserSessionId = betaFirst.runtime?.browserSessionId;
   assert.ok(Number.isSafeInteger(hostPid));
-  assert.ok(Number.isSafeInteger(browserPid));
-  assert.match(browserSessionId, /^[0-9a-f-]{36}$/i);
+  assert.ok(Number.isSafeInteger(alphaBrowserPid));
+  assert.ok(Number.isSafeInteger(betaBrowserPid));
+  assert.equal(betaFirst.host?.hostProcessId, hostPid);
+  assert.notEqual(alphaBrowserPid, betaBrowserPid);
+  assert.match(alphaBrowserSessionId, /^[0-9a-f-]{36}$/i);
+  assert.match(betaBrowserSessionId, /^[0-9a-f-]{36}$/i);
+  assert.notEqual(alphaBrowserSessionId, betaBrowserSessionId);
+  browserPids.push(alphaBrowserPid, betaBrowserPid);
 
   await stopGateway(gateway);
   gateway = null;
   assert.equal(processIsAlive(hostPid), true, 'Gateway exit must not close Browser Host');
-  assert.equal(processIsAlive(browserPid), true, 'Gateway exit must not close Chromium');
+  for (const browserPid of browserPids) {
+    assert.equal(processIsAlive(browserPid), true, 'Gateway exit must not close either Chromium Profile');
+  }
 
   gateway = await startGateway(environment, origin);
   const reconnected = await request(origin, '/v1/profiles');
-  const second = reconnected.profiles.find((candidate) => candidate.profile.profileId === profileId);
-  assert.equal(second.host.hostProcessId, hostPid);
-  assert.equal(second.runtime.browserProcessId, browserPid);
-  assert.equal(second.runtime.browserSessionId, browserSessionId);
-  assert.equal(second.runtime.extensionRuntime.nativeBridgeConnected, true);
+  const alphaSecond = profileById(reconnected.profiles, alphaProfileId);
+  const betaSecond = profileById(reconnected.profiles, betaProfileId);
+  assertReconnectedProfile(alphaSecond, hostPid, alphaBrowserPid, alphaBrowserSessionId);
+  assertReconnectedProfile(betaSecond, hostPid, betaBrowserPid, betaBrowserSessionId);
 
-  await request(origin, `/v1/profiles/${profileId}/browser/close`, { method: 'POST', body: {} });
-  await waitUntil(() => !processIsAlive(browserPid), 10_000, 'gateway_host_gate_browser_close_timeout');
+  await request(origin, `/v1/profiles/${alphaProfileId}/browser/close`, { method: 'POST', body: {} });
+  await waitUntil(() => !processIsAlive(alphaBrowserPid), 10_000, 'gateway_host_gate_alpha_browser_close_timeout');
+  assert.equal(processIsAlive(betaBrowserPid), true, 'explicit close for alpha must not close beta');
+  const afterAlphaClose = await request(origin, '/v1/profiles');
+  const survivingBeta = profileById(afterAlphaClose.profiles, betaProfileId);
+  assertReconnectedProfile(survivingBeta, hostPid, betaBrowserPid, betaBrowserSessionId);
+
+  await request(origin, `/v1/profiles/${betaProfileId}/browser/close`, { method: 'POST', body: {} });
+  await waitUntil(() => !processIsAlive(betaBrowserPid), 10_000, 'gateway_host_gate_beta_browser_close_timeout');
   await request(origin, '/v1/browser-host/exit', { method: 'POST', body: {} });
   await waitUntil(() => !processIsAlive(hostPid), 10_000, 'gateway_host_gate_host_exit_timeout');
+  await waitForTestScopedProcessesToExit(runtimeRoot, 10_000);
 
   console.log(JSON.stringify({
     ok: true,
@@ -111,17 +147,45 @@ try {
     reconnectPreservedHostPid: true,
     reconnectPreservedBrowserPid: true,
     reconnectPreservedBrowserSession: true,
+    twoProfilesSurvivedGatewayRestart: true,
+    profilesRemainIsolatedThroughGatewayApi: true,
     extensionNativeBridgeConnected: true,
     crossSiteProfileCreationRejected,
     profileClosedOnlyByExplicitRequest: true,
     hostExitedOnlyByExplicitRequest: true,
+    testScopedProcessResidue: 0,
     testScopedExplicitCleanup: true
   }, null, 2));
 } finally {
   if (gateway) await stopGateway(gateway).catch(() => undefined);
-  if (browserPid && processIsAlive(browserPid)) process.kill(browserPid);
+  for (const browserPid of browserPids) {
+    if (processIsAlive(browserPid)) process.kill(browserPid);
+  }
   if (hostPid && processIsAlive(hostPid)) process.kill(hostPid);
+  await terminateTestScopedProcesses(runtimeRoot);
+  await waitForTestScopedProcessesToExit(runtimeRoot, 5_000).catch(() => undefined);
   await rm(runtimeRoot, { recursive: true, force: true });
+}
+
+function assertLaunchedProfile(profile) {
+  assert.equal(profile.running, true);
+  assert.equal(profile.runtime?.extensionRuntime?.finalRuntimeVersion, '0.7.6');
+  assert.equal(profile.runtime?.extensionRuntime?.nativeBridgeConnected, true);
+  assert.equal(profile.runtime?.livePlatformRequests, 0);
+}
+
+function profileById(profiles, profileId) {
+  const profile = profiles.find((candidate) => candidate.profile.profileId === profileId);
+  assert.ok(profile, `gateway_profile_missing:${profileId}`);
+  return profile;
+}
+
+function assertReconnectedProfile(profile, expectedHostPid, expectedBrowserPid, expectedBrowserSessionId) {
+  assert.equal(profile.host.hostProcessId, expectedHostPid);
+  assert.equal(profile.runtime.browserProcessId, expectedBrowserPid);
+  assert.equal(profile.runtime.browserSessionId, expectedBrowserSessionId);
+  assert.equal(profile.runtime.extensionRuntime.nativeBridgeConnected, true);
+  assert.equal(profile.runtime.livePlatformRequests, 0);
 }
 
 async function availablePort() {

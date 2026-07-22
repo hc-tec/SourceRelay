@@ -228,7 +228,14 @@ export const collectorValidationCatalog = [
     timeoutMs: 180_000,
     platformPolicy: 'forbidden',
     ci: 'pull_request',
-    capabilities: ['gateway-reconnect', 'browser-host', 'native-messaging', 'loopback-origin-guard', 'explicit-close']
+    capabilities: [
+      'gateway-reconnect',
+      'browser-host',
+      'native-messaging',
+      'multi-profile-gateway-isolation',
+      'loopback-origin-guard',
+      'explicit-close'
+    ]
   },
   {
     id: 'bilibili-account-video-page-two-live-canary',

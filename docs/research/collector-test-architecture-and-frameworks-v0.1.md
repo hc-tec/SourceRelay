@@ -444,8 +444,8 @@ Integration (@playwright/test project: integration)
 
 E2E (@playwright/test project: e2e-local)
   -> real Gateway HTTP API -> Profile launch -> Browser Host -> Chromium
-  -> Gateway restart keeps Host/browser/session alive
-  -> cross-site profile mutation is rejected; explicit close is the only browser close path
+  -> Gateway restart keeps each managed Profile's Host/browser/session alive
+  -> cross-site profile mutation is rejected; Profile close is isolated and explicit
 ```
 
 当前命令分别是：
@@ -463,7 +463,7 @@ npm run verify:collector      # 上述测试 + supporting regression spine
 
 本轮还通过 Unit 回归发现并修复了一个真实的 Browser Host 缺陷：Node 对 `chrome-extension://` URL 的 `origin` 返回 `"null"`。旧实现会把扩展页身份误记为 `null/path`；现在基于 `protocol + host + pathname` 生成身份，避免不同扩展页落入同一 identity namespace。
 
-验证边界保持不变：上述 48 个 Unit 测试和 6 个 Playwright 本地 spec 都没有访问平台页面；它们证明的是正式本地执行面和安全不变量。新增的 runtime mismatch gate 用真实 production MV3，但向 Host 故意声明错误版本；它必须返回 `collector_extension_worker_version_mismatch`，并证明失败发生在正式 Profile 注册、Native Messaging 安装和 `profile_launched` journal 写入之前，随后清理 test-scoped Chromium/Host 进程。多 Profile gate 则实际启动两个独立的 production MV3/Chromium 会话，证明 Browser session、Native Messaging 注册和 Profile-local lease 不会串线；控制连接断开时两个 active lease 都必须被 quarantine，而两个浏览器与 bridge 保持，随后关闭其中一个也不会关闭另一个。Unit 还补齐了 Evidence Plan 的预算、同意、Profile、权限与策略成熟度决策；coverage 上升只是这些核心行为被明确断言后的副产物，不是单独目标。B站、小红书、知乎等页面的 DOM、可信鼠标输入、菜单、字幕、评论与 XHR 语义，仍只能由低频、可见、去敏、受预算的 L4 Canary 证明。
+验证边界保持不变：上述 48 个 Unit 测试和 6 个 Playwright 本地 spec 都没有访问平台页面；它们证明的是正式本地执行面和安全不变量。新增的 runtime mismatch gate 用真实 production MV3，但向 Host 故意声明错误版本；它必须返回 `collector_extension_worker_version_mismatch`，并证明失败发生在正式 Profile 注册、Native Messaging 安装和 `profile_launched` journal 写入之前，随后清理 test-scoped Chromium/Host 进程。多 Profile gate 则实际启动两个独立的 production MV3/Chromium 会话，证明 Browser session、Native Messaging 注册和 Profile-local lease 不会串线；控制连接断开时两个 active lease 都必须被 quarantine，而两个浏览器与 bridge 保持，随后关闭其中一个也不会关闭另一个。Gateway E2E 将同一隔离约束再穿过实际 HTTP API 与 Gateway restart：两条 Profile 都必须保留各自 PID/session/bridge，关闭一条不得影响另一条。Unit 还补齐了 Evidence Plan 的预算、同意、Profile、权限与策略成熟度决策；coverage 上升只是这些核心行为被明确断言后的副产物，不是单独目标。B站、小红书、知乎等页面的 DOM、可信鼠标输入、菜单、字幕、评论与 XHR 语义，仍只能由低频、可见、去敏、受预算的 L4 Canary 证明。
 
 ## 11. 本轮推荐决策
 
