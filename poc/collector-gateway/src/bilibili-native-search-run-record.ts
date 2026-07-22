@@ -1,4 +1,7 @@
-import { BILIBILI_NATIVE_SEARCH_STRATEGY_ID } from '@intelligence/collector-contracts';
+import {
+  BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
+  type StrategyBindingDiagnostics
+} from '@intelligence/collector-contracts';
 import { createHash } from 'node:crypto';
 import type {
   BilibiliNativeSearchAction,
@@ -23,6 +26,7 @@ export function createBilibiliNativeSearchRunRecord(input: {
   errorCode: string | null;
   results: BilibiliNativeSearchProjection | null;
   visualEvidence: BilibiliNativeSearchVisualEvidence | null;
+  bindingDiagnostics?: StrategyBindingDiagnostics | null;
   actions: BilibiliNativeSearchAction[];
   terminalReason: BilibiliNativeSearchTerminalReason;
   targetTabSelection: BilibiliNativeSearchRunRecord['safeguards']['targetTabSelection'];
@@ -49,6 +53,7 @@ export function createBilibiliNativeSearchRunRecord(input: {
     completedAt: input.completedAt,
     results,
     visualEvidence: input.visualEvidence,
+    ...(input.bindingDiagnostics ? { bindingDiagnostics: structuredClone(input.bindingDiagnostics) } : {}),
     actions: input.actions,
     coverage: {
       capturedPages: results ? 1 : 0,

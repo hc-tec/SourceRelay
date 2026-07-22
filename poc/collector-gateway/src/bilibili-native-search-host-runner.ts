@@ -3,7 +3,8 @@ import {
   BrowserHostError,
   COLLECTOR_EXTENSION_VERSION,
   type AcquirePageResult,
-  type PageReleaseDisposition
+  type PageReleaseDisposition,
+  type StrategyBindingDiagnostics
 } from '@intelligence/collector-contracts';
 import { randomUUID } from 'node:crypto';
 import type { AccountSafetyRegistry, AccountSafetyRunPermit } from './account-safety';
@@ -43,6 +44,21 @@ export interface BilibiliNativeSearchHostRunResult {
 
 interface LeasedPageContext {
   recordVersion: number;
+}
+
+/**
+ * Carries a bounded, local-only diagnosis when an exact document binding fails.
+ * It never carries the search phrase, URL, document ID, DOM, request data or
+ * authentication material, and it does not alter at-most-once navigation.
+ */
+class NativeSearchObservationError extends Error {
+  readonly bindingDiagnostics: StrategyBindingDiagnostics | null;
+
+  constructor(cause: unknown, bindingDiagnostics: StrategyBindingDiagnostics | null) {
+    super(cause instanceof Error ? cause.message : 'native_search_strategy_observation_failed');
+    this.name = 'NativeSearchObservationError';
+    this.bindingDiagnostics = bindingDiagnostics;
+  }
 }
 
 function input(value: BilibiliNativeSearchHostRunInput): BilibiliNativeSearchHostRunInput {
@@ -182,6 +198,7 @@ export class BilibiliNativeSearchHostRunner {
     let state: BilibiliNativeSearchRunRecord['state'] = 'failed';
     let terminalReason: BilibiliNativeSearchTerminalReason = 'dom_projection_failed';
     let errorCode: string | null = null;
+    let bindingDiagnostics: StrategyBindingDiagnostics | null = null;
     let releaseDisposition: PageReleaseDisposition = 'quarantined';
     let releaseReason = 'native_search_run_not_started';
     let uncertainPageOutcome = false;
@@ -274,6 +291,7 @@ export class BilibiliNativeSearchHostRunner {
         errorCode = null;
       }
     } catch (error) {
+      if (error instanceof NativeSearchObservationError) bindingDiagnostics = error.bindingDiagnostics;
       const failure = failureFor(error);
       state = failure.state;
       terminalReason = failure.terminalReason;
@@ -324,6 +342,7 @@ export class BilibiliNativeSearchHostRunner {
       errorCode,
       results,
       visualEvidence,
+      bindingDiagnostics,
       actions,
       terminalReason,
       targetTabSelection,
@@ -382,11 +401,31 @@ export class BilibiliNativeSearchHostRunner {
         });
       } catch (error) {
         if (!(error instanceof BrowserHostError) || error.record.code !== 'managed_page_record_version_mismatch' || attempt === 1) {
-          throw error;
+          const diagnostics = await this.#readStrategyBindingDiagnostics(input, context).catch(() => null);
+          throw new NativeSearchObservationError(error, diagnostics);
         }
       }
     }
     throw new Error('native_search_local_version_unavailable');
+  }
+
+  async #readStrategyBindingDiagnostics(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    runId: string;
+    observerBindingId: string;
+  }, context: LeasedPageContext): Promise<StrategyBindingDiagnostics> {
+    return await this.#browserManager.readStrategyBindingDiagnostics({
+      schemaVersion: 1,
+      profileId: input.profileId,
+      pageAlias: input.pageAlias,
+      pageLeaseId: input.pageLeaseId,
+      expectedRecordVersion: context.recordVersion,
+      runId: input.runId,
+      observerBindingId: input.observerBindingId,
+      strategyId: BILIBILI_NATIVE_SEARCH_STRATEGY_ID
+    });
   }
 
   async #captureVisualEvidence(input: {

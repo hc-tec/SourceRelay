@@ -1,6 +1,7 @@
 import {
   bilibiliNativeSearchUrl,
-  normaliseBilibiliNativeSearchQuery
+  normaliseBilibiliNativeSearchQuery,
+  type StrategyBindingDiagnostics
 } from '@intelligence/collector-contracts';
 
 export const BILIBILI_NATIVE_SEARCH_MAX_RESULTS = 20;
@@ -110,6 +111,7 @@ export interface BilibiliNativeSearchRunRecord {
   completedAt: string;
   results: BilibiliNativeSearchProjection | null;
   visualEvidence: BilibiliNativeSearchVisualEvidence | null;
+  bindingDiagnostics?: StrategyBindingDiagnostics;
   actions: BilibiliNativeSearchAction[];
   coverage: {
     capturedPages: 0 | 1;

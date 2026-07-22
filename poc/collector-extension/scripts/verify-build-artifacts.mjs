@@ -149,7 +149,7 @@ assert.match(
 );
 assert.match(backgroundSource, /collector\.native-bridge-config\.v1/, 'Browser Host bridge bootstrap key is required');
 assert.match(backgroundSource, /collector\.runtime-bootstrap\.v1/, 'worker runtime marker is required');
-assert.match(backgroundSource, /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*13|controlSurfaceRevision:\s*13/, 'runtime revision must be 13');
+assert.match(backgroundSource, /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*14|controlSurfaceRevision:\s*14/, 'runtime revision must be 14');
 assert.doesNotMatch(
   backgroundSource,
   /collector\.pollGatewayTasks|collector\.pairGateway|collector\.startCapabilityValidation|collector\.startDetailCapabilityValidation|collector\.startTranscriptCapabilityValidation|collector\.collectionResult|stageLease|127\.0\.0\.1|localhost/i,

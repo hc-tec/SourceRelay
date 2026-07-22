@@ -29,6 +29,7 @@ import {
 } from './strategies/bilibili-dynamic-strategy';
 import {
   bindBilibiliNativeSearchObserver,
+  diagnoseBilibiliNativeSearchObserver,
   readBilibiliNativeSearchObservation
 } from './strategies/bilibili-native-search-strategy';
 import {
@@ -164,6 +165,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
     case 'collector_read_strategy_binding_diagnostics':
       if (command.command.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
         return await diagnoseBilibiliVideoDetailObserver(command.command);
+      }
+      if (command.command.strategyId === BILIBILI_NATIVE_SEARCH_STRATEGY_ID) {
+        return await diagnoseBilibiliNativeSearchObserver(command.command);
       }
       throw new Error('collector_strategy_binding_diagnostics_not_supported');
   }

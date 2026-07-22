@@ -38,6 +38,7 @@ export interface BilibiliNativeSearchArtifactManifest
   resultsFile: typeof RESULTS_FILE | null;
   resultsFileSha256: string | null;
   visualEvidence: BilibiliNativeSearchRunRecord['visualEvidence'];
+  bindingDiagnostics?: BilibiliNativeSearchRunRecord['bindingDiagnostics'];
   safeguards: BilibiliNativeSearchRunRecord['safeguards'];
 }
 
@@ -166,6 +167,7 @@ export class BilibiliNativeSearchArtifactStore {
       resultsFile,
       resultsFileSha256,
       visualEvidence: run.visualEvidence,
+      ...(run.bindingDiagnostics ? { bindingDiagnostics: structuredClone(run.bindingDiagnostics) } : {}),
       safeguards: run.safeguards
     };
     const manifestSha256 = sha256(canonicalJson(manifest));

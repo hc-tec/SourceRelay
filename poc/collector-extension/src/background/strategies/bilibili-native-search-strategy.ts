@@ -48,4 +48,5 @@ const observer = createDomOnlyDocumentObserver<NativeSearchBinding, BilibiliNati
 export const initialiseBilibiliNativeSearchDocumentBridge = observer.initialiseDocumentBridge;
 export const bindBilibiliNativeSearchObserver = observer.bind;
 export const readBilibiliNativeSearchObservation = observer.read;
+export const diagnoseBilibiliNativeSearchObserver = observer.diagnose;
 export const cleanupExpiredBilibiliNativeSearchObserverBindings = observer.cleanupExpiredBindings;
