@@ -89,6 +89,43 @@ describe('Native bridge runtime guards', () => {
     })).toBe(true);
   });
 
+  test('admits the fixed transcript response binding but rejects an arbitrary response budget', () => {
+    const transcriptBinding = {
+      ...validHostCommand(),
+      command: {
+        type: 'collector_bind_strategy_observer',
+        tabId: 17,
+        nextDocumentGeneration: 1,
+        binding: {
+          schemaVersion: 1,
+          profileId: 'profile-123',
+          pageAlias: 'managed-page-1',
+          pageLeaseId: 'page-lease-id-which-is-long-enough',
+          expectedRecordVersion: 1,
+          runId: 'run-id-which-is-long-enough',
+          observerBindingId: 'observer-binding-id-123',
+          strategyId: 'bilibili.video.transcript.trusted-response.v2',
+          target: {
+            canonicalUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa',
+            bvid: 'BV1qZSLBYEpa'
+          },
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          maximumResponseObservations: 2,
+          maximumPayloadBytes: 192 * 1024,
+          documentBindingMode: 'next_navigation_only'
+        }
+      }
+    };
+    expect(isCollectorHostBridgeCommand(transcriptBinding)).toBe(true);
+    expect(isCollectorHostBridgeCommand({
+      ...transcriptBinding,
+      command: {
+        ...transcriptBinding.command,
+        binding: { ...transcriptBinding.command.binding, maximumResponseObservations: 1 }
+      }
+    })).toBe(false);
+  });
+
   test('reject every generated non-current protocol version', () => {
     fc.assert(fc.property(fc.integer(), (protocolVersion) => {
       fc.pre(protocolVersion !== NATIVE_BRIDGE_PROTOCOL_VERSION);

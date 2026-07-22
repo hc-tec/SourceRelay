@@ -24,6 +24,7 @@ test('production Browser Host and MV3 complete a zero-navigation strategy bindin
     videoDetailBindingDiagnosticRoundTripCompleted: true,
     accountVideoInventoryDomOnlyBindingRoundTripCompleted: true,
     accountProfileDomOnlyBindingRoundTripCompleted: true,
+    transcriptResponseBindingRoundTripCompleted: true,
     runLeaseMismatchRejectedBeforeExtensionDispatch: true,
     recordVersionMismatchRejectedBeforeExtensionDispatch: true,
     testScopedExplicitCleanup: true

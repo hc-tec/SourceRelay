@@ -6,13 +6,21 @@ export const BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID =
 export const BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID =
   'bilibili.account.profile.dom.v2' as const;
 export const BILIBILI_NATIVE_SEARCH_STRATEGY_ID = 'bilibili.search.breadth.dom.v2' as const;
+/**
+ * A new, fixed browser-interaction and MV3-response path. It intentionally
+ * does not inherit the suspended legacy transcript runner's identity or
+ * admission status.
+ */
+export const BILIBILI_TRANSCRIPT_STRATEGY_ID =
+  'bilibili.video.transcript.trusted-response.v2' as const;
 
 export type CollectorStrategyId =
   | typeof BILIBILI_DYNAMIC_STRATEGY_ID
   | typeof BILIBILI_VIDEO_DETAIL_STRATEGY_ID
   | typeof BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID
   | typeof BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID
-  | typeof BILIBILI_NATIVE_SEARCH_STRATEGY_ID;
+  | typeof BILIBILI_NATIVE_SEARCH_STRATEGY_ID
+  | typeof BILIBILI_TRANSCRIPT_STRATEGY_ID;
 
 export type BridgeJsonValue =
   | null
@@ -44,6 +52,11 @@ export interface BilibiliAccountProfileStrategyTarget {
 
 export interface BilibiliNativeSearchStrategyTarget {
   canonicalUrl: string;
+}
+
+export interface BilibiliTranscriptStrategyTarget {
+  canonicalUrl: string;
+  bvid: string;
 }
 
 /**
@@ -99,6 +112,12 @@ export type StrategyObserverBindingRequest =
     strategyId: typeof BILIBILI_NATIVE_SEARCH_STRATEGY_ID;
     target: BilibiliNativeSearchStrategyTarget;
     maximumResponseObservations: 0;
+  })
+  | (StrategyObserverBindingRequestBase & {
+    strategyId: typeof BILIBILI_TRANSCRIPT_STRATEGY_ID;
+    target: BilibiliTranscriptStrategyTarget;
+    /** Directory plus one public subtitle document; no generic response budget. */
+    maximumResponseObservations: 2;
   });
 
 export interface StrategyObservationReadRequest {

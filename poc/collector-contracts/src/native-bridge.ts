@@ -6,6 +6,7 @@ import {
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
   BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
+  BILIBILI_TRANSCRIPT_STRATEGY_ID,
   BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
   STRATEGY_OBSERVATION_SCHEMA_VERSION,
   isBridgeJsonValue,
@@ -17,7 +18,7 @@ import {
   type StrategyObserverBindingResult
 } from './strategy-observation.js';
 
-export const NATIVE_BRIDGE_PROTOCOL_VERSION = 3 as const;
+export const NATIVE_BRIDGE_PROTOCOL_VERSION = 4 as const;
 export const NATIVE_BRIDGE_MAX_MESSAGE_BYTES = 256 * 1024;
 export const COLLECTOR_NATIVE_BRIDGE_CONFIG_KEY = 'collector.native-bridge-config.v1' as const;
 export const COLLECTOR_NATIVE_BRIDGE_STATUS_KEY = 'collector.native-bridge-status.v1' as const;
@@ -399,7 +400,8 @@ function isCollectorStrategyId(value: unknown): value is StrategyObserverBinding
     value === BILIBILI_VIDEO_DETAIL_STRATEGY_ID ||
     value === BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID ||
     value === BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID ||
-    value === BILIBILI_NATIVE_SEARCH_STRATEGY_ID;
+    value === BILIBILI_NATIVE_SEARCH_STRATEGY_ID ||
+    value === BILIBILI_TRANSCRIPT_STRATEGY_ID;
 }
 
 function validStrategyBindingTargetAndBudget(
@@ -420,6 +422,9 @@ function validStrategyBindingTargetAndBudget(
   }
   if (candidate.strategyId === BILIBILI_NATIVE_SEARCH_STRATEGY_ID) {
     return validBilibiliNativeSearchTarget(candidate.target) && candidate.maximumResponseObservations === 0;
+  }
+  if (candidate.strategyId === BILIBILI_TRANSCRIPT_STRATEGY_ID) {
+    return validVideoDetailTarget(candidate.target) && candidate.maximumResponseObservations === 2;
   }
   return false;
 }

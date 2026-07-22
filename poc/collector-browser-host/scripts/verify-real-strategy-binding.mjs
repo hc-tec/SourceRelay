@@ -204,6 +204,27 @@ try {
   assert.equal(accountProfileBinding.pageAlias, acquired.page.pageAlias);
   assert.equal(accountProfileBinding.nextDocumentGeneration, acquired.page.documentGeneration + 1);
 
+  // Transcript observation owns a distinct exact-document response arm. This
+  // remains on about:blank, so it proves only real MV3/Native Messaging
+  // binding and must not be interpreted as Bilibili transcript collection.
+  const transcriptBindingRequest = {
+    ...bindingRequest,
+    observerBindingId: randomUUID(),
+    strategyId: 'bilibili.video.transcript.trusted-response.v2',
+    target: videoTarget,
+    maximumResponseObservations: 2,
+    maximumPayloadBytes: 192 * 1024,
+    documentBindingMode: 'next_navigation_only'
+  };
+  const transcriptBinding = await client.command({
+    type: 'bind_strategy_observer',
+    request: transcriptBindingRequest
+  });
+  assert.equal(transcriptBinding.type, 'collector_strategy_observer_binding');
+  assert.equal(transcriptBinding.observerBindingId, transcriptBindingRequest.observerBindingId);
+  assert.equal(transcriptBinding.pageAlias, acquired.page.pageAlias);
+  assert.equal(transcriptBinding.nextDocumentGeneration, acquired.page.documentGeneration + 1);
+
   const visual = await client.command({
     type: 'capture_page_visual_evidence',
     request: {
@@ -280,6 +301,7 @@ try {
     videoDetailBindingDiagnosticRoundTripCompleted: true,
     accountVideoInventoryDomOnlyBindingRoundTripCompleted: true,
     accountProfileDomOnlyBindingRoundTripCompleted: true,
+    transcriptResponseBindingRoundTripCompleted: true,
     priorBindingReplacedWithoutPlatformNavigation: true,
     observerBindingCorrelationVerified: true,
     postObservationVisualEvidenceCaptured: true,

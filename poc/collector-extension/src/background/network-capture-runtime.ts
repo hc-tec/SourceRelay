@@ -6,15 +6,19 @@ import {
   type NetworkCaptureRouteId
 } from '../shared/network-capture';
 import { isSupportedPlatform, type SupportedPlatform } from '../shared/collection-contracts';
+import { canonicalBilibiliVideoUrl } from '../shared/bilibili-video-url';
 
 const MAXIMUM_ARM_LIFETIME_MS = 60_000;
 
 /**
  * An arm is deliberately narrower than a task: it represents one exact
  * document that an already-bound strategy may observe for at most one minute.
- * There is no generic collection or transcript arm in the Extension runtime.
+ * Each purpose is source-specific; there is no generic response-collection
+ * arm and callers cannot provide arbitrary route, URL, or script inputs.
  */
-export type NetworkCaptureArmPurpose = 'dynamic_strategy';
+export type NetworkCaptureArmPurpose =
+  | 'dynamic_strategy'
+  | 'bilibili_transcript_strategy';
 
 export interface NetworkCaptureArm {
   platform: SupportedPlatform;
@@ -59,6 +63,24 @@ function canonicalDynamicUrl(value: string): string | null {
   }
 }
 
+function canonicalNavigationUrl(purpose: NetworkCaptureArmPurpose, value: string): string | null {
+  return purpose === 'dynamic_strategy'
+    ? canonicalDynamicUrl(value)
+    : canonicalBilibiliVideoUrl(value, 'observed_document');
+}
+
+function validContentScriptId(purpose: NetworkCaptureArmPurpose, value: unknown): value is string {
+  return typeof value === 'string' && (
+    purpose === 'dynamic_strategy'
+      ? /^collector-dynamic-[a-z0-9-]{1,80}$/.test(value)
+      : /^collector-transcript-[a-z0-9-]{1,80}$/.test(value)
+  );
+}
+
+function isNetworkCaptureArmPurpose(value: unknown): value is NetworkCaptureArmPurpose {
+  return value === 'dynamic_strategy' || value === 'bilibili_transcript_strategy';
+}
+
 export async function armNetworkCapture(input: {
   tabId: number;
   platform: SupportedPlatform;
@@ -71,7 +93,9 @@ export async function armNetworkCapture(input: {
   contentScriptId: string;
   expiresAt: number;
 }): Promise<NetworkCaptureArm> {
-  const canonicalUrl = input.platform === 'bilibili' ? canonicalDynamicUrl(input.navigationUrl) : null;
+  const canonicalUrl = input.platform === 'bilibili'
+    ? canonicalNavigationUrl(input.purpose, input.navigationUrl)
+    : null;
   const routeIds = validateNetworkCaptureRouteIds(input.platform, input.routeIds, 'research_validation');
   if (
     !Number.isInteger(input.tabId) ||
@@ -83,7 +107,7 @@ export async function armNetworkCapture(input: {
     input.maximumObservations < 1 ||
     input.maximumObservations > NETWORK_CAPTURE_MAX_PER_PAGE ||
     !/^[0-9a-f-]{36}$/i.test(input.observerBindingId) ||
-    !/^collector-dynamic-[a-z0-9-]{1,80}$/.test(input.contentScriptId) ||
+    !validContentScriptId(input.purpose, input.contentScriptId) ||
     !Number.isFinite(input.expiresAt) ||
     input.expiresAt <= Date.now() ||
     input.expiresAt > Date.now() + MAXIMUM_ARM_LIFETIME_MS
@@ -113,6 +137,7 @@ export async function getActiveNetworkCaptureArm(tabId: number): Promise<Network
     : typeof candidate.documentId === 'string' && candidate.documentId.length > 0
       ? candidate.documentId
       : null;
+  const purpose = isNetworkCaptureArmPurpose(candidate?.purpose) ? candidate.purpose : null;
   const routeIds = isSupportedPlatform(candidate?.platform) && Array.isArray(candidate?.routeIds)
     ? validateNetworkCaptureRouteIds(candidate.platform, candidate.routeIds, 'research_validation')
     : null;
@@ -122,7 +147,7 @@ export async function getActiveNetworkCaptureArm(tabId: number): Promise<Network
   if (
     candidate &&
     isSupportedPlatform(candidate.platform) &&
-    candidate.purpose === 'dynamic_strategy' &&
+    purpose !== null &&
     typeof candidate.runId === 'string' && /^[0-9a-f-]{36}$/i.test(candidate.runId) &&
     typeof candidate.navigationUrlDigest === 'string' && /^[0-9a-f]{64}$/.test(candidate.navigationUrlDigest) &&
     routeIds &&
@@ -130,13 +155,13 @@ export async function getActiveNetworkCaptureArm(tabId: number): Promise<Network
     Number.isInteger(maximumObservations) &&
     maximumObservations >= 1 && maximumObservations <= NETWORK_CAPTURE_MAX_PER_PAGE &&
     typeof candidate.observerBindingId === 'string' && /^[0-9a-f-]{36}$/i.test(candidate.observerBindingId) &&
-    typeof candidate.contentScriptId === 'string' && /^collector-dynamic-[a-z0-9-]{1,80}$/.test(candidate.contentScriptId) &&
+    validContentScriptId(purpose, candidate.contentScriptId) &&
     typeof candidate.expiresAt === 'number' && Number.isFinite(candidate.expiresAt) && candidate.expiresAt > Date.now() &&
     documentId !== null
   ) {
     return {
       platform: candidate.platform,
-      purpose: 'dynamic_strategy',
+      purpose,
       runId: candidate.runId,
       navigationUrlDigest: candidate.navigationUrlDigest,
       routeIds,
@@ -155,7 +180,7 @@ async function activeArmForNavigation(tabId: number, senderUrl: string | undefin
   if (!senderUrl) return null;
   const arm = await getActiveNetworkCaptureArm(tabId);
   if (!arm) return null;
-  const canonicalUrl = canonicalDynamicUrl(senderUrl);
+  const canonicalUrl = canonicalNavigationUrl(arm.purpose, senderUrl);
   return canonicalUrl && (await sha256(canonicalUrl)) === arm.navigationUrlDigest ? arm : null;
 }
 

@@ -3,6 +3,7 @@ import {
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
   BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
+  BILIBILI_TRANSCRIPT_STRATEGY_ID,
   BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
   COLLECTOR_CONTROL_SURFACE_REVISION,
   COLLECTOR_EXTENSION_VERSION,
@@ -42,6 +43,10 @@ import {
   diagnoseBilibiliVideoDetailObserver,
   readBilibiliVideoDetailObservation
 } from './strategies/bilibili-video-detail-strategy';
+import {
+  bindBilibiliTranscriptObserver,
+  readBilibiliTranscriptObservation
+} from './strategies/bilibili-transcript-strategy';
 
 let activePort: chrome.runtime.Port | null = null;
 let activeConfig: CollectorNativeBridgeConfig | null = null;
@@ -155,6 +160,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
       if (command.command.binding.strategyId === BILIBILI_NATIVE_SEARCH_STRATEGY_ID) {
         return await bindBilibiliNativeSearchObserver(command.command);
       }
+      if (command.command.binding.strategyId === BILIBILI_TRANSCRIPT_STRATEGY_ID) {
+        return await bindBilibiliTranscriptObserver(command.command);
+      }
       throw new Error('collector_strategy_id_rejected');
     case 'collector_read_strategy_observation':
       if (command.command.request.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID) {
@@ -171,6 +179,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
       }
       if (command.command.request.strategyId === BILIBILI_NATIVE_SEARCH_STRATEGY_ID) {
         return await readBilibiliNativeSearchObservation(command.command);
+      }
+      if (command.command.request.strategyId === BILIBILI_TRANSCRIPT_STRATEGY_ID) {
+        return await readBilibiliTranscriptObservation(command.command);
       }
       throw new Error('collector_strategy_id_rejected');
     case 'collector_read_strategy_binding_diagnostics':

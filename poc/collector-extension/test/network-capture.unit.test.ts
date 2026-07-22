@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   BILIBILI_DYNAMIC_FEED_ROUTE_ID,
   approvedNetworkCaptureRouteIds,
+  bilibiliTranscriptResearchRouteIds,
   createNetworkCaptureFromText,
   findNetworkCaptureRoute,
   isJsonContentType,
@@ -11,6 +12,10 @@ import {
   sanitiseNetworkJson,
   validateNetworkCaptureRouteIds
 } from '../src/shared/network-capture.js';
+import {
+  BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
+  BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID
+} from '../src/shared/transcript-capture.js';
 
 // These inputs exercise the local redaction and route gate only. They are not
 // synthetic platform/XHR evidence and do not claim that a live route works.
@@ -54,6 +59,10 @@ describe('Extension network observation safety contract', () => {
       [BILIBILI_DYNAMIC_FEED_ROUTE_ID],
       'production'
     )).toBeNull();
+    expect(bilibiliTranscriptResearchRouteIds()).toEqual([
+      BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
+      BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID
+    ]);
     expect(sanitiseCaptureUrl(dynamicUrl)).toBe('https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space');
 
     const route = findNetworkCaptureRoute('bilibili', dynamicUrl, [BILIBILI_DYNAMIC_FEED_ROUTE_ID]);
