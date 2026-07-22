@@ -71,6 +71,23 @@ requestedPages: 2
 - 分页点击按声明预算执行，每个分页动作最多一次；
 - 在达到请求页数后停止，没有把“还有更多页”伪装成全量终点。
 
+同一分页 runner 随后在新的独立 run 中使用当前允许的 7 页上限完成扩展验证：
+
+```text
+runId: ef6e6a14-aec7-4d4f-9272-127ce5d3a21c
+artifactId: fb61315a-5f38-4ab2-b423-e40a2c46cd3c
+state: completed
+terminalReason: requested_page_budget_reached
+requestedPages: 7
+capturedPages: 7
+capturedItems: 263
+uniqueBvidCount: 263
+duplicateBvidCount: 0
+unresolvedCardCount: 0
+```
+
+7 页 run 仍复用同一投稿目录 tab；每页一次可信分页动作，达到 7 页预算后停止。`263` 条是本次声明页数和捕获时间下的覆盖，不是账号投稿全量终点。
+
 ## 生命周期与安全观察
 
 在部署当前构建时，headless marker probe 发现持久 worker 没有内部构建指纹，于是只执行了一次受控 `chrome.runtime.reload()`，随后精确复核通过；公开版本仍为 `0.7.17 / rev 15`，没有因为这次功能验证升级扩展版本。
@@ -84,7 +101,7 @@ requestedPages: 2
 
 ## 尚未声称完成的范围
 
-- 账号投稿全量分页、排序/筛选和中断恢复仍是独立能力；本次只证明 2 页有限预算闭环。
+- 账号投稿超出 7 页的全量分页、排序/筛选和中断恢复仍是独立能力；本次证明的是最多 7 页的有界目录闭环。
 - 详情、字幕、评论/楼中楼、弹幕、动态、专栏、合集、直播回放、热榜和关系快照不由本次结果覆盖；
 - response route 仍未进入正式 production response routes；
 - 当前策略仍需 review/admission，不能对外显示为“B站全部能力已准入”。

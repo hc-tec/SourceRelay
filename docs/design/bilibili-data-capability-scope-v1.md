@@ -84,6 +84,6 @@ coverage / terminal_reason / status
 | capability | 当前增量证据 | 仍然保留的边界 |
 |---|---|---|
 | `account_profile` | `bilibili.account.profile.dom.v2 @ 0.1.0`：`completed / profile_captured`；身份、头像、横幅、8 个公开字段、公告、充电区已保存到本地 artifact | 仍为 `build_ready`；多账号/布局漂移、风险样本和独立 review/admission 未完成 |
-| `account_inventory` | `bilibili.account.video-inventory.dom.v1 @ 0.1.0`：首页 `completed / page_one_ready`（40/40）并完成一次 2 页有限分页（80/80 unique、0 duplicate、0 unresolved） | 仍只承诺声明页数；全量分页、恢复、排序/筛选和独立 review/admission 未完成 |
+| `account_inventory` | `bilibili.account.video-inventory.dom.v1 @ 0.1.0`：首页 40/40，并完成 2 页与 7 页有限分页；7 页为 263/263 unique、0 duplicate、0 unresolved | 仍只承诺声明页数（当前最多 7 页）；超出预算的全量分页、恢复、排序/筛选和独立 review/admission 未完成 |
 
 两次 run 均使用一次导航、无平台交互重放、无 response body 读取，且 `admissionEligible=false`。这份增量证据记录在[账号档案与投稿目录 MV3 真实闭环](../validation/bilibili-account-profile-inventory-mv3-v0.1.md)。
