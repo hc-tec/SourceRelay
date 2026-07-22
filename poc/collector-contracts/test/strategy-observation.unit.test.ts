@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID,
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
   BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
@@ -58,6 +59,17 @@ function bindingFor(strategyId: string): Record<string, unknown> {
       maximumResponseObservations: 0
     };
   }
+  if (strategyId === BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID) {
+    return {
+      ...base,
+      strategyId,
+      target: {
+        stableAccountId: '7481602',
+        canonicalUrl: 'https://space.bilibili.com/7481602'
+      },
+      maximumResponseObservations: 0
+    };
+  }
   return {
     ...base,
     strategyId,
@@ -93,6 +105,7 @@ describe('Strategy observation contract guards', () => {
       BILIBILI_DYNAMIC_STRATEGY_ID,
       BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
       BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
+      BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID,
       BILIBILI_NATIVE_SEARCH_STRATEGY_ID
     ]) {
       expect(isCollectorHostBridgeCommand(hostCommand(bindingFor(strategyId)))).toBe(true);
@@ -115,6 +128,13 @@ describe('Strategy observation contract guards', () => {
       canonicalUrl: 'https://space.bilibili.com/7481602/dynamic'
     };
     expect(isCollectorHostBridgeCommand(hostCommand(inventoryWithDynamicRoute))).toBe(false);
+
+    const profileWithQuery = bindingFor(BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID);
+    profileWithQuery.target = {
+      stableAccountId: '7481602',
+      canonicalUrl: 'https://space.bilibili.com/7481602?from=unsafe'
+    };
+    expect(isCollectorHostBridgeCommand(hostCommand(profileWithQuery))).toBe(false);
 
     const nativeSearchWithExtraQuery = bindingFor(BILIBILI_NATIVE_SEARCH_STRATEGY_ID);
     nativeSearchWithExtraQuery.target = {

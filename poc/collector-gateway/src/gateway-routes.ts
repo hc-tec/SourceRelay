@@ -1,6 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AccountSafetyRegistry } from './account-safety';
 import { accountSafetyUnlockInput } from './account-safety';
+import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
+import { bilibiliAccountProfileInput } from './bilibili-account-profile-contract';
+import type { BilibiliAccountProfileHostRunner } from './bilibili-account-profile-host-runner';
 import type { BilibiliAccountVideoDetailMaterializationArtifactStore } from './bilibili-account-video-detail-materialization-artifacts';
 import type { BilibiliAccountVideoDetailMaterializationHostRunner } from './bilibili-account-video-detail-materialization-host-runner';
 import type { BilibiliAccountVideoPageTwoArtifactStore } from './bilibili-account-video-page-two-artifacts';
@@ -30,6 +33,8 @@ export interface GatewayRouteContext {
   browserManager: CollectionBrowserManager;
   profileRegistry: BrowserProfileRegistry;
   accountSafety: AccountSafetyRegistry;
+  accountProfileArtifacts: BilibiliAccountProfileArtifactStore;
+  accountProfileRunner: BilibiliAccountProfileHostRunner;
   accountVideoDetailMaterializationArtifacts: BilibiliAccountVideoDetailMaterializationArtifactStore;
   accountVideoDetailMaterializationRunner: BilibiliAccountVideoDetailMaterializationHostRunner;
   accountVideoPageTwoArtifacts: BilibiliAccountVideoPageTwoArtifactStore;
@@ -145,6 +150,10 @@ export async function handleGatewayRoute(
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.dynamicArtifacts.list() });
     return true;
   }
+  if (request.method === 'GET' && url.pathname === '/v1/account-profile-artifacts') {
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.accountProfileArtifacts.list() });
+    return true;
+  }
   if (request.method === 'GET' && url.pathname === '/v1/bilibili-native-search-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.nativeSearchArtifacts.list() });
     return true;
@@ -204,6 +213,29 @@ export async function handleGatewayRoute(
     const result = await context.nativeSearchRunner.run({
       profileId: nativeSearchRun[1]!,
       ...search
+    });
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        coverage: result.run.coverage,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
+  const accountProfileRun = url.pathname.match(
+    new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/account/profile$`, 'i')
+  );
+  if (request.method === 'POST' && accountProfileRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const profileInput = bilibiliAccountProfileInput(await readJsonBody(request));
+    const result = await context.accountProfileRunner.run({
+      profileId: accountProfileRun[1]!,
+      canonicalProfileUrl: profileInput.canonicalProfileUrl
     });
     sendJson(response, 201, {
       schemaVersion: 1,
@@ -370,6 +402,15 @@ export async function handleGatewayRoute(
   if (request.method === 'GET' && nativeSearchArtifact) {
     const artifact = await context.nativeSearchArtifacts.get(nativeSearchArtifact[1]!);
     if (!artifact) throw new Error('bilibili_native_search_artifact_not_found');
+    sendJson(response, 200, { schemaVersion: 1, artifact });
+    return true;
+  }
+  const accountProfileArtifact = url.pathname.match(
+    new RegExp(`^/v1/account-profile-artifacts/(${PROFILE_ID})$`, 'i')
+  );
+  if (request.method === 'GET' && accountProfileArtifact) {
+    const artifact = await context.accountProfileArtifacts.get(accountProfileArtifact[1]!);
+    if (!artifact) throw new Error('bilibili_account_profile_artifact_not_found');
     sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }

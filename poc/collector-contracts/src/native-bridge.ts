@@ -1,6 +1,8 @@
 import { canonicalJson } from './ipc.js';
 import { canonicalBilibiliNativeSearchUrl } from './bilibili-native-search.js';
+import { canonicalBilibiliAccountProfileUrl } from './bilibili-account-profile.js';
 import {
+  BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID,
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
   BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
@@ -396,6 +398,7 @@ function isCollectorStrategyId(value: unknown): value is StrategyObserverBinding
   return value === BILIBILI_DYNAMIC_STRATEGY_ID ||
     value === BILIBILI_VIDEO_DETAIL_STRATEGY_ID ||
     value === BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID ||
+    value === BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID ||
     value === BILIBILI_NATIVE_SEARCH_STRATEGY_ID;
 }
 
@@ -411,6 +414,9 @@ function validStrategyBindingTargetAndBudget(
   }
   if (candidate.strategyId === BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID) {
     return validAccountVideoInventoryTarget(candidate.target) && candidate.maximumResponseObservations === 0;
+  }
+  if (candidate.strategyId === BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID) {
+    return validAccountProfileTarget(candidate.target) && candidate.maximumResponseObservations === 0;
   }
   if (candidate.strategyId === BILIBILI_NATIVE_SEARCH_STRATEGY_ID) {
     return validBilibiliNativeSearchTarget(candidate.target) && candidate.maximumResponseObservations === 0;
@@ -437,6 +443,14 @@ function validAccountVideoInventoryTarget(value: unknown): boolean {
   const candidate = value as Partial<{ canonicalUrl: string; stableAccountId: string }>;
   if (typeof candidate.stableAccountId !== 'string' || !/^\d{1,20}$/.test(candidate.stableAccountId)) return false;
   return candidate.canonicalUrl === `https://space.bilibili.com/${candidate.stableAccountId}/upload/video`;
+}
+
+function validAccountProfileTarget(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<{ canonicalUrl: string; stableAccountId: string }>;
+  if (typeof candidate.stableAccountId !== 'string' || !/^\d{1,20}$/.test(candidate.stableAccountId)) return false;
+  return candidate.canonicalUrl === `https://space.bilibili.com/${candidate.stableAccountId}` &&
+    canonicalBilibiliAccountProfileUrl(candidate.canonicalUrl, 'strict_input') === candidate.canonicalUrl;
 }
 
 function validBilibiliNativeSearchTarget(value: unknown): boolean {

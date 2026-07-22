@@ -39,6 +39,11 @@ const bundles = [
     format: 'iife'
   },
   {
+    input: resolve(root, 'src', 'content', 'bilibili-account-profile-document-bridge.ts'),
+    output: resolve(outputDirectory, 'bilibili-account-profile-document-bridge.js'),
+    format: 'iife'
+  },
+  {
     input: resolve(root, 'src', 'content', 'bilibili-native-search-document-bridge.ts'),
     output: resolve(outputDirectory, 'bilibili-native-search-document-bridge.js'),
     format: 'iife'

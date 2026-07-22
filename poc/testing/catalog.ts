@@ -227,7 +227,12 @@ export const collectorValidationCatalog = [
     timeoutMs: 120_000,
     platformPolicy: 'forbidden',
     ci: 'pull_request',
-    capabilities: ['native-messaging', 'mv3-command-round-trip', 'strategy-binding']
+    capabilities: [
+      'native-messaging',
+      'mv3-command-round-trip',
+      'strategy-binding',
+      'account-profile-dom-only-binding'
+    ]
   },
   {
     id: 'collector-gateway-host-local-e2e',

@@ -4,9 +4,9 @@ import { resolve } from 'node:path';
 import { canonicalJson } from '../../collector-extension/src/shared/cryptography';
 import type {
   BilibiliAccountProfileAction,
-  BilibiliAccountProfileRouteObservation,
   BilibiliAccountProfileRunRecord,
-  BilibiliAccountProfileSnapshot
+  BilibiliAccountProfileSnapshot,
+  BilibiliAccountProfileVisualEvidence
 } from './bilibili-account-profile-contract';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -33,8 +33,8 @@ export interface BilibiliAccountProfileArtifactManifest
   collectorVersion: string;
   strategyCandidate: BilibiliAccountProfileRunRecord['strategyCandidate'];
   actions: BilibiliAccountProfileAction[];
-  routeObservations: BilibiliAccountProfileRouteObservation[];
   coverage: BilibiliAccountProfileRunRecord['coverage'];
+  visualEvidence: BilibiliAccountProfileVisualEvidence | null;
   profileFile: typeof PROFILE_FILE;
   profileFileSha256: string;
   safeguards: BilibiliAccountProfileRunRecord['safeguards'];
@@ -135,8 +135,8 @@ export class BilibiliAccountProfileArtifactStore {
       collectorVersion: run.collectorVersion,
       strategyCandidate: run.strategyCandidate,
       actions: run.actions,
-      routeObservations: run.routeObservations,
       coverage: run.coverage,
+      visualEvidence: run.visualEvidence,
       profileFile: PROFILE_FILE,
       profileFileSha256,
       safeguards: run.safeguards

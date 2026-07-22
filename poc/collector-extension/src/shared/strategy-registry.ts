@@ -22,6 +22,7 @@ export type {
 
 export type StrategySurface =
   | 'native_search'
+  | 'account_profile'
   | 'account_listing'
   | 'content_detail'
   | 'transcript'
@@ -31,6 +32,7 @@ export type StrategyEntryKind = 'native_search_url' | 'canonical_url' | 'profile
 
 export type StrategyOutputKind =
   | 'search_card'
+  | 'account_profile'
   | 'content_detail'
   | 'transcript_document'
   | 'comment'
@@ -256,11 +258,58 @@ function bilibiliVideoTranscriptResponseStrategy(): StaticPlatformStrategy {
   };
 }
 
+/**
+ * A public account home is distinct from its upload inventory. The strategy
+ * is deliberately DOM-only: historic research Network metadata is not a
+ * production input and cannot silently enlarge this archive.
+ */
+function bilibiliAccountProfileDomStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'bilibili.account.profile.dom.v2',
+    version: '0.1.0',
+    platform: 'bilibili',
+    evidenceObjectives: ['account_context'],
+    acquisition: ['native_navigation', 'visible_dom'],
+    maturity: 'build_ready',
+    surface: 'account_profile',
+    nativeEntry: { kind: 'profile_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['native_navigation', 'visible_dom']
+    },
+    bounds: {
+      maxRecords: 1,
+      maxReadOnlyActions: 0,
+      firstRenderedPageOnly: true,
+      allowsDetailNavigation: false,
+      allowsCommentNavigation: false,
+      allowsReadOnlyInteraction: false
+    },
+    output: {
+      kind: 'account_profile',
+      // A profile snapshot does not imply that inventory, relationships,
+      // posts, or comments were collected.
+      partialByDefault: true
+    },
+    browser: {
+      optionalHostPermissions: ['https://space.bilibili.com/*'],
+      domContentMatches: ['https://space.bilibili.com/*'],
+      responseBridgeMatches: []
+    },
+    approvedResponseRouteIds: [],
+    validation: {
+      mode: 'local_live_platform_only',
+      liveRecord: null
+    }
+  };
+}
+
 // This is a compiled, repository-local registry.  It is not a mechanism for
 // downloading plugins, evaluating remote code, or granting a strategy browser
 // privileges.  The Collector Core owns all privileged APIs.
 export const STATIC_PLATFORM_STRATEGIES: readonly StaticPlatformStrategy[] = [
   nativeSearchDomStrategy('bilibili'),
+  bilibiliAccountProfileDomStrategy(),
   bilibiliVideoDetailDomStrategy(),
   bilibiliVideoTranscriptResponseStrategy(),
   nativeSearchDomStrategy('zhihu'),

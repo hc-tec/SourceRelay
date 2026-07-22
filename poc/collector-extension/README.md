@@ -7,6 +7,7 @@
 - `bilibili.dynamic.account-feed.response-dom.v1`：B 站账号动态页，两页以内的 DOM/XHR 观察；
 - `bilibili.video.detail.dom.v2`：B 站视频详情首屏，一次导航、零页面交互、零 response 观察的有界 DOM 投影。
 - `bilibili.account.video-inventory.dom.v1`：UP 主投稿视频首页，一次导航、零页面交互、零 response 观察的有界卡片投影。
+- `bilibili.account.profile.dom.v2`：UP 主公开主页，一次导航、零页面交互、零 response 观察的有界档案 DOM 投影。
 - `bilibili.search.breadth.dom.v2`：B 站站内默认综合搜索首屏，一次导航、最多 20 条规范 BV 视频卡、零 response 观察的有界 DOM 投影。
 
 ```text
@@ -30,6 +31,7 @@ MV3 Extension
 - B 站动态页只允许 `https://space.bilibili.com/<mid>/dynamic`，当前 route 仅是研究验证中的 `https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space`。
 - B 站视频详情只允许无 query/hash 的 `https://www.bilibili.com/video/<BVID>`；它只保存公开首屏字段，并把已正向观察到的充电试看限制标为受限访问；不读取 XHR、response body、字幕、评论或推荐内容。
 - B 站投稿视频首页只允许无 query/hash 的 `https://space.bilibili.com/<MID>` 输入，并在页面内转为固定 `/upload/video` 目标；链接 pathname 只用于提取 BVID，任何平台附加 query 都被丢弃。
+- B 站账号主页只允许无 query/hash 的 `https://space.bilibili.com/<MID>`；它只投影目标账号 header 与 main 中正常可见的公开档案字段，明确排除全站 header、当前登录用户菜单、隐藏页面状态与 response 数据。
 - B 站站内搜索只允许固定 `/all?keyword=...` 首屏；搜索词只存在于短时导航和精确 document binding，长期 artifact 仅保存规范化搜索词的 SHA-256 摘要。排序、筛选、分页、详情跳转及非视频混合对象均是独立能力。
 - 绑定在下一个精确 document 上短时生效；页面世界只能回传经过路由、大小、深度和敏感字段清洗后的 JSON 投影。
 - 同一受管 tab 同时只能保留一个 Strategy binding；切换绑定时会清除前一 binding 与其 route-bound network arm。

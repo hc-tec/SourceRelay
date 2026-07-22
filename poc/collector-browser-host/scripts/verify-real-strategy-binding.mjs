@@ -36,6 +36,10 @@ const accountVideoInventoryTarget = {
   stableAccountId: '7481602',
   canonicalUrl: 'https://space.bilibili.com/7481602/upload/video'
 };
+const accountProfileTarget = {
+  stableAccountId: '7481602',
+  canonicalUrl: 'https://space.bilibili.com/7481602'
+};
 
 if (relative(runtimeParent, runtimeRoot).startsWith('..')) {
   throw new Error('strategy_binding_runtime_path_rejected');
@@ -180,6 +184,26 @@ try {
   assert.equal(accountVideoInventoryBinding.pageAlias, acquired.page.pageAlias);
   assert.equal(accountVideoInventoryBinding.nextDocumentGeneration, acquired.page.documentGeneration + 1);
 
+  // Account profile has a separately compiled document-start bridge and
+  // fixed DOM projection. This real MV3 / Native Messaging binding remains
+  // on about:blank, so it cannot be mistaken for a Bilibili page validation.
+  const accountProfileBindingRequest = {
+    ...bindingRequest,
+    observerBindingId: randomUUID(),
+    strategyId: 'bilibili.account.profile.dom.v2',
+    target: accountProfileTarget,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 128 * 1024
+  };
+  const accountProfileBinding = await client.command({
+    type: 'bind_strategy_observer',
+    request: accountProfileBindingRequest
+  });
+  assert.equal(accountProfileBinding.type, 'collector_strategy_observer_binding');
+  assert.equal(accountProfileBinding.observerBindingId, accountProfileBindingRequest.observerBindingId);
+  assert.equal(accountProfileBinding.pageAlias, acquired.page.pageAlias);
+  assert.equal(accountProfileBinding.nextDocumentGeneration, acquired.page.documentGeneration + 1);
+
   const visual = await client.command({
     type: 'capture_page_visual_evidence',
     request: {
@@ -255,6 +279,7 @@ try {
     videoDetailDomOnlyBindingRoundTripCompleted: true,
     videoDetailBindingDiagnosticRoundTripCompleted: true,
     accountVideoInventoryDomOnlyBindingRoundTripCompleted: true,
+    accountProfileDomOnlyBindingRoundTripCompleted: true,
     priorBindingReplacedWithoutPlatformNavigation: true,
     observerBindingCorrelationVerified: true,
     postObservationVisualEvidenceCaptured: true,

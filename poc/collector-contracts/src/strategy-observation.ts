@@ -1,16 +1,17 @@
-import { canonicalBilibiliNativeSearchUrl } from './bilibili-native-search.js';
-
 export const STRATEGY_OBSERVATION_SCHEMA_VERSION = 1 as const;
 export const BILIBILI_DYNAMIC_STRATEGY_ID = 'bilibili.dynamic.account-feed.response-dom.v1' as const;
 export const BILIBILI_VIDEO_DETAIL_STRATEGY_ID = 'bilibili.video.detail.dom.v2' as const;
 export const BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID =
   'bilibili.account.video-inventory.dom.v1' as const;
+export const BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID =
+  'bilibili.account.profile.dom.v2' as const;
 export const BILIBILI_NATIVE_SEARCH_STRATEGY_ID = 'bilibili.search.breadth.dom.v2' as const;
 
 export type CollectorStrategyId =
   | typeof BILIBILI_DYNAMIC_STRATEGY_ID
   | typeof BILIBILI_VIDEO_DETAIL_STRATEGY_ID
   | typeof BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID
+  | typeof BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID
   | typeof BILIBILI_NATIVE_SEARCH_STRATEGY_ID;
 
 export type BridgeJsonValue =
@@ -32,6 +33,11 @@ export interface BilibiliVideoDetailStrategyTarget {
 }
 
 export interface BilibiliAccountVideoInventoryStrategyTarget {
+  canonicalUrl: string;
+  stableAccountId: string;
+}
+
+export interface BilibiliAccountProfileStrategyTarget {
   canonicalUrl: string;
   stableAccountId: string;
 }
@@ -82,6 +88,11 @@ export type StrategyObserverBindingRequest =
   | (StrategyObserverBindingRequestBase & {
     strategyId: typeof BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID;
     target: BilibiliAccountVideoInventoryStrategyTarget;
+    maximumResponseObservations: 0;
+  })
+  | (StrategyObserverBindingRequestBase & {
+    strategyId: typeof BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID;
+    target: BilibiliAccountProfileStrategyTarget;
     maximumResponseObservations: 0;
   })
   | (StrategyObserverBindingRequestBase & {

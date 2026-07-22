@@ -58,6 +58,11 @@ try {
   );
   assert.match(
     await controlPage.locator('body').innerText(),
+    /bilibili\.account\.profile\.dom\.v2/,
+    'control page must describe the compiled DOM-only account-profile Strategy'
+  );
+  assert.match(
+    await controlPage.locator('body').innerText(),
     /bilibili\.search\.breadth\.dom\.v2/,
     'control page must describe the compiled Bilibili native-search Strategy'
   );

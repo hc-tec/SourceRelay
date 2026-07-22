@@ -1,7 +1,7 @@
 # B站十四类数据能力范围 v1
 
 - 状态：Accepted implementation scope
-- 日期：2026-07-20
+- 日期：2026-07-22
 - 产品边界：Collector Core 浏览器扩展、Gateway 受管浏览器控制层、持久 Collection Profile、本地 raw-first Evidence
 - 验证规则：每类能力独立 reconnaissance、策略版本、真实平台验证、review 与 admission
 
@@ -69,7 +69,7 @@ coverage / terminal_reason / status
 | `video_detail` | `0.7.8` 已完成“完成的账号目录 artifact → 显式选中 BVID → 单条详情 artifact”的真实受管浏览器物化：来源 digest/页码、一次导航账本和子 artifact 已闭环。两个目录样本真实取得标题、可见元数据、播放器容器、标签与创作者（团队/标准作者布局），但无可投影简介；其中 `BV1BoKD6ZEir` 的目录卡明确标为“充电专属”，而未标该记号的样本也为空。匿名可见页面对照已直接证明该 BVID 的“专属视频 / 试看中 / 开通充电”播放器门禁；`0.7.11` 已把这个正向门禁事实建模为 `charge_exclusive_trial`。详情首屏完成只要求稳定 document、规范 BVID、可见标题和可见播放器；播放器控制条属于字幕/播放等独立交互能力，不得阻塞零交互元数据投影。`0.7.13` 的正常公开视频 canary 已证明 document binding 仍存在但被错误的控制条 gating 阻塞；修复后的 `0.7.14` 已在一次受管导航中真实完成标题、简介、创作者、8 个标签和选集摘要的闭环。未命中时只能是 `indeterminate`，空字段仍只能按 `present/absent` 解释，且 `playerVisible` 不等于可播放或已获受限内容。策略保持 `admissionEligible=false`；详情 response body、字幕、弹幕、评论和推荐继续排除。详见[目录到详情真实闭环](../validation/bilibili-account-video-detail-materialization-v0.1.md)与[详情 DOM 侦察](../reconnaissance/bilibili/video-detail-dom-mvp-v0.1.md)。 |
 | `transcript` | 登录态真实闭环两次取得 509/509 段；仍 research-only |
 | `discussion` | 已证明排序与楼中楼动作到 route 的因果；正文 projector 尚未 admission |
-| `account_profile` | research-only Gateway runner 已真实保存稳定 MID、昵称、简介、头像、横幅、公开标识、8 个统计/导航字段、公告、充电区、代表作和 7 条 route metadata；artifact digest 与敏感字段扫描通过，正式 MV3 策略和多账号覆盖仍未 admission |
+| `account_profile` | 历史 research-only Gateway runner 已真实保存稳定 MID、昵称、简介、头像、横幅、公开标识、8 个统计/导航字段、公告、充电区、代表作和 7 条 route metadata；其历史 Network metadata 不会进入正式路径。正式 `bilibili.account.profile.dom.v2` 已完成 Gateway → Browser Host/PageLease → Native Messaging → MV3 精确 document binding 的 production bundle 与真实本地 Chromium 回路，artifact 已改为严格 DOM-only，策略登记为 `build_ready`。尚缺受管 Collection Profile 的一次真实闭环、风险/登录样本和多账号漂移覆盖，故仍未 admission。 |
 | `account_inventory` | 旧 research runner 已完成真实 9 页 / 330 条视频目录，逐页 DOM/response 身份摘要一致、跨页 0 重复、末页 10 条、manifest/page digest 可恢复。新增受管浏览器 DOM v0.2 已在真实登录 Profile 中完成直接数字页码第 1–7 页 / 262 条的连续可信分页闭环；页数为 40/40/40/40/40/40/22、跨页 0 重复、每次点击窗口内目录 route 均为成功状态。`0.7.7` 还在真实 exact-target tab 复用后重新导航的路径中验证了 document-binding 修复；全量穷尽性、恢复、排序/筛选和 admission 仍是独立缺口。详见[七页真实闭环](../validation/bilibili-account-video-pagination-three-page-v0.2.md)。 |
 | `article` | research runner 已真实完成 1 页 / 1 条专栏目录与单篇详情：目录按 Opus ID 合并 DOM 双 anchor、`has_more=false` 诚实终止；详情从已验证目录 artifact 绑定账号，保存 1376 字、15 个保序块、4 个媒体引用、10 个标签和五类公开指标；多页 cursor、删除/锁定/外链样本、MV3 正式策略与 admission 仍未完成 |
 | `collection_series` | research runner 已真实保存 11 个总览项和稳定 series ID；独立单系列 runner 又完成 5 页 / 129 条默认顺序全目录，页数为 30/30/30/30/9、DOM/response 全匹配、跨页 0 重复、artifact digest 与敏感字段扫描通过；planner 全系列遍历、season/边缘样本、MV3 正式策略与 admission 仍未完成 |

@@ -57,6 +57,15 @@ describe('Static strategy registry boundary', () => {
       acquisition: ['native_navigation', 'visible_dom']
     });
     expect(strategiesFor('xiaohongshu', 'breadth_search')).toHaveLength(1);
+    expect(strategiesFor('bilibili', 'account_context')).toEqual([
+      expect.objectContaining({
+        strategyId: 'bilibili.account.profile.dom.v2',
+        maturity: 'build_ready',
+        surface: 'account_profile',
+        acquisition: ['native_navigation', 'visible_dom'],
+        approvedResponseRouteIds: []
+      })
+    ]);
     expect(resolveDetailStrategy('bilibili')).toMatchObject({ maturity: 'suspended' });
     expect(() => resolveDetailStrategy('zhihu')).toThrow('No static detail strategy is registered for zhihu.');
   });

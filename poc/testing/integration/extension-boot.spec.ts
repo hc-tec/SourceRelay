@@ -52,6 +52,7 @@ test('production MV3 boot uses the actual extension and makes zero platform requ
     await expect(controlPage.locator('html[data-collector-control-ready="true"]')).toHaveCount(1);
     await expect(controlPage.locator('h1')).toHaveText('Collector Extension');
     await expect(controlPage.locator('body')).toContainText('bilibili.account.video-inventory.dom.v1');
+    await expect(controlPage.locator('body')).toContainText('bilibili.account.profile.dom.v2');
     await expect(controlPage.locator('body')).toContainText('bilibili.search.breadth.dom.v2');
     await controlPage.close();
 

@@ -1,10 +1,10 @@
 import {
-  canonicalBilibiliProfileUrl,
-  safeBilibiliPublicImageUrl,
-  stableAccountIdFromProfileUrl
+  bilibiliAccountProfileIdFromUrl,
+  canonicalBilibiliAccountProfileUrl
+} from '@intelligence/collector-contracts';
+import {
+  safeBilibiliPublicImageUrl
 } from './bilibili-account-archive-contract';
-
-export const BILIBILI_ACCOUNT_PROFILE_MAX_ROUTE_OBSERVATIONS = 40;
 
 export interface BilibiliAccountProfileInput {
   canonicalProfileUrl: string;
@@ -54,15 +54,6 @@ export interface BilibiliAccountProfileSnapshot {
   capturedAt: string;
 }
 
-export interface BilibiliAccountProfileRouteObservation {
-  method: 'GET';
-  origin: 'https://api.bilibili.com';
-  pathname: string;
-  status: number;
-  queryKeyNames: string[];
-  capturedAt: string;
-}
-
 export interface BilibiliAccountProfileAction {
   actionId: 'open_account_profile';
   intent: string;
@@ -72,8 +63,28 @@ export interface BilibiliAccountProfileAction {
   errorCode: string | null;
 }
 
+export interface BilibiliAccountProfileVisualEvidence {
+  phase: 'baseline';
+  actionId: 'open_account_profile';
+  evidenceId: string;
+  capturedAt: string;
+  viewport: {
+    cssWidth: number;
+    cssHeight: number;
+    devicePixelRatio: number;
+    scrollX: number;
+    scrollY: number;
+  };
+  screenshot: {
+    fileName: string;
+    byteLength: number;
+    sha256: string;
+  };
+}
+
 export type BilibiliAccountProfileTerminalReason =
   | 'profile_captured'
+  | 'authentication_required'
   | 'verification_required'
   | 'rate_limited'
   | 'risk_controlled'
@@ -91,8 +102,8 @@ export interface BilibiliAccountProfileRunRecord {
   pageRole: 'account_profile';
   targetUrlDigest: string;
   strategyCandidate: {
-    strategyId: 'bilibili.account.profile.dom.v1';
-    version: '1.0.0';
+    strategyId: 'bilibili.account.profile.dom.v2';
+    version: '0.1.0';
     admissionEligible: false;
   };
   state: 'completed' | 'partial' | 'failed';
@@ -100,7 +111,7 @@ export interface BilibiliAccountProfileRunRecord {
   startedAt: string;
   completedAt: string;
   snapshot: BilibiliAccountProfileSnapshot | null;
-  routeObservations: BilibiliAccountProfileRouteObservation[];
+  visualEvidence: BilibiliAccountProfileVisualEvidence | null;
   actions: BilibiliAccountProfileAction[];
   coverage: {
     identityCaptured: boolean;
@@ -111,13 +122,12 @@ export interface BilibiliAccountProfileRunRecord {
     announcementCaptured: boolean;
     chargeSectionCaptured: boolean;
     highlightCount: number;
-    observedRouteCount: number;
     terminalReason: BilibiliAccountProfileTerminalReason;
   };
   safeguards: {
     environment: 'local_user_controlled_collection_profile';
     browser: 'visible_playwright_chromium';
-    acquisition: 'bounded_visible_account_dom_plus_route_metadata';
+    acquisition: 'bounded_visible_account_dom';
     responseBody: 'not_read';
     requestHeaders: 'not_read';
     requestBody: 'not_read';
@@ -126,8 +136,8 @@ export interface BilibiliAccountProfileRunRecord {
     currentViewerIdentity: 'excluded';
     semanticActionDelivery: 'at_most_once';
     runDeadlineMs: 60_000;
-    targetTabSelection: 'reused_matching_managed_tab' | 'created_new_managed_tab';
-    targetPage: 'retained_after_run';
+    targetTabSelection: 'reused_matching_managed_tab' | 'reused_retained_managed_tab' | 'created_new_managed_tab' | 'not_acquired';
+    targetPage: 'retained_after_run' | 'quarantined_on_uncertain_outcome' | 'not_acquired';
     admissionEligible: false;
   };
 }
@@ -277,7 +287,7 @@ export function bilibiliAccountProfileInput(value: unknown): BilibiliAccountProf
     throw new Error('bilibili_account_profile_input_invalid');
   }
   const canonicalProfileUrl = typeof value.canonicalProfileUrl === 'string'
-    ? canonicalBilibiliProfileUrl(value.canonicalProfileUrl)
+    ? canonicalBilibiliAccountProfileUrl(value.canonicalProfileUrl, 'strict_input')
     : null;
   if (!canonicalProfileUrl) throw new Error('bilibili_account_profile_input_invalid');
   return { canonicalProfileUrl };
@@ -290,7 +300,8 @@ export function projectBilibiliAccountProfileDom(
 ): BilibiliAccountProfileSnapshot | null {
   if (!isRecord(value)) return null;
   const raw = value as RawBilibiliAccountProfileDom;
-  const accountId = stableAccountIdFromProfileUrl(canonicalProfileUrl);
+  const accountId = bilibiliAccountProfileIdFromUrl(canonicalProfileUrl);
+  if (!accountId) return null;
   const displayName = cleanText(raw.displayName, 200);
   if (String(raw.stableAccountId ?? '') !== accountId || !displayName) return null;
   const avatarUrl = raw.avatarUrl === null ? null : safeBilibiliPublicImageUrl(raw.avatarUrl);

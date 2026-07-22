@@ -89,8 +89,8 @@ try {
     pageRole: 'account_profile',
     targetUrlDigest: 'a'.repeat(64),
     strategyCandidate: {
-      strategyId: 'bilibili.account.profile.dom.v1',
-      version: '1.0.0',
+      strategyId: 'bilibili.account.profile.dom.v2',
+      version: '0.1.0',
       admissionEligible: false
     },
     state: 'completed',
@@ -98,14 +98,14 @@ try {
     startedAt: '2026-07-20T00:00:00.000Z',
     completedAt: '2026-07-20T00:00:01.000Z',
     snapshot,
-    routeObservations: [{
-      method: 'GET',
-      origin: 'https://api.bilibili.com',
-      pathname: '/x/space/wbi/acc/info',
-      status: 200,
-      queryKeyNames: ['mid', 'w_rid', 'wts'],
-      capturedAt: '2026-07-20T00:00:00.500Z'
-    }],
+    visualEvidence: {
+      phase: 'baseline',
+      actionId: 'open_account_profile',
+      evidenceId: 'visual-1',
+      capturedAt: '2026-07-20T00:00:00.500Z',
+      viewport: { cssWidth: 1280, cssHeight: 720, devicePixelRatio: 1, scrollX: 0, scrollY: 0 },
+      screenshot: { fileName: 'visual-1.png', byteLength: 1024, sha256: 'b'.repeat(64) }
+    },
     actions: [{
       actionId: 'open_account_profile',
       intent: 'Open the canonical public account profile.',
@@ -123,13 +123,12 @@ try {
       announcementCaptured: true,
       chargeSectionCaptured: true,
       highlightCount: snapshot.highlights.length,
-      observedRouteCount: 1,
       terminalReason: 'profile_captured'
     },
     safeguards: {
       environment: 'local_user_controlled_collection_profile',
       browser: 'visible_playwright_chromium',
-      acquisition: 'bounded_visible_account_dom_plus_route_metadata',
+      acquisition: 'bounded_visible_account_dom',
       responseBody: 'not_read',
       requestHeaders: 'not_read',
       requestBody: 'not_read',

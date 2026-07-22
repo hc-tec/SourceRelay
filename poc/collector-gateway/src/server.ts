@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import { AccountSafetyRegistry } from './account-safety';
+import { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
+import { BilibiliAccountProfileHostRunner } from './bilibili-account-profile-host-runner';
 import { BilibiliAccountVideoDetailMaterializationArtifactStore } from './bilibili-account-video-detail-materialization-artifacts';
 import { BilibiliAccountVideoDetailMaterializationHostRunner } from './bilibili-account-video-detail-materialization-host-runner';
 import { BilibiliAccountVideoPageTwoArtifactStore } from './bilibili-account-video-page-two-artifacts';
@@ -28,6 +30,7 @@ const accountSafety = await AccountSafetyRegistry.create(config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
 const accountVideoDetailMaterializationArtifacts =
   await BilibiliAccountVideoDetailMaterializationArtifactStore.create(config.stateDirectory);
+const accountProfileArtifacts = await BilibiliAccountProfileArtifactStore.create(config.stateDirectory);
 const accountVideoPageTwoArtifacts = await BilibiliAccountVideoPageTwoArtifactStore.create(config.stateDirectory);
 const accountVideoPaginationArtifacts = await BilibiliAccountVideoPaginationArtifactStore.create(config.stateDirectory);
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
@@ -39,6 +42,12 @@ const dynamicRunner = new BilibiliDynamicHostRunner({
   browserManager,
   profiles: profileRegistry,
   artifacts: dynamicArtifacts
+});
+const accountProfileRunner = new BilibiliAccountProfileHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: accountProfileArtifacts
 });
 const accountVideoInventoryRunner = new BilibiliAccountVideoInventoryHostRunner({
   accountSafety,
@@ -91,6 +100,8 @@ const server = createServer(async (request, response) => {
       browserManager,
       profileRegistry,
       accountSafety,
+      accountProfileArtifacts,
+      accountProfileRunner,
       accountVideoDetailMaterializationArtifacts,
       accountVideoDetailMaterializationRunner,
       accountVideoPageTwoArtifacts,
