@@ -67,6 +67,19 @@ describe('Static strategy registry boundary', () => {
         approvedResponseRouteIds: []
       })
     ]);
+    expect(strategiesFor('bilibili', 'account_archive')).toEqual([
+      expect.objectContaining({
+        strategyId: 'bilibili.account.video-inventory.dom.v1',
+        maturity: 'build_ready',
+        surface: 'account_listing',
+        acquisition: ['native_navigation', 'visible_dom'],
+        bounds: expect.objectContaining({
+          maxRecords: 40,
+          maxReadOnlyActions: 0,
+          firstRenderedPageOnly: true
+        })
+      })
+    ]);
     expect(resolveDetailStrategy('bilibili')).toMatchObject({ maturity: 'suspended' });
     expect(() => resolveDetailStrategy('zhihu')).toThrow('No static detail strategy is registered for zhihu.');
   });

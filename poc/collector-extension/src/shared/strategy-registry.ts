@@ -302,12 +302,57 @@ function bilibiliAccountProfileDomStrategy(): StaticPlatformStrategy {
   };
 }
 
+/**
+ * The inventory entry intentionally means only the first rendered upload
+ * page. Pagination has a separate action budget and evidence contract, so it
+ * cannot be enabled just because this zero-interaction entry is available.
+ */
+function bilibiliAccountVideoInventoryDomStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'bilibili.account.video-inventory.dom.v1',
+    version: '0.1.0',
+    platform: 'bilibili',
+    evidenceObjectives: ['account_archive'],
+    acquisition: ['native_navigation', 'visible_dom'],
+    maturity: 'build_ready',
+    surface: 'account_listing',
+    nativeEntry: { kind: 'profile_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['native_navigation', 'visible_dom']
+    },
+    bounds: {
+      maxRecords: 40,
+      maxReadOnlyActions: 0,
+      firstRenderedPageOnly: true,
+      allowsDetailNavigation: false,
+      allowsCommentNavigation: false,
+      allowsReadOnlyInteraction: false
+    },
+    output: {
+      kind: 'collection_state',
+      partialByDefault: true
+    },
+    browser: {
+      optionalHostPermissions: ['https://space.bilibili.com/*'],
+      domContentMatches: ['https://space.bilibili.com/*'],
+      responseBridgeMatches: []
+    },
+    approvedResponseRouteIds: [],
+    validation: {
+      mode: 'local_live_platform_only',
+      liveRecord: null
+    }
+  };
+}
+
 // This is a compiled, repository-local registry.  It is not a mechanism for
 // downloading plugins, evaluating remote code, or granting a strategy browser
 // privileges.  The Collector Core owns all privileged APIs.
 export const STATIC_PLATFORM_STRATEGIES: readonly StaticPlatformStrategy[] = [
   nativeSearchDomStrategy('bilibili'),
   bilibiliAccountProfileDomStrategy(),
+  bilibiliAccountVideoInventoryDomStrategy(),
   bilibiliVideoDetailDomStrategy(),
   bilibiliVideoTranscriptResponseStrategy(),
   nativeSearchDomStrategy('zhihu'),
