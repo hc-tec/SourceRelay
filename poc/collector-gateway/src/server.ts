@@ -2,6 +2,8 @@ import { createServer } from 'node:http';
 import { AccountSafetyRegistry } from './account-safety';
 import { BilibiliAccountVideoPageTwoArtifactStore } from './bilibili-account-video-page-two-artifacts';
 import { BilibiliAccountVideoPageTwoHostRunner } from './bilibili-account-video-page-two-host-runner';
+import { BilibiliAccountVideoPaginationArtifactStore } from './bilibili-account-video-pagination-artifacts';
+import { BilibiliAccountVideoPaginationHostRunner } from './bilibili-account-video-pagination-host-runner';
 import { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
 import { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account-video-inventory-host-runner';
 import { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
@@ -21,6 +23,7 @@ const profileRegistry = await BrowserProfileRegistry.create(config.profileDirect
 const accountSafety = await AccountSafetyRegistry.create(config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
 const accountVideoPageTwoArtifacts = await BilibiliAccountVideoPageTwoArtifactStore.create(config.stateDirectory);
+const accountVideoPaginationArtifacts = await BilibiliAccountVideoPaginationArtifactStore.create(config.stateDirectory);
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
@@ -41,6 +44,12 @@ const accountVideoPageTwoRunner = new BilibiliAccountVideoPageTwoHostRunner({
   browserManager,
   profiles: profileRegistry,
   artifacts: accountVideoPageTwoArtifacts
+});
+const accountVideoPaginationRunner = new BilibiliAccountVideoPaginationHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: accountVideoPaginationArtifacts
 });
 const videoDetailRunner = new BilibiliVideoDetailHostRunner({
   accountSafety,
@@ -64,6 +73,8 @@ const server = createServer(async (request, response) => {
       accountSafety,
       accountVideoPageTwoArtifacts,
       accountVideoPageTwoRunner,
+      accountVideoPaginationArtifacts,
+      accountVideoPaginationRunner,
       accountVideoInventoryArtifacts,
       accountVideoInventoryRunner,
       dynamicArtifacts,

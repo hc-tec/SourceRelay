@@ -307,6 +307,7 @@ export class BilibiliAccountVideoPageTwoHostRunner {
           expectedRecordVersion: context.recordVersion,
           expectedDocumentGeneration: context.documentGeneration,
           actionId: click.actionId,
+          expectedActivePage: 1,
           targetPage: BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_TARGET_PAGE,
           timeoutMs: Math.min(CLICK_TIMEOUT_MS, remainingDeadline(deadline, 1_000))
         });

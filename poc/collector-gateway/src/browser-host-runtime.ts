@@ -5,6 +5,7 @@ import {
   launchBrowserHost
 } from '@intelligence/collector-browser-host/client';
 import {
+  BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_SCHEMA_VERSION,
   type BilibiliAccountVideoPageClickRequest,
   type BilibiliAccountVideoPageClickResult,
   COLLECTOR_CONTROL_SURFACE_REVISION,
@@ -104,16 +105,9 @@ export class GatewayBrowserHostRuntime {
   async clickBilibiliAccountVideoPage(
     request: BilibiliAccountVideoPageClickRequest
   ): Promise<BilibiliAccountVideoPageClickResult> {
-    const result = await this.#command({ type: 'click_bilibili_account_video_page', request }, false);
-    if (!result || typeof result !== 'object' ||
-      (result as { schemaVersion?: unknown }).schemaVersion !== 1 ||
-      (result as { clickAttempted?: unknown }).clickAttempted !== true ||
-      typeof (result as { pageAlias?: unknown }).pageAlias !== 'string' ||
-      typeof (result as { actionId?: unknown }).actionId !== 'string' ||
-      !('before' in result) || !('after' in result) || !('network' in result)) {
-      throw new Error('browser_host_bilibili_page_click_response_invalid');
-    }
-    return structuredClone(result as BilibiliAccountVideoPageClickResult);
+    return bilibiliAccountVideoPageClickResponse(
+      await this.#command({ type: 'click_bilibili_account_video_page', request }, false)
+    );
   }
 
   async capturePageVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {
@@ -214,6 +208,23 @@ export class GatewayBrowserHostRuntime {
       if (this.#connecting === connecting) this.#connecting = null;
     }
   }
+}
+
+/**
+ * Keeps the Browser Host wire contract explicit and independently testable.
+ * A malformed result is safety-significant because the trusted input may
+ * already have been delivered before Gateway receives the response.
+ */
+export function bilibiliAccountVideoPageClickResponse(value: unknown): BilibiliAccountVideoPageClickResult {
+  if (!value || typeof value !== 'object' ||
+    (value as { schemaVersion?: unknown }).schemaVersion !== BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_SCHEMA_VERSION ||
+    (value as { clickAttempted?: unknown }).clickAttempted !== true ||
+    typeof (value as { pageAlias?: unknown }).pageAlias !== 'string' ||
+    typeof (value as { actionId?: unknown }).actionId !== 'string' ||
+    !('before' in value) || !('after' in value) || !('network' in value)) {
+    throw new Error('browser_host_bilibili_page_click_response_invalid');
+  }
+  return structuredClone(value as BilibiliAccountVideoPageClickResult);
 }
 
 async function fileExists(path: string): Promise<boolean> {

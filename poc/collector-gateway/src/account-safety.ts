@@ -18,6 +18,7 @@ export type AccountSafetyRunPurpose =
   | 'authenticated_dynamic_reconnaissance'
   | 'authenticated_account_video_inventory_reconnaissance'
   | 'authenticated_account_video_page_two_reconnaissance'
+  | 'authenticated_account_video_pagination_reconnaissance'
   | 'authenticated_video_detail_reconnaissance'
   | 'authenticated_transcript_validation'
   | 'formal_collection_stage';
@@ -93,6 +94,7 @@ function isSafetyRecord(value: unknown): value is PersistedAccountSafetyRecord {
         activeRun.purpose === 'authenticated_dynamic_reconnaissance' ||
         activeRun.purpose === 'authenticated_account_video_inventory_reconnaissance' ||
         activeRun.purpose === 'authenticated_account_video_page_two_reconnaissance' ||
+        activeRun.purpose === 'authenticated_account_video_pagination_reconnaissance' ||
         activeRun.purpose === 'authenticated_video_detail_reconnaissance' ||
         activeRun.purpose === 'authenticated_transcript_validation' ||
         activeRun.purpose === 'formal_collection_stage') &&
@@ -313,9 +315,7 @@ export class AccountSafetyRegistry {
     if (record.state !== 'running' || record.activeRun?.runId !== runId) {
       throw new Error('account_safety_run_not_active');
     }
-    const hardLock = /verification_required|rate_limited|risk_control|captcha|authentication_lost|user_safety_pause/.test(
-      reasonCode
-    );
+    const hardLock = /verification_required|rate_limited|risk_control|captcha|authentication_lost|user_safety_pause|outcome_unknown|document_context_changed|bilibili_page_click_response_invalid|run_deadline_exceeded/.test(reasonCode);
     record.state = hardLock ? 'locked' : 'ready';
     record.reasonCode = reasonCode;
     record.manualUnlockRequired = hardLock;

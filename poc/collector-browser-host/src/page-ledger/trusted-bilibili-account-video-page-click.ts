@@ -1,8 +1,9 @@
 import type { Page, Response } from 'playwright';
 import {
   BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_MAX_NETWORK_OBSERVATIONS,
+  BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_MAX_TARGET_PAGE,
+  BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_MIN_ACTIVE_PAGE,
   BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_SCHEMA_VERSION,
-  BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_TARGET_PAGE,
   type BilibiliAccountVideoPageClickBounds,
   type BilibiliAccountVideoPageClickNetworkObservation,
   type BilibiliAccountVideoPageClickRequest,
@@ -54,7 +55,14 @@ export function validateTrustedBilibiliAccountVideoPageClickRequest(
   if (!ACTION_ID_PATTERN.test(request.actionId)) {
     throw hostError({ code: 'bilibili_page_click_action_id_invalid', category: 'action', scope: 'action' });
   }
-  if (request.targetPage !== BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_TARGET_PAGE) {
+  if (
+    !Number.isSafeInteger(request.expectedActivePage) ||
+    request.expectedActivePage < BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_MIN_ACTIVE_PAGE ||
+    request.expectedActivePage >= BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_MAX_TARGET_PAGE ||
+    !Number.isSafeInteger(request.targetPage) ||
+    request.targetPage !== request.expectedActivePage + 1 ||
+    request.targetPage > BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_MAX_TARGET_PAGE
+  ) {
     throw hostError({ code: 'bilibili_page_click_target_rejected', category: 'action', scope: 'action' });
   }
   if (!Number.isSafeInteger(request.timeoutMs) ||
@@ -118,7 +126,12 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
   let actionAttempted = false;
   try {
     let beforeScroll = await readTrustedScrollPosition(record.page, remaining(deadline));
-    let initial = await waitForInitialPaginationPrecondition(record.page, request.targetPage, deadline);
+    let initial = await waitForInitialPaginationPrecondition(
+      record.page,
+      request.expectedActivePage,
+      request.targetPage,
+      deadline
+    );
 
     let afterScroll = beforeScroll;
     let scrollAttempted = false;
@@ -152,7 +165,7 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
       await withinDeadline(record.page.mouse.wheel(0, deltaY), remaining(deadline));
       afterScroll = await readTrustedScrollPosition(record.page, remaining(deadline));
       initial = await readPaginationProbe(record.page, request.targetPage, remaining(deadline));
-      assertInitialPrecondition(initial, request.targetPage);
+      assertInitialPrecondition(initial, request.expectedActivePage, request.targetPage);
       if (!initial.target!.inViewport) throw new Error('bilibili_page_click_target_not_in_viewport_after_scroll');
     }
 
@@ -168,7 +181,7 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
     const pointerY = Math.floor(target.bounds.y + target.bounds.height / 2);
     await withinDeadline(record.page.mouse.move(pointerX, pointerY), remaining(deadline));
     const hovered = await readPaginationProbe(record.page, request.targetPage, remaining(deadline));
-    assertClickableTarget(hovered, request.targetPage);
+    assertClickableTarget(hovered, request.expectedActivePage, request.targetPage);
     const beforeVisualEvidence = await withinDeadline(captureManagedPageVisualEvidence({
       page: record.page,
       pageAlias: record.pageAlias,
@@ -190,7 +203,7 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
       await withinDeadline(record.page.mouse.up({ button: 'left' }), remaining(deadline));
       const neutral = await findNeutralPointerTarget(record.page, remaining(deadline));
       await withinDeadline(record.page.mouse.move(neutral.x, neutral.y), remaining(deadline));
-      const after = await waitForPageTwoPostcondition(record.page, request.targetPage, observations, deadline);
+      const after = await waitForPaginationPostcondition(record.page, request.targetPage, observations, deadline);
       assertSameDocument(record, request);
       const afterVisualEvidence = await withinDeadline(captureManagedPageVisualEvidence({
         page: record.page,
@@ -211,7 +224,7 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
         clickAttempted: true,
         scrollToControl: { attempted: scrollAttempted, before: beforeScroll, after: afterScroll },
         before: {
-          activePage: 1,
+          activePage: request.expectedActivePage,
           targetPage: request.targetPage,
           targetBounds: hovered.target!.bounds,
           pointerHitTarget: true,
@@ -248,8 +261,12 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
   }
 }
 
-function assertInitialPrecondition(probe: PaginationProbe, targetPage: number): void {
-  if (!hasInitialPrecondition(probe, targetPage)) {
+function assertInitialPrecondition(
+  probe: PaginationProbe,
+  expectedActivePage: number,
+  targetPage: number
+): void {
+  if (!hasInitialPrecondition(probe, expectedActivePage, targetPage)) {
     throw hostError({
       code: 'bilibili_page_click_precondition_unmet',
       category: 'action',
@@ -259,14 +276,22 @@ function assertInitialPrecondition(probe: PaginationProbe, targetPage: number): 
   }
 }
 
-function hasInitialPrecondition(probe: PaginationProbe, targetPage: number): boolean {
-  return probe.activePage === 1 && Boolean(
+function hasInitialPrecondition(
+  probe: PaginationProbe,
+  expectedActivePage: number,
+  targetPage: number
+): boolean {
+  return probe.activePage === expectedActivePage && Boolean(
     probe.target && probe.target.page === targetPage && probe.target.rendered && probe.target.enabled
   );
 }
 
-function assertClickableTarget(probe: PaginationProbe, targetPage: number): void {
-  assertInitialPrecondition(probe, targetPage);
+function assertClickableTarget(
+  probe: PaginationProbe,
+  expectedActivePage: number,
+  targetPage: number
+): void {
+  assertInitialPrecondition(probe, expectedActivePage, targetPage);
   if (!probe.target!.inViewport || !probe.target!.pointerHitTarget || !probe.target!.pointerHoveredTarget) {
     throw new Error('bilibili_page_click_pointer_precondition_unmet');
   }
@@ -413,7 +438,7 @@ async function findNeutralPointerTarget(page: Page, timeoutMs: number): Promise<
   return { x, y };
 }
 
-async function waitForPageTwoPostcondition(
+async function waitForPaginationPostcondition(
   page: Page,
   targetPage: number,
   observations: readonly BilibiliAccountVideoPageClickNetworkObservation[],
@@ -433,6 +458,7 @@ async function waitForPageTwoPostcondition(
 
 async function waitForInitialPaginationPrecondition(
   page: Page,
+  expectedActivePage: number,
   targetPage: number,
   deadline: number
 ): Promise<PaginationProbe> {
@@ -441,11 +467,11 @@ async function waitForInitialPaginationPrecondition(
     const available = deadline - Date.now();
     if (available < 100) break;
     latest = await readPaginationProbe(page, targetPage, available);
-    if (hasInitialPrecondition(latest, targetPage)) return latest;
+    if (hasInitialPrecondition(latest, expectedActivePage, targetPage)) return latest;
     await delay(Math.min(100, Math.max(1, deadline - Date.now())));
   }
   if (!latest) throw new Error('bilibili_page_click_initial_precondition_unavailable');
-  assertInitialPrecondition(latest, targetPage);
+  assertInitialPrecondition(latest, expectedActivePage, targetPage);
   return latest;
 }
 

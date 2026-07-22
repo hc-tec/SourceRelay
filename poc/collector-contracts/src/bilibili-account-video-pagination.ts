@@ -3,11 +3,14 @@ import type { PageVisualEvidence } from './page-visual-evidence.js';
 
 /**
  * This is intentionally a single source-specific browser action, not a
- * generic click protocol.  v0.1 can select only page two of Bilibili's
- * account video inventory after the real human flow has been proven.
+ * generic click protocol. It only advances the visible Bilibili account-video
+ * paginator by one adjacent page; the Host owns all selector, hover, bounds
+ * and Network semantics.
  */
-export const BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_SCHEMA_VERSION = 1 as const;
+export const BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_SCHEMA_VERSION = 2 as const;
 export const BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_TARGET_PAGE = 2 as const;
+export const BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_MIN_ACTIVE_PAGE = 1 as const;
+export const BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_MAX_TARGET_PAGE = 20 as const;
 export const BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_MAX_NETWORK_OBSERVATIONS = 3 as const;
 
 export interface BilibiliAccountVideoPageClickRequest {
@@ -19,7 +22,10 @@ export interface BilibiliAccountVideoPageClickRequest {
   expectedRecordVersion: number;
   expectedDocumentGeneration: number;
   actionId: string;
-  targetPage: typeof BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_TARGET_PAGE;
+  /** The active page observed by the Gateway immediately before this click. */
+  expectedActivePage: number;
+  /** Must equal `expectedActivePage + 1`; arbitrary page jumps are rejected. */
+  targetPage: number;
   timeoutMs: number;
 }
 
@@ -54,8 +60,8 @@ export interface BilibiliAccountVideoPageClickResult {
     after: PageScrollPosition;
   };
   before: {
-    activePage: 1;
-    targetPage: typeof BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_TARGET_PAGE;
+    activePage: number;
+    targetPage: number;
     targetBounds: BilibiliAccountVideoPageClickBounds;
     pointerHitTarget: true;
     pointerHoveredTarget: true;

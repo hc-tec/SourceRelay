@@ -88,6 +88,27 @@ describe('Account safety state machine', () => {
     expect(locked).toMatchObject({ state: 'locked', manualUnlockRequired: true, reasonCode: 'verification_required' });
   });
 
+  test('locks an account when a browser action response is invalid after the action may have been sent', async () => {
+    const { registry } = await createRegistry('2026-07-22T00:00:00.000Z');
+    const permit = await registry.beginAuthenticatedRun(
+      profileId,
+      'bilibili',
+      'authenticated_account_video_pagination_reconnaissance'
+    );
+    await registry.recordActionAttempt(profileId, 'bilibili', permit.runId, 'advance_account_video_page_2');
+    const locked = await registry.finishAuthenticatedRun(
+      profileId,
+      'bilibili',
+      permit.runId,
+      'browser_host_bilibili_page_click_response_invalid'
+    );
+    expect(locked).toMatchObject({
+      state: 'locked',
+      manualUnlockRequired: true,
+      reasonCode: 'browser_host_bilibili_page_click_response_invalid'
+    });
+  });
+
   test('keeps action budgets and locks isolated to one profile-platform pair', async () => {
     const { registry } = await createRegistry('2026-07-21T00:00:00.000Z');
     const permit = await registry.beginAuthenticatedRun(

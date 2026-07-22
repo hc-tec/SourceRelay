@@ -26,7 +26,7 @@ import type {
   BilibiliAccountVideoPageClickResult
 } from './bilibili-account-video-pagination.js';
 
-export const BROWSER_HOST_PROTOCOL_VERSION = 5 as const;
+export const BROWSER_HOST_PROTOCOL_VERSION = 6 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
 
 export interface BrowserHostEndpointRecord {

@@ -3,6 +3,8 @@ import type { AccountSafetyRegistry } from './account-safety';
 import { accountSafetyUnlockInput } from './account-safety';
 import type { BilibiliAccountVideoPageTwoArtifactStore } from './bilibili-account-video-page-two-artifacts';
 import type { BilibiliAccountVideoPageTwoHostRunner } from './bilibili-account-video-page-two-host-runner';
+import type { BilibiliAccountVideoPaginationArtifactStore } from './bilibili-account-video-pagination-artifacts';
+import type { BilibiliAccountVideoPaginationHostRunner } from './bilibili-account-video-pagination-host-runner';
 import type { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
 import type { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account-video-inventory-host-runner';
 import type { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
@@ -25,6 +27,8 @@ export interface GatewayRouteContext {
   accountSafety: AccountSafetyRegistry;
   accountVideoPageTwoArtifacts: BilibiliAccountVideoPageTwoArtifactStore;
   accountVideoPageTwoRunner: BilibiliAccountVideoPageTwoHostRunner;
+  accountVideoPaginationArtifacts: BilibiliAccountVideoPaginationArtifactStore;
+  accountVideoPaginationRunner: BilibiliAccountVideoPaginationHostRunner;
   accountVideoInventoryArtifacts: BilibiliAccountVideoInventoryArtifactStore;
   accountVideoInventoryRunner: BilibiliAccountVideoInventoryHostRunner;
   dynamicArtifacts: BilibiliDynamicArtifactStore;
@@ -140,6 +144,10 @@ export async function handleGatewayRoute(
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.accountVideoPageTwoArtifacts.list() });
     return true;
   }
+  if (request.method === 'GET' && url.pathname === '/v1/account-video-pagination-artifacts') {
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.accountVideoPaginationArtifacts.list() });
+    return true;
+  }
   if (request.method === 'GET' && url.pathname === '/v1/video-detail-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.videoDetailArtifacts.list() });
     return true;
@@ -223,6 +231,36 @@ export async function handleGatewayRoute(
     });
     return true;
   }
+  const accountVideoPaginationRun = url.pathname.match(
+    new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/account/video-inventory/pagination$`, 'i')
+  );
+  if (request.method === 'POST' && accountVideoPaginationRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const body = await readJsonBody(request);
+    if (
+      !body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).length !== 2 ||
+      typeof (body as { canonicalProfileUrl?: unknown }).canonicalProfileUrl !== 'string' ||
+      typeof (body as { maxPages?: unknown }).maxPages !== 'number'
+    ) throw new Error('bilibili_account_video_pagination_run_input_invalid');
+    const result = await context.accountVideoPaginationRunner.run({
+      profileId: accountVideoPaginationRun[1]!,
+      canonicalProfileUrl: (body as { canonicalProfileUrl: string }).canonicalProfileUrl,
+      maxPages: (body as { maxPages: number }).maxPages
+    });
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        coverage: result.run.coverage,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
   const videoDetailRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/video/detail$`, 'i'));
   if (request.method === 'POST' && videoDetailRun) {
     if (!sameOrigin(request, response, context)) return true;
@@ -270,6 +308,15 @@ export async function handleGatewayRoute(
   if (request.method === 'GET' && accountVideoPageTwoArtifact) {
     const artifact = await context.accountVideoPageTwoArtifacts.get(accountVideoPageTwoArtifact[1]!);
     if (!artifact) throw new Error('bilibili_account_video_page_two_artifact_not_found');
+    sendJson(response, 200, { schemaVersion: 1, artifact });
+    return true;
+  }
+  const accountVideoPaginationArtifact = url.pathname.match(
+    new RegExp(`^/v1/account-video-pagination-artifacts/(${PROFILE_ID})$`, 'i')
+  );
+  if (request.method === 'GET' && accountVideoPaginationArtifact) {
+    const artifact = await context.accountVideoPaginationArtifacts.get(accountVideoPaginationArtifact[1]!);
+    if (!artifact) throw new Error('bilibili_account_video_pagination_artifact_not_found');
     sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }
