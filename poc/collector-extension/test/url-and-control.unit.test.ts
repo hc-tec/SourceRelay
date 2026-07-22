@@ -44,7 +44,7 @@ describe('Extension canonical URL and loopback boundaries', () => {
 });
 
 describe('Static strategy registry boundary', () => {
-  test('exposes compiled strategies without granting response capture or dormant detail capability', () => {
+  test('exposes compiled strategies without granting response capture or unbounded detail capability', () => {
     const bilibiliSearch = resolveNativeSearchStrategy('bilibili');
     expect(bilibiliSearch).toMatchObject({
       strategyId: 'bilibili.search.breadth.dom.v2',
@@ -80,7 +80,12 @@ describe('Static strategy registry boundary', () => {
         })
       })
     ]);
-    expect(resolveDetailStrategy('bilibili')).toMatchObject({ maturity: 'suspended' });
+    expect(resolveDetailStrategy('bilibili')).toMatchObject({
+      strategyId: 'bilibili.video.detail.dom.v2',
+      version: '0.4.0',
+      maturity: 'build_ready',
+      approvedResponseRouteIds: []
+    });
     expect(() => resolveDetailStrategy('zhihu')).toThrow('No static detail strategy is registered for zhihu.');
   });
 });

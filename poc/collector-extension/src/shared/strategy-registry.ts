@@ -165,24 +165,18 @@ function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStr
 }
 
 /**
- * Historical validation metadata only. This suspended v1 strategy is not the
- * Browser Host / Native Messaging implementation. The active DOM-only detail
- * binding is the separately contracted `bilibili.video.detail.dom.v2`.
+ * One exact, visible first-screen detail projection. Subtitles, comments,
+ * recommendations, playback, and response capture remain separate
+ * capabilities even when this detail strategy is ready to be live-validated.
  */
 function bilibiliVideoDetailDomStrategy(): StaticPlatformStrategy {
-  const admittedValidation: LiveValidationReference = {
-    category: 'anonymous',
-    recordId: '2a5008a7-97ab-488c-b0bd-25b98e277093',
-    verifiedAt: '2026-07-18T13:05:01.696Z',
-    environment: 'local_user_controlled_validation_profile'
-  };
   return {
-    strategyId: 'bilibili.video.detail.dom.v1',
-    version: '1.4.0',
+    strategyId: 'bilibili.video.detail.dom.v2',
+    version: '0.4.0',
     platform: 'bilibili',
     evidenceObjectives: ['detail_read'],
     acquisition: ['detail_navigation', 'visible_dom'],
-    maturity: 'suspended',
+    maturity: 'build_ready',
     surface: 'content_detail',
     nativeEntry: { kind: 'canonical_url' },
     preconditions: {
@@ -209,7 +203,7 @@ function bilibiliVideoDetailDomStrategy(): StaticPlatformStrategy {
     approvedResponseRouteIds: [],
     validation: {
       mode: 'local_live_platform_only',
-      liveRecord: admittedValidation
+      liveRecord: null
     }
   };
 }
