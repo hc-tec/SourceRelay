@@ -32,7 +32,10 @@ const observer = createDomOnlyDocumentObserver<VideoDetailBinding, BilibiliVideo
   canonicalTargetUrl: (binding) => binding.target.canonicalUrl,
   canonicalObservedUrl: (value) => canonicalBilibiliVideoUrl(value, 'observed_document'),
   capture: ({ tabId, documentId }) => captureBilibiliVideoDetailDom(tabId, documentId),
-  minimumDocumentSettleMs: 2_000,
+  // The observed desktop page can replace its first same-target document a
+  // little after DOMContentLoaded.  Three seconds is a source-specific first
+  // screen stability window, not an interaction delay or a retry budget.
+  minimumDocumentSettleMs: 3_000,
   isReady: (dom, binding) =>
     dom.risk.verificationRequired ||
     dom.risk.rateLimited ||

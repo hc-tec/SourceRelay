@@ -1,7 +1,7 @@
 # B 站视频详情首屏：DOM-only MVP 契约 v0.1
 
 - 日期：2026-07-21
-- 状态：已完成独立匿名实网可行性侦察与受管 Profile 产品闭环
+- 状态：已完成独立匿名实网可行性侦察；历史受管闭环见第 7–10 节，`0.7.12` 文档替换修复的重新验证进行中（第 12 节）
 - 示例页面：`https://www.bilibili.com/video/BV1qZSLBYEpa`
 
 ## 1. 要解决的问题
@@ -213,3 +213,44 @@ reason      detail_ready
 - `BV136K36TEa8` 同样没有可投影简介，故“充电专属”不是此前两条 `descriptionCaptured=false` 的充分或必要解释。
 
 基于此侦察，`0.7.11` 详情投影新增 `chargeExclusiveTrialVisible` 的受限 DOM 事实，并在 Gateway artifact 中映射为 `accessStatus = charge_exclusive_trial | login_required | indeterminate`。该实现还要求 document-start 后的固定首屏稳定窗口和可见播放器控制层，避免把骨架屏误判为完成；若同一规范 URL 在首屏加载中被站点再次替换，Observer 只会以 Chrome 返回的当前主文档 ID 重新绑定，不会再次导航或接受调用方的 document ID。仍须由受管登录 Collection Profile 的独立真实闭环验证，匿名人工侦察不能替代产品闭环。
+
+## 12. 同 URL 主文档替换：故障复盘与 `0.7.12` 修复（2026-07-22）
+
+### 事实，不把错误归因成平台门禁
+
+`0.7.10` 与 `0.7.11` 分别对 `BV1BoKD6ZEir` 进行了单条、一次导航、零点击的受管 Profile canary。两次都没有验证码、异常访问、限流、付费解锁或重复导航；Account Safety 最终也回到 `ready`。但 Browser Host 的去敏 journal 均表明：
+
+```text
+首次 main-frame navigation / navigation_completed
+  -> 约 2 秒后，同一规范 BVID URL 再发生一次 main-frame navigation
+  -> 旧 binding 在约 55 秒到期
+  -> video_detail_strategy_binding_context_rejected
+```
+
+因此该错误不能解释为“页面没有充电门禁”或“内容公开”。它首先是详情观察生命周期没有完成的本地框架故障。
+
+另做了一次独立、匿名、无扩展、可见的临时 Chromium 侦察，只访问该受限样本一次且不点击、hover、滚动、登录或读取网络数据。页面在初始截图和静置 6 秒后的可访问性树中，都同时有可见播放器控制项（如“播放/暂停”）与可见试看 toast。故“控件因为没有 hover 而永久隐藏”不是本次 55 秒失败的主因。临时 browser、Profile、截图和 CLI 材料随后均已关闭/清理。
+
+### `0.7.12` 的生命周期修复
+
+修复保持详情策略的零页面交互边界，不增加平台导航、刷新、点击或 response 读取：
+
+1. document-start bridge 不再在第一个 document-ready 消息后注销；只要短时 binding 仍在，它可以收到同一规范目标的替换文档。
+2. 每次 DOM capture 前，MV3 只在已绑定 tab 上调用 Chrome `webNavigation.getFrame({ frameId: 0 })` 取得当前主文档身份；它不接受 Gateway/调用方提供的 document ID，不读取页面 DOM，也不把 URL 或 document ID 输出到 artifact。
+3. binding session schema 升至 `v3`，只在 Extension session storage 内维护 `documentBindCount` 等生命周期元数据；旧 binding 不迁移，因其本来就是短时任务状态。
+4. B 站首屏稳定窗口由 2 秒提高到 3 秒，并在每个替换文档重新开始计时。它用于避免把首个骨架文档当成最终页面，不是随机“拟人”延迟、重试或额外平台动作。
+5. Manifest 新增 `webNavigation` 权限，但实现只在已有精确 binding 的 tab、规范目标已匹配时读取主 frame 身份；不会注册全局采集、持久化浏览历史或导出 URL/认证信息。
+
+### 验证层级与当前状态
+
+```text
+L1  单元：同目标 document-a -> document-b 的 binding 仍保持 bridge 注册，
+    且以 Chrome 当前主 frame identity 重新绑定；不需要页面 fixture。
+
+L3  real-local：生产 Chromium + MV3 + Native Messaging + Browser Host + Gateway，
+    6/6 通过、live platform requests = 0。
+
+L4  live canary：待执行；只允许一个 BVID、一次导航、零点击、零自动重试。
+```
+
+L1/L3 仅证明浏览器/扩展基础框架，不能冒充 B 站能力。`0.7.12` 仍必须以独立受管登录 Profile canary 验证：视觉非骨架、DOM 投影、document lifecycle 与访问状态三者同时成立后，才可以把这条详情闭环重新标为 `proved`。

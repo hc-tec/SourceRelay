@@ -10,12 +10,18 @@ import {
 import { clearStrategyBindingsForTab } from '../strategy-binding-state';
 
 interface StoredDomOnlyBinding<TBinding extends StrategyObserverBindingRequest> {
-  schemaVersion: 2;
+  schemaVersion: 3;
   tabId: number;
   nextDocumentGeneration: number;
   contentScriptId: string;
   documentId: string | null;
   documentBoundAt: number | null;
+  /**
+   * Number of distinct same-target main documents seen while this short-lived
+   * binding is active.  This is lifecycle metadata only: document IDs remain
+   * in extension session storage and are never sent to the Gateway.
+   */
+  documentBindCount: number;
   excludedDocumentId: string | null;
   binding: TBinding;
 }
@@ -79,29 +85,48 @@ export function createDomOnlyDocumentObserver<
   const bindingStorageKey = (observerBindingId: string): string =>
     `${config.storageKeyPrefix}${observerBindingId}`;
 
-  async function storedBinding(observerBindingId: string): Promise<StoredDomOnlyBinding<TBinding> | null> {
-    const key = bindingStorageKey(observerBindingId);
-    const value = (await chrome.storage.session.get(key))[key] as StoredDomOnlyBinding<TBinding> | undefined;
-    return value?.schemaVersion === 2 &&
-      value.binding?.observerBindingId === observerBindingId &&
-      (value.documentId === null || (typeof value.documentId === 'string' && Number.isSafeInteger(value.documentBoundAt))) &&
-      value.binding.strategyId === config.strategyId &&
-      Date.parse(value.binding.expiresAt) > Date.now()
+  function validStoredBinding(value: unknown): value is StoredDomOnlyBinding<TBinding> {
+    const candidate = value as Partial<StoredDomOnlyBinding<TBinding>> | null;
+    const tabId = candidate?.tabId;
+    const nextDocumentGeneration = candidate?.nextDocumentGeneration;
+    const documentBindCount = candidate?.documentBindCount;
+    if (!candidate || candidate.schemaVersion !== 3 ||
+      typeof tabId !== 'number' || !Number.isSafeInteger(tabId) || tabId < 0 ||
+      typeof nextDocumentGeneration !== 'number' || !Number.isSafeInteger(nextDocumentGeneration) || nextDocumentGeneration < 1 ||
+      typeof candidate.contentScriptId !== 'string' || candidate.contentScriptId.length === 0 ||
+      typeof documentBindCount !== 'number' || !Number.isSafeInteger(documentBindCount) || documentBindCount < 0 ||
+      (candidate.excludedDocumentId !== null && typeof candidate.excludedDocumentId !== 'string') ||
+      !candidate.binding || candidate.binding.strategyId !== config.strategyId ||
+      typeof candidate.binding.observerBindingId !== 'string' ||
+      !Number.isFinite(Date.parse(candidate.binding.expiresAt))) return false;
+    if (candidate.documentId === null) {
+      return candidate.documentBoundAt === null && documentBindCount === 0;
+    }
+    return typeof candidate.documentId === 'string' && candidate.documentId.length > 0 &&
+      Number.isSafeInteger(candidate.documentBoundAt) && documentBindCount >= 1;
+  }
+
+  function currentBinding(value: unknown): StoredDomOnlyBinding<TBinding> | null {
+    return validStoredBinding(value) && Date.parse(value.binding.expiresAt) > Date.now()
       ? value
       : null;
+  }
+
+  async function storedBinding(observerBindingId: string): Promise<StoredDomOnlyBinding<TBinding> | null> {
+    const key = bindingStorageKey(observerBindingId);
+    const value = currentBinding((await chrome.storage.session.get(key))[key]);
+    return value?.binding.observerBindingId === observerBindingId ? value : null;
   }
 
   async function storedBindingForTab(tabId: number): Promise<StoredDomOnlyBinding<TBinding> | null> {
     const values = await chrome.storage.session.get(null);
     for (const [key, value] of Object.entries(values)) {
       if (!key.startsWith(config.storageKeyPrefix)) continue;
-      const candidate = value as StoredDomOnlyBinding<TBinding>;
+      const candidate = currentBinding(value);
       if (
-        candidate.schemaVersion === 2 &&
+        candidate &&
         candidate.tabId === tabId &&
-        candidate.documentId === null &&
-        candidate.binding?.strategyId === config.strategyId &&
-        Date.parse(candidate.binding?.expiresAt) > Date.now()
+        candidate.binding.strategyId === config.strategyId
       ) return candidate;
     }
     return null;
@@ -130,18 +155,26 @@ export function createDomOnlyDocumentObserver<
     const stored = await storedBindingForTab(tabId);
     if (
       !stored ||
-      // A binding owns one exact main-frame document. A late duplicate
-      // document_start signal must not replace that document identity.
-      stored.documentId !== null ||
       // A retained exact-target tab can be navigated again by a new run. In
       // that case, a delayed bridge message from the old document must never
       // satisfy the binding intended for the next document.
       stored.excludedDocumentId === documentId ||
       config.canonicalObservedUrl(senderUrl ?? '') !== config.canonicalTargetUrl(stored.binding)
     ) return false;
-    const updated: StoredDomOnlyBinding<TBinding> = { ...stored, documentId, documentBoundAt: Date.now() };
+    if (stored.documentId === documentId) return true;
+    // Keep the short-lived document-start registration active for the entire
+    // observation window.  Some sites commit a second main-frame document at
+    // the same canonical URL after the first DOMContentLoaded; unregistering
+    // after the first handshake leaves that replacement without a bridge.
+    // `read()` rechecks Chrome's current main-frame identity before every DOM
+    // capture, so a late message from a retired document cannot be projected.
+    const updated: StoredDomOnlyBinding<TBinding> = {
+      ...stored,
+      documentId,
+      documentBoundAt: Date.now(),
+      documentBindCount: stored.documentBindCount + 1
+    };
     await chrome.storage.session.set({ [bindingStorageKey(updated.binding.observerBindingId)]: updated });
-    await chrome.scripting.unregisterContentScripts({ ids: [updated.contentScriptId] }).catch(() => undefined);
     return true;
   }
 
@@ -151,10 +184,14 @@ export function createDomOnlyDocumentObserver<
    * document-start message then belongs to a page that no longer exists.
    *
    * Reconcile only with Chrome's own current main-frame document identity,
-   * after rechecking the exact tab and canonical target. This never accepts a
-   * caller-supplied document id, runs no page DOM projection, and performs no
-   * platform action. It also preserves `excludedDocumentId` for a retained
-   * tab whose next navigation was explicitly required.
+   * after rechecking the exact tab and canonical target. `webNavigation` is
+   * used here rather than treating an injection result as the source of truth:
+   * it gives the extension the active frame's identity even when the prior
+   * isolated-world execution belonged to a document that has just been
+   * replaced. This never accepts a caller-supplied document id, reads no page
+   * DOM, and performs no platform action. It also preserves
+   * `excludedDocumentId` for a retained tab whose next navigation was
+   * explicitly required.
    */
   async function reconcileCurrentDocument(
     stored: StoredDomOnlyBinding<TBinding>
@@ -166,17 +203,18 @@ export function createDomOnlyDocumentObserver<
       if (stored.documentId !== null) throw new Error(error('document_context_changed'));
       return stored;
     }
-    const currentDocument = (await chrome.scripting.executeScript({
-      target: { tabId: stored.tabId },
-      world: 'ISOLATED',
-      func: (): null => null
-    })).find((result) => result.frameId === 0) ?? null;
-    if (!currentDocument?.documentId || currentDocument.documentId === stored.excludedDocumentId ||
-      currentDocument.documentId === stored.documentId) return stored;
+    const currentDocument = await chrome.webNavigation.getFrame({ tabId: stored.tabId, frameId: 0 }).catch(() => null);
+    const currentDocumentId = currentDocument?.documentId;
+    const currentObservedUrl = typeof currentDocument?.url === 'string'
+      ? config.canonicalObservedUrl(currentDocument.url)
+      : null;
+    if (!currentDocumentId || currentObservedUrl !== expectedUrl || currentDocumentId === stored.excludedDocumentId ||
+      currentDocumentId === stored.documentId) return stored;
     const updated: StoredDomOnlyBinding<TBinding> = {
       ...stored,
-      documentId: currentDocument.documentId,
-      documentBoundAt: Date.now()
+      documentId: currentDocumentId,
+      documentBoundAt: Date.now(),
+      documentBindCount: stored.documentBindCount + 1
     };
     await chrome.storage.session.set({ [bindingStorageKey(updated.binding.observerBindingId)]: updated });
     return updated;
@@ -256,12 +294,13 @@ export function createDomOnlyDocumentObserver<
       world: 'ISOLATED'
     }]);
     const stored: StoredDomOnlyBinding<TBinding> = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       tabId: command.tabId,
       nextDocumentGeneration: command.nextDocumentGeneration,
       contentScriptId,
       documentId: null,
       documentBoundAt: null,
+      documentBindCount: 0,
       excludedDocumentId,
       binding: structuredClone(binding)
     };

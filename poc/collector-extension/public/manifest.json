@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Personal Intelligence Collector",
-  "version": "0.7.11",
+  "version": "0.7.12",
   "description": "Runs explicitly approved, read-only collection tasks in the user's browser context.",
   "background": {
     "service_worker": "background.js",
@@ -14,7 +14,8 @@
   "permissions": [
     "nativeMessaging",
     "storage",
-    "scripting"
+    "scripting",
+    "webNavigation"
   ],
   "host_permissions": [
     "https://space.bilibili.com/*",
