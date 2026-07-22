@@ -122,7 +122,12 @@ export const collectorValidationCatalog = [
     timeoutMs: 30_000,
     platformPolicy: 'forbidden',
     ci: 'pull_request',
-    capabilities: ['account-safety', 'at-most-once-action', 'restart-lock']
+    capabilities: [
+      'account-safety',
+      'at-most-once-action',
+      'stage-terminal-safety-convergence',
+      'restart-lock'
+    ]
   },
   {
     id: 'collector-gateway-evidence-and-profile-boundaries',
