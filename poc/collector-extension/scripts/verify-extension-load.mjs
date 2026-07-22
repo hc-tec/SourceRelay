@@ -33,7 +33,7 @@ try {
   assert.deepEqual(runtime.runtimeBootstrap, {
     schemaVersion: 1,
     collectorVersion: runtime.extensionVersion,
-    controlSurfaceRevision: 14
+    controlSurfaceRevision: 15
   }, 'service worker must publish its compiled runtime identity');
   assert.equal(runtime.nativeBridgeStatus?.state, 'unconfigured', 'fresh Profile must not invent a Browser Host bridge');
 

@@ -68,8 +68,15 @@ export async function captureBilibiliNativeSearchDom(
           }
         };
         const searchInput = document.querySelector<HTMLInputElement>('input[placeholder="输入关键字搜索"]');
-        const resultRoot = document.querySelector<HTMLElement>('.search-all-list') ??
-          document.querySelector<HTMLElement>('.search-page .video-list');
+        // On the current desktop page `.search-all-list` is a structural,
+        // zero-size wrapper around the actual rendered `.video-list`. Prefer
+        // the visibly rendered list, while retaining the wrapper only as a
+        // source-compatible fallback for a future page layout.
+        const resultRoot = [
+          document.querySelector<HTMLElement>('.search-page .video-list'),
+          document.querySelector<HTMLElement>('.video-list'),
+          document.querySelector<HTMLElement>('.search-all-list')
+        ].find(rendered) ?? null;
         const wrappedCards = resultRoot
           ? Array.from(resultRoot.querySelectorAll<HTMLElement>('.bili-video-card__wrap')).filter(rendered)
           : [];

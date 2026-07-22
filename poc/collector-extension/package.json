@@ -1,6 +1,6 @@
 {
   "name": "@intelligence/collector-extension",
-  "version": "0.7.16",
+  "version": "0.7.17",
   "private": true,
   "type": "module",
   "description": "Manifest V3 core for user-approved, read-only browser collection tasks.",

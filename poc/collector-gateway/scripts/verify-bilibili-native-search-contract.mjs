@@ -103,7 +103,7 @@ try {
 
   const run = runRecord.createBilibiliNativeSearchRunRecord({
     runId: '22222222-2222-4222-8222-222222222222',
-    collectorVersion: '0.7.16',
+    collectorVersion: '0.7.17',
     query,
     canonicalSearchUrl,
     startedAt: '2026-07-22T02:00:00.000Z',

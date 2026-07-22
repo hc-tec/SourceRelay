@@ -26,7 +26,7 @@ const extensionDirectory = resolve(workspaceRoot, 'collector-extension', 'dist')
 const mainModulePath = resolve(root, 'dist', 'main.js');
 const profileId = 'extension-runtime-rejection';
 const expectedVersion = '999.999.999';
-const expectedControlSurfaceRevision = 14;
+const expectedControlSurfaceRevision = 15;
 
 if (relative(runtimeParent, runtimeRoot).startsWith('..')) {
   throw new Error('extension_runtime_rejection_path_rejected');
@@ -42,7 +42,7 @@ let report = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.16');
+  assert.equal(extensionManifest.version, '0.7.17');
   assert.notEqual(extensionManifest.version, expectedVersion);
 
   endpoint = await launchBrowserHost({
