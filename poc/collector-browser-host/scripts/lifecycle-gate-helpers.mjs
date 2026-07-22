@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { stat } from 'node:fs/promises';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 export function acquireRequest(profileId, taskId, runId, pageRole, targetUrl, overrides = {}) {
   return {
@@ -120,4 +124,53 @@ export async function processAlive(processId) {
 
 export function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+/**
+ * Browser Host verifiers create a unique runtime root.  On Windows, inspect
+ * only process command lines containing that root so cleanup never reaches a
+ * user-managed browser or another test run.
+ */
+export async function waitForTestScopedProcessesToExit(runtimeRoot, timeoutMs) {
+  if (process.platform !== 'win32') return;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if ((await testScopedProcessIds(runtimeRoot)).length === 0) return;
+    await delay(100);
+  }
+  const remaining = await testScopedProcessIds(runtimeRoot);
+  throw new Error(`test_scoped_process_residue:${remaining.join(',')}`);
+}
+
+export async function terminateTestScopedProcesses(runtimeRoot) {
+  if (process.platform !== 'win32') return;
+  for (const processId of await testScopedProcessIds(runtimeRoot)) {
+    await execFileAsync('taskkill.exe', ['/pid', String(processId), '/t', '/f'], {
+      windowsHide: true
+    }).catch(() => undefined);
+  }
+}
+
+async function testScopedProcessIds(runtimeRoot) {
+  const command = [
+    '$needle = $env:COLLECTOR_TEST_RUNTIME_ROOT',
+    '$items = @(Get-CimInstance Win32_Process | Where-Object {',
+    '  $_.CommandLine -and $_.CommandLine.Contains($needle)',
+    '} | Select-Object -ExpandProperty ProcessId)',
+    'ConvertTo-Json -Compress -InputObject $items'
+  ].join('; ');
+  const { stdout } = await execFileAsync('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    command
+  ], {
+    windowsHide: true,
+    env: { ...process.env, COLLECTOR_TEST_RUNTIME_ROOT: runtimeRoot }
+  });
+  const value = stdout.trim();
+  if (!value) return [];
+  const parsed = JSON.parse(value);
+  const candidates = Array.isArray(parsed) ? parsed : [parsed];
+  return candidates.filter((candidate) => Number.isSafeInteger(candidate) && candidate > 0);
 }

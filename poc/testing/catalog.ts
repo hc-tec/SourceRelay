@@ -175,6 +175,23 @@ export const collectorValidationCatalog = [
     capabilities: ['production-chromium', 'page-pool', 'lease-reuse', 'explicit-reclamation']
   },
   {
+    id: 'collector-browser-host-extension-runtime-rejection',
+    tier: 'integration',
+    owner: 'collector-browser-host',
+    runner: 'playwright',
+    command: 'npm run test:integration -- --grep "worker version mismatch"',
+    timeoutMs: 120_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: [
+      'production-extension',
+      'mv3-worker-runtime-marker',
+      'headless-mismatch-rejection',
+      'native-messaging-non-registration',
+      'profile-launch-containment'
+    ]
+  },
+  {
     id: 'collector-browser-host-strategy-binding',
     tier: 'integration',
     owner: 'collector-browser-host',

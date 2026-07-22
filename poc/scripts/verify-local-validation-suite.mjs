@@ -51,6 +51,12 @@ const lanes = Object.freeze([
     playwrightOwned: true
   },
   {
+    id: 'browser-host-extension-runtime-rejection',
+    scope: 'real production MV3 worker mismatch fails before profile and Native Messaging startup',
+    npmArgs: ['run', 'verify:extension-runtime-rejection', '--workspace', '@intelligence/collector-browser-host'],
+    playwrightOwned: true
+  },
+  {
     id: 'strategy-binding',
     scope: 'real local Chromium MV3 and Native Messaging strategy binding',
     npmArgs: ['run', 'verify:strategy-binding', '--workspace', '@intelligence/collector-browser-host'],
