@@ -85,18 +85,37 @@ export async function captureBilibiliNativeSearchDom(
           : resultRoot
             ? Array.from(resultRoot.querySelectorAll<HTMLElement>('.bili-video-card')).filter(rendered)
             : [])
-          .slice(0, 20);
-        const cards = candidateCards.map((card) => {
+          // The page presents mixed object types in one visible grid. Inspect
+          // a bounded prefix wide enough to skip ads/courses/live cards before
+          // applying the public-video result budget below.
+          .slice(0, 60);
+        const cards: Array<{
+          bvid: string | null;
+          title: string | null;
+          visibleText: string | null;
+          thumbnailUrl: string | null;
+        }> = [];
+        const seenBvids = new Set<string>();
+        for (const card of candidateCards) {
+          if (cards.length >= 20) break;
           const anchors = Array.from(card.querySelectorAll<HTMLAnchorElement>('a[href]')).filter(rendered);
           const videoAnchor = anchors.find((anchor) => bvidFromLink(anchor) !== null) ?? null;
           const titleElement = Array.from(card.querySelectorAll<HTMLElement>('h3')).find(rendered) ?? null;
-          return {
-            bvid: bvidFromLink(videoAnchor),
-            title: clean(titleElement?.innerText, 500),
-            visibleText: clean(card.innerText, 2_000),
+          const bvid = bvidFromLink(videoAnchor);
+          const title = clean(titleElement?.innerText, 500);
+          const visibleText = clean(card.innerText, 2_000);
+          // Only canonical, human-visible BV video cards enter this Strategy.
+          // Other mixed result types have no stable BV identity and are not
+          // "unresolved" videos; they are intentionally outside its scope.
+          if (!bvid || !titleElement || !title || !visibleText || seenBvids.has(bvid)) continue;
+          seenBvids.add(bvid);
+          cards.push({
+            bvid,
+            title,
+            visibleText,
             thumbnailUrl: safeImageUrl(card.querySelector<HTMLImageElement>('img'))
-          };
-        });
+          });
+        }
         const emptyStateVisible = Array.from(
           document.querySelectorAll<HTMLElement>('[class*="empty" i], [class*="no-result" i]')
         ).some((element) => rendered(element) && /未找到|没有找到|暂无/.test(clean(element.innerText, 500) ?? ''));
