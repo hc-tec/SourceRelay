@@ -47,10 +47,10 @@ let report = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.17');
+  assert.equal(extensionManifest.version, '0.7.18');
   const extensionRuntime = {
     version: extensionManifest.version,
-    controlSurfaceRevision: 15,
+    controlSurfaceRevision: 16,
     runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
   };
 

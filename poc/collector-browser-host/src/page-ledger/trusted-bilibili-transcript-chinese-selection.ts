@@ -66,12 +66,12 @@ export async function executeTrustedBilibiliTranscriptChineseSelection(input: {
       record,
       request,
       deadline,
-      (candidate) => candidate.dom.authenticationRequired ||
+      (candidate) => stoppedByRisk(candidate.dom) ||
         (candidate.dom.playerAreaPresent && candidate.dom.captionControlAttached)
     );
     baseline = await captureEvidence(record, input.visualEvidenceDirectory, remaining(deadline));
 
-    if (probe.dom.authenticationRequired || !probe.dom.playerAreaPresent || !probe.dom.captionControlAttached) {
+    if (stoppedByRisk(probe.dom) || !probe.dom.playerAreaPresent || !probe.dom.captionControlAttached) {
       return result(record, request, actions, probe.dom, baseline, await captureEvidence(record, input.visualEvidenceDirectory, remaining(deadline)));
     }
     if (probe.dom.chineseOptionActive && probe.dom.subtitlePanelVisible) {
@@ -92,9 +92,9 @@ export async function executeTrustedBilibiliTranscriptChineseSelection(input: {
         record,
         request,
         subDeadline(deadline, CONTROL_REVEAL_TIMEOUT_MS),
-        (candidate) => candidate.dom.captionControlVisuallyExposed || candidate.dom.authenticationRequired
+        (candidate) => candidate.dom.captionControlVisuallyExposed || stoppedByRisk(candidate.dom)
       );
-      if (probe.dom.authenticationRequired) {
+      if (stoppedByRisk(probe.dom)) {
         setAction(actions, 'reveal_player_controls', true, 'postcondition_unmet');
         return result(record, request, actions, probe.dom, baseline, await captureEvidence(record, input.visualEvidenceDirectory, remaining(deadline)));
       }
@@ -118,9 +118,9 @@ export async function executeTrustedBilibiliTranscriptChineseSelection(input: {
         record,
         request,
         subDeadline(deadline, MENU_REVEAL_TIMEOUT_MS),
-        (candidate) => candidate.dom.chineseOptionVisible || candidate.dom.authenticationRequired
+        (candidate) => candidate.dom.chineseOptionVisible || stoppedByRisk(candidate.dom)
       );
-      if (probe.dom.authenticationRequired) {
+      if (stoppedByRisk(probe.dom)) {
         setAction(actions, 'open_caption_menu', true, 'postcondition_unmet');
         return result(record, request, actions, probe.dom, baseline, await captureEvidence(record, input.visualEvidenceDirectory, remaining(deadline)));
       }
@@ -149,7 +149,7 @@ export async function executeTrustedBilibiliTranscriptChineseSelection(input: {
       record,
       request,
       deadline,
-      (candidate) => (candidate.dom.chineseOptionActive && candidate.dom.subtitlePanelVisible) || candidate.dom.authenticationRequired
+      (candidate) => (candidate.dom.chineseOptionActive && candidate.dom.subtitlePanelVisible) || stoppedByRisk(candidate.dom)
     );
     if (probe.dom.chineseOptionActive && probe.dom.subtitlePanelVisible) {
       setAction(actions, 'select_chinese_caption', true, 'completed');
@@ -280,6 +280,10 @@ function result(
     dom: { ...dom },
     visualEvidence: { baseline, final }
   };
+}
+
+function stoppedByRisk(dom: BilibiliTranscriptInteractionDomState): boolean {
+  return dom.authenticationRequired || dom.verificationRequired || dom.rateLimited || dom.sourceUnavailable;
 }
 
 function subDeadline(deadline: number, maximumDurationMs: number): number {

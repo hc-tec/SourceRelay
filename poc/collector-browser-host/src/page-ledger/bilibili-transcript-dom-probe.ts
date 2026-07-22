@@ -92,9 +92,13 @@ export async function readBilibiliTranscriptDomProbe(
       const text = (root.textContent ?? '').replace(/\s+/g, '');
       return /扫码登录|密码登录|短信登录/.test(text);
     });
+    const visiblePageText = (document.body?.innerText ?? '').replace(/\s+/g, ' ').slice(0, 100_000);
     return {
       dom: {
         authenticationRequired,
+        verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(visiblePageText),
+        rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(visiblePageText),
+        sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(visiblePageText),
         playerAreaPresent: Boolean(playerArea && visible(playerArea)),
         captionControlAttached: Boolean(captionControl),
         captionControlVisuallyExposed: Boolean(captionControl && visible(captionControl) && controlBarVisible),
@@ -121,6 +125,9 @@ function validateProbe(value: unknown): BilibiliTranscriptDomProbe {
   if (!dom || typeof dom !== 'object' ||
     ![
       dom.authenticationRequired,
+      dom.verificationRequired,
+      dom.rateLimited,
+      dom.sourceUnavailable,
       dom.playerAreaPresent,
       dom.captionControlAttached,
       dom.captionControlVisuallyExposed,
@@ -133,6 +140,9 @@ function validateProbe(value: unknown): BilibiliTranscriptDomProbe {
   return {
     dom: {
       authenticationRequired: dom.authenticationRequired,
+      verificationRequired: dom.verificationRequired,
+      rateLimited: dom.rateLimited,
+      sourceUnavailable: dom.sourceUnavailable,
       playerAreaPresent: dom.playerAreaPresent,
       captionControlAttached: dom.captionControlAttached,
       captionControlVisuallyExposed: dom.captionControlVisuallyExposed,

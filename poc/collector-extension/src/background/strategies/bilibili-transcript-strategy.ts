@@ -141,7 +141,6 @@ export async function readBilibiliTranscriptObservation(
     schemaVersion: 1,
     strategyId: BILIBILI_TRANSCRIPT_STRATEGY_ID,
     bvid: stored.binding.target.bvid,
-    documentId: arm.documentId,
     responses
   } as unknown as BridgeJsonValue;
   const payloadBytes = new TextEncoder().encode(JSON.stringify(payload)).byteLength;

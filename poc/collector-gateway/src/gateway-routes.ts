@@ -19,6 +19,9 @@ import { bilibiliNativeSearchInput } from './bilibili-native-search-contract';
 import type { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import type { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
+import type { BilibiliTranscriptArtifactStore } from './bilibili-transcript-artifacts';
+import { bilibiliTranscriptInput } from './bilibili-transcript-contract';
+import type { BilibiliTranscriptHostRunner } from './bilibili-transcript-host-runner';
 import type { CollectionBrowserManager } from './browser-manager';
 import type { LoadedGatewayIdentity } from './identity';
 import type { BrowserProfileRegistry } from './profiles';
@@ -49,6 +52,8 @@ export interface GatewayRouteContext {
   nativeSearchRunner: BilibiliNativeSearchHostRunner;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
   videoDetailRunner: BilibiliVideoDetailHostRunner;
+  transcriptArtifacts: BilibiliTranscriptArtifactStore;
+  transcriptRunner: BilibiliTranscriptHostRunner;
 }
 
 export async function handleGatewayRoute(
@@ -176,6 +181,10 @@ export async function handleGatewayRoute(
   }
   if (request.method === 'GET' && url.pathname === '/v1/video-detail-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.videoDetailArtifacts.list() });
+    return true;
+  }
+  if (request.method === 'GET' && url.pathname === '/v1/bilibili-transcript-artifacts') {
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.transcriptArtifacts.list() });
     return true;
   }
   const dynamicRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/dynamic/two-page$`, 'i'));
@@ -389,6 +398,27 @@ export async function handleGatewayRoute(
     });
     return true;
   }
+  const transcriptRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/video/transcript$`, 'i'));
+  if (request.method === 'POST' && transcriptRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const transcript = bilibiliTranscriptInput(await readJsonBody(request));
+    const result = await context.transcriptRunner.run({
+      profileId: transcriptRun[1]!,
+      canonicalVideoUrl: transcript.canonicalVideoUrl
+    });
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        coverage: result.run.coverage,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
   const dynamicArtifact = url.pathname.match(new RegExp(`^/v1/dynamic-artifacts/(${PROFILE_ID})$`, 'i'));
   if (request.method === 'GET' && dynamicArtifact) {
     const artifact = await context.dynamicArtifacts.get(dynamicArtifact[1]!);
@@ -454,6 +484,13 @@ export async function handleGatewayRoute(
   if (request.method === 'GET' && videoDetailArtifact) {
     const artifact = await context.videoDetailArtifacts.get(videoDetailArtifact[1]!);
     if (!artifact) throw new Error('bilibili_video_detail_artifact_not_found');
+    sendJson(response, 200, { schemaVersion: 1, artifact });
+    return true;
+  }
+  const transcriptArtifact = url.pathname.match(new RegExp(`^/v1/bilibili-transcript-artifacts/(${PROFILE_ID})$`, 'i'));
+  if (request.method === 'GET' && transcriptArtifact) {
+    const artifact = await context.transcriptArtifacts.get(transcriptArtifact[1]!);
+    if (!artifact) throw new Error('bilibili_transcript_artifact_not_found');
     sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }

@@ -37,6 +37,9 @@ export interface BilibiliTranscriptInteractionStepResult {
 
 export interface BilibiliTranscriptInteractionDomState {
   authenticationRequired: boolean;
+  verificationRequired: boolean;
+  rateLimited: boolean;
+  sourceUnavailable: boolean;
   playerAreaPresent: boolean;
   captionControlAttached: boolean;
   captionControlVisuallyExposed: boolean;

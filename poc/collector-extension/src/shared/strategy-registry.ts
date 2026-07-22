@@ -208,14 +208,17 @@ function bilibiliVideoDetailDomStrategy(): StaticPlatformStrategy {
   };
 }
 
-function bilibiliVideoTranscriptResponseStrategy(): StaticPlatformStrategy {
+function bilibiliVideoTranscriptTrustedResponseStrategy(): StaticPlatformStrategy {
   return {
-    strategyId: 'bilibili.video.transcript.response.v1',
-    version: '1.0.0',
+    strategyId: 'bilibili.video.transcript.trusted-response.v2',
+    version: '0.1.0',
     platform: 'bilibili',
     evidenceObjectives: ['transcript_read'],
     acquisition: ['detail_navigation', 'visible_dom', 'bounded_interaction', 'approved_response'],
-    maturity: 'suspended',
+    // The fixed Host/MV3 path is compiled and locally verified, but its two
+    // response routes remain research-validation-only until a new managed
+    // Profile run is admitted. Historic v1 validation must not be inherited.
+    maturity: 'build_ready',
     surface: 'transcript',
     nativeEntry: { kind: 'canonical_url' },
     preconditions: {
@@ -224,7 +227,7 @@ function bilibiliVideoTranscriptResponseStrategy(): StaticPlatformStrategy {
     },
     bounds: {
       maxRecords: 1,
-      maxReadOnlyActions: 2,
+      maxReadOnlyActions: 3,
       firstRenderedPageOnly: true,
       allowsDetailNavigation: true,
       allowsCommentNavigation: false,
@@ -237,9 +240,9 @@ function bilibiliVideoTranscriptResponseStrategy(): StaticPlatformStrategy {
     browser: {
       optionalHostPermissions: ['https://www.bilibili.com/*'],
       domContentMatches: ['https://www.bilibili.com/video/*'],
-      // The research arm supplies its two route IDs explicitly. Keeping this
-      // empty prevents the strategy from becoming production response
-      // observation before a separate authenticated admission decision.
+      // Runtime route IDs are fixed inside the Extension. Keeping this empty
+      // prevents the strategy from becoming production response observation
+      // before a separate managed-profile admission decision.
       responseBridgeMatches: []
     },
     approvedResponseRouteIds: [],
@@ -348,7 +351,7 @@ export const STATIC_PLATFORM_STRATEGIES: readonly StaticPlatformStrategy[] = [
   bilibiliAccountProfileDomStrategy(),
   bilibiliAccountVideoInventoryDomStrategy(),
   bilibiliVideoDetailDomStrategy(),
-  bilibiliVideoTranscriptResponseStrategy(),
+  bilibiliVideoTranscriptTrustedResponseStrategy(),
   nativeSearchDomStrategy('zhihu'),
   nativeSearchDomStrategy('weibo'),
   nativeSearchDomStrategy('xiaohongshu')

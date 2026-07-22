@@ -2,13 +2,14 @@
 
 这是个人情报产品在用户自己浏览器 Profile 内的只读观察层。它不是传统爬虫，也不是一个把 Cookie、任意 selector 或任意请求转发给本地服务的代理。浏览器自然保留用户正常登录状态；扩展不导出凭证、不绕过验证码/限流，也不执行点赞、关注、评论、私信、发布或删除。
 
-当前版本为 `0.7.17`。已编译的 Strategy 均是源专属、短时绑定的能力：
+当前版本为 `0.7.18`。已编译的 Strategy 均是源专属、短时绑定的能力：
 
 - `bilibili.dynamic.account-feed.response-dom.v1`：B 站账号动态页，两页以内的 DOM/XHR 观察；
 - `bilibili.video.detail.dom.v2`：B 站视频详情首屏，一次导航、零页面交互、零 response 观察的有界 DOM 投影。
 - `bilibili.account.video-inventory.dom.v1`：UP 主投稿视频首页，一次导航、零页面交互、零 response 观察的有界卡片投影。
 - `bilibili.account.profile.dom.v2`：UP 主公开主页，一次导航、零页面交互、零 response 观察的有界档案 DOM 投影。
 - `bilibili.search.breadth.dom.v2`：B 站站内综合相关性或视频相关性/最新发布搜索；每次仅导航一个经审查的页码 1–2，最多 20 条规范 BV 视频卡，零 response 观察。
+- `bilibili.video.transcript.trusted-response.v2`：B 站视频中文字幕的固定 Host 鼠标流程与同一 MV3 document 的两条受限 response 投影；仅 `build_ready`，必须完成新的受管 Profile 实网闭环后才可能 admission。
 
 ```text
 Gateway
@@ -20,7 +21,7 @@ Browser Host
 
 MV3 Extension
   exact tab + document ObserverBinding /
-  bounded DOM projection / route-bound XHR observation (dynamic only)
+  bounded DOM projection / route-bound XHR observation (dynamic and transcript validation only)
 ```
 
 ## 当前边界
@@ -33,6 +34,7 @@ MV3 Extension
 - B 站投稿视频首页只允许无 query/hash 的 `https://space.bilibili.com/<MID>` 输入，并在页面内转为固定 `/upload/video` 目标；链接 pathname 只用于提取 BVID，任何平台附加 query 都被丢弃。
 - B 站账号主页只允许无 query/hash 的 `https://space.bilibili.com/<MID>`；它只投影目标账号 header 与 main 中正常可见的公开档案字段，明确排除全站 header、当前登录用户菜单、隐藏页面状态与 response 数据。
 - B 站站内搜索只允许经审查的 `/all?keyword=...`（综合相关性）或 `/video?keyword=...`（视频相关性/最新发布）原生 URL，页码仅 1–2。搜索词只存在于短时导航和精确 document binding，长期 artifact 仅保存规范化搜索词的 SHA-256 摘要。更多筛选、更多页、详情跳转及非视频混合对象均是独立能力。
+- 字幕只能由 Browser Host 用实时视频区/字幕父节点边界完成可信 hover 与单次中文点击；MV3 只在同一精确 document 上投影固定的轨道目录与公开字幕正文。若首轮播放器与字幕控件均未渲染、且无登录/风控信号，Gateway 至多在同一受管 tab 刷新式导航一次，并在刷新前重新绑定 observer。
 - 绑定在下一个精确 document 上短时生效；页面世界只能回传经过路由、大小、深度和敏感字段清洗后的 JSON 投影。
 - 同一受管 tab 同时只能保留一个 Strategy binding；切换绑定时会清除前一 binding 与其 route-bound network arm。
 - 观察 payload、response 数量、绑定有效期和 document/route generation 都有明确上限；读操作无法传入任意 JS、selector、CDP 方法或 response route。
@@ -43,7 +45,7 @@ MV3 Extension
 
 ## 已移除的旧路径
 
-`0.7.17` 不再包含以下 Extension runtime：
+`0.7.18` 不再包含以下 Extension runtime：
 
 - Extension 到 `127.0.0.1` Gateway 的配对、轮询、fetch、签名任务 envelope 和 evidence 回传；
 - stage lease、单工作 tab、URL digest 认领、静态 `content.js` 和旧的 capability-validation runner；

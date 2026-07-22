@@ -16,6 +16,8 @@ import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-arti
 import { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
+import { BilibiliTranscriptArtifactStore } from './bilibili-transcript-artifacts';
+import { BilibiliTranscriptHostRunner } from './bilibili-transcript-host-runner';
 import { CollectionBrowserManager } from './browser-manager';
 import { loadGatewayConfig } from './config';
 import { handleGatewayRoute } from './gateway-routes';
@@ -37,6 +39,7 @@ const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifa
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
+const transcriptArtifacts = await BilibiliTranscriptArtifactStore.create(config.stateDirectory);
 const dynamicRunner = new BilibiliDynamicHostRunner({
   accountSafety,
   browserManager,
@@ -79,6 +82,12 @@ const videoDetailRunner = new BilibiliVideoDetailHostRunner({
   profiles: profileRegistry,
   artifacts: videoDetailArtifacts
 });
+const transcriptRunner = new BilibiliTranscriptHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: transcriptArtifacts
+});
 const accountVideoDetailMaterializationRunner = new BilibiliAccountVideoDetailMaterializationHostRunner({
   accountSafety,
   profiles: profileRegistry,
@@ -115,7 +124,9 @@ const server = createServer(async (request, response) => {
       nativeSearchArtifacts,
       nativeSearchRunner,
       videoDetailArtifacts,
-      videoDetailRunner
+      videoDetailRunner,
+      transcriptArtifacts,
+      transcriptRunner
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 1, ok: false, error: 'route_not_found' });
   } catch (error) {

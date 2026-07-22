@@ -180,7 +180,7 @@ describe('Evidence Plan control-plane', () => {
       requiredUserActions: ['grant_host_permission']
     });
 
-    const suspended = await planFor(task({
+    const transcript = await planFor(task({
       targets: [{ type: 'known_url', url: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }],
       evidenceObjectives: ['transcript_read'],
       consent: {
@@ -191,7 +191,7 @@ describe('Evidence Plan control-plane', () => {
         escalationPolicy: 'explicit_approval_required'
       }
     }), true);
-    expect(suspended.preflight).toMatchObject({ status: 'strategy_suspended', releaseTrack: 'unsupported' });
+    expect(transcript.preflight).toMatchObject({ status: 'live_validation_required', releaseTrack: 'experimental' });
 
     const unsupported = await planFor(task({ evidenceObjectives: ['discussion_sample'] }), true);
     expect(unsupported.preflight).toMatchObject({

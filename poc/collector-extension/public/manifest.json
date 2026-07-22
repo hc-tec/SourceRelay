@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Personal Intelligence Collector",
-  "version": "0.7.17",
+  "version": "0.7.18",
   "description": "Runs explicitly approved, read-only collection tasks in the user's browser context.",
   "background": {
     "service_worker": "background.js",

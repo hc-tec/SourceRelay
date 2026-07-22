@@ -8,7 +8,7 @@ import type { CollectionTerminalStatus, SupportedPlatform } from './collection-c
 export type { SupportedPlatform } from './collection-contracts';
 
 export const COLLECT_VISIBLE_RESULTS = 'collector.collectVisibleResults' as const;
-export const COLLECTOR_CORE_VERSION = '0.7.17' as const;
+export const COLLECTOR_CORE_VERSION = '0.7.18' as const;
 export const COLLECTION_RESULT = 'collector.collectionResult' as const;
 export const CONTENT_READY = 'collector.contentReady' as const;
 export const PROBE_CONTENT_INSTALLATION = 'collector.probeContentInstallation' as const;
