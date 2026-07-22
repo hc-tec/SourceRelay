@@ -61,7 +61,7 @@ coverage / terminal_reason / status
 8. 所有结果都包含 `provenance_coverage`、本地 artifact 和失败语义；
 9. 构建门禁和当前策略版本的真实网站 E2E 均通过；fixture、假 XHR 或页面克隆不能计入完成度。
 
-## 5. 2026-07-20 起始状态
+## 5. 2026-07-20 起始状态（历史基线）
 
 | capability | 当前可证明状态 |
 |---|---|
@@ -76,3 +76,14 @@ coverage / terminal_reason / status
 | 其余六类（含统一 coverage） | 未形成正式生产闭环 |
 
 后续不得使用单一 `bilibili_supported=true`。Console 和 DeepResearch adapter 必须读取此矩阵中每项独立的 maturity、`last_verified_at`、登录类别、覆盖与缺口。
+
+## 6. 2026-07-23 实时进展
+
+在公开版本保持 `0.7.17 / rev 15` 的前提下，当前 production MV3 + Browser Host + Native Messaging 已在受管 Collection Profile 对 `7481602` 完成一次真实账号档案 run 和一次真实投稿目录首页 run：
+
+| capability | 当前增量证据 | 仍然保留的边界 |
+|---|---|---|
+| `account_profile` | `bilibili.account.profile.dom.v2 @ 0.1.0`：`completed / profile_captured`；身份、头像、横幅、8 个公开字段、公告、充电区已保存到本地 artifact | 仍为 `build_ready`；多账号/布局漂移、风险样本和独立 review/admission 未完成 |
+| `account_inventory` | `bilibili.account.video-inventory.dom.v1 @ 0.1.0`：`completed / page_one_ready`；首屏 40/40、0 unresolved、无登录遮罩 | 只覆盖首个渲染投稿页；全量分页、恢复、排序/筛选和独立 review/admission 未完成 |
+
+两次 run 均使用一次导航、无平台交互重放、无 response body 读取，且 `admissionEligible=false`。这份增量证据记录在[账号档案与投稿目录 MV3 真实闭环](../validation/bilibili-account-profile-inventory-mv3-v0.1.md)。

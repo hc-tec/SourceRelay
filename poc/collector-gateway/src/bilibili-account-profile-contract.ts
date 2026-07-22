@@ -55,7 +55,9 @@ export interface BilibiliAccountProfileSnapshot {
 }
 
 export interface BilibiliAccountProfileAction {
-  actionId: 'open_account_profile';
+  // Action IDs are run-scoped so a retained target page can be reused by a
+  // later independent run without replaying the earlier run's action.
+  actionId: string;
   intent: string;
   attempted: boolean;
   attemptCount: 0 | 1;
@@ -65,7 +67,7 @@ export interface BilibiliAccountProfileAction {
 
 export interface BilibiliAccountProfileVisualEvidence {
   phase: 'baseline';
-  actionId: 'open_account_profile';
+  actionId: string;
   evidenceId: string;
   capturedAt: string;
   viewport: {

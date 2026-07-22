@@ -57,7 +57,12 @@ function fields(value: unknown): Array<{ label: string | null; value: string | n
     const candidate = record(item);
     const label = nullableText(candidate?.label, 40);
     const fieldValue = nullableText(candidate?.value, 100);
-    const href = nullableText(candidate?.href, 2_000);
+    // Statistics intentionally omit `href`; only navigation fields carry an
+    // optional link. JSON serialization drops an undefined property, so an
+    // absent optional field must be treated as null rather than invalid.
+    const href = candidate && Object.prototype.hasOwnProperty.call(candidate, 'href')
+      ? nullableText(candidate.href, 2_000)
+      : null;
     if (!candidate || label === undefined || fieldValue === undefined || href === undefined) return null;
     entries.push({ label, value: fieldValue, ...(href === null ? {} : { href }) });
   }

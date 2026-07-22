@@ -54,9 +54,9 @@ function input(value: BilibiliAccountProfileHostRunInput): BilibiliAccountProfil
   return { profileId: value.profileId, ...bilibiliAccountProfileInput({ canonicalProfileUrl: value.canonicalProfileUrl }) };
 }
 
-function navigationAction(): BilibiliAccountProfileAction {
+function navigationAction(runId: string): BilibiliAccountProfileAction {
   return {
-    actionId: 'open_account_profile',
+    actionId: `open_account_profile_${runId.replace(/-/g, '_')}`,
     intent: 'Open the canonical public account profile exactly once.',
     attempted: false,
     attemptCount: 0,
@@ -153,7 +153,7 @@ export class BilibiliAccountProfileHostRunner {
   ): Promise<BilibiliAccountProfileHostRunResult> {
     const stableAccountId = bilibiliAccountProfileIdFromUrl(canonicalProfileUrl);
     if (!stableAccountId) throw new Error('bilibili_account_profile_target_invalid');
-    const navigation = navigationAction();
+    const navigation = navigationAction(permit.runId);
     const actions = [navigation];
     let acquired: AcquirePageResult | null = null;
     let snapshot: BilibiliAccountProfileRunRecord['snapshot'] = null;
@@ -404,7 +404,7 @@ export class BilibiliAccountProfileHostRunner {
     pageLeaseId: string;
     runId: string;
     deadline: number;
-    actionId: 'open_account_profile';
+    actionId: string;
   }): Promise<BilibiliAccountProfileVisualEvidence> {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const context = await this.#leasedPageContext(input);
