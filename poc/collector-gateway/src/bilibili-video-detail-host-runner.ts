@@ -206,7 +206,10 @@ export class BilibiliVideoDetailHostRunner {
         target: { canonicalUrl: canonicalVideoUrl, bvid },
         expiresAt: new Date(Date.now() + 55_000).toISOString(),
         maximumResponseObservations: 0,
-        maximumPayloadBytes: 96 * 1024
+        maximumPayloadBytes: 96 * 1024,
+        documentBindingMode: acquired.selection === 'reused_exact_target'
+          ? 'next_navigation_only'
+          : 'current_document_or_next_navigation'
       });
       deadline = Date.now() + RUN_DEADLINE_MS;
       await this.#accountSafety.recordActionAttempt(permit.profileId, 'bilibili', permit.runId, navigation.actionId);

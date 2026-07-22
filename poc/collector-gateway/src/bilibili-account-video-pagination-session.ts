@@ -1,7 +1,8 @@
 import {
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
   BrowserHostError,
-  type PageVisualEvidence
+  type PageVisualEvidence,
+  type StrategyDocumentBindingMode
 } from '@intelligence/collector-contracts';
 import { randomUUID } from 'node:crypto';
 import { bilibiliAccountVideoBvidSetDigest } from './bilibili-account-video-pagination-contract';
@@ -42,6 +43,7 @@ export class BilibiliAccountVideoPaginationSession {
   readonly #canonicalInventoryUrl: string;
   readonly #stableAccountId: string;
   readonly #deadline: number;
+  readonly #documentBindingMode: StrategyDocumentBindingMode;
   #observerBindingId: string | null = null;
 
   constructor(input: {
@@ -53,6 +55,7 @@ export class BilibiliAccountVideoPaginationSession {
     canonicalInventoryUrl: string;
     stableAccountId: string;
     deadline: number;
+    documentBindingMode: StrategyDocumentBindingMode;
   }) {
     this.#browserManager = input.browserManager;
     this.#profileId = input.profileId;
@@ -62,6 +65,7 @@ export class BilibiliAccountVideoPaginationSession {
     this.#canonicalInventoryUrl = input.canonicalInventoryUrl;
     this.#stableAccountId = input.stableAccountId;
     this.#deadline = input.deadline;
+    this.#documentBindingMode = input.documentBindingMode;
   }
 
   async bindBeforeNavigation(): Promise<void> {
@@ -79,7 +83,8 @@ export class BilibiliAccountVideoPaginationSession {
       target: { canonicalUrl: this.#canonicalInventoryUrl, stableAccountId: this.#stableAccountId },
       expiresAt: new Date(Date.now() + Math.min(55_000, paginationRemainingDeadline(this.#deadline, 1_000))).toISOString(),
       maximumResponseObservations: 0,
-      maximumPayloadBytes: 128 * 1024
+      maximumPayloadBytes: 128 * 1024,
+      documentBindingMode: this.#documentBindingMode
     });
     this.#observerBindingId = observerBindingId;
   }

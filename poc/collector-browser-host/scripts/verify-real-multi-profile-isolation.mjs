@@ -47,7 +47,7 @@ let report = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.6');
+  assert.equal(extensionManifest.version, '0.7.7');
   const extensionRuntime = {
     version: extensionManifest.version,
     controlSurfaceRevision: 10,

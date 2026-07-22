@@ -42,7 +42,7 @@ let report = null;
 
 try {
   const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-  assert.equal(extensionManifest.version, '0.7.6');
+  assert.equal(extensionManifest.version, '0.7.7');
   assert.notEqual(extensionManifest.version, expectedVersion);
 
   endpoint = await launchBrowserHost({

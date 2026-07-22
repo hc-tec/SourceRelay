@@ -35,7 +35,7 @@ function validSubmission() {
   };
   return gatewayEvidenceSubmission({
     schemaVersion: 1,
-    collectorVersion: '0.7.6',
+    collectorVersion: '0.7.7',
     taskId,
     stageId: 'stage-1',
     leaseId,

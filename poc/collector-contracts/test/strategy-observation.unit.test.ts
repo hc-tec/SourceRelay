@@ -122,6 +122,16 @@ describe('Strategy observation contract guards', () => {
     expect(isCollectorHostBridgeCommand(command)).toBe(false);
   });
 
+  test('admits only the two fixed document binding modes', () => {
+    const nextNavigationOnly = bindingFor(BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID);
+    nextNavigationOnly.documentBindingMode = 'next_navigation_only';
+    expect(isCollectorHostBridgeCommand(hostCommand(nextNavigationOnly))).toBe(true);
+
+    const unsafeMode = bindingFor(BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID);
+    unsafeMode.documentBindingMode = 'accept_any_document';
+    expect(isCollectorHostBridgeCommand(hostCommand(unsafeMode))).toBe(false);
+  });
+
   test('accepts a bounded observation result and rejects duplicate tabs or unsafe response payloads', () => {
     const base = {
       type: 'collector_extension_bridge_command_result',

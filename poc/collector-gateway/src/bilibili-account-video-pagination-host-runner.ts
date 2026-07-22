@@ -145,7 +145,10 @@ export class BilibiliAccountVideoPaginationHostRunner {
         runId: permit.runId,
         canonicalInventoryUrl,
         stableAccountId,
-        deadline
+        deadline,
+        documentBindingMode: acquired.selection === 'reused_exact_target'
+          ? 'next_navigation_only'
+          : 'current_document_or_next_navigation'
       });
       await session.bindBeforeNavigation();
       await this.#accountSafety.recordActionAttempt(permit.profileId, 'bilibili', permit.runId, navigation.actionId);

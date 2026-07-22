@@ -32,6 +32,16 @@ export interface BilibiliAccountVideoInventoryStrategyTarget {
   stableAccountId: string;
 }
 
+/**
+ * Determines whether an observer may bind the document that is already open
+ * in a managed tab. A caller that will immediately navigate an exact retained
+ * target must require the next document, otherwise a late document-start
+ * handshake from the old page can win the binding race.
+ */
+export type StrategyDocumentBindingMode =
+  | 'current_document_or_next_navigation'
+  | 'next_navigation_only';
+
 interface StrategyObserverBindingRequestBase {
   schemaVersion: typeof STRATEGY_OBSERVATION_SCHEMA_VERSION;
   profileId: string;
@@ -42,6 +52,7 @@ interface StrategyObserverBindingRequestBase {
   observerBindingId: string;
   expiresAt: string;
   maximumPayloadBytes: number;
+  documentBindingMode?: StrategyDocumentBindingMode;
 }
 
 /**

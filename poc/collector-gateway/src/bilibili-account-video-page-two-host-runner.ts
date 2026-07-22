@@ -479,7 +479,10 @@ export class BilibiliAccountVideoPageTwoHostRunner {
       target: { canonicalUrl: input.canonicalInventoryUrl, stableAccountId: input.stableAccountId },
       expiresAt: new Date(Date.now() + Math.min(55_000, remainingDeadline(input.deadline, 1_000))).toISOString(),
       maximumResponseObservations: 0,
-      maximumPayloadBytes: 128 * 1024
+      maximumPayloadBytes: 128 * 1024,
+      documentBindingMode: input.allowPreNavigationState === true
+        ? 'next_navigation_only'
+        : 'current_document_or_next_navigation'
     });
     return observerBindingId;
   }

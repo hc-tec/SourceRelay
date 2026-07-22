@@ -90,7 +90,7 @@ try {
 
   const run = runRecord.createBilibiliVideoDetailRunRecord({
     runId: '22222222-2222-4222-8222-222222222222',
-    collectorVersion: '0.7.6',
+    collectorVersion: '0.7.7',
     canonicalVideoUrl,
     bvid,
     startedAt: '2026-07-21T01:00:00.000Z',

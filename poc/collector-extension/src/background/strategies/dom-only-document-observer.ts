@@ -15,6 +15,7 @@ interface StoredDomOnlyBinding<TBinding extends StrategyObserverBindingRequest> 
   nextDocumentGeneration: number;
   contentScriptId: string;
   documentId: string | null;
+  excludedDocumentId: string | null;
   binding: TBinding;
 }
 
@@ -119,6 +120,10 @@ export function createDomOnlyDocumentObserver<
       // A binding owns one exact main-frame document. A late duplicate
       // document_start signal must not replace that document identity.
       stored.documentId !== null ||
+      // A retained exact-target tab can be navigated again by a new run. In
+      // that case, a delayed bridge message from the old document must never
+      // satisfy the binding intended for the next document.
+      stored.excludedDocumentId === documentId ||
       config.canonicalObservedUrl(senderUrl ?? '') !== config.canonicalTargetUrl(stored.binding)
     ) return false;
     const updated: StoredDomOnlyBinding<TBinding> = { ...stored, documentId };
@@ -177,6 +182,17 @@ export function createDomOnlyDocumentObserver<
       tab.url !== 'about:blank' &&
       config.canonicalObservedUrl(tab.url) !== config.canonicalTargetUrl(binding)
     ) throw new Error(error('tab_context_rejected'));
+    const nextNavigationOnly = binding.documentBindingMode === 'next_navigation_only';
+    let excludedDocumentId: string | null = null;
+    if (nextNavigationOnly && tab.url && tab.url !== 'about:blank') {
+      const currentDocument = (await chrome.scripting.executeScript({
+        target: { tabId: command.tabId },
+        world: 'ISOLATED',
+        func: (): null => null
+      })).find((result) => result.frameId === 0) ?? null;
+      if (!currentDocument?.documentId) throw new Error(error('current_document_identity_unavailable'));
+      excludedDocumentId = currentDocument.documentId;
+    }
     await clearStrategyBindingsForTab(command.tabId);
     const contentScriptId = `${config.contentScriptIdPrefix}${binding.observerBindingId.replace(/-/g, '')}`;
     await chrome.scripting.unregisterContentScripts({ ids: [contentScriptId] }).catch(() => undefined);
@@ -195,13 +211,16 @@ export function createDomOnlyDocumentObserver<
       nextDocumentGeneration: command.nextDocumentGeneration,
       contentScriptId,
       documentId: null,
+      excludedDocumentId,
       binding: structuredClone(binding)
     };
     await chrome.storage.session.set({ [bindingStorageKey(binding.observerBindingId)]: stored });
 
-    // A retained exact target does not re-run a newly registered document_start
-    // script. This fixed handshake still lets Chrome supply its document ID.
-    if (tab.url && config.canonicalObservedUrl(tab.url) === config.canonicalTargetUrl(binding)) {
+    // A retained exact target does not re-run a newly registered document-start
+    // script. This fixed handshake is safe only when the caller has explicitly
+    // allowed the current document; a run that will navigate must wait for the
+    // next document-start signal instead.
+    if (!nextNavigationOnly && tab.url && config.canonicalObservedUrl(tab.url) === config.canonicalTargetUrl(binding)) {
       await chrome.scripting.executeScript({
         target: { tabId: command.tabId },
         world: 'ISOLATED',

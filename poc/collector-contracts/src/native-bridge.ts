@@ -327,7 +327,14 @@ function isStrategyObserverBindingRequest(value: unknown): value is StrategyObse
     typeof candidate.expiresAt === 'string' && Date.parse(candidate.expiresAt) > Date.now() &&
     Number.isSafeInteger(candidate.maximumPayloadBytes) &&
     Number(candidate.maximumPayloadBytes) >= 1_024 && Number(candidate.maximumPayloadBytes) <= 192 * 1024 &&
+    validStrategyDocumentBindingMode(candidate.documentBindingMode) &&
     validStrategyBindingTargetAndBudget(candidate);
+}
+
+function validStrategyDocumentBindingMode(value: unknown): boolean {
+  return value === undefined ||
+    value === 'current_document_or_next_navigation' ||
+    value === 'next_navigation_only';
 }
 
 function isStrategyObservationReadRequest(value: unknown): value is StrategyObservationReadRequest {
