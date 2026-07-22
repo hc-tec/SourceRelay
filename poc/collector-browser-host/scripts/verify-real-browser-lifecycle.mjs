@@ -34,7 +34,7 @@ const profileId = 'real-browser-lifecycle';
 await mkdir(stateDirectory, { recursive: true });
 await mkdir(profileRoot, { recursive: true });
 const extensionManifest = JSON.parse(await readFile(resolve(extensionDirectory, 'manifest.json'), 'utf8'));
-assert.equal(extensionManifest.version, '0.7.14');
+assert.equal(extensionManifest.version, '0.7.15');
 
 let endpoint = null;
 let client = null;
@@ -75,7 +75,7 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 12,
+        controlSurfaceRevision: 13,
         runtimeBootstrapKey: 'collector.runtime-bootstrap.v1'
       }
     }
@@ -89,7 +89,7 @@ try {
   assert.ok(initialProfile.browserProcessId, 'real Chromium process id must be observable');
   assert.ok(initialProfile.extensionPages <= 1, 'Browser Session must not accumulate extension pages');
   assert.equal(initialProfile.extensionRuntime?.finalRuntimeVersion, extensionManifest.version);
-  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 11);
+  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 13);
   assert.equal(initialProfile.extensionRuntime?.nativeBridgeConnected, true);
 
   const reusedEndpoint = await launchBrowserHost({

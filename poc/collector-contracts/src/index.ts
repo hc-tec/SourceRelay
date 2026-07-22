@@ -1,4 +1,5 @@
 export * from './bilibili-account-video-pagination.js';
+export * from './bilibili-native-search.js';
 export * from './errors.js';
 export * from './extension-runtime.js';
 export * from './ipc.js';

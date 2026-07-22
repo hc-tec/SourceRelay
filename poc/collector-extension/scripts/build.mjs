@@ -39,6 +39,11 @@ const bundles = [
     format: 'iife'
   },
   {
+    input: resolve(root, 'src', 'content', 'bilibili-native-search-document-bridge.ts'),
+    output: resolve(outputDirectory, 'bilibili-native-search-document-bridge.js'),
+    format: 'iife'
+  },
+  {
     input: resolve(root, 'src', 'content', 'main-world-network-observer.ts'),
     output: resolve(outputDirectory, 'main-world-network-observer.js'),
     format: 'iife'

@@ -1,5 +1,6 @@
 import { cleanupExpiredBilibiliAccountVideoInventoryObserverBindings } from './strategies/bilibili-account-video-inventory-strategy';
 import { cleanupExpiredBilibiliDynamicObserverBindings } from './strategies/bilibili-dynamic-strategy';
+import { cleanupExpiredBilibiliNativeSearchObserverBindings } from './strategies/bilibili-native-search-strategy';
 import { cleanupExpiredBilibiliVideoDetailObserverBindings } from './strategies/bilibili-video-detail-strategy';
 
 const RETIRED_SCRIPT_PREFIXES = [
@@ -22,5 +23,6 @@ export async function cleanupStrategyScriptRegistrations(): Promise<void> {
   }
   await cleanupExpiredBilibiliAccountVideoInventoryObserverBindings();
   await cleanupExpiredBilibiliDynamicObserverBindings();
+  await cleanupExpiredBilibiliNativeSearchObserverBindings();
   await cleanupExpiredBilibiliVideoDetailObserverBindings();
 }

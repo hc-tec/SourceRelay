@@ -8,6 +8,7 @@ import { initialiseNativeBridge } from './native-bridge';
 import { initialiseNetworkObserverController } from './network-observer-controller';
 import { cleanupStrategyScriptRegistrations } from './strategy-script-lifecycle';
 import { initialiseBilibiliAccountVideoInventoryDocumentBridge } from './strategies/bilibili-account-video-inventory-strategy';
+import { initialiseBilibiliNativeSearchDocumentBridge } from './strategies/bilibili-native-search-strategy';
 import { initialiseBilibiliVideoDetailDocumentBridge } from './strategies/bilibili-video-detail-strategy';
 
 const runtimeBootstrap: CollectorRuntimeBootstrap = {
@@ -19,6 +20,7 @@ const runtimeBootstrap: CollectorRuntimeBootstrap = {
 void chrome.storage.session.set({ [COLLECTOR_RUNTIME_BOOTSTRAP_KEY]: runtimeBootstrap });
 initialiseNetworkObserverController();
 initialiseBilibiliAccountVideoInventoryDocumentBridge();
+initialiseBilibiliNativeSearchDocumentBridge();
 initialiseBilibiliVideoDetailDocumentBridge();
 void initialiseNativeBridge();
 void cleanupStrategyScriptRegistrations();

@@ -15,10 +15,10 @@ const approved = {
   hostPermissions: [
     'https://space.bilibili.com/*',
     'https://api.bilibili.com/*',
+    'https://search.bilibili.com/*',
     'https://www.bilibili.com/*'
   ],
   optionalHostPermissions: [
-    'https://search.bilibili.com/*',
     'https://www.zhihu.com/*',
     'https://zhuanlan.zhihu.com/*',
     'https://s.weibo.com/*',
@@ -78,6 +78,7 @@ const requiredScripts = [
   manifest.background?.service_worker,
   'network-capture-bridge.js',
   'bilibili-account-video-inventory-document-bridge.js',
+  'bilibili-native-search-document-bridge.js',
   'bilibili-video-detail-document-bridge.js',
   'main-world-network-observer.js',
   'control.js'
@@ -106,6 +107,10 @@ const accountVideoInventoryDocumentBridgeSource = await readFile(
   resolve(outputDirectory, 'bilibili-account-video-inventory-document-bridge.js'),
   'utf8'
 );
+const nativeSearchDocumentBridgeSource = await readFile(
+  resolve(outputDirectory, 'bilibili-native-search-document-bridge.js'),
+  'utf8'
+);
 const videoDetailDocumentBridgeSource = await readFile(
   resolve(outputDirectory, 'bilibili-video-detail-document-bridge.js'),
   'utf8'
@@ -124,6 +129,7 @@ assert.match(backgroundSource, /connectNative/, 'Native Messaging bridge connect
 assert.match(backgroundSource, /bilibili\.dynamic\.account-feed\.response-dom\.v1/, 'compiled Bilibili dynamic Strategy is required');
 assert.match(backgroundSource, /bilibili\.video\.detail\.dom\.v2/, 'compiled Bilibili DOM-only detail Strategy is required');
 assert.match(backgroundSource, /bilibili\.account\.video-inventory\.dom\.v1/, 'compiled Bilibili DOM-only inventory Strategy is required');
+assert.match(backgroundSource, /bilibili\.search\.breadth\.dom\.v2/, 'compiled Bilibili native-search Strategy is required');
 assert.match(backgroundSource, /document_start/, 'observer bridge must be registered before document scripts run');
 assert.match(backgroundSource, /persistAcrossSessions:\s*false/, 'observer bridge registration must be short-lived');
 assert.match(
@@ -136,9 +142,14 @@ assert.match(
   /collector_bilibili_account_video_inventory_document_ready/,
   'account-video inventory DOM projection must bind one exact Chrome document before reading it'
 );
+assert.match(
+  backgroundSource,
+  /collector_bilibili_native_search_document_ready/,
+  'native-search DOM projection must bind one exact Chrome document before reading it'
+);
 assert.match(backgroundSource, /collector\.native-bridge-config\.v1/, 'Browser Host bridge bootstrap key is required');
 assert.match(backgroundSource, /collector\.runtime-bootstrap\.v1/, 'worker runtime marker is required');
-  assert.match(backgroundSource, /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*12|controlSurfaceRevision:\s*12/, 'runtime revision must be 12');
+assert.match(backgroundSource, /COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*13|controlSurfaceRevision:\s*13/, 'runtime revision must be 13');
 assert.doesNotMatch(
   backgroundSource,
   /collector\.pollGatewayTasks|collector\.pairGateway|collector\.startCapabilityValidation|collector\.startDetailCapabilityValidation|collector\.startTranscriptCapabilityValidation|collector\.collectionResult|stageLease|127\.0\.0\.1|localhost/i,
@@ -153,6 +164,12 @@ assert.doesNotMatch(
   accountVideoInventoryDocumentBridgeSource,
   /querySelector|document\.(?:body|documentElement)|fetch\s*\(/,
   'inventory document-start bridge may send identity readiness only, never page data or a network request'
+);
+assert.match(nativeSearchDocumentBridgeSource, /collector_bilibili_native_search_document_ready/);
+assert.doesNotMatch(
+  nativeSearchDocumentBridgeSource,
+  /querySelector|document\.(?:body|documentElement)|fetch\s*\(/,
+  'native-search document-start bridge may send identity readiness only, never page data, query, or a network request'
 );
 assert.match(videoDetailDocumentBridgeSource, /collector_bilibili_video_detail_document_ready/);
 assert.doesNotMatch(

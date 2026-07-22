@@ -10,6 +10,8 @@ import { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-v
 import { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account-video-inventory-host-runner';
 import { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
+import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
+import { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
 import { CollectionBrowserManager } from './browser-manager';
@@ -30,6 +32,7 @@ const accountVideoPageTwoArtifacts = await BilibiliAccountVideoPageTwoArtifactSt
 const accountVideoPaginationArtifacts = await BilibiliAccountVideoPaginationArtifactStore.create(config.stateDirectory);
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
+const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const dynamicRunner = new BilibiliDynamicHostRunner({
   accountSafety,
@@ -42,6 +45,12 @@ const accountVideoInventoryRunner = new BilibiliAccountVideoInventoryHostRunner(
   browserManager,
   profiles: profileRegistry,
   artifacts: accountVideoInventoryArtifacts
+});
+const nativeSearchRunner = new BilibiliNativeSearchHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: nativeSearchArtifacts
 });
 const accountVideoPageTwoRunner = new BilibiliAccountVideoPageTwoHostRunner({
   accountSafety,
@@ -92,6 +101,8 @@ const server = createServer(async (request, response) => {
       accountVideoInventoryRunner,
       dynamicArtifacts,
       dynamicRunner,
+      nativeSearchArtifacts,
+      nativeSearchRunner,
       videoDetailArtifacts,
       videoDetailRunner
     });

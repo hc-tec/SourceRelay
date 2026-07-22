@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
+  BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
   BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
   isBridgeJsonValue,
   isCollectorExtensionBridgeCommandResult,
@@ -47,6 +48,16 @@ function bindingFor(strategyId: string): Record<string, unknown> {
       maximumResponseObservations: 0
     };
   }
+  if (strategyId === BILIBILI_NATIVE_SEARCH_STRATEGY_ID) {
+    return {
+      ...base,
+      strategyId,
+      target: {
+        canonicalUrl: 'https://search.bilibili.com/all?keyword=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD'
+      },
+      maximumResponseObservations: 0
+    };
+  }
   return {
     ...base,
     strategyId,
@@ -81,7 +92,8 @@ describe('Strategy observation contract guards', () => {
     for (const strategyId of [
       BILIBILI_DYNAMIC_STRATEGY_ID,
       BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
-      BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID
+      BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
+      BILIBILI_NATIVE_SEARCH_STRATEGY_ID
     ]) {
       expect(isCollectorHostBridgeCommand(hostCommand(bindingFor(strategyId)))).toBe(true);
     }
@@ -103,6 +115,12 @@ describe('Strategy observation contract guards', () => {
       canonicalUrl: 'https://space.bilibili.com/7481602/dynamic'
     };
     expect(isCollectorHostBridgeCommand(hostCommand(inventoryWithDynamicRoute))).toBe(false);
+
+    const nativeSearchWithExtraQuery = bindingFor(BILIBILI_NATIVE_SEARCH_STRATEGY_ID);
+    nativeSearchWithExtraQuery.target = {
+      canonicalUrl: 'https://search.bilibili.com/all?keyword=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD&from_source=unsafe'
+    };
+    expect(isCollectorHostBridgeCommand(hostCommand(nativeSearchWithExtraQuery))).toBe(false);
   });
 
   test('rejects expired binding, oversized payload budgets, and invalid document generations', () => {

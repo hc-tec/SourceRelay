@@ -16,6 +16,7 @@ export type AccountSafetyRunPurpose =
   | 'authenticated_article_inventory_reconnaissance'
   | 'authenticated_article_detail_reconnaissance'
   | 'authenticated_dynamic_reconnaissance'
+  | 'authenticated_native_search_reconnaissance'
   | 'authenticated_account_video_inventory_reconnaissance'
   | 'authenticated_account_video_page_two_reconnaissance'
   | 'authenticated_account_video_pagination_reconnaissance'
@@ -92,6 +93,7 @@ function isSafetyRecord(value: unknown): value is PersistedAccountSafetyRecord {
         activeRun.purpose === 'authenticated_article_inventory_reconnaissance' ||
         activeRun.purpose === 'authenticated_article_detail_reconnaissance' ||
         activeRun.purpose === 'authenticated_dynamic_reconnaissance' ||
+        activeRun.purpose === 'authenticated_native_search_reconnaissance' ||
         activeRun.purpose === 'authenticated_account_video_inventory_reconnaissance' ||
         activeRun.purpose === 'authenticated_account_video_page_two_reconnaissance' ||
         activeRun.purpose === 'authenticated_account_video_pagination_reconnaissance' ||

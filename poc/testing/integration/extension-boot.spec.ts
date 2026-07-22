@@ -35,6 +35,7 @@ test('production MV3 boot uses the actual extension and makes zero platform requ
     expect(runtime.manifest.name).toBe('Personal Intelligence Collector');
     expect(runtime.permissions.origins?.sort()).toEqual([
       'https://api.bilibili.com/*',
+      'https://search.bilibili.com/*',
       'https://space.bilibili.com/*',
       'https://www.bilibili.com/*'
     ]);
@@ -42,7 +43,7 @@ test('production MV3 boot uses the actual extension and makes zero platform requ
     expect(runtime.runtimeBootstrap).toEqual({
       schemaVersion: 1,
       collectorVersion: runtime.manifest.version,
-      controlSurfaceRevision: 12
+      controlSurfaceRevision: 13
     });
     expect(runtime.nativeBridgeStatus?.state).toBe('unconfigured');
 
@@ -51,6 +52,7 @@ test('production MV3 boot uses the actual extension and makes zero platform requ
     await expect(controlPage.locator('html[data-collector-control-ready="true"]')).toHaveCount(1);
     await expect(controlPage.locator('h1')).toHaveText('Collector Extension');
     await expect(controlPage.locator('body')).toContainText('bilibili.account.video-inventory.dom.v1');
+    await expect(controlPage.locator('body')).toContainText('bilibili.search.breadth.dom.v2');
     await controlPage.close();
 
     expect(platformRequests).toEqual([]);
