@@ -168,3 +168,13 @@ reason      detail_ready
 新的 artifact 再次捕获标题、简介、10 个标签和选集摘要；并且创作者显示名与公开数字账号 ID 都已存在。manifest/detail 摘要、截图引用和所有 `not_read` safeguards 均已核验：没有读取 request header/body、Cookie/Token、网络 query/fragment 或 response body。
 
 结论：**proved（当前桌面首屏完整投影）**。在这个已验证样本上，MVP 定义的全部首屏公开字段均可用。该结论仍不延伸到字幕正文、全量选集、评论/楼中楼、推荐内容或任何未独立实证的交互能力。
+
+## 10. 目录派生详情与团队布局校准（2026-07-22）
+
+随后 `0.7.8` 在受管、可见、登录 Collection Profile 中把已完成的账号目录 artifact 作为唯一来源，先后对两条显式选中 BVID 执行单条详情物化。每条均只有一次导航、零 hover/click/scroll、零 response body、零自动重试；父 artifact digest、源页码和子详情 artifact 均可复核。
+
+- `BV136K36TEa8` 的视觉页面显示“创作团队”卡。旧 `#v_upinfo` 与单一 `.up-info-container` 假设不足，因此投影加入受限的 `.up-panel-container` 候选；真实结果取得团队公开数字账号 ID。其目录卡未见“充电专属”标记，视频没有可投影简介文本。
+- `BV1BoKD6ZEir` 的标准作者卡真实取得显示名与公开数字账号 ID；目录卡明确标为“充电专属”，同样没有可投影简介文本。当前策略没有访问状态字段，因此不能把这条 run 的可见播放器容器误报为已经证明可以播放或读取受限内容。
+- 为确认这不是描述 selector 回归，已知 URL `BV1qZSLBYEpa` 在同一 `0.7.8` 运行时以一次导航真实取得简介、创作者显示名/账号、10 个标签和选集摘要。
+
+描述读取现在只在固定候选 `#v_desc`、`.video-desc-container .basic-desc-info`、`.video-desc-container .desc-info-text` 与 `.video-desc-container` 间选择，仍受可见性、长度和控制字符校验。已知有简介的对照页面已在同版本命中这些候选；又因未标“充电专属”的目录样本也没有简介，付费限制不是空简介的充分或必要解释。首屏策略仍把简介/创作者/选集视为独立 present/absent 字段；访问状态另行侦察，不能为所有视频承诺完整性。

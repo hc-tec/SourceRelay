@@ -66,7 +66,7 @@ coverage / terminal_reason / status
 | capability | 当前可证明状态 |
 |---|---|
 | `native_search` | 正式 admission 仅覆盖匿名首个渲染页、最多 20 条 |
-| `video_detail` | `0.7.7` 已完成一次“完成的账号目录 artifact → 显式选中 BVID → 单条详情 artifact”的真实受管浏览器物化：来源 digest/页码、一次导航账本和子 artifact 已闭环，标题、可见元数据、播放器状态与 9 个标签取得；同一样本的简介、作者和 episode summary 未取得，故只能视为部分字段覆盖，仍 `admissionEligible=false`。详情 response body、字幕、弹幕、评论和推荐继续排除。详见[目录到详情真实闭环](../validation/bilibili-account-video-detail-materialization-v0.1.md)。 |
+| `video_detail` | `0.7.8` 已完成“完成的账号目录 artifact → 显式选中 BVID → 单条详情 artifact”的真实受管浏览器物化：来源 digest/页码、一次导航账本和子 artifact 已闭环。两个目录样本真实取得标题、可见元数据、播放器容器、标签与创作者（团队/标准作者布局），但无可投影简介；其中 `BV1BoKD6ZEir` 的目录卡明确标为“充电专属”，而未标该记号的样本也为空。已知 URL 对照样本在同一版本真实取得简介、显示名/数字账号、10 标签和选集摘要，证明当前固定描述候选有效；空字段仍只能按 `present/absent` 解释，且 `playerVisible` 不等于可播放或已获受限内容。独立访问状态尚未建模，策略保持 `admissionEligible=false`；详情 response body、字幕、弹幕、评论和推荐继续排除。详见[目录到详情真实闭环](../validation/bilibili-account-video-detail-materialization-v0.1.md)。 |
 | `transcript` | 登录态真实闭环两次取得 509/509 段；仍 research-only |
 | `discussion` | 已证明排序与楼中楼动作到 route 的因果；正文 projector 尚未 admission |
 | `account_profile` | research-only Gateway runner 已真实保存稳定 MID、昵称、简介、头像、横幅、公开标识、8 个统计/导航字段、公告、充电区、代表作和 7 条 route metadata；artifact digest 与敏感字段扫描通过，正式 MV3 策略和多账号覆盖仍未 admission |

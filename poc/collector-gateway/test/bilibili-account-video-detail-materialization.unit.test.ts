@@ -55,7 +55,7 @@ function sourceArtifact(): BilibiliAccountVideoPaginationArtifactView {
       uniqueBvidCount: 2,
       duplicateBvidCount: 0,
       terminalReason: 'requested_page_budget_reached',
-      collectorVersion: '0.7.7',
+      collectorVersion: '0.7.8',
       strategyCandidate: {
         strategyId: 'bilibili.account.video-inventory.pagination.dom.v2',
         version: '0.2.0',
@@ -173,7 +173,7 @@ describe('Bilibili account-video detail materialization domain contract', () => 
     const [selection] = selectBilibiliAccountVideoDetailMaterializations(source, { bvids: ['BV1qZSLBYEpa'] });
     const run = createBilibiliAccountVideoDetailMaterializationRunRecord({
       runId: '33333333-3333-4333-8333-333333333333',
-      collectorVersion: '0.7.7',
+      collectorVersion: '0.7.8',
       source: materializationSource(source),
       startedAt: '2026-07-22T06:30:00.000Z',
       completedAt: '2026-07-22T06:30:01.000Z',

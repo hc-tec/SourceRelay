@@ -50,8 +50,18 @@ export async function captureBilibiliVideoDetailDom(
           : null;
         const titleElement = Array.from(document.querySelectorAll<HTMLElement>('h1')).find(rendered) ?? null;
         const player = document.querySelector<HTMLElement>('[aria-label="哔哩哔哩播放器"]');
-        const description = document.querySelector<HTMLElement>('#v_desc');
+        // `#v_desc` is the legacy desktop container. Current pages commonly
+        // expose the same public description below the title in
+        // `.video-desc-container`; the candidates remain fixed and scoped to
+        // this source-specific projection.
+        const description = [
+          document.querySelector<HTMLElement>('#v_desc'),
+          document.querySelector<HTMLElement>('.video-desc-container .basic-desc-info'),
+          document.querySelector<HTMLElement>('.video-desc-container .desc-info-text'),
+          document.querySelector<HTMLElement>('.video-desc-container')
+        ].find((element): element is HTMLElement => rendered(element)) ?? null;
         const upInfo = document.querySelector<HTMLElement>('.up-info-container') ??
+          document.querySelector<HTMLElement>('.up-panel-container') ??
           document.querySelector<HTMLElement>('#v_upinfo');
         const creatorAnchors = upInfo
           ? [
@@ -73,6 +83,13 @@ export async function captureBilibiliVideoDetailDom(
           } catch {
             creator = { displayName: clean(creatorAnchor.innerText, 200), publicAccountId: null };
           }
+        } else if (upInfo && rendered(upInfo)) {
+          const creatorName = [
+            upInfo.querySelector<HTMLElement>('.up-name'),
+            upInfo.querySelector<HTMLElement>('.up-name__text')
+          ].find((element): element is HTMLElement => rendered(element)) ?? null;
+          const displayName = clean(creatorName?.innerText, 200);
+          if (displayName) creator = { displayName, publicAccountId: null };
         }
         const tagTexts = [...new Set(Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).filter(rendered)
           .map((anchor) => {
