@@ -34,6 +34,7 @@ export default defineConfig({
         'collector-extension/src/shared/{bilibili-video-url,bilibili-account-video-inventory-url,control-plane,network-capture,strategy-registry}.ts',
         'collector-browser-host/src/{host-errors,security,validation}.ts',
         'collector-browser-host/src/ipc/wire-auth.ts',
+        'collector-browser-host/src/native-bridge/{native-bridge-command-broker,native-bridge-registry}.ts',
         'collector-browser-host/src/page-ledger/{page-record,page-selection}.ts',
         'collector-browser-host/src/reclamation/page-reclamation.ts',
         'collector-gateway/src/{account-safety,evidence,profiles,tasks}.ts',

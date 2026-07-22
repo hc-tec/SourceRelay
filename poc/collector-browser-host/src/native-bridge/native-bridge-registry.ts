@@ -193,7 +193,13 @@ export class NativeBridgeRegistry {
     const expected = this.#expected.get(profileId);
     if (expected?.browserSessionId === browserSessionId) this.#expected.delete(profileId);
     const connectionId = this.#profileConnections.get(profileId);
-    if (connectionId) this.disconnect(connectionId);
+    const connection = connectionId ? this.#connections.get(connectionId) : null;
+    // Cleanup can arrive late after a Profile is relaunched. A stale session
+    // must never tear down the newer worker connection that now owns the same
+    // Profile ID.
+    if (connection && connectionId && connection.browserSessionId === browserSessionId) {
+      this.disconnect(connectionId);
+    }
     const key = this.#waiterKey(profileId, browserSessionId);
     for (const waiter of this.#waiters.get(key) ?? []) {
       clearTimeout(waiter.timeout);

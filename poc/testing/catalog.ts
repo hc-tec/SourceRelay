@@ -106,7 +106,12 @@ export const collectorValidationCatalog = [
     timeoutMs: 30_000,
     platformPolicy: 'forbidden',
     ci: 'pull_request',
-    capabilities: ['ipc-authentication', 'path-boundary', 'safe-error-wire-format']
+    capabilities: [
+      'ipc-authentication',
+      'native-bridge-registry-session-isolation',
+      'path-boundary',
+      'safe-error-wire-format'
+    ]
   },
   {
     id: 'collector-gateway-account-safety-state-machine',
