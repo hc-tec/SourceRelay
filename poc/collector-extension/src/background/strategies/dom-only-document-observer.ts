@@ -145,6 +145,43 @@ export function createDomOnlyDocumentObserver<
     return true;
   }
 
+  /**
+   * Some real sites replace their main frame once more after the first
+   * DOMContentLoaded while remaining on the same canonical URL. A one-shot
+   * document-start message then belongs to a page that no longer exists.
+   *
+   * Reconcile only with Chrome's own current main-frame document identity,
+   * after rechecking the exact tab and canonical target. This never accepts a
+   * caller-supplied document id, runs no page DOM projection, and performs no
+   * platform action. It also preserves `excludedDocumentId` for a retained
+   * tab whose next navigation was explicitly required.
+   */
+  async function reconcileCurrentDocument(
+    stored: StoredDomOnlyBinding<TBinding>
+  ): Promise<StoredDomOnlyBinding<TBinding>> {
+    const tab = await chrome.tabs.get(stored.tabId);
+    const observedUrl = tab.url ? config.canonicalObservedUrl(tab.url) : null;
+    const expectedUrl = config.canonicalTargetUrl(stored.binding);
+    if (observedUrl !== expectedUrl) {
+      if (stored.documentId !== null) throw new Error(error('document_context_changed'));
+      return stored;
+    }
+    const currentDocument = (await chrome.scripting.executeScript({
+      target: { tabId: stored.tabId },
+      world: 'ISOLATED',
+      func: (): null => null
+    })).find((result) => result.frameId === 0) ?? null;
+    if (!currentDocument?.documentId || currentDocument.documentId === stored.excludedDocumentId ||
+      currentDocument.documentId === stored.documentId) return stored;
+    const updated: StoredDomOnlyBinding<TBinding> = {
+      ...stored,
+      documentId: currentDocument.documentId,
+      documentBoundAt: Date.now()
+    };
+    await chrome.storage.session.set({ [bindingStorageKey(updated.binding.observerBindingId)]: updated });
+    return updated;
+  }
+
   function initialiseDocumentBridge(): void {
     if (documentBridgeInitialised) return;
     documentBridgeInitialised = true;
@@ -264,6 +301,7 @@ export function createDomOnlyDocumentObserver<
     do {
       stored = await storedBinding(command.request.observerBindingId);
       if (!matchesReadContext(stored, command)) throw new Error(error('binding_context_rejected'));
+      stored = await reconcileCurrentDocument(stored);
       if (!stored.documentId) {
         await new Promise((resolve) => setTimeout(resolve, 250));
         continue;
@@ -272,10 +310,6 @@ export function createDomOnlyDocumentObserver<
       if (Date.now() < earliestCaptureAt) {
         await new Promise((resolve) => setTimeout(resolve, Math.min(250, earliestCaptureAt - Date.now())));
         continue;
-      }
-      const tab = await chrome.tabs.get(command.tabId);
-      if (!tab.url || config.canonicalObservedUrl(tab.url) !== config.canonicalTargetUrl(stored.binding)) {
-        throw new Error(error('document_context_changed'));
       }
       dom = await config.capture({ tabId: command.tabId, documentId: stored.documentId, binding: stored.binding });
       if (config.isReady(dom, stored.binding)) break;

@@ -40,7 +40,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
     bvid: input.bvid,
     strategyCandidate: {
       strategyId: BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
-      version: '0.3.0',
+      version: '0.4.0',
       admissionEligible: false
     },
     state: input.state,

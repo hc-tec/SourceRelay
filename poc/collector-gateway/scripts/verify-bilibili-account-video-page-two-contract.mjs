@@ -73,7 +73,7 @@ try {
 
   const run = runRecord.createBilibiliAccountVideoPageTwoRunRecord({
     runId: '22222222-2222-4222-8222-222222222222',
-    collectorVersion: '0.7.10',
+    collectorVersion: '0.7.11',
     canonicalInventoryUrl,
     stableAccountId,
     startedAt: '2026-07-21T03:00:00.000Z',

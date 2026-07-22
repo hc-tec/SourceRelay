@@ -110,7 +110,7 @@ export interface BilibiliVideoDetailRunRecord {
   bvid: string;
   strategyCandidate: {
     strategyId: 'bilibili.video.detail.dom.v2';
-    version: '0.3.0';
+    version: '0.4.0';
     admissionEligible: false;
   };
   state: 'completed' | 'partial' | 'failed';
