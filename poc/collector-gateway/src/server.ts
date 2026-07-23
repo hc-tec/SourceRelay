@@ -16,6 +16,8 @@ import { BilibiliDanmakuArtifactStore } from './bilibili-danmaku-artifacts';
 import { BilibiliDanmakuHostRunner } from './bilibili-danmaku-host-runner';
 import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
+import { BilibiliNativeSearchBatchArtifactStore } from './bilibili-native-search-batch-artifacts';
+import { BilibiliNativeSearchBatchHostRunner } from './bilibili-native-search-batch-host-runner';
 import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
 import { BilibiliVideoDiscussionArtifactStore } from './bilibili-video-discussion-artifacts';
@@ -42,6 +44,7 @@ const accountVideoPaginationArtifacts = await BilibiliAccountVideoPaginationArti
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
+const nativeSearchBatchArtifacts = await BilibiliNativeSearchBatchArtifactStore.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const discussionArtifacts = await BilibiliVideoDiscussionArtifactStore.create(config.stateDirectory);
 const transcriptArtifacts = await BilibiliTranscriptArtifactStore.create(config.stateDirectory);
@@ -69,6 +72,10 @@ const nativeSearchRunner = new BilibiliNativeSearchHostRunner({
   browserManager,
   profiles: profileRegistry,
   artifacts: nativeSearchArtifacts
+});
+const nativeSearchBatchRunner = new BilibiliNativeSearchBatchHostRunner({
+  singleRunner: nativeSearchRunner,
+  artifacts: nativeSearchBatchArtifacts
 });
 const accountVideoPageTwoRunner = new BilibiliAccountVideoPageTwoHostRunner({
   accountSafety,
@@ -141,6 +148,8 @@ const server = createServer(async (request, response) => {
       dynamicRunner,
       nativeSearchArtifacts,
       nativeSearchRunner,
+      nativeSearchBatchArtifacts,
+      nativeSearchBatchRunner,
       videoDetailArtifacts,
       videoDetailRunner,
       discussionArtifacts,

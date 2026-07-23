@@ -65,7 +65,7 @@ class NativeSearchObservationError extends Error {
   }
 }
 
-function input(value: BilibiliNativeSearchHostRunInput): BilibiliNativeSearchHostRunInput {
+function input(value: BilibiliNativeSearchHostRunInput): BilibiliNativeSearchHostRunInput & BilibiliNativeSearchInput {
   if (!PROFILE_ID.test(value.profileId)) throw new Error('bilibili_native_search_profile_invalid');
   return {
     profileId: value.profileId,

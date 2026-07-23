@@ -19,6 +19,9 @@ import type { BilibiliDanmakuHostRunner } from './bilibili-danmaku-host-runner';
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import { bilibiliNativeSearchInput } from './bilibili-native-search-contract';
 import type { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
+import type { BilibiliNativeSearchBatchArtifactStore } from './bilibili-native-search-batch-artifacts';
+import type { BilibiliNativeSearchBatchHostRunner } from './bilibili-native-search-batch-host-runner';
+import { bilibiliNativeSearchBatchInput } from './bilibili-native-search-batch-contract';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import type { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
 import type { BilibiliVideoDiscussionArtifactStore } from './bilibili-video-discussion-artifacts';
@@ -56,6 +59,8 @@ export interface GatewayRouteContext {
   dynamicRunner: BilibiliDynamicHostRunner;
   nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
   nativeSearchRunner: BilibiliNativeSearchHostRunner;
+  nativeSearchBatchArtifacts: BilibiliNativeSearchBatchArtifactStore;
+  nativeSearchBatchRunner: BilibiliNativeSearchBatchHostRunner;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
   videoDetailRunner: BilibiliVideoDetailHostRunner;
   discussionArtifacts: BilibiliVideoDiscussionArtifactStore;
@@ -194,6 +199,10 @@ export async function handleGatewayRoute(
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.nativeSearchArtifacts.list() });
     return true;
   }
+  if (request.method === 'GET' && url.pathname === '/v1/bilibili-native-search-batch-artifacts') {
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.nativeSearchBatchArtifacts.list() });
+    return true;
+  }
   if (request.method === 'GET' && url.pathname === '/v1/account-video-inventory-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.accountVideoInventoryArtifacts.list() });
     return true;
@@ -266,6 +275,29 @@ export async function handleGatewayRoute(
       schemaVersion: 1,
       result: {
         runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        coverage: result.run.coverage,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
+  const nativeSearchBatchRun = url.pathname.match(
+    new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/search/native/batch$`, 'i')
+  );
+  if (request.method === 'POST' && nativeSearchBatchRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const body = bilibiliNativeSearchBatchInput({
+      ...(await readJsonBody(request) as Record<string, unknown>),
+      profileId: nativeSearchBatchRun[1]!
+    });
+    const result = await context.nativeSearchBatchRunner.run(body);
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        batchId: result.run.batchId,
         state: result.run.state,
         errorCode: result.run.errorCode,
         terminalReason: result.run.coverage.terminalReason,
@@ -514,6 +546,15 @@ export async function handleGatewayRoute(
   if (request.method === 'GET' && nativeSearchArtifact) {
     const artifact = await context.nativeSearchArtifacts.get(nativeSearchArtifact[1]!);
     if (!artifact) throw new Error('bilibili_native_search_artifact_not_found');
+    sendJson(response, 200, { schemaVersion: 1, artifact });
+    return true;
+  }
+  const nativeSearchBatchArtifact = url.pathname.match(
+    new RegExp(`^/v1/bilibili-native-search-batch-artifacts/(${PROFILE_ID})$`, 'i')
+  );
+  if (request.method === 'GET' && nativeSearchBatchArtifact) {
+    const artifact = await context.nativeSearchBatchArtifacts.get(nativeSearchBatchArtifact[1]!);
+    if (!artifact) throw new Error('bilibili_native_search_batch_artifact_not_found');
     sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }
