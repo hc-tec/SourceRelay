@@ -213,6 +213,7 @@ export async function captureBilibiliVideoDiscussionDom(
           ? composedElements(replyRenderer)
             .filter((element) => (element.tagName.toLowerCase() === 'bili-text-button' ||
               element.tagName.toLowerCase() === 'button' || element.getAttribute('role') === 'button') &&
+              renderedControl(element) &&
               /^\d+$/.test(clean(composedText(element), 20)))
             .find((element) => stateOf(element) === 'active') ?? null
           : null;
@@ -227,14 +228,22 @@ export async function captureBilibiliVideoDiscussionDom(
         const nextButton = replyRenderer
           ? composedElements(replyRenderer).find((element) =>
             (element.tagName.toLowerCase() === 'bili-text-button' || element.tagName.toLowerCase() === 'button' ||
-              element.getAttribute('role') === 'button') && /下一页/.test(clean(composedText(element), 20))) ?? null
+              element.getAttribute('role') === 'button') && renderedControl(element) &&
+            /下一页/.test(clean(composedText(element), 20))) ?? null
+          : null;
+        const collapseButton = replyRenderer
+          ? composedElements(replyRenderer).find((element) =>
+            (element.tagName.toLowerCase() === 'bili-text-button' || element.tagName.toLowerCase() === 'button' ||
+              element.getAttribute('role') === 'button') && renderedControl(element) &&
+            /收起/.test(clean(composedText(element), 20))) ?? null
           : null;
         const nextDisabled = Boolean(nextButton && (nextButton.getAttribute('aria-disabled') === 'true' ||
           nextButton.hasAttribute('disabled') || nextButton.classList.contains('disabled') ||
           nextButton.classList.contains('is-disabled')));
-        const replyPaginationVisible = Boolean(replyRenderer && (
-          /下一页|上一页|第\s*\d+\s*页|共\s*\d+\s*页|收起/.test(replyText) || nextButton || activePageButton
-        ));
+        const visiblePaginationText = Boolean(replyRenderer && composedElements(replyRenderer).some((element) =>
+          renderedControl(element) && /第\s*\d+\s*页|共\s*\d+\s*页|上一页/.test(clean(composedText(element), 100))));
+        const replyPaginationVisible = Boolean(replyRenderer &&
+          (nextButton || collapseButton || activePageButton || visiblePaginationText));
         const firstThreadExpanded = Boolean(replyRenderer && !replyExpandVisible &&
           (replyPaginationVisible || replyRenderers.length > 0));
         const firstThreadReplies = firstThreadExpanded ? projectedReplies : [];

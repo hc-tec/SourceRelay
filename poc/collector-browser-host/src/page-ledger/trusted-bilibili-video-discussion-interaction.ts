@@ -494,7 +494,8 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         .map(replyRecord)
         .filter((value): value is NonNullable<ReturnType<typeof replyRecord>> => value !== null);
       const activePageButton = replyRenderer
-        ? findComposedAll(replyRenderer, (element) => interactive(element) && /^\d+$/.test(clean(composedText(element), 20)), 500)
+        ? findComposedAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
+          /^\d+$/.test(clean(composedText(element), 20)), 500)
           .find((element) => stateOf(element) === 'active')
         : null;
       const activePageText = activePageButton ? clean(composedText(activePageButton), 20) : null;
@@ -507,7 +508,12 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
             : null;
       replyPageCount = pageCountMatch ? Number(pageCountMatch[1]) : slashMatch ? Number(slashMatch[2]) : null;
       const nextButton = replyRenderer
-        ? findComposedAll(replyRenderer, (element) => interactive(element) && /下一页/.test(clean(composedText(element), 20)), 500)[0] ?? null
+        ? findComposedAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
+          /下一页/.test(clean(composedText(element), 20)), 500)[0] ?? null
+        : null;
+      const collapseButton = replyRenderer
+        ? findComposedAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
+          /收起/.test(clean(composedText(element), 20)), 500)[0] ?? null
         : null;
       const nextDisabled = Boolean(nextButton && (
         nextButton.getAttribute('aria-disabled') === 'true' ||
@@ -515,9 +521,9 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         nextButton.classList.contains('disabled') ||
         nextButton.classList.contains('is-disabled')
       ));
-      replyPaginationVisible = Boolean(replyRenderer && (
-        /下一页|上一页|第\s*\d+\s*页|共\s*\d+\s*页|收起/.test(replyText) || nextButton || activePageButton
-      ));
+      const visiblePaginationText = Boolean(replyRenderer && findComposedAll(replyRenderer, (element) =>
+        renderedControl(element) && /第\s*\d+\s*页|共\s*\d+\s*页|上一页/.test(clean(composedText(element), 100)), 500).length > 0);
+      replyPaginationVisible = Boolean(replyRenderer && (nextButton || collapseButton || activePageButton || visiblePaginationText));
       targetExpanded = Boolean(replyRenderer && !expandVisible && (
         replyPaginationVisible || replyRenderers.length > 0 || stateOf(replyRenderer) === 'active'
       ));
