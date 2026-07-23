@@ -306,3 +306,40 @@ managed work tab open/on expected page = true -> true
 - MV3 正式 projector、独立 review 或 admission 已完成。
 
 下一门槛是补 feed 终点和边缘样本，再把安全 response/DOM projector 迁移到 MV3。评论正文继续由 `discussion` 能力独立采集，不能塞进 dynamic inventory。
+
+## 8. 2026-07-23 新 Gateway 两页动态 canary 与深度哨兵修复
+
+在不重启当前 Browser Host、不中断已保留视频评论页的前提下，临时 Gateway 连接正在运行的新 Host，加载最新 Gateway 构建后重新验证同一账号动态页。首次 canary 暴露一个真实的投影缺陷：MV3 网络边界为超过安全递归深度的字段写入 `[truncated: depth limit]` 内部哨兵；某个普通 Opus 动态的 response 正文因此不可比较，而页面上仍然有公开可见正文，旧 cross-check 把它误判为 `card_evidence_mismatch`。
+
+修复包含两部分：
+
+1. Gateway 的 response projector 不再把 `[truncated: depth limit]` 当作公开字段；
+2. 对 `primaryIdentity.kind=opus`、response 没有可比较正文、DOM 卡片仍为 `opus` 且作者/发布时间/访问状态一致的情况，采用明确的 DOM-only structural fallback。该 fallback 不把 `textMatch` 伪装成 `true`，只允许卡片整体互证通过；卡片类型、作者、发布时间或访问状态不一致时仍然失败。
+
+真实复跑结果：
+
+```yaml
+runId: 6120c383-1899-441b-aecf-2b87813ac1e6
+artifactId: b55952c4-dc71-4bd2-b1e4-b78bd6873cd5
+targetAccount: 7481602
+strategy: bilibili.dynamic.account-feed.response-dom.v1 @ 1.2.0
+state: partial
+terminalReason: budget_exhausted
+navigationCount: 1
+trustedScrollCount: 3
+automaticRetry: 0
+capturedPages: 2
+capturedItems: 24
+uniqueItems: 24
+duplicateItems: 0
+unresolvedCardEvidenceItems: 0
+forwardedItems: 4
+restrictedPlaceholderItems: 8
+targetTabSelection: reused_matching_managed_tab
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+两页中每页 12 条动态，DOM/response 累计数量一致，跨页稳定 ID 无重复，作者、发布时间、访问状态和转发状态均通过；视频、图文、普通 Opus、转发和充电专属公开占位仍按同一 raw-first artifact 保存。`partial / budget_exhausted` 是有意的预算终态：本 runner 只计划两页，而第二页仍返回后续 cursor，不能写成账号动态已到终点。
+
+本次修复通过 31 个测试文件、100 个单元测试和 Gateway 构建；策略仍为 `research-only / admissionEligible=false`。尚未覆盖 feed 终点、置顶/删除/直播/投票等边缘样本，也没有把动态正文评论混入该能力。

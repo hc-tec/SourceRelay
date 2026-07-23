@@ -78,6 +78,30 @@ function textContains(left: string | null, right: string | null): boolean {
   return normalLeft.includes(normalRight) || normalRight.includes(normalLeft);
 }
 
+function responseTextCandidates(
+  item: Omit<BilibiliDynamicItemProjection, 'domEvidence'>
+): Array<string | null> {
+  const ordinaryOpusAdditionalCandidates = item.primaryIdentity.kind === 'opus' &&
+    item.reservationTitle === null && !item.card.reservation
+    ? [item.additionalGoodsHeadText, item.additionalUpowerLotteryTitle]
+    : [];
+  return [
+    item.visibleText,
+    item.majorTitle,
+    item.card.reservation ? item.reservationTitle : null,
+    ...ordinaryOpusAdditionalCandidates
+  ];
+}
+
+function hasComparableResponseText(
+  item: Omit<BilibiliDynamicItemProjection, 'domEvidence'>
+): boolean {
+  return responseTextCandidates(item).some((candidate) => {
+    const text = candidate ? normaliseText(candidate) : '';
+    return text.length >= 2 && text !== '[truncated: depth limit]';
+  });
+}
+
 function isPrimaryIdentityCrossCheckable(kind: BilibiliDynamicResponseItem['primaryIdentity']['kind']): boolean {
   return kind === 'video' || kind === 'article' || kind === 'live';
 }
@@ -97,28 +121,29 @@ export function bilibiliDynamicCardEvidenceCheck(
   const primaryIdentityMatch = primaryIdentityCrossCheckable && item.card.links.some((link) =>
     link.url === item.primaryIdentity.canonicalUrl
   );
-  const ordinaryOpusAdditionalCandidates = item.primaryIdentity.kind === 'opus' &&
-    item.reservationTitle === null && !item.card.reservation
-    ? [item.additionalGoodsHeadText, item.additionalUpowerLotteryTitle]
-    : [];
   const textMatch = bilibiliDynamicCardTextEvidenceMatches(
     item.card.visibleText,
-    [
-      item.visibleText,
-      item.majorTitle,
-      item.card.reservation ? item.reservationTitle : null,
-      ...ordinaryOpusAdditionalCandidates
-    ],
+    responseTextCandidates(item),
     item.card.mediaRefs.map((media) => media.alt).filter(Boolean)
   );
   const accessStateMatch = (item.accessState === 'restricted_placeholder') === item.card.blockedPlaceholder;
   const responseForwarded = item.forwardedSourceState !== 'not_forward';
   const forwardedStateMatch = responseForwarded === item.card.forwarded;
+  // Ordinary Opus responses can omit the public body text at the permitted
+  // network depth. In that case, accept the visible DOM card only when its
+  // structural identity is still coherent; do not call the unavailable text
+  // comparison a match.
+  const domOnlyOpusFallback = !hasComparableResponseText(item) &&
+    item.primaryIdentity.kind === 'opus' &&
+    item.card.kind === 'opus' &&
+    authorMatch &&
+    publicationMatch;
   const cardEvidenceMatch = accessStateMatch && (
     item.accessState === 'restricted_placeholder' ||
     primaryIdentityMatch ||
     textMatch ||
-    (responseForwarded && forwardedStateMatch)
+    (responseForwarded && forwardedStateMatch) ||
+    domOnlyOpusFallback
   );
   return {
     authorMatch,

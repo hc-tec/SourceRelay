@@ -1,7 +1,7 @@
 # Collector 实现状态
 
 - 分支：`feat/browser-extension-system`
-- 状态日期：2026-07-20
+- 状态日期：2026-07-23
 - 权威决策：[collector-grilling-decision-log.md](collector-grilling-decision-log.md)
 - 产品规格：[platform-strategy-product-spec.md](platform-strategy-product-spec.md)
 - 冲突审计：[collector-decision-audit.md](collector-decision-audit.md)
@@ -17,7 +17,7 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 
 当前分支仍处于零兼容切换前的中间态：Browser Host/Contracts 自身 typecheck、build 和真实生命周期门禁为绿色，但旧 Gateway 仍直接持有 Playwright、单页面 helper 与旧 Console page lifecycle，Gateway/Extension/runner 尚未使用新 PageLease 与 Native Messaging 边界。因此整体 Collector 还不能描述为已经完成新页面池迁移；Checkpoint 3 必须一次性删除旧路径，不恢复旧字段，不加入 adapter、dual write、legacy endpoint 或 fallback。
 
-已完成的 B站 dynamic 真实侦察和两页 raw-first artifact contract 保留为 Browser Host canary 输入：它证明当前真实页面的 DOM/XHR/稳定 ID/覆盖语义，不证明页面已经通过新 Host、PageLease、Native Messaging 或 Gateway 重连链路。
+已完成的 B站 dynamic 真实侦察和两页 raw-first artifact contract 已接入新 Host/PageLease/Native Messaging/Gateway 控制链路做低频 canary：新 Gateway 复用运行中的 Browser Host，不关闭 retained tab；两页共 24 条动态、0 重复、0 unresolved card evidence，`budget_exhausted` 作为有界预算终态。该能力仍是 research-only，尚未覆盖 feed 终点、边缘样本、MV3 正式 admission。
 
 B站字幕目前已具备“按需真实采集”的产品底层能力，但仍是 research-only validation、`admissionEligible=false`，没有进入正式 Task production routes。v0.4.23 的 Gateway + 生产 MV3 扩展已在真实登录 Profile 中完成轨道目录、中文选择、字幕正文和本地 raw-first artifact 闭环；这证明能力可用，不等于把单一样本升级为正式策略 admission。
 
@@ -78,7 +78,7 @@ B站详情正式 Task 的 receipt / Evidence race 已加入控制面修复：acc
 已完成设计：Browser Host / 多 PageLease / Native Messaging / 页面状态 / Console MVP（101–170）
 已完成：Browser Host Contracts、单实例 Host 与真实本地 Chromium 页面池 foundation
 待切换：Gateway/Extension/全部 runner 零兼容迁移并删除旧单 tab 路径
-待验证：B站 dynamic 通过新页面池的低频真实 canary
+已验证：B站 dynamic 通过新页面池的两页低频真实 canary（仍待边缘样本、MV3 review 与 admission）
 未开始：P3 加密 Evidence Vault
 未开始：P4 EvidencePackage / DeepResearch 正式接入
 ```
@@ -283,7 +283,7 @@ P2a  Collection / Validation Profile launcher（完成）
   -> P2c 正式 Gateway dispatch / Evidence 闭环（完成）
   -> B站 account profile / inventory research 闭环（完成，待 MV3 迁移与 admission）
   -> B站原生搜索分页筛选、detail / multi-P / subtitle（各自独立策略与 admission）
-  -> B站 dynamic 与 article 多页/边缘样本
+  -> B站 dynamic 与 article feed 终点/边缘样本及 MV3 review
   -> B站 discussion / danmaku / collection planner / live replay
   -> B站 trend / relationship / 统一 provenance_coverage
   -> P3 encrypted Evidence Vault

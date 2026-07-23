@@ -402,7 +402,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function cleanText(value: unknown, maximum: number): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.replace(/\s+/g, ' ').trim();
-  if (!clean || clean.length > maximum || /[\u0000-\u001f\u007f]/.test(clean)) return null;
+  // The MV3 network boundary uses this marker when a nested response value
+  // exceeds its redaction depth budget. It is an implementation sentinel,
+  // never public platform content, and must not become a durable field or a
+  // false DOM/response mismatch.
+  if (!clean || clean === '[truncated: depth limit]' || clean.length > maximum || /[\u0000-\u001f\u007f]/.test(clean)) return null;
   return clean;
 }
 
