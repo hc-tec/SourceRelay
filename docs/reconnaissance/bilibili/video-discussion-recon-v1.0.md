@@ -294,3 +294,28 @@ accountSafety: ready
 动作前 DOM 将“最新”判为 `inactive`，实时边界框为 `x=240,y=120,w=38,h=28`；Host 先移动真实鼠标并确认 hover、可见、viewport 与 composed hit-test，再发送一次 mouse down/up。动作后 DOM 变为 `latestState=active`，视觉截图 [557985d9-3c20-4d2c-9724-f6eff53ff177.png](../../../poc/collector-gateway/runtime/p2a-validation-20260717/browser-host/visual-evidence/557985d9-3c20-4d2c-9724-f6eff53ff177.png) 显示“最新”为蓝色选中态，Network 观察到 `/x/v2/reply/wbi/main` 的 GET 200。未读取 query 值、请求/响应正文或认证材料；楼中楼入口仅观察为可见，没有点击。
 
 这次 run 证明了“导航 → 延迟评论加载 → 一次可信滚动 → 一次最新评论排序 → DOM/视觉/Network 三面交叉后置条件”的真实闭环。`discussion` 仍保持 `admissionEligible=false`，因为 response projector、分页覆盖和楼中楼正文尚未完成；下一步只能在独立预算下验证一个根评论的楼中楼入口，不能把排序成功扩展成评论全量能力。
+
+## O. 2026-07-23 首个楼中楼入口真实闭环完成
+
+在排序验证之后，使用独立预算执行了一个只含 `expand_first_thread` 的新 run，没有把排序点击串入同一动作链：
+
+```yaml
+runId: 6165e4d7-2301-42cd-8e67-830f877b6163
+artifactId: d61f90f8-b179-4dce-9d74-641e603dc2b6
+target: BV1qZSLBYEpa
+state: completed
+terminalReason: discussion_ready
+navigationCount: 1
+trustedScrollCount: 1
+expandFirstThreadClickCount: 1
+automaticRetry: 0
+capturedRootComments: 20
+firstThreadExpanded: true
+replyPaginationVisible: true
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+动作前“点击查看”入口通过评论组件 Shadow DOM、实时边界框（`x=251,y=467,w=52,h=22`）、hover 和 composed hit-test 校验；动作后入口消失，回复分页控件出现，视觉截图 [8a900fdb-8227-44df-ac76-fd3802beb0ca.png](../../../poc/collector-gateway/runtime/p2a-validation-20260717/browser-host/visual-evidence/8a900fdb-8227-44df-ac76-fd3802beb0ca.png) 显示首个根评论下的回复树，Network 捕获 `/x/v2/reply/reply` 的 GET 200。没有点击“下一页”，没有展开第二个根评论，没有读取 response body。
+
+因此，当前已真实证明：默认热门根评论样本、最新评论排序、首个公开楼中楼展开三类人类流程均可在持久 Collection Profile 中按独立预算运行。尚未证明的是回复正文 response projector、回复分页覆盖、跨根评论采样、去重与完整性；这些必须作为后续独立 capability 和预算继续实现，不能把本次单线程展开宣称为“全量评论”。

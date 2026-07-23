@@ -97,3 +97,5 @@ coverage / terminal_reason / status
 随后对登录 Profile 的排序动作做了严格单动作验证。真实组件复核补上了 Shadow DOM slot 文本投影以及 `#sort-actions` 的 `hot/time` 状态解析，代码已提交为 `dbfb15c`；但一次可信“最新”点击的后置结果仍为 `outcome_unknown`，页面已 quarantine、账号安全已锁定，未重试、未刷新、未升级 `discussion` maturity。排序和楼中楼仍必须分别完成新的安全解锁后真实闭环，当前 `discussion` 继续保持 `build_ready / admissionEligible=false`。
 
 随后在固定安全解锁后的新 run 中，`BV1qZSLBYEpa` 已完成一次真实 `select_latest_comments` 闭环：导航 1 次、可信滚动 1 次、排序点击 1 次、自动重试 0 次；动作前 `latestState=inactive`，动作后 `latestState=active`，视觉显示“最新”选中，`/x/v2/reply/wbi/main` 返回 200，捕获 20 条根评论，页面 `retained_after_run`，账号安全回到 `ready`。证据 artifact 为 `a977831d-7a5a-427b-aa2b-fd6e53d6bac8`，该事实只把排序动作标记为真实已验证，不改变 `discussion` 的 `admissionEligible=false`。
+
+随后又以独立预算完成了首个根评论的 `expand_first_thread`：导航 1 次、可信滚动 1 次、入口点击 1 次、自动重试 0 次；动作后 `firstThreadExpanded=true`、`replyPaginationVisible=true`，`/x/v2/reply/reply` 返回 200，视觉与 DOM 均显示回复树，页面仍 `retained_after_run`。证据 artifact 为 `d61f90f8-b179-4dce-9d74-641e603dc2b6`。未点击下一页、未展开第二个根评论、未读取 response body；回复分页覆盖、正文 projector 与完整性仍未完成。
