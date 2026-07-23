@@ -99,3 +99,5 @@ coverage / terminal_reason / status
 随后在固定安全解锁后的新 run 中，`BV1qZSLBYEpa` 已完成一次真实 `select_latest_comments` 闭环：导航 1 次、可信滚动 1 次、排序点击 1 次、自动重试 0 次；动作前 `latestState=inactive`，动作后 `latestState=active`，视觉显示“最新”选中，`/x/v2/reply/wbi/main` 返回 200，捕获 20 条根评论，页面 `retained_after_run`，账号安全回到 `ready`。证据 artifact 为 `a977831d-7a5a-427b-aa2b-fd6e53d6bac8`，该事实只把排序动作标记为真实已验证，不改变 `discussion` 的 `admissionEligible=false`。
 
 随后又以独立预算完成了首个根评论的 `expand_first_thread`：导航 1 次、可信滚动 1 次、入口点击 1 次、自动重试 0 次；动作后 `firstThreadExpanded=true`、`replyPaginationVisible=true`，`/x/v2/reply/reply` 返回 200，视觉与 DOM 均显示回复树，页面仍 `retained_after_run`。证据 artifact 为 `d61f90f8-b179-4dce-9d74-641e603dc2b6`。未点击下一页、未展开第二个根评论、未读取 response body；回复分页覆盖、正文 projector 与完整性仍未完成。
+
+本轮对 `bili-comment-reply-renderer` 的真实 Shadow DOM 字段做了窄复核，并把 `author/content/publishedAt/likeCount`、当前页分页状态与 `replyCoverage` 纳入讨论 MVP 的 DOM 投影契约。预算固定为一个已选 root、一个可见回复页、最多 20 条；不读取 response body、不点击下一页、不宣称全量。页面池同时修复了尾斜杠与合法 `vd_source` 变体导致的 retained exact-target 误判；该修复已通过状态机单测，但需要下一次 Browser Host 生命周期切换后重新做认证三面闭环，`discussion` 当前仍为 `build_ready / admissionEligible=false`。

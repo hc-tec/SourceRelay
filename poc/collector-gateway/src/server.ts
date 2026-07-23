@@ -141,6 +141,7 @@ const server = createServer(async (request, response) => {
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 1, ok: false, error: 'route_not_found' });
   } catch (error) {
+    process.stderr.write(`[gateway_request_error] ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     if (!response.headersSent) {
       const code = safeErrorCode(error);
       const status = code === 'browser_host_not_running' || code === 'profile_has_active_page_leases'

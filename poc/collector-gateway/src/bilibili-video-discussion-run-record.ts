@@ -6,6 +6,7 @@ import {
 } from '@intelligence/collector-contracts';
 import {
   BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS,
+  BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS,
   BILIBILI_VIDEO_DISCUSSION_STRATEGY_VERSION,
   type BilibiliVideoDiscussionAction,
   type BilibiliVideoDiscussionProjection,
@@ -60,9 +61,14 @@ export function createBilibiliVideoDiscussionRunRecord(input: {
     actions: input.actions,
     coverage: {
       capturedRootComments: input.discussion?.rootComments.length ?? 0,
+      capturedFirstThreadReplies: input.discussion?.firstThreadReplies.length ?? 0,
       sort: input.discussion?.sort ?? null,
       firstThreadExpandVisible: input.discussion?.firstThreadExpandVisible ?? false,
       firstThreadExpanded: input.discussion?.firstThreadExpanded ?? false,
+      replyCoverage: input.discussion?.replyCoverage ?? 'not_expanded',
+      replyPage: input.discussion?.replyPage ?? null,
+      replyPageCount: input.discussion?.replyPageCount ?? null,
+      replyHasMore: input.discussion?.replyHasMore ?? null,
       loginGateVisible: input.discussion?.loginGateVisible ?? false,
       capturedAfterScroll: input.discussion?.capturedAfterScroll ?? false,
       terminalReason: input.terminalReason
@@ -78,6 +84,7 @@ export function createBilibiliVideoDiscussionRunRecord(input: {
       responseBodies: 'not_read',
       productionResponseRoutes: [],
       maxRootComments: BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS,
+      maxReplyItems: BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS,
       semanticActionDelivery: 'at_most_once',
       runDeadlineMs: 60_000,
       targetTabSelection: input.targetTabSelection,

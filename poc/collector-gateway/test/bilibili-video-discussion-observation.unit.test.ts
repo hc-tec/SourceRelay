@@ -74,6 +74,42 @@ describe('Bilibili discussion DOM contract', () => {
       .toMatchObject({ sort: 'hot', contentState: 'ready', loginGateVisible: true, capturedAfterScroll: true });
   });
 
+  test('projects one bounded visible reply page without inventing missing fields', () => {
+    const observed = bilibiliVideoDiscussionStrategyObservation(result({
+      bvid,
+      commentHostPresent: true,
+      commentHostVisible: true,
+      commentHostInViewport: true,
+      commentHostBounds: { x: 0, y: 32, width: 800, height: 500 },
+      sortControls: { hotVisible: true, latestVisible: true, latestState: 'active' },
+      commentContentState: 'ready',
+      rootCommentTexts: ['根评论'],
+      firstThreadExpandVisible: false,
+      firstThreadReplies: [{
+        author: '回复作者',
+        content: '回复正文',
+        publishedAt: '2026-07-23 12:00',
+        likeCount: 23
+      }],
+      replyPaginationVisible: true,
+      replyPage: 1,
+      replyPageCount: 83,
+      replyHasMore: true,
+      replyCoverage: 'current_page',
+      loginGateVisible: false,
+      risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+    }), bvid);
+    expect(projectBilibiliVideoDiscussionDom(observed.dom, bvid, true, '2026-07-23T01:00:03.000Z'))
+      .toMatchObject({
+        sort: 'latest',
+        firstThreadReplies: [{ author: '回复作者', content: '回复正文', publishedAt: '2026-07-23 12:00', likeCount: 23 }],
+        replyPage: 1,
+        replyPageCount: 83,
+        replyHasMore: true,
+        replyCoverage: 'current_page'
+      });
+  });
+
   test('rejects a wrong BVID or an unbounded root text list', () => {
     expect(() => bilibiliVideoDiscussionStrategyObservation(result({
       bvid: 'BV1xx411c7mD',

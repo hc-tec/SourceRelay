@@ -1,5 +1,8 @@
 import {
+  BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS,
   BILIBILI_DISCUSSION_STRATEGY_ID,
+  type BilibiliVideoDiscussionReply,
+  type BilibiliVideoDiscussionReplyCoverage,
   type StrategyObservationResult
 } from '@intelligence/collector-contracts';
 import {
@@ -59,12 +62,44 @@ function bool(value: unknown): boolean {
   return typeof value === 'boolean' ? value : false;
 }
 
+function page(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 100_000
+    ? value
+    : null;
+}
+
+function replyCoverage(value: unknown): BilibiliVideoDiscussionReplyCoverage {
+  return value === 'not_expanded' || value === 'current_page' || value === 'empty' || value === 'unknown'
+    ? value
+    : 'not_expanded';
+}
+
+function replies(value: unknown): BilibiliVideoDiscussionReply[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS).flatMap((entry) => {
+    const candidate = record(entry);
+    if (!candidate || typeof candidate.content !== 'string') return [];
+    const content = text(candidate.content, 4_000);
+    if (!content) return [];
+    const likeCount = typeof candidate.likeCount === 'number' && Number.isSafeInteger(candidate.likeCount) && candidate.likeCount >= 0
+      ? candidate.likeCount
+      : null;
+    return [{
+      author: text(candidate.author, 200),
+      content,
+      publishedAt: text(candidate.publishedAt, 100),
+      likeCount
+    }];
+  });
+}
+
 function domSnapshot(value: unknown, expectedBvid: string): BilibiliVideoDiscussionDomSnapshot {
   const candidate = record(value);
   const sort = record(candidate?.sortControls);
   const risk = record(candidate?.risk);
   const bounds = record(candidate?.commentHostBounds);
   const rootComments = candidate?.rootCommentTexts;
+  const firstThreadReplies = replies(candidate?.firstThreadReplies);
   const commentContentState = candidate?.commentContentState;
   const cleanRootComments = Array.isArray(rootComments)
     ? rootComments.map((entry) => text(entry, 2_000)).filter((entry): entry is string => entry !== null)
@@ -102,6 +137,12 @@ function domSnapshot(value: unknown, expectedBvid: string): BilibiliVideoDiscuss
     commentContentState,
     rootCommentTexts: cleanRootComments,
     firstThreadExpandVisible: bool(candidate.firstThreadExpandVisible),
+    firstThreadReplies,
+    replyPaginationVisible: bool(candidate.replyPaginationVisible),
+    replyPage: page(candidate.replyPage),
+    replyPageCount: page(candidate.replyPageCount),
+    replyHasMore: typeof candidate.replyHasMore === 'boolean' ? candidate.replyHasMore : null,
+    replyCoverage: replyCoverage(candidate.replyCoverage),
     loginGateVisible: bool(candidate.loginGateVisible),
     risk: {
       verificationRequired: bool(risk.verificationRequired),

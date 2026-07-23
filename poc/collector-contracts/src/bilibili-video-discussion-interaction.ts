@@ -9,6 +9,8 @@ import type { PageVisualEvidence } from './page-visual-evidence.js';
 export const BILIBILI_VIDEO_DISCUSSION_INTERACTION_SCHEMA_VERSION = 1 as const;
 export const BILIBILI_VIDEO_DISCUSSION_INTERACTION_MAX_NETWORK_OBSERVATIONS = 3 as const;
 export const BILIBILI_VIDEO_DISCUSSION_INTERACTION_MAX_TIMEOUT_MS = 20_000 as const;
+/** A single expanded reply page is intentionally bounded for the MVP. */
+export const BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS = 20 as const;
 
 export const BILIBILI_VIDEO_DISCUSSION_INTERACTION_ACTIONS = [
   'select_latest_comments',
@@ -39,6 +41,23 @@ export interface BilibiliVideoDiscussionInteractionBounds {
   height: number;
 }
 
+/**
+ * Public fields projected from one visible reply renderer.  This is a DOM
+ * projection, not a response-body copy; absent/ambiguous fields stay null.
+ */
+export interface BilibiliVideoDiscussionReply {
+  author: string | null;
+  content: string;
+  publishedAt: string | null;
+  likeCount: number | null;
+}
+
+export type BilibiliVideoDiscussionReplyCoverage =
+  | 'not_expanded'
+  | 'current_page'
+  | 'empty'
+  | 'unknown';
+
 export interface BilibiliVideoDiscussionInteractionDomState {
   commentHostPresent: boolean;
   commentHostVisible: boolean;
@@ -56,6 +75,11 @@ export interface BilibiliVideoDiscussionInteractionDomState {
   targetExpanded: boolean;
   rootCommentCount: number;
   replyPaginationVisible: boolean;
+  firstThreadReplies: BilibiliVideoDiscussionReply[];
+  replyPage: number | null;
+  replyPageCount: number | null;
+  replyHasMore: boolean | null;
+  replyCoverage: BilibiliVideoDiscussionReplyCoverage;
 }
 
 /** Metadata only; query strings and response bodies are intentionally absent. */

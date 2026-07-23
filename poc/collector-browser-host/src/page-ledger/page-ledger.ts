@@ -107,7 +107,13 @@ export class PageLedger {
     await this.#reconcileStaleCandidates();
 
     const targetUrlDigest = request.targetUrl ? digestUrl(request.targetUrl) : null;
-    const selected = selectLeaseablePage([...this.#records.values()], request.platform, request.pageRole, targetUrlDigest);
+    const selected = selectLeaseablePage(
+      [...this.#records.values()],
+      request.platform,
+      request.pageRole,
+      targetUrlDigest,
+      request.targetUrl
+    );
     if (selected.record && selected.selection) {
       const result = leaseSelectedPage(
         selected.record,

@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
+import { BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS as SHARED_MAX_REPLY_ITEMS } from '@intelligence/collector-contracts';
 import type {
+  BilibiliVideoDiscussionReply,
+  BilibiliVideoDiscussionReplyCoverage,
   BilibiliVideoDiscussionInteractionAction,
   BilibiliVideoDiscussionInteractionResult,
   PageVisualEvidence,
@@ -7,6 +10,7 @@ import type {
 } from '@intelligence/collector-contracts';
 
 export const BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS = 20;
+export const BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS = SHARED_MAX_REPLY_ITEMS;
 export const BILIBILI_VIDEO_DISCUSSION_STRATEGY_VERSION = '0.1.0' as const;
 
 export interface BilibiliVideoDiscussionInput {
@@ -28,6 +32,12 @@ export interface BilibiliVideoDiscussionDomSnapshot {
   commentContentState: 'loading' | 'ready' | 'empty' | 'unknown';
   rootCommentTexts: string[];
   firstThreadExpandVisible: boolean;
+  firstThreadReplies?: BilibiliVideoDiscussionReply[];
+  replyPaginationVisible?: boolean;
+  replyPage?: number | null;
+  replyPageCount?: number | null;
+  replyHasMore?: boolean | null;
+  replyCoverage?: BilibiliVideoDiscussionReplyCoverage;
   loginGateVisible: boolean;
   risk: {
     verificationRequired: boolean;
@@ -44,6 +54,12 @@ export interface BilibiliVideoDiscussionProjection {
   rootComments: string[];
   firstThreadExpandVisible: boolean;
   firstThreadExpanded: boolean;
+  firstThreadReplies: BilibiliVideoDiscussionReply[];
+  replyPaginationVisible: boolean;
+  replyPage: number | null;
+  replyPageCount: number | null;
+  replyHasMore: boolean | null;
+  replyCoverage: BilibiliVideoDiscussionReplyCoverage;
   loginGateVisible: boolean;
   capturedAfterScroll: boolean;
   capturedAt: string;
@@ -94,9 +110,14 @@ export interface BilibiliVideoDiscussionRunRecord {
   actions: BilibiliVideoDiscussionAction[];
   coverage: {
     capturedRootComments: number;
+    capturedFirstThreadReplies: number;
     sort: BilibiliVideoDiscussionProjection['sort'] | null;
     firstThreadExpandVisible: boolean;
     firstThreadExpanded: boolean;
+    replyCoverage: BilibiliVideoDiscussionProjection['replyCoverage'];
+    replyPage: number | null;
+    replyPageCount: number | null;
+    replyHasMore: boolean | null;
     loginGateVisible: boolean;
     capturedAfterScroll: boolean;
     terminalReason: BilibiliVideoDiscussionTerminalReason;
@@ -112,6 +133,7 @@ export interface BilibiliVideoDiscussionRunRecord {
     responseBodies: 'not_read';
     productionResponseRoutes: [];
     maxRootComments: typeof BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS;
+    maxReplyItems: typeof BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS;
     semanticActionDelivery: 'at_most_once';
     runDeadlineMs: 60_000;
     targetTabSelection: 'reused_matching_managed_tab' | 'reused_retained_managed_tab' | 'created_new_managed_tab' | 'not_acquired';
@@ -207,10 +229,42 @@ export function projectBilibiliVideoDiscussionDom(
     rootComments,
     firstThreadExpandVisible: dom.firstThreadExpandVisible,
     firstThreadExpanded: false,
+    firstThreadReplies: normaliseReplies(dom.firstThreadReplies),
+    replyPaginationVisible: dom.replyPaginationVisible ?? false,
+    replyPage: safePage(dom.replyPage),
+    replyPageCount: safePage(dom.replyPageCount),
+    replyHasMore: typeof dom.replyHasMore === 'boolean' ? dom.replyHasMore : null,
+    replyCoverage: normaliseReplyCoverage(dom.replyCoverage, dom.firstThreadReplies),
     loginGateVisible: dom.loginGateVisible,
     capturedAfterScroll: true,
     capturedAt
   };
+}
+
+function safePage(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 100_000
+    ? value
+    : null;
+}
+
+function normaliseReplies(value: unknown): BilibiliVideoDiscussionReply[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS).flatMap((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    const candidate = entry as Record<string, unknown>;
+    const author = cleanText(candidate.author, 200);
+    const content = cleanText(candidate.content, 4_000);
+    const publishedAt = cleanText(candidate.publishedAt, 100);
+    const likeCount = typeof candidate.likeCount === 'number' && Number.isSafeInteger(candidate.likeCount) && candidate.likeCount >= 0
+      ? candidate.likeCount
+      : null;
+    return content ? [{ author, content, publishedAt, likeCount }] : [];
+  });
+}
+
+function normaliseReplyCoverage(value: unknown, replies: unknown): BilibiliVideoDiscussionReplyCoverage {
+  if (value === 'not_expanded' || value === 'current_page' || value === 'empty' || value === 'unknown') return value;
+  return Array.isArray(replies) && replies.length > 0 ? 'current_page' : 'not_expanded';
 }
 
 export function targetUrlDigest(canonicalVideoUrl: string): string {

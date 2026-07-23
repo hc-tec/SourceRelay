@@ -319,3 +319,33 @@ accountSafety: ready
 动作前“点击查看”入口通过评论组件 Shadow DOM、实时边界框（`x=251,y=467,w=52,h=22`）、hover 和 composed hit-test 校验；动作后入口消失，回复分页控件出现，视觉截图 [8a900fdb-8227-44df-ac76-fd3802beb0ca.png](../../../poc/collector-gateway/runtime/p2a-validation-20260717/browser-host/visual-evidence/8a900fdb-8227-44df-ac76-fd3802beb0ca.png) 显示首个根评论下的回复树，Network 捕获 `/x/v2/reply/reply` 的 GET 200。没有点击“下一页”，没有展开第二个根评论，没有读取 response body。
 
 因此，当前已真实证明：默认热门根评论样本、最新评论排序、首个公开楼中楼展开三类人类流程均可在持久 Collection Profile 中按独立预算运行。尚未证明的是回复正文 response projector、回复分页覆盖、跨根评论采样、去重与完整性；这些必须作为后续独立 capability 和预算继续实现，不能把本次单线程展开宣称为“全量评论”。
+
+## P. 2026-07-23 回复组件字段复核与有界 MVP
+
+本轮先在独立可见 DevTools 侦察页按人类流程导航到同一公开视频、滚动到评论区并观察开放 Shadow DOM；没有加载待测扩展，不读取 Cookie、Token、storage、请求头、请求体或 response body。真实 DOM 确认了以下结构事实：
+
+```text
+bili-comments
+  └─ bili-comment-thread-renderer
+      └─ bili-comment-replies-renderer
+          └─ bili-comment-reply-renderer
+              ├─ bili-comment-user-info > #user-name
+              ├─ bili-rich-text > #contents
+              └─ bili-comment-action-buttons-renderer
+                  ├─ #pubdate
+                  └─ #like > #count
+```
+
+在公开可见的预览回复中，`#user-name`、`#contents`、`#pubdate` 和 `#like #count` 分别呈现作者、正文、发布时间和点赞数；回复 renderer 自身的 Shadow DOM 还会保留 `共 N 条回复` 与“点击查看”入口。匿名页点击该入口后受到登录门禁，未形成回复 route 后置条件，因此不计入认证楼中楼能力。
+
+基于上述真实字段，代码已加入一个不读取 response body 的有界 DOM 投影：
+
+- 单次只保存第一个根评论当前可见页，最多 20 条回复；
+- 每条只保留公开可见 `author/content/publishedAt/likeCount`，缺失或无法解析时为 `null`；
+- 记录 `replyPage/replyPageCount/replyHasMore/replyCoverage`，无法从可见分页控件确认时保持 `null/unknown`；
+- 不点击“下一页”，不展开第二个根评论，不遍历全部 162 页，不把预览回复误报为已展开回复；
+- 认证 Host 的真实浏览器输入仍要求三面后置条件；artifact 由动作后的 DOM 投影保存，response route 只保留 `/x/v2/reply/reply` 的 method/origin/path/status 时间元数据。
+
+本轮还发现并修复了页面池的一个实际设计缺陷：B站导航会把视频 URL 改写成尾斜杠或合法 `vd_source` 变体，原 exact-target 选择只比较 URL digest，导致三个 retained tab 被错误判定为不可复用并返回 `page_pool_capacity_exhausted`。源码现在在 `bilibili + video_discussion` 角色下按已验证的同一 BVID URL 变体复用 retained tab；并增加了对应纯状态机测试。当前受管 Browser Host 进程尚未热加载该修复，因此本轮容量失败 run 只作为缺陷证据，不计入真实回复能力证明；下一次 Host 生命周期切换后再做一次新的认证单 root run。
+
+当前 MVP 结论仍为 `partial / research-only / admissionEligible=false`：真实回复字段已被页面结构证明，生产投影与 artifact 路径已实现并通过本地单元/类型门禁，但尚缺一次加载新 Host/扩展构建后的认证三面闭环、分页控件真实页码样本和去重/完整性验证。

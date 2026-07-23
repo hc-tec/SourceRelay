@@ -11,6 +11,7 @@ import {
   touchRecord,
   type ManagedPageRecord
 } from './page-record.js';
+import { matchesBilibiliVideoDiscussionPageIdentity } from './bilibili-video-discussion-page-identity.js';
 
 const MAXIMUM_LEASE_DURATION_MS = 60 * 60 * 1000;
 export const DEFAULT_MAX_IDLE_TRUST_MS = 15 * 60 * 1000;
@@ -33,7 +34,8 @@ export function selectLeaseablePage(
   records: readonly ManagedPageRecord[],
   platform: string,
   pageRole: string,
-  targetUrlDigest: string | null
+  targetUrlDigest: string | null,
+  targetUrl?: string
 ): PageSelectionResult {
   const idle = records.filter((record) => record.state === 'idle_reusable');
   const exact = targetUrlDigest
@@ -56,8 +58,7 @@ export function selectLeaseablePage(
         !record.page.isClosed() &&
         record.platform === platform &&
         record.pageRole === pageRole &&
-        record.expectedIdentity.targetUrlDigest === targetUrlDigest &&
-        digestUrl(record.page.url()) === targetUrlDigest)
+        retainedTargetMatches(record, targetUrlDigest, targetUrl))
       .sort((left, right) => Date.parse(right.lastUsedAt) - Date.parse(left.lastUsedAt))[0] ?? null
     : null;
   if (retainedExact) return { record: retainedExact, selection: 'reused_exact_target' };
@@ -67,6 +68,18 @@ export function selectLeaseablePage(
   return idle[0]
     ? { record: idle[0], selection: 'reused_same_profile' }
     : { record: null, selection: null };
+}
+
+function retainedTargetMatches(
+  record: ManagedPageRecord,
+  targetUrlDigest: string,
+  targetUrl: string | undefined
+): boolean {
+  if (record.expectedIdentity.targetUrlDigest === targetUrlDigest &&
+    digestUrl(record.page.url()) === targetUrlDigest) return true;
+  if (record.platform !== 'bilibili' || record.pageRole !== 'video_discussion' || !targetUrl) return false;
+  const bvid = targetUrl.match(/\/video\/(BV[0-9A-Za-z]{10})\/?(?:[?#]|$)/)?.[1] ?? null;
+  return Boolean(bvid && matchesBilibiliVideoDiscussionPageIdentity(record.page.url(), bvid));
 }
 
 export function validateAcquireRequest(request: AcquirePageRequest, profileId: string): void {

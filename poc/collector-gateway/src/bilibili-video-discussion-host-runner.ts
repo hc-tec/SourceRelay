@@ -239,7 +239,10 @@ export class BilibiliVideoDiscussionHostRunner {
         runId: permit.runId,
         platform: 'bilibili',
         pageRole: 'video_discussion',
-        targetUrl: canonicalVideoUrl,
+        // Bilibili normalises the live document to a trailing slash after
+        // navigation. Keep the pool identity in that same form so a retained
+        // exact-target tab can be leased again instead of consuming capacity.
+        targetUrl: `${canonicalVideoUrl}/`,
         leaseDurationMs: RUN_DEADLINE_MS
       });
       targetTabSelection = pageSelection(acquired.selection);
@@ -461,7 +464,17 @@ export class BilibiliVideoDiscussionHostRunner {
               if (requestedAction === 'select_latest_comments') {
                 discussion = { ...discussion, sort: 'latest' };
               } else {
-                discussion = { ...discussion, firstThreadExpandVisible: false, firstThreadExpanded: true };
+                discussion = {
+                  ...discussion,
+                  firstThreadExpandVisible: false,
+                  firstThreadExpanded: true,
+                  firstThreadReplies: interaction.after.dom.firstThreadReplies,
+                  replyPaginationVisible: interaction.after.dom.replyPaginationVisible,
+                  replyPage: interaction.after.dom.replyPage,
+                  replyPageCount: interaction.after.dom.replyPageCount,
+                  replyHasMore: interaction.after.dom.replyHasMore,
+                  replyCoverage: interaction.after.dom.replyCoverage
+                };
               }
             } catch (error) {
               const actionErrorCode = safeErrorCode(error);

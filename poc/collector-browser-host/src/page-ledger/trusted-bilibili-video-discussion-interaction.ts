@@ -2,6 +2,7 @@ import type { Page, Response } from 'playwright';
 import {
   BrowserHostError,
   BILIBILI_VIDEO_DISCUSSION_INTERACTION_ACTIONS,
+  BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS,
   BILIBILI_VIDEO_DISCUSSION_INTERACTION_MAX_NETWORK_OBSERVATIONS,
   BILIBILI_VIDEO_DISCUSSION_INTERACTION_MAX_TIMEOUT_MS,
   BILIBILI_VIDEO_DISCUSSION_INTERACTION_SCHEMA_VERSION,
@@ -265,7 +266,7 @@ async function waitForProbe(
 }
 
 async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionAction, timeoutMs: number): Promise<DiscussionProbe> {
-  const value = await withinDeadline(page.evaluate((targetAction) => {
+  const value = await withinDeadline(page.evaluate((input) => {
     const clean = (value: string | null | undefined, maximum: number): string =>
       (value ?? '').replace(/\s+/g, ' ').trim().slice(0, maximum);
     const rendered = (element: Element | null): element is HTMLElement => {
@@ -332,6 +333,28 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
       }
       return visit(root);
     };
+    const findComposedAll = (
+      root: Element,
+      predicate: (element: Element) => boolean,
+      maximumNodes = 3_000
+    ): Element[] => {
+      const matches: Element[] = [];
+      let visited = 0;
+      const visit = (container: Element | ShadowRoot): void => {
+        for (const element of Array.from(container.children)) {
+          visited += 1;
+          if (visited > maximumNodes) return;
+          if (predicate(element)) matches.push(element);
+          if (element.shadowRoot) visit(element.shadowRoot);
+          visit(element);
+          if (visited > maximumNodes) return;
+        }
+      };
+      if (predicate(root)) matches.push(root);
+      if (root.shadowRoot) visit(root.shadowRoot);
+      visit(root);
+      return matches;
+    };
     const renderedControl = (element: Element): boolean =>
       rendered(element) || Boolean(element.shadowRoot &&
         Array.from(element.shadowRoot.querySelectorAll('*')).some((candidate) => rendered(candidate)));
@@ -386,6 +409,45 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
     const targetFor = (root: Element, label: string): Element | null =>
       findComposed(root, (element) => interactive(element) && renderedControl(element) &&
         clean(composedText(element), 100) === label);
+    const parseLikeCount = (value: string | null): number | null => {
+      const candidate = clean(value, 40);
+      if (!candidate) return null;
+      if (/^\d+$/.test(candidate)) {
+        const parsed = Number(candidate);
+        return Number.isSafeInteger(parsed) ? parsed : null;
+      }
+      const abbreviated = candidate.match(/^([\d.]+)\s*([万千])$/);
+      if (!abbreviated) return null;
+      const amount = Number(abbreviated[1]);
+      const multiplier = abbreviated[2] === '万' ? 10_000 : 1_000;
+      if (!Number.isFinite(amount)) return null;
+      const parsed = Math.round(amount * multiplier);
+      return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+    };
+    const replyRecord = (renderer: Element): {
+      author: string | null;
+      content: string;
+      publishedAt: string | null;
+      likeCount: number | null;
+    } | null => {
+      const userName = findComposed(renderer, (element) =>
+        element instanceof HTMLElement && element.id === 'user-name');
+      const contents = findComposed(renderer, (element) =>
+        element instanceof HTMLElement && element.id === 'contents');
+      if (!contents) return null;
+      const content = clean(composedText(contents), 4_000);
+      if (!content) return null;
+      const pubdate = findComposed(renderer, (element) =>
+        element instanceof HTMLElement && element.id === 'pubdate');
+      const count = findComposed(renderer, (element) =>
+        element instanceof HTMLElement && element.id === 'count');
+      return {
+        author: userName ? (clean(composedText(userName), 200) || null) : null,
+        content,
+        publishedAt: pubdate ? (clean(composedText(pubdate), 100) || null) : null,
+        likeCount: count ? parseLikeCount(composedText(count)) : null
+      };
+    };
     const host = document.querySelector<HTMLElement>('#commentapp');
     const commentRoot = host?.querySelector<HTMLElement>('bili-comments') ?? null;
     const commentText = clean(composedText(commentRoot ?? host ?? document.body), 20_000);
@@ -398,7 +460,17 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
     let hotControl: Element | null = null;
     let targetExpanded = false;
     let replyPaginationVisible = false;
-    if (targetAction === 'select_latest_comments') {
+    let firstThreadReplies: Array<{
+      author: string | null;
+      content: string;
+      publishedAt: string | null;
+      likeCount: number | null;
+    }> = [];
+    let replyPage: number | null = null;
+    let replyPageCount: number | null = null;
+    let replyHasMore: boolean | null = null;
+    let replyCoverage: 'not_expanded' | 'current_page' | 'empty' | 'unknown' = 'not_expanded';
+    if (input.action === 'select_latest_comments') {
       const header = commentRoot
         ? findComposed(commentRoot, (element) => element.tagName.toLowerCase() === 'bili-comments-header-renderer', 400)
         : null;
@@ -411,10 +483,53 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
           element.tagName.toLowerCase() === 'bili-comment-replies-renderer' && rendered(element), 800)
         : null;
       target = replyRenderer ? targetFor(replyRenderer, '点击查看') : null;
-      targetExpanded = Boolean(replyRenderer &&
-        (/收起|下一页|共\s*\d+\s*页/.test(clean(composedText(replyRenderer), 10_000)) ||
-          stateOf(replyRenderer) === 'active'));
-      replyPaginationVisible = Boolean(replyRenderer && /下一页|共\s*\d+\s*页|收起/.test(clean(composedText(replyRenderer), 10_000)));
+      const replyText = clean(replyRenderer ? composedText(replyRenderer) : '', 20_000);
+      const expandVisible = Boolean(target);
+      const replyRenderers = replyRenderer
+        ? findComposedAll(replyRenderer, (element) =>
+          element.tagName.toLowerCase() === 'bili-comment-reply-renderer' && rendered(element), 2_000)
+        : [];
+      const replyRecords = replyRenderers
+        .slice(0, input.maxReplyItems)
+        .map(replyRecord)
+        .filter((value): value is NonNullable<ReturnType<typeof replyRecord>> => value !== null);
+      const activePageButton = replyRenderer
+        ? findComposedAll(replyRenderer, (element) => interactive(element) && /^\d+$/.test(clean(composedText(element), 20)), 500)
+          .find((element) => stateOf(element) === 'active')
+        : null;
+      const activePageText = activePageButton ? clean(composedText(activePageButton), 20) : null;
+      const pageMatch = replyText.match(/第\s*(\d+)\s*页/);
+      const pageCountMatch = replyText.match(/共\s*(\d+)\s*页/);
+      const slashMatch = replyText.match(/(?:^|\s)(\d+)\s*\/\s*(\d+)(?:\s|$)/);
+      replyPage = pageMatch ? Number(pageMatch[1])
+        : slashMatch ? Number(slashMatch[1])
+          : activePageText ? Number(activePageText)
+            : null;
+      replyPageCount = pageCountMatch ? Number(pageCountMatch[1]) : slashMatch ? Number(slashMatch[2]) : null;
+      const nextButton = replyRenderer
+        ? findComposedAll(replyRenderer, (element) => interactive(element) && /下一页/.test(clean(composedText(element), 20)), 500)[0] ?? null
+        : null;
+      const nextDisabled = Boolean(nextButton && (
+        nextButton.getAttribute('aria-disabled') === 'true' ||
+        nextButton.hasAttribute('disabled') ||
+        nextButton.classList.contains('disabled') ||
+        nextButton.classList.contains('is-disabled')
+      ));
+      replyPaginationVisible = Boolean(replyRenderer && (
+        /下一页|上一页|第\s*\d+\s*页|共\s*\d+\s*页|收起/.test(replyText) || nextButton || activePageButton
+      ));
+      targetExpanded = Boolean(replyRenderer && !expandVisible && (
+        replyPaginationVisible || replyRenderers.length > 0 || stateOf(replyRenderer) === 'active'
+      ));
+      if (targetExpanded) {
+        firstThreadReplies = replyRecords;
+        replyCoverage = replyRecords.length > 0 ? 'current_page' : replyPaginationVisible ? 'empty' : 'unknown';
+        replyHasMore = replyPage !== null && replyPageCount !== null
+          ? replyPage < replyPageCount
+          : nextButton
+            ? !nextDisabled
+            : null;
+      }
     }
     const rect = target?.getBoundingClientRect() ?? null;
     const bounds = rect && rect.width > 0 && rect.height > 0
@@ -478,10 +593,15 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         targetHovered: composedHovered(target),
         targetExpanded,
         rootCommentCount: firstThread ? 1 : 0,
-        replyPaginationVisible
+        replyPaginationVisible,
+        firstThreadReplies,
+        replyPage,
+        replyPageCount,
+        replyHasMore,
+        replyCoverage
       }
     };
-  }, action), timeoutMs);
+  }, { action, maxReplyItems: BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS }), timeoutMs);
   return validateProbe(value);
 }
 
@@ -501,6 +621,19 @@ function validateProbe(value: unknown): DiscussionProbe {
     : null;
   const latestState = dom.latestState;
   const rootCommentCount = dom.rootCommentCount;
+  const firstThreadReplies = dom.firstThreadReplies;
+  const replyPage = dom.replyPage;
+  const replyPageCount = dom.replyPageCount;
+  const replyHasMore = dom.replyHasMore;
+  const replyCoverage = dom.replyCoverage;
+  const validReplies = Array.isArray(firstThreadReplies) && firstThreadReplies.length <= BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS &&
+    firstThreadReplies.every((reply) => reply && typeof reply === 'object' &&
+      (reply.author === null || typeof reply.author === 'string') && typeof reply.content === 'string' &&
+      reply.content.length > 0 && reply.content.length <= 4_000 &&
+      (reply.publishedAt === null || typeof reply.publishedAt === 'string') &&
+      (reply.likeCount === null || (typeof reply.likeCount === 'number' && Number.isSafeInteger(reply.likeCount) && reply.likeCount >= 0)));
+  const validPage = (value: unknown): value is number => value === null ||
+    (typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 100_000);
   if ((latestState !== 'active' && latestState !== 'inactive' && latestState !== 'unknown') ||
     typeof dom.commentHostPresent !== 'boolean' || typeof dom.commentHostVisible !== 'boolean' ||
     typeof dom.commentHostInViewport !== 'boolean' || typeof dom.loginGateVisible !== 'boolean' ||
@@ -508,7 +641,11 @@ function validateProbe(value: unknown): DiscussionProbe {
     typeof dom.sourceUnavailable !== 'boolean' || typeof dom.targetVisible !== 'boolean' ||
     typeof dom.targetInViewport !== 'boolean' || typeof dom.targetPointerHit !== 'boolean' ||
     typeof dom.targetHovered !== 'boolean' || typeof dom.targetExpanded !== 'boolean' ||
-    typeof dom.replyPaginationVisible !== 'boolean' || typeof rootCommentCount !== 'number' ||
+    typeof dom.replyPaginationVisible !== 'boolean' || !validReplies ||
+    !validPage(replyPage) || !validPage(replyPageCount) ||
+    (replyHasMore !== null && typeof replyHasMore !== 'boolean') ||
+    (replyCoverage !== 'not_expanded' && replyCoverage !== 'current_page' &&
+      replyCoverage !== 'empty' && replyCoverage !== 'unknown') || typeof rootCommentCount !== 'number' ||
     !Number.isSafeInteger(rootCommentCount) || rootCommentCount < 0 || rootCommentCount > 20) {
     throw new Error('bilibili_video_discussion_interaction_probe_invalid');
   }
@@ -529,7 +666,12 @@ function validateProbe(value: unknown): DiscussionProbe {
       targetHovered: dom.targetHovered,
       targetExpanded: dom.targetExpanded,
       rootCommentCount,
-      replyPaginationVisible: dom.replyPaginationVisible
+      replyPaginationVisible: dom.replyPaginationVisible,
+      firstThreadReplies: firstThreadReplies as BilibiliVideoDiscussionInteractionDomState['firstThreadReplies'],
+      replyPage,
+      replyPageCount,
+      replyHasMore,
+      replyCoverage
     }
   };
 }

@@ -17,6 +17,17 @@ export interface BilibiliVideoDiscussionDomSnapshot {
   commentContentState: 'loading' | 'ready' | 'empty' | 'unknown';
   rootCommentTexts: string[];
   firstThreadExpandVisible: boolean;
+  firstThreadReplies?: Array<{
+    author: string | null;
+    content: string;
+    publishedAt: string | null;
+    likeCount: number | null;
+  }>;
+  replyPaginationVisible?: boolean;
+  replyPage?: number | null;
+  replyPageCount?: number | null;
+  replyHasMore?: boolean | null;
+  replyCoverage?: 'not_expanded' | 'current_page' | 'empty' | 'unknown';
   loginGateVisible: boolean;
   risk: {
     verificationRequired: boolean;
@@ -153,7 +164,89 @@ export async function captureBilibiliVideoDiscussionDom(
           .slice(0, 20)
           .map((element) => clean(composedText(element), 2_000))
           .filter((value) => value.length > 0);
-        const commentText = clean(composedText(commentRoot ?? host), 20_000);
+        const firstThread = elements.find((element) =>
+          element.tagName.toLowerCase() === 'bili-comment-thread-renderer' && rendered(element)) ?? null;
+        const replyRenderer = firstThread
+          ? composedElements(firstThread).find((element) =>
+            element.tagName.toLowerCase() === 'bili-comment-replies-renderer' && rendered(element)) ?? null
+          : null;
+        const replyText = clean(replyRenderer ? composedText(replyRenderer) : '', 20_000);
+        const replyExpandVisible = Boolean(replyRenderer &&
+          visibleSemanticButton(composedElements(replyRenderer), '点击查看'));
+        const replyRenderers = replyRenderer
+          ? composedElements(replyRenderer)
+            .filter((element) => element.tagName.toLowerCase() === 'bili-comment-reply-renderer' && rendered(element))
+            .slice(0, 20)
+          : [];
+        const parseLikeCount = (value: string): number | null => {
+          const candidate = clean(value, 40);
+          if (!candidate) return null;
+          if (/^\d+$/.test(candidate)) {
+            const parsed = Number(candidate);
+            return Number.isSafeInteger(parsed) ? parsed : null;
+          }
+          const abbreviated = candidate.match(/^([\d.]+)\s*([万千])$/);
+          if (!abbreviated) return null;
+          const amount = Number(abbreviated[1]);
+          if (!Number.isFinite(amount)) return null;
+          const parsed = Math.round(amount * (abbreviated[2] === '万' ? 10_000 : 1_000));
+          return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+        };
+        const elementWithId = (root: Element, id: string): Element | null =>
+          [root, ...composedElements(root)].find((element) => element.id === id) ?? null;
+        const projectedReplies = replyRenderers.flatMap((renderer) => {
+          const userName = elementWithId(renderer, 'user-name');
+          const contents = elementWithId(renderer, 'contents');
+          if (!contents) return [];
+          const content = clean(composedText(contents), 4_000);
+          if (!content) return [];
+          const pubdate = elementWithId(renderer, 'pubdate');
+          const count = elementWithId(renderer, 'count');
+          return [{
+            author: userName ? (clean(composedText(userName), 200) || null) : null,
+            content,
+            publishedAt: pubdate ? (clean(composedText(pubdate), 100) || null) : null,
+            likeCount: count ? parseLikeCount(composedText(count)) : null
+          }];
+        });
+        const activePageButton = replyRenderer
+          ? composedElements(replyRenderer)
+            .filter((element) => (element.tagName.toLowerCase() === 'bili-text-button' ||
+              element.tagName.toLowerCase() === 'button' || element.getAttribute('role') === 'button') &&
+              /^\d+$/.test(clean(composedText(element), 20)))
+            .find((element) => stateOf(element) === 'active') ?? null
+          : null;
+        const pageMatch = replyText.match(/第\s*(\d+)\s*页/);
+        const pageCountMatch = replyText.match(/共\s*(\d+)\s*页/);
+        const slashMatch = replyText.match(/(?:^|\s)(\d+)\s*\/\s*(\d+)(?:\s|$)/);
+        const replyPage = pageMatch ? Number(pageMatch[1])
+          : slashMatch ? Number(slashMatch[1])
+            : activePageButton ? Number(clean(composedText(activePageButton), 20))
+              : null;
+        const replyPageCount = pageCountMatch ? Number(pageCountMatch[1]) : slashMatch ? Number(slashMatch[2]) : null;
+        const nextButton = replyRenderer
+          ? composedElements(replyRenderer).find((element) =>
+            (element.tagName.toLowerCase() === 'bili-text-button' || element.tagName.toLowerCase() === 'button' ||
+              element.getAttribute('role') === 'button') && /下一页/.test(clean(composedText(element), 20))) ?? null
+          : null;
+        const nextDisabled = Boolean(nextButton && (nextButton.getAttribute('aria-disabled') === 'true' ||
+          nextButton.hasAttribute('disabled') || nextButton.classList.contains('disabled') ||
+          nextButton.classList.contains('is-disabled')));
+        const replyPaginationVisible = Boolean(replyRenderer && (
+          /下一页|上一页|第\s*\d+\s*页|共\s*\d+\s*页|收起/.test(replyText) || nextButton || activePageButton
+        ));
+        const firstThreadExpanded = Boolean(replyRenderer && !replyExpandVisible &&
+          (replyPaginationVisible || replyRenderers.length > 0));
+        const firstThreadReplies = firstThreadExpanded ? projectedReplies : [];
+        const replyCoverage = firstThreadExpanded
+          ? firstThreadReplies.length > 0 ? 'current_page' as const : replyPaginationVisible ? 'empty' as const : 'unknown' as const
+          : 'not_expanded' as const;
+        const replyHasMore = firstThreadExpanded
+          ? replyPage !== null && replyPageCount !== null
+            ? replyPage < replyPageCount
+            : nextButton ? !nextDisabled : null
+          : null;
+        const commentText = clean(composedText(commentRoot ?? host ?? document.body), 20_000);
         const commentContentState = /正在玩命加载|正在加载|加载中|loading/i.test(commentText)
           ? 'loading' as const
           : roots.length > 0
@@ -185,6 +278,12 @@ export async function captureBilibiliVideoDiscussionDom(
           commentContentState,
           rootCommentTexts: roots,
           firstThreadExpandVisible,
+          firstThreadReplies,
+          replyPaginationVisible,
+          replyPage,
+          replyPageCount,
+          replyHasMore,
+          replyCoverage,
           loginGateVisible: /登录后查看|登录参与社区互动/.test(commentText),
           risk: {
             verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(commentText),

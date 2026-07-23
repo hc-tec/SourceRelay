@@ -53,6 +53,33 @@ describe('Managed page identity and lease invariants', () => {
     });
   });
 
+  test('reuses a retained Bilibili discussion tab across the public vd_source URL variant', () => {
+    const canonical = 'https://www.bilibili.com/video/BV1qZSLBYEpa';
+    const retained = record({
+      alias: 'discussion-retained',
+      url: `${canonical}/?vd_source=0123456789abcdef0123456789abcdef`,
+      targetUrl: canonical,
+      state: 'retained_for_review',
+      pageRole: 'video_discussion'
+    });
+    expect(selectLeaseablePage(
+      [retained.record],
+      'bilibili',
+      'video_discussion',
+      digestUrl(`${canonical}/`),
+      `${canonical}/`
+    )).toMatchObject({ record: retained.record, selection: 'reused_exact_target' });
+
+    retained.browserPage.setUrl('https://www.bilibili.com/video/BV1xx411c7mD/');
+    expect(selectLeaseablePage(
+      [retained.record],
+      'bilibili',
+      'video_discussion',
+      digestUrl(`${canonical}/`),
+      `${canonical}/`
+    )).toEqual({ record: null, selection: null });
+  });
+
   test('creates a lease whose state requires navigation when the current page differs from its exact target', () => {
     const candidate = record({ url: 'about:blank' });
     const request = acquireRequest();
