@@ -295,6 +295,18 @@ Plan 只选择 Collector-owned、idle reusable、无 lease/permit、非 Control�
 
 Execute 逐页再次核验 session、record version、ownership、state、lease 与身份；变化页面跳过。MVP 只有用户显式执行、关闭 Profile 或明确开发生命周期切换才关闭页面，不自动定时回收。
 
+### 7.5 Quarantine 维护动作
+
+`quarantined` 不属于回收候选，也不能通过普通 `release_page`、`reconcile_page` 或复用选择器悄悄恢复。需要清理时只能调用显式的 `close_quarantined_page` 本地维护命令，并同时提交：
+
+```text
+profileId + pageAlias + exact recordVersion
+```
+
+Host 依次校验页面存在、版本仍匹配、状态仍为 `quarantined`、没有活动 lease，然后才关闭这一页并记录 `closed`。任何版本漂移、状态变化或活动 lease 都只返回可审计维护错误，不触碰浏览器页面；命令不会关闭 retained 成功页，也不会关闭整个 Profile。该动作不代表平台动作，不解除 Account Safety 锁，也不把页面重新投入复用。
+
+2026-07-23 已在独立真实 Chromium/Profile 上完成一次生命周期验证：访问公开 B 站视频一次后显式 quarantine，读取精确版本并执行 `close_quarantined_page`，最终页面为 `closed`；临时 Host/Profile 已清理，当前登录 Profile 的浏览器进程、两个 retained 页和一个历史 quarantine 页均保持不变。
+
 ## 8. 平台执行链
 
 ### 8.1 职责
