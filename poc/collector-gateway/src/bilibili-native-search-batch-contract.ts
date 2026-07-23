@@ -23,6 +23,7 @@ export interface BilibiliNativeSearchBatchInput {
 
 export type BilibiliNativeSearchBatchTerminalReason =
   | 'search_batch_ready'
+  | 'search_batch_empty'
   | 'search_batch_duplicates'
   | 'search_batch_page_partial'
   | 'search_batch_page_failed'

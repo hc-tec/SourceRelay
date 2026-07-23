@@ -67,6 +67,9 @@ function terminalForPage(result: BilibiliNativeSearchHostRunResult): {
       errorCode: result.run.errorCode
     };
   }
+  if (result.run.coverage.terminalReason === 'search_empty') {
+    return { state: 'completed', terminalReason: 'search_batch_empty', errorCode: null };
+  }
   return { state: 'completed', terminalReason: 'search_batch_ready', errorCode: null };
 }
 
@@ -111,6 +114,11 @@ export class BilibiliNativeSearchBatchHostRunner {
       pageRuns.push(pageRun(result));
       if (result.run.results) projections.push({ page, projection: result.run.results });
       const pageTerminal = terminalForPage(result);
+      if (pageTerminal.terminalReason === 'search_batch_empty') {
+        terminalReason = pageTerminal.terminalReason;
+        errorCode = null;
+        break;
+      }
       if (pageTerminal.state !== 'completed') {
         state = pageTerminal.state;
         terminalReason = pageTerminal.terminalReason;

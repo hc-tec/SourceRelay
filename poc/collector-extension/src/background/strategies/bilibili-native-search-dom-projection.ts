@@ -22,6 +22,43 @@ export interface BilibiliNativeSearchDomSnapshot {
 }
 
 /**
+ * B 站 currently renders an empty search as `.search-nodata-container` /
+ * `.no-data`, not as a class containing `empty` or `no-result`. Keep this
+ * classifier independent from the page so the real DOM contract can be unit
+ * tested without inventing a fake page.
+ */
+export function isBilibiliNativeSearchEmptyStateElement(
+  className: string | null,
+  text: string | null,
+  visible: boolean
+): boolean {
+  if (!visible || !text?.trim()) return false;
+  const classes = (className ?? '').split(/\s+/).filter(Boolean).map((value) => value.toLowerCase());
+  return classes.some((value) => value === 'no-data' || value.includes('nodata') ||
+    value.includes('no-result') || value.includes('empty'));
+}
+
+/**
+ * The anonymous header's `.login-panel-popover` is a non-blocking tooltip. It
+ * must not turn a public search empty state into `authentication_required`.
+ * Only modal/mask semantics count as a blocking login surface.
+ */
+export function isBilibiliNativeSearchBlockingLoginElement(input: {
+  className: string | null;
+  role: string | null;
+  ariaModal: string | null;
+  visible: boolean;
+  width: number;
+  height: number;
+}): boolean {
+  if (!input.visible || input.width < 160 || input.height < 120) return false;
+  if (input.role === 'dialog' || input.ariaModal === 'true') return true;
+  const classes = (input.className ?? '').split(/\s+/).filter(Boolean).map((value) => value.toLowerCase());
+  return classes.some((value) => value === 'bili-mini-mask' || value === 'bili-mini-login' ||
+    value === 'passport-login-container' || value.includes('login-modal') || value.includes('passport-layer'));
+}
+
+/**
  * Fixed projection for the default Bilibili "综合" search page. It only emits
  * visible canonical BV video cards; ads, courses, live rooms, films and other
  * mixed search object types are intentionally excluded by construction.
@@ -39,6 +76,26 @@ export async function captureBilibiliNativeSearchDom(
         const clean = (value: string | null | undefined, maximum: number): string | null => {
           const result = (value ?? '').replace(/\s+/g, ' ').trim();
           return result && result.length <= maximum && !/[\u0000-\u001f\u007f]/.test(result) ? result : null;
+        };
+        const isEmptyStateElement = (className: string | null, text: string | null, visible: boolean): boolean => {
+          if (!visible || !text?.trim()) return false;
+          const classes = (className ?? '').split(/\s+/).filter(Boolean).map((value) => value.toLowerCase());
+          return classes.some((value) => value === 'no-data' || value.includes('nodata') ||
+            value.includes('no-result') || value.includes('empty'));
+        };
+        const isBlockingLoginElement = (input: {
+          className: string | null;
+          role: string | null;
+          ariaModal: string | null;
+          visible: boolean;
+          width: number;
+          height: number;
+        }): boolean => {
+          if (!input.visible || input.width < 160 || input.height < 120) return false;
+          if (input.role === 'dialog' || input.ariaModal === 'true') return true;
+          const classes = (input.className ?? '').split(/\s+/).filter(Boolean).map((value) => value.toLowerCase());
+          return classes.some((value) => value === 'bili-mini-mask' || value === 'bili-mini-login' ||
+            value === 'passport-login-container' || value.includes('login-modal') || value.includes('passport-layer'));
         };
         const rendered = (element: Element | null): element is HTMLElement => {
           if (!(element instanceof HTMLElement)) return false;
@@ -71,7 +128,7 @@ export async function captureBilibiliNativeSearchDom(
           }
         };
         const searchInput = document.querySelector<HTMLInputElement>('input[placeholder="输入关键字搜索"]');
-        const resultType = location.pathname === '/all'
+        const resultType: BilibiliNativeSearchDomSnapshot['resultType'] = location.pathname === '/all'
           ? 'comprehensive'
           : location.pathname === '/video'
             ? 'video'
@@ -79,7 +136,7 @@ export async function captureBilibiliNativeSearchDom(
         const activeSortButton = Array.from(document.querySelectorAll<HTMLButtonElement>('.search-condition-row button'))
           .find((button) => rendered(button) && /vui_button--active|selected/.test(button.className)) ?? null;
         const activeSortLabel = clean(activeSortButton?.innerText, 80);
-        const sort = activeSortLabel === '综合排序'
+        const sort: BilibiliNativeSearchDomSnapshot['sort'] = activeSortLabel === '综合排序'
           ? 'relevance'
           : activeSortLabel === '最新发布'
             ? 'newest'
@@ -137,13 +194,30 @@ export async function captureBilibiliNativeSearchDom(
           });
         }
         const emptyStateVisible = Array.from(
-          document.querySelectorAll<HTMLElement>('[class*="empty" i], [class*="no-result" i]')
-        ).some((element) => rendered(element) && /未找到|没有找到|暂无/.test(clean(element.innerText, 500) ?? ''));
+          document.querySelectorAll<HTMLElement>(
+            '.search-nodata-container, .no-data, [class*="nodata" i], [class*="no-result" i], [class*="empty" i]'
+          )
+        ).some((element) => isEmptyStateElement(
+          element.getAttribute('class'),
+          clean(element.innerText, 500),
+          rendered(element)
+        ));
         const bodyText = clean(document.body?.innerText, 100_000) ?? '';
         const loginOverlayVisible = Array.from(
-          document.querySelectorAll<HTMLElement>('[role="dialog"], [class*="login" i], [class*="passport" i]')
-        ).some((element) => rendered(element) &&
-          element.getBoundingClientRect().width >= 160 && element.getBoundingClientRect().height >= 120);
+          document.querySelectorAll<HTMLElement>(
+            '[role="dialog"], [aria-modal="true"], .bili-mini-mask, .bili-mini-login, .passport-login-container, [class*="login-modal" i], [class*="passport-layer" i]'
+          )
+        ).some((element) => {
+          const rect = element.getBoundingClientRect();
+          return isBlockingLoginElement({
+            className: element.getAttribute('class'),
+            role: element.getAttribute('role'),
+            ariaModal: element.getAttribute('aria-modal'),
+            visible: rendered(element),
+            width: rect.width,
+            height: rect.height
+          });
+        });
         return {
           searchInputVisible: rendered(searchInput),
           resultListVisible: rendered(resultRoot),

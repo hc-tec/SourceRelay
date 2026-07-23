@@ -123,6 +123,30 @@ admissionEligible: false
 
 临时 Gateway、Browser Host 和 Profile 已在 canary 结束后显式关闭；43131 监听端口已清理，其他受管 Gateway（43127/43128/43129）未受影响。
 
+### 空结果终止 canary
+
+批量 canary 随后使用同一隔离 Profile 做了一次真实空结果验证，请求页预算为 `[1, 2]`。第一次复跑的截图已经显示空页面，但旧 DOM projector 只寻找 `empty` / `no-result` 类名，漏掉了真实的 `.search-nodata-container` / `.no-data`，并把匿名顶部 `.login-panel-popover` 误当成阻断式登录弹层，因而错误终止为 `authentication_required`。该失败只作为 bug 证据，不计入空结果能力。
+
+修正真实 DOM 分类器并重新构建后，第二次独立 run 的结果为：
+
+```yaml
+batchId: 9b9a12e3-dac9-454d-9113-68633c7256e0
+artifactId: ac12da63-4ecb-4069-808d-f22a867e00ef
+query: sha256_only_in_persisted_artifacts
+queryDigest: ebc9195f0fd605ba86361b068b6678147d3836348d287f614374153f096070a1
+requestedPages: [1, 2]
+capturedPages: 1
+uniqueItems: 0
+duplicateCount: 0
+unresolvedCardCount: 0
+state: completed
+terminalReason: search_batch_empty
+page2Navigation: not_dispatched
+admissionEligible: false
+```
+
+视觉证据显示搜索框、视频类型、最新发布排序和 B 站真实空态文案“今天真是寂寞如雪啊~”；DOM 证据对应 `.search-nodata-container` 与 `.no-data`，动作账本只有一次 page 1 导航。batch 在空态成立后不再导航 page 2，`capturedPages=1` 是有意的稳定终止，不是异常丢页；未读取 response body、请求参数值或认证材料。
+
 ## 结论
 
 `bilibili.search.breadth.dom.v2 @ 0.2.0` 已在 UTF-8 中文查询上完成一次真实生产首屏闭环，但当前策略仍保持：
@@ -133,4 +157,4 @@ admissionEligible: false
 productionStatus: research-only
 ```
 
-下一门槛不再是“有没有 batch runner”，而是补齐空结果样本、跨任务的结果漂移/重复比例 coverage、batch 中断恢复和独立 review；不能把本次 batch 的 40 条 unique 结果或旧的 v1 admission 自动扩大为 v2 admission。
+下一门槛不再是“有没有 batch runner”或“能否识别空结果”，而是补齐跨任务的结果漂移/重复比例 coverage、batch 中断恢复和独立 review；不能把本次 batch 的 40 条 unique 结果、空结果终止或旧的 v1 admission 自动扩大为 v2 admission。

@@ -7,7 +7,7 @@ import type { BilibiliNativeSearchHostRunResult } from '../src/bilibili-native-s
 
 const profileId = '11111111-1111-4111-8111-111111111111';
 
-function pageResult(page: number, bvids: string[]): BilibiliNativeSearchHostRunResult {
+function pageResult(page: number, bvids: string[], terminalReason: 'search_ready' | 'search_empty' = 'search_ready'): BilibiliNativeSearchHostRunResult {
   const items = bvids.map((bvid, index) => ({
     rank: index + 1,
     bvid,
@@ -21,7 +21,7 @@ function pageResult(page: number, bvids: string[]): BilibiliNativeSearchHostRunR
     resultType: 'video' as const,
     sort: 'newest' as const,
     page,
-    resultState: 'video_results' as const,
+    resultState: bvids.length > 0 ? 'video_results' as const : 'no_video_results' as const,
     items,
     semanticResultCardCount: items.length,
     visibleVideoCardCount: items.length,
@@ -40,7 +40,7 @@ function pageResult(page: number, bvids: string[]): BilibiliNativeSearchHostRunR
       coverage: {
         capturedItems: items.length,
         unresolvedCardCount: 0,
-        terminalReason: 'search_ready'
+        terminalReason
       }
     },
     artifact: {
@@ -118,5 +118,48 @@ describe('Bilibili native-search batch contract', () => {
       terminalReason: 'search_batch_duplicates'
     });
     expect(record).toHaveBeenCalledOnce();
+  });
+
+  test('stops at a real empty page and preserves an explicit empty terminal reason', async () => {
+    const singleRunner = {
+      run: vi.fn().mockResolvedValueOnce(pageResult(1, [], 'search_empty'))
+    };
+    const record = vi.fn(async () => ({
+      schemaVersion: 1 as const,
+      artifactId: '44444444-4444-4444-8444-444444444444',
+      batchId: '55555555-5555-4555-8555-555555555555',
+      platform: 'bilibili' as const,
+      capturedAt: '2026-07-23T00:00:00.000Z',
+      state: 'completed' as const,
+      search: { resultType: 'video' as const, sort: 'newest' as const, pages: [1, 2] },
+      queryDigest: 'a'.repeat(64),
+      requestedPages: 2,
+      capturedPages: 1,
+      uniqueItems: 0,
+      duplicateCount: 0,
+      terminalReason: 'search_batch_empty' as const,
+      manifestSha256: 'b'.repeat(64)
+    }));
+    const runner = new BilibiliNativeSearchBatchHostRunner({
+      singleRunner: singleRunner as never,
+      artifacts: { record } as never
+    });
+    const result = await runner.run({
+      profileId,
+      query: '不存在的检索词',
+      resultType: 'video',
+      sort: 'newest',
+      pages: [1, 2]
+    });
+    expect(singleRunner.run).toHaveBeenCalledOnce();
+    expect(result.run.state).toBe('completed');
+    expect(result.run.coverage).toMatchObject({
+      requestedPages: 2,
+      capturedPages: 1,
+      uniqueItems: 0,
+      duplicateCount: 0,
+      partial: false,
+      terminalReason: 'search_batch_empty'
+    });
   });
 });
