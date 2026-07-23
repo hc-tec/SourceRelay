@@ -199,3 +199,29 @@ comment_navigation
 - `select_latest_comments` 与 `expand_first_thread` 的动作预算仍各自最多一次；目标未通过组件层级和可见边界框校验时，`attempted=false / prerequisite_unmet`，不得尝试全页面兜底。
 
 本轮没有把匿名登录门控误报成平台 route 不可用，也没有把错误点击产生的对话框当成评论能力证据。认证样本中既有的 `/x/v2/reply/wbi/main` 与 `/x/v2/reply/reply` 因果记录仍是候选研究证据，但 response schema projector 和 production response routes 继续为空；下一步应在现有登录 Collection Profile 清理出可用页面后，执行一次严格 scoped 的认证 `select_latest_comments`，再执行一次 scoped 的单 root `expand_first_thread`。
+
+## L. 2026-07-23 discussion DOM runner canary
+
+在独立临时 Gateway、独立可见 Chromium Collection Profile 和当前 production extension build 上完成了一次新的产品闭环验证。该 run 没有复用登录 Profile，也没有读取认证材料。
+
+```yaml
+runId: d580e1a2-d43c-45ac-ac84-30e24c1ccb01
+artifactId: 85cc5a05-56e9-4a8c-a360-facd8948d49c
+target: BV1qZSLBYEpa
+strategy: bilibili.video.discussion.dom.v1 @ 0.1.0
+state: partial
+terminalReason: login_required
+navigationCount: 1
+trustedScrollCount: 1
+clickCount: 0
+rootComments: 2
+commentContentState: ready
+responseBodies: not_read
+productionResponseRoutes: []
+targetPage: retained_for_review
+admissionEligible: false
+```
+
+视觉证据显示评论标题、数量、`最热/最新`、登录评论提示和首屏评论卡均已出现；artifact 中两条根评论文本不再包含 Shadow DOM `<style>` 内容。匿名页面的登录门禁被如实保留为 `partial/login_required`，没有点击登录、排序或楼中楼，也没有自动重试。
+
+这次 canary 还暴露并修复了两个生产后置条件缺陷：评论宿主出现但仍显示“正在玩命加载…”时不能判定 `discussion_ready`；评论文本、登录和风控信号必须限定在 `#commentapp` 组件树，不能用全页面文本兜底。当前 DOM runner 只在 `ready` 或明确 `empty` 状态投影，加载超时进入失败语义。最新排序与楼中楼动作仍未在该 run 中尝试，response projector 和 admission 继续保持暂停。

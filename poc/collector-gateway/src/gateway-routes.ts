@@ -19,8 +19,11 @@ import { bilibiliNativeSearchInput } from './bilibili-native-search-contract';
 import type { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import type { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
+import type { BilibiliVideoDiscussionArtifactStore } from './bilibili-video-discussion-artifacts';
+import type { BilibiliVideoDiscussionHostRunner } from './bilibili-video-discussion-host-runner';
 import type { BilibiliTranscriptArtifactStore } from './bilibili-transcript-artifacts';
 import { bilibiliTranscriptInput } from './bilibili-transcript-contract';
+import { bilibiliVideoDiscussionInput } from './bilibili-video-discussion-contract';
 import type { BilibiliTranscriptHostRunner } from './bilibili-transcript-host-runner';
 import type { CollectionBrowserManager } from './browser-manager';
 import type { LoadedGatewayIdentity } from './identity';
@@ -52,6 +55,8 @@ export interface GatewayRouteContext {
   nativeSearchRunner: BilibiliNativeSearchHostRunner;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
   videoDetailRunner: BilibiliVideoDetailHostRunner;
+  discussionArtifacts: BilibiliVideoDiscussionArtifactStore;
+  discussionRunner: BilibiliVideoDiscussionHostRunner;
   transcriptArtifacts: BilibiliTranscriptArtifactStore;
   transcriptRunner: BilibiliTranscriptHostRunner;
 }
@@ -202,6 +207,10 @@ export async function handleGatewayRoute(
   }
   if (request.method === 'GET' && url.pathname === '/v1/video-detail-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.videoDetailArtifacts.list() });
+    return true;
+  }
+  if (request.method === 'GET' && url.pathname === '/v1/bilibili-video-discussion-artifacts') {
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.discussionArtifacts.list() });
     return true;
   }
   if (request.method === 'GET' && url.pathname === '/v1/bilibili-transcript-artifacts') {
@@ -419,6 +428,27 @@ export async function handleGatewayRoute(
     });
     return true;
   }
+  const discussionRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/video/discussion$`, 'i'));
+  if (request.method === 'POST' && discussionRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const discussion = bilibiliVideoDiscussionInput(await readJsonBody(request));
+    const result = await context.discussionRunner.run({
+      profileId: discussionRun[1]!,
+      canonicalVideoUrl: discussion.canonicalVideoUrl
+    });
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        coverage: result.run.coverage,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
   const transcriptRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/video/transcript$`, 'i'));
   if (request.method === 'POST' && transcriptRun) {
     if (!sameOrigin(request, response, context)) return true;
@@ -505,6 +535,15 @@ export async function handleGatewayRoute(
   if (request.method === 'GET' && videoDetailArtifact) {
     const artifact = await context.videoDetailArtifacts.get(videoDetailArtifact[1]!);
     if (!artifact) throw new Error('bilibili_video_detail_artifact_not_found');
+    sendJson(response, 200, { schemaVersion: 1, artifact });
+    return true;
+  }
+  const discussionArtifact = url.pathname.match(
+    new RegExp(`^/v1/bilibili-video-discussion-artifacts/(${PROFILE_ID})$`, 'i')
+  );
+  if (request.method === 'GET' && discussionArtifact) {
+    const artifact = await context.discussionArtifacts.get(discussionArtifact[1]!);
+    if (!artifact) throw new Error('bilibili_video_discussion_artifact_not_found');
     sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }

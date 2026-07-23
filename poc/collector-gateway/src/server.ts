@@ -16,6 +16,8 @@ import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-arti
 import { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
+import { BilibiliVideoDiscussionArtifactStore } from './bilibili-video-discussion-artifacts';
+import { BilibiliVideoDiscussionHostRunner } from './bilibili-video-discussion-host-runner';
 import { BilibiliTranscriptArtifactStore } from './bilibili-transcript-artifacts';
 import { BilibiliTranscriptHostRunner } from './bilibili-transcript-host-runner';
 import { CollectionBrowserManager } from './browser-manager';
@@ -39,6 +41,7 @@ const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifa
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
+const discussionArtifacts = await BilibiliVideoDiscussionArtifactStore.create(config.stateDirectory);
 const transcriptArtifacts = await BilibiliTranscriptArtifactStore.create(config.stateDirectory);
 const dynamicRunner = new BilibiliDynamicHostRunner({
   accountSafety,
@@ -81,6 +84,12 @@ const videoDetailRunner = new BilibiliVideoDetailHostRunner({
   browserManager,
   profiles: profileRegistry,
   artifacts: videoDetailArtifacts
+});
+const discussionRunner = new BilibiliVideoDiscussionHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: discussionArtifacts
 });
 const transcriptRunner = new BilibiliTranscriptHostRunner({
   accountSafety,
@@ -125,6 +134,8 @@ const server = createServer(async (request, response) => {
       nativeSearchRunner,
       videoDetailArtifacts,
       videoDetailRunner,
+      discussionArtifacts,
+      discussionRunner,
       transcriptArtifacts,
       transcriptRunner
     });

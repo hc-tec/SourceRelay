@@ -2,6 +2,7 @@ export interface BilibiliVideoDiscussionDomSnapshot {
   bvid: string | null;
   commentHostPresent: boolean;
   commentHostVisible: boolean;
+  commentHostInViewport: boolean;
   commentHostBounds: {
     x: number;
     y: number;
@@ -13,6 +14,7 @@ export interface BilibiliVideoDiscussionDomSnapshot {
     latestVisible: boolean;
     latestState: 'active' | 'inactive' | 'unknown';
   };
+  commentContentState: 'loading' | 'ready' | 'empty' | 'unknown';
   rootCommentTexts: string[];
   firstThreadExpandVisible: boolean;
   loginGateVisible: boolean;
@@ -51,6 +53,7 @@ export async function captureBilibiliVideoDiscussionDom(
         const composedText = (node: Node): string => {
           if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
           if (!(node instanceof Element || node instanceof DocumentFragment)) return '';
+          if (node instanceof Element && ['STYLE', 'SCRIPT', 'TEMPLATE'].includes(node.tagName)) return '';
           const shadow = node instanceof Element ? node.shadowRoot : null;
           const source = shadow ?? node;
           return Array.from(source.childNodes).map(composedText).join(' ');
@@ -67,10 +70,16 @@ export async function captureBilibiliVideoDiscussionDom(
           if (root.shadowRoot) visit(root.shadowRoot);
           return result;
         };
+        const renderedControl = (element: Element): boolean =>
+          rendered(element) || Boolean(element.shadowRoot &&
+            Array.from(element.shadowRoot.querySelectorAll('*')).some((candidate) => rendered(candidate)));
         const visibleSemanticButton = (elements: readonly Element[], label: string): Element | null =>
-          elements.find((element) => element.tagName.toLowerCase() === 'bili-text-button' &&
-            rendered(element) && clean(composedText(element), 100) === label) ?? null;
-        const bodyText = clean(composedText(document.body), 30_000);
+          elements.find((element) => {
+            const tagName = element.tagName.toLowerCase();
+            const interactive = tagName === 'bili-text-button' || tagName === 'button' ||
+              element.getAttribute('role') === 'button';
+            return interactive && renderedControl(element) && clean(composedText(element), 100) === label;
+          }) ?? null;
         const host = document.querySelector<HTMLElement>('#commentapp');
         const commentRoot = host?.querySelector<HTMLElement>('bili-comments') ?? null;
         const elements = commentRoot ? composedElements(commentRoot) : [];
@@ -88,10 +97,19 @@ export async function captureBilibiliVideoDiscussionDom(
           .slice(0, 20)
           .map((element) => clean(composedText(element), 2_000))
           .filter((value) => value.length > 0);
+        const commentText = clean(composedText(commentRoot ?? host), 20_000);
+        const commentContentState = /正在玩命加载|正在加载|加载中|loading/i.test(commentText)
+          ? 'loading' as const
+          : roots.length > 0
+            ? 'ready' as const
+            : /暂无评论|还没有评论|成为第一个评论者|快来发表你的评论/.test(commentText)
+              ? 'empty' as const
+              : 'unknown' as const;
         const firstThreadExpandVisible = elements
           .filter((element) => element.tagName.toLowerCase() === 'bili-comment-replies-renderer')
           .some((renderer) => visibleSemanticButton(composedElements(renderer), '点击查看') !== null);
         const rect = host?.getBoundingClientRect();
+        const commentHostInViewport = Boolean(rect && rect.bottom > 0 && rect.top < window.innerHeight);
         const bvid = location.protocol === 'https:' && location.hostname === 'www.bilibili.com'
           ? location.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/)?.[1] ?? null
           : null;
@@ -99,6 +117,7 @@ export async function captureBilibiliVideoDiscussionDom(
           bvid,
           commentHostPresent: Boolean(host && commentRoot),
           commentHostVisible: Boolean(commentRoot && rendered(commentRoot)),
+          commentHostInViewport,
           commentHostBounds: rect && rect.width > 0 && rect.height > 0
             ? { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
             : null,
@@ -107,13 +126,14 @@ export async function captureBilibiliVideoDiscussionDom(
             latestVisible: latest !== null,
             latestState
           },
+          commentContentState,
           rootCommentTexts: roots,
           firstThreadExpandVisible,
-          loginGateVisible: /登录后查看|登录参与社区互动/.test(bodyText),
+          loginGateVisible: /登录后查看|登录参与社区互动/.test(commentText),
           risk: {
-            verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(bodyText),
-            rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(bodyText),
-            sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(bodyText)
+            verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(commentText),
+            rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(commentText),
+            sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(commentText)
           }
         };
       }

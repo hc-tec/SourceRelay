@@ -91,3 +91,5 @@ coverage / terminal_reason / status
 本轮又在独立、可关闭的临时 Collection Profile 对 `BV1qZSLBYEpa` 完成一次真实视频详情闭环：`completed / detail_ready`，一次导航、零 hover/click/scroll、零自动重试，标题、简介、创作者、8 个标签和选集摘要均已捕获，`accessStatus=indeterminate`。临时 Profile 已关闭；登录 Collection Profile 的两个 retained 成功页保持不变。该证据只把 `video_detail` 的首屏 MVP 标记为“真实闭环已复核”，不把字幕、弹幕、评论、全量选集或推荐内容视为已完成。详见[视频详情 DOM MVP](../reconnaissance/bilibili/video-detail-dom-mvp-v0.1.md)。
 
 评论能力本轮完成了新的匿名 Shadow DOM 结构复核：`#commentapp > bili-comments` 的开放 shadow tree 中可稳定发现 `最热/最新` 与首个 `点击查看` 语义控件，滚动后 `/x/v2/reply/wbi/main` 返回 200；一次全页面文本误点打开登录对话框，已记录为 `inconclusive` 并停止，不计入能力完成度。`discussion` 仍保持“route 因果已研究、response projector 未 admission”，下一步只在登录 Profile 清理出可用页面后做严格组件 scoped 的认证动作闭环。
+
+2026-07-23 又完成了 `bilibili.video.discussion.dom.v1 @ 0.1.0` 的独立临时 Profile 产品 canary：一次导航、一次可信滚动、0 次点击，捕获 2 条根评论；页面视觉与 DOM 均显示评论已就绪，但匿名登录门禁使 run 诚实结束为 `partial / login_required`，目标页面保留在 `retained_for_review`，response body 与 production response routes 仍为空。此次 canary 修复了“评论宿主出现但仍在加载时误报完成”和 Shadow DOM `<style>` 污染评论文本两个问题；该策略仍为 `build_ready`，`admissionEligible=false`，最新排序与楼中楼动作没有在本次 run 中尝试。
