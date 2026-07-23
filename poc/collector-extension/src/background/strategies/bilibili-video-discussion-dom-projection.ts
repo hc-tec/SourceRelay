@@ -80,18 +80,46 @@ export async function captureBilibiliVideoDiscussionDom(
               element.getAttribute('role') === 'button';
             return interactive && renderedControl(element) && clean(composedText(element), 100) === label;
           }) ?? null;
+        const stateOf = (element: Element | null): 'active' | 'inactive' | 'unknown' => {
+          if (!element) return 'unknown';
+          const inspect = (candidate: Element): 'active' | 'inactive' | 'unknown' => {
+            const pressed = candidate.getAttribute('aria-pressed') ?? candidate.getAttribute('aria-selected');
+            if (pressed === 'true') return 'active';
+            if (pressed === 'false') return 'inactive';
+            if (candidate.classList.contains('active') || candidate.classList.contains('selected') ||
+              candidate.classList.contains('is-active') || candidate.classList.contains('is-selected')) return 'active';
+            return 'unknown';
+          };
+          const candidates = [element, ...Array.from(element.querySelectorAll('*'))];
+          for (const candidate of candidates) {
+            const state = inspect(candidate);
+            if (state !== 'unknown') return state;
+          }
+          let current: Node | null = element;
+          while (current) {
+            if (current instanceof Element) {
+              const state = inspect(current);
+              if (state !== 'unknown') return state;
+            }
+            if (current.parentNode) {
+              current = current.parentNode;
+              continue;
+            }
+            const root = current.getRootNode();
+            current = root instanceof ShadowRoot ? root.host : null;
+          }
+          return 'unknown';
+        };
         const host = document.querySelector<HTMLElement>('#commentapp');
         const commentRoot = host?.querySelector<HTMLElement>('bili-comments') ?? null;
         const elements = commentRoot ? composedElements(commentRoot) : [];
         const latest = visibleSemanticButton(elements, '最新');
         const hot = visibleSemanticButton(elements, '最热');
-        const latestState = latest
-          ? latest.getAttribute('aria-pressed') === 'true' || latest.getAttribute('aria-selected') === 'true'
-            ? 'active' as const
-            : latest.getAttribute('aria-pressed') === 'false' || latest.getAttribute('aria-selected') === 'false'
-              ? 'inactive' as const
-              : 'unknown' as const
-          : 'unknown' as const;
+        const latestState = stateOf(latest);
+        const hotState = stateOf(hot);
+        const resolvedLatestState = latestState === 'unknown' && hotState === 'active'
+          ? 'inactive' as const
+          : latestState;
         const roots = elements
           .filter((element) => element.tagName.toLowerCase() === 'bili-comment-thread-renderer' && rendered(element))
           .slice(0, 20)
@@ -124,7 +152,7 @@ export async function captureBilibiliVideoDiscussionDom(
           sortControls: {
             hotVisible: hot !== null,
             latestVisible: latest !== null,
-            latestState
+            latestState: resolvedLatestState
           },
           commentContentState,
           rootCommentTexts: roots,

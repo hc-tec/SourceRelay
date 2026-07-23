@@ -340,6 +340,22 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         if (candidate.classList.contains('active') || candidate.classList.contains('selected') ||
           candidate.classList.contains('is-active') || candidate.classList.contains('is-selected')) return 'active';
       }
+      let current: Node | null = element;
+      while (current) {
+        if (current instanceof Element) {
+          const pressed = current.getAttribute('aria-pressed') ?? current.getAttribute('aria-selected');
+          if (pressed === 'true') return 'active';
+          if (pressed === 'false') return 'inactive';
+          if (current.classList.contains('active') || current.classList.contains('selected') ||
+            current.classList.contains('is-active') || current.classList.contains('is-selected')) return 'active';
+        }
+        if (current.parentNode) {
+          current = current.parentNode;
+          continue;
+        }
+        const root = current.getRootNode();
+        current = root instanceof ShadowRoot ? root.host : null;
+      }
       return 'unknown';
     };
     const targetFor = (root: Element, label: string): Element | null =>
@@ -354,6 +370,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
       : null;
     let target: Element | null = null;
     let latestControl: Element | null = null;
+    let hotControl: Element | null = null;
     let targetExpanded = false;
     let replyPaginationVisible = false;
     if (targetAction === 'select_latest_comments') {
@@ -361,6 +378,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         ? findComposed(commentRoot, (element) => element.tagName.toLowerCase() === 'bili-comments-header-renderer', 400)
         : null;
       latestControl = targetFor(header ?? commentRoot ?? host ?? document.body, '最新');
+      hotControl = targetFor(header ?? commentRoot ?? host ?? document.body, '最热');
       target = latestControl;
     } else {
       const replyRenderer = firstThread
@@ -407,6 +425,9 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
       }
       return false;
     };
+    const latestState = stateOf(latestControl);
+    const hotState = stateOf(hotControl);
+    const resolvedLatestState = latestState === 'unknown' && hotState === 'active' ? 'inactive' : latestState;
     return {
       dom: {
         commentHostPresent: Boolean(host && commentRoot),
@@ -416,7 +437,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(commentText),
         rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(commentText),
         sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(commentText),
-        latestState: stateOf(latestControl),
+        latestState: resolvedLatestState,
         targetVisible: Boolean(target && renderedControl(target)),
         targetInViewport: Boolean(rect && rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth),
         targetBounds: bounds,
