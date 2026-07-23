@@ -103,6 +103,8 @@ export class BrowserHostRuntime {
         return await this.#profile(body.request.profileId).clickBilibiliAccountVideoPage(body.request);
       case 'select_bilibili_transcript_chinese':
         return await this.#profile(body.request.profileId).selectBilibiliTranscriptChinese(body.request);
+      case 'click_bilibili_video_discussion_control':
+        return await this.#profile(body.request.profileId).clickBilibiliVideoDiscussionControl(body.request);
       case 'capture_page_visual_evidence':
         return await this.#profile(body.request.profileId).captureVisualEvidence(body.request);
       case 'bind_strategy_observer':

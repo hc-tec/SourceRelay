@@ -3,6 +3,8 @@ import type {
   BilibiliAccountVideoPageClickResult,
   BilibiliTranscriptChineseSelectionRequest,
   BilibiliTranscriptChineseSelectionResult,
+  BilibiliVideoDiscussionInteractionRequest,
+  BilibiliVideoDiscussionInteractionResult,
   AcquirePageRequest,
   AcquirePageResult,
   CapturePageVisualEvidenceRequest,
@@ -96,6 +98,13 @@ export class CollectionBrowserManager {
   ): Promise<BilibiliTranscriptChineseSelectionResult> {
     this.#registry.get(request.profileId);
     return await this.#runtime.selectBilibiliTranscriptChinese(request);
+  }
+
+  async clickBilibiliVideoDiscussionControl(
+    request: BilibiliVideoDiscussionInteractionRequest
+  ): Promise<BilibiliVideoDiscussionInteractionResult> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.clickBilibiliVideoDiscussionControl(request);
   }
 
   async capturePageVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {

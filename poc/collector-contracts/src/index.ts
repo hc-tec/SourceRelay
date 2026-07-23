@@ -1,6 +1,7 @@
 export * from './bilibili-account-video-pagination.js';
 export * from './bilibili-account-profile.js';
 export * from './bilibili-transcript-interaction.js';
+export * from './bilibili-video-discussion-interaction.js';
 export * from './bilibili-native-search.js';
 export * from './errors.js';
 export * from './extension-runtime.js';

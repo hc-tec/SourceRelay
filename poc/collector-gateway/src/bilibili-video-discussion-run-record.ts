@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   BILIBILI_DISCUSSION_STRATEGY_ID,
+  type BilibiliVideoDiscussionInteractionResult,
   type StrategyBindingDiagnostics
 } from '@intelligence/collector-contracts';
 import {
@@ -26,6 +27,7 @@ export function createBilibiliVideoDiscussionRunRecord(input: {
   state: BilibiliVideoDiscussionRunRecord['state'];
   errorCode: string | null;
   discussion: BilibiliVideoDiscussionProjection | null;
+  interactions: BilibiliVideoDiscussionInteractionResult[];
   visualEvidence: BilibiliVideoDiscussionRunRecord['visualEvidence'];
   bindingDiagnostics?: StrategyBindingDiagnostics | null;
   actions: BilibiliVideoDiscussionAction[];
@@ -52,6 +54,7 @@ export function createBilibiliVideoDiscussionRunRecord(input: {
     startedAt: input.startedAt,
     completedAt: input.completedAt,
     discussion: input.discussion,
+    interactions: structuredClone(input.interactions),
     visualEvidence: input.visualEvidence,
     ...(input.bindingDiagnostics ? { bindingDiagnostics: structuredClone(input.bindingDiagnostics) } : {}),
     actions: input.actions,
@@ -59,6 +62,7 @@ export function createBilibiliVideoDiscussionRunRecord(input: {
       capturedRootComments: input.discussion?.rootComments.length ?? 0,
       sort: input.discussion?.sort ?? null,
       firstThreadExpandVisible: input.discussion?.firstThreadExpandVisible ?? false,
+      firstThreadExpanded: input.discussion?.firstThreadExpanded ?? false,
       loginGateVisible: input.discussion?.loginGateVisible ?? false,
       capturedAfterScroll: input.discussion?.capturedAfterScroll ?? false,
       terminalReason: input.terminalReason

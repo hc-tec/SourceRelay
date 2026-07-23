@@ -4,6 +4,8 @@ import {
   type BilibiliAccountVideoPageClickResult,
   type BilibiliTranscriptChineseSelectionRequest,
   type BilibiliTranscriptChineseSelectionResult,
+  type BilibiliVideoDiscussionInteractionRequest,
+  type BilibiliVideoDiscussionInteractionResult,
   type AcquirePageRequest,
   type AcquirePageResult,
   type BrowserProfilePagePoolSummary,
@@ -200,6 +202,12 @@ export class ProfileRuntime {
     request: BilibiliTranscriptChineseSelectionRequest
   ): Promise<BilibiliTranscriptChineseSelectionResult> {
     return this.#ledger.selectBilibiliTranscriptChinese(request, this.#visualEvidenceDirectory);
+  }
+
+  clickBilibiliVideoDiscussionControl(
+    request: BilibiliVideoDiscussionInteractionRequest
+  ): Promise<BilibiliVideoDiscussionInteractionResult> {
+    return this.#ledger.clickBilibiliVideoDiscussionControl(request, this.#visualEvidenceDirectory);
   }
 
   async bindStrategyObserver(request: StrategyObserverBindingRequest): Promise<StrategyObserverBindingResult> {

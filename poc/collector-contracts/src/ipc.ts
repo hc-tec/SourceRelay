@@ -32,6 +32,10 @@ import type {
   BilibiliTranscriptChineseSelectionRequest,
   BilibiliTranscriptChineseSelectionResult
 } from './bilibili-transcript-interaction.js';
+import type {
+  BilibiliVideoDiscussionInteractionRequest,
+  BilibiliVideoDiscussionInteractionResult
+} from './bilibili-video-discussion-interaction.js';
 
 export const BROWSER_HOST_PROTOCOL_VERSION = 7 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
@@ -73,6 +77,7 @@ export type BrowserHostCommandBody =
   | { type: 'scroll_page'; request: ScrollPageRequest }
   | { type: 'click_bilibili_account_video_page'; request: BilibiliAccountVideoPageClickRequest }
   | { type: 'select_bilibili_transcript_chinese'; request: BilibiliTranscriptChineseSelectionRequest }
+  | { type: 'click_bilibili_video_discussion_control'; request: BilibiliVideoDiscussionInteractionRequest }
   | { type: 'capture_page_visual_evidence'; request: CapturePageVisualEvidenceRequest }
   | { type: 'bind_strategy_observer'; request: StrategyObserverBindingRequest }
   | { type: 'read_strategy_observation'; request: StrategyObservationReadRequest }
@@ -105,6 +110,7 @@ export type BrowserHostCommandResult =
   | PageScrollResult
   | BilibiliAccountVideoPageClickResult
   | BilibiliTranscriptChineseSelectionResult
+  | BilibiliVideoDiscussionInteractionResult
   | PageVisualEvidence
   | ReclaimPlan
   | ReclaimExecutionResult

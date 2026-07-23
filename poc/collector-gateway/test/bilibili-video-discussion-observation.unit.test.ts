@@ -39,8 +39,19 @@ describe('Bilibili discussion DOM contract', () => {
       .toBe(`https://www.bilibili.com/video/${bvid}`);
     expect(canonicalBilibiliVideoDiscussionUrl(`https://www.bilibili.com/video/${bvid}?from=search`)).toBeNull();
     expect(bilibiliVideoDiscussionInput({ canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}` }))
-      .toEqual({ canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}` });
+      .toEqual({ canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`, actions: [] });
     expect(bilibiliVideoDiscussionBvid(`https://www.bilibili.com/video/${bvid}`)).toBe(bvid);
+    expect(bilibiliVideoDiscussionInput({
+      canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
+      actions: ['select_latest_comments', 'expand_first_thread']
+    })).toEqual({
+      canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
+      actions: ['select_latest_comments', 'expand_first_thread']
+    });
+    expect(() => bilibiliVideoDiscussionInput({
+      canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
+      actions: ['select_latest_comments', 'select_latest_comments']
+    })).toThrow('bilibili_video_discussion_input_invalid');
   });
 
   test('accepts a bounded shadow-DOM projection and preserves login gate state', () => {

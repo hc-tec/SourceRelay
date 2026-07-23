@@ -29,6 +29,7 @@ export interface BilibiliVideoDiscussionArtifactManifest
   collectorVersion: string;
   strategyCandidate: BilibiliVideoDiscussionRunRecord['strategyCandidate'];
   actions: BilibiliVideoDiscussionRunRecord['actions'];
+  interactions: BilibiliVideoDiscussionRunRecord['interactions'];
   coverage: BilibiliVideoDiscussionRunRecord['coverage'];
   discussionFile: typeof DISCUSSION_FILE | null;
   discussionFileSha256: string | null;
@@ -153,6 +154,7 @@ export class BilibiliVideoDiscussionArtifactStore {
       collectorVersion: run.collectorVersion,
       strategyCandidate: run.strategyCandidate,
       actions: run.actions,
+      interactions: run.interactions,
       coverage: run.coverage,
       discussionFile,
       discussionFileSha256,

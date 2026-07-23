@@ -1,11 +1,17 @@
 import { createHash } from 'node:crypto';
-import type { PageVisualEvidence, StrategyBindingDiagnostics } from '@intelligence/collector-contracts';
+import type {
+  BilibiliVideoDiscussionInteractionAction,
+  BilibiliVideoDiscussionInteractionResult,
+  PageVisualEvidence,
+  StrategyBindingDiagnostics
+} from '@intelligence/collector-contracts';
 
 export const BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS = 20;
 export const BILIBILI_VIDEO_DISCUSSION_STRATEGY_VERSION = '0.1.0' as const;
 
 export interface BilibiliVideoDiscussionInput {
   canonicalVideoUrl: string;
+  actions: BilibiliVideoDiscussionInteractionAction[];
 }
 
 export interface BilibiliVideoDiscussionDomSnapshot {
@@ -37,6 +43,7 @@ export interface BilibiliVideoDiscussionProjection {
   contentState: 'ready' | 'empty';
   rootComments: string[];
   firstThreadExpandVisible: boolean;
+  firstThreadExpanded: boolean;
   loginGateVisible: boolean;
   capturedAfterScroll: boolean;
   capturedAt: string;
@@ -44,7 +51,7 @@ export interface BilibiliVideoDiscussionProjection {
 
 export interface BilibiliVideoDiscussionAction {
   actionId: string;
-  kind: 'navigation' | 'scroll';
+  kind: 'navigation' | 'scroll' | BilibiliVideoDiscussionInteractionAction;
   attempted: boolean;
   attemptCount: 0 | 1;
   outcome: 'completed' | 'prerequisite_unmet' | 'postcondition_unmet' | 'risk_stopped' | 'failed';
@@ -59,7 +66,8 @@ export type BilibiliVideoDiscussionTerminalReason =
   | 'source_unavailable'
   | 'dom_projection_failed'
   | 'document_context_changed'
-  | 'run_deadline_exceeded';
+  | 'run_deadline_exceeded'
+  | 'interaction_prerequisite_unmet';
 
 export interface BilibiliVideoDiscussionRunRecord {
   schemaVersion: 1;
@@ -80,6 +88,7 @@ export interface BilibiliVideoDiscussionRunRecord {
   startedAt: string;
   completedAt: string;
   discussion: BilibiliVideoDiscussionProjection | null;
+  interactions: BilibiliVideoDiscussionInteractionResult[];
   visualEvidence: PageVisualEvidence | null;
   bindingDiagnostics?: StrategyBindingDiagnostics;
   actions: BilibiliVideoDiscussionAction[];
@@ -87,6 +96,7 @@ export interface BilibiliVideoDiscussionRunRecord {
     capturedRootComments: number;
     sort: BilibiliVideoDiscussionProjection['sort'] | null;
     firstThreadExpandVisible: boolean;
+    firstThreadExpanded: boolean;
     loginGateVisible: boolean;
     capturedAfterScroll: boolean;
     terminalReason: BilibiliVideoDiscussionTerminalReason;
@@ -140,12 +150,19 @@ export function canonicalBilibiliVideoDiscussionUrl(value: string): string | nul
 
 export function bilibiliVideoDiscussionInput(value: unknown): BilibiliVideoDiscussionInput {
   const candidate = record(value);
-  if (!candidate || Object.keys(candidate).length !== 1 || typeof candidate.canonicalVideoUrl !== 'string') {
+  if (!candidate || Object.keys(candidate).some((key) => key !== 'canonicalVideoUrl' && key !== 'actions') ||
+    typeof candidate.canonicalVideoUrl !== 'string') {
     throw new Error('bilibili_video_discussion_input_invalid');
   }
   const canonicalVideoUrl = canonicalBilibiliVideoDiscussionUrl(candidate.canonicalVideoUrl);
   if (!canonicalVideoUrl) throw new Error('bilibili_video_discussion_input_invalid');
-  return { canonicalVideoUrl };
+  const actions = candidate.actions === undefined ? [] : candidate.actions;
+  if (!Array.isArray(actions) || actions.length > 2 ||
+    actions.some((action) => action !== 'select_latest_comments' && action !== 'expand_first_thread') ||
+    new Set(actions).size !== actions.length) {
+    throw new Error('bilibili_video_discussion_input_invalid');
+  }
+  return { canonicalVideoUrl, actions: [...actions] };
 }
 
 export function bilibiliVideoDiscussionBvid(canonicalVideoUrl: string): string {
@@ -189,6 +206,7 @@ export function projectBilibiliVideoDiscussionDom(
     contentState: dom.commentContentState,
     rootComments,
     firstThreadExpandVisible: dom.firstThreadExpandVisible,
+    firstThreadExpanded: false,
     loginGateVisible: dom.loginGateVisible,
     capturedAfterScroll: true,
     capturedAt

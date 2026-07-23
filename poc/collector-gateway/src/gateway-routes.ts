@@ -434,7 +434,8 @@ export async function handleGatewayRoute(
     const discussion = bilibiliVideoDiscussionInput(await readJsonBody(request));
     const result = await context.discussionRunner.run({
       profileId: discussionRun[1]!,
-      canonicalVideoUrl: discussion.canonicalVideoUrl
+      canonicalVideoUrl: discussion.canonicalVideoUrl,
+      actions: discussion.actions
     });
     sendJson(response, 201, {
       schemaVersion: 1,

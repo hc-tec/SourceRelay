@@ -12,6 +12,8 @@ import {
   type BilibiliAccountVideoPageClickResult,
   type BilibiliTranscriptChineseSelectionRequest,
   type BilibiliTranscriptChineseSelectionResult,
+  type BilibiliVideoDiscussionInteractionRequest,
+  type BilibiliVideoDiscussionInteractionResult,
   COLLECTOR_CONTROL_SURFACE_REVISION,
   COLLECTOR_EXTENSION_VERSION,
   COLLECTOR_RUNTIME_BUILD_METADATA_FILENAME,
@@ -120,6 +122,20 @@ export class GatewayBrowserHostRuntime {
     return bilibiliTranscriptChineseSelectionResponse(
       await this.#command({ type: 'select_bilibili_transcript_chinese', request }, false)
     );
+  }
+
+  async clickBilibiliVideoDiscussionControl(
+    request: BilibiliVideoDiscussionInteractionRequest
+  ): Promise<BilibiliVideoDiscussionInteractionResult> {
+    const result = await this.#command({ type: 'click_bilibili_video_discussion_control', request }, false);
+    if (!result || typeof result !== 'object' ||
+      (result as { schemaVersion?: unknown }).schemaVersion !== 1 ||
+      typeof (result as { actionId?: unknown }).actionId !== 'string' ||
+      typeof (result as { pageAlias?: unknown }).pageAlias !== 'string' ||
+      !('before' in result) || !('after' in result) || !('network' in result)) {
+      throw new Error('browser_host_bilibili_video_discussion_interaction_response_invalid');
+    }
+    return structuredClone(result as BilibiliVideoDiscussionInteractionResult);
   }
 
   async capturePageVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {

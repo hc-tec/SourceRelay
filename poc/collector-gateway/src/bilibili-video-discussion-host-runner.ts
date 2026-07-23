@@ -1,8 +1,11 @@
 import {
   BILIBILI_DISCUSSION_STRATEGY_ID,
+  BILIBILI_VIDEO_DISCUSSION_INTERACTION_SCHEMA_VERSION,
   BrowserHostError,
   COLLECTOR_EXTENSION_VERSION,
   type AcquirePageResult,
+  type BilibiliVideoDiscussionInteractionAction,
+  type BilibiliVideoDiscussionInteractionResult,
   type PageReleaseDisposition,
   type StrategyBindingDiagnostics
 } from '@intelligence/collector-contracts';
@@ -34,6 +37,7 @@ const OBSERVATION_DEADLINE_MS = 15_000;
 export interface BilibiliVideoDiscussionHostRunInput {
   profileId: string;
   canonicalVideoUrl: string;
+  actions?: BilibiliVideoDiscussionInteractionAction[];
 }
 
 export interface BilibiliVideoDiscussionHostRunResult {
@@ -51,9 +55,14 @@ class DiscussionObservationError extends Error {
   }
 }
 
-function input(value: BilibiliVideoDiscussionHostRunInput): BilibiliVideoDiscussionHostRunInput {
+function input(value: BilibiliVideoDiscussionHostRunInput): BilibiliVideoDiscussionHostRunInput & {
+  actions: BilibiliVideoDiscussionInteractionAction[];
+} {
   if (!PROFILE_ID.test(value.profileId)) throw new Error('bilibili_video_discussion_profile_invalid');
-  return { profileId: value.profileId, ...bilibiliVideoDiscussionInput({ canonicalVideoUrl: value.canonicalVideoUrl }) };
+  return {
+    profileId: value.profileId,
+    ...bilibiliVideoDiscussionInput({ canonicalVideoUrl: value.canonicalVideoUrl, actions: value.actions })
+  };
 }
 
 function navigationAction(runId: string): BilibiliVideoDiscussionAction {
@@ -71,6 +80,20 @@ function scrollAction(runId: string): BilibiliVideoDiscussionAction {
   return {
     actionId: `scroll_video_discussion_${runId.replace(/-/g, '_')}`,
     kind: 'scroll',
+    attempted: false,
+    attemptCount: 0,
+    outcome: 'prerequisite_unmet',
+    errorCode: null
+  };
+}
+
+function interactionAction(
+  runId: string,
+  action: BilibiliVideoDiscussionInteractionAction
+): BilibiliVideoDiscussionAction {
+  return {
+    actionId: `${action}_${runId.replace(/-/g, '_')}`,
+    kind: action,
     attempted: false,
     attemptCount: 0,
     outcome: 'prerequisite_unmet',
@@ -114,6 +137,7 @@ function failureFor(error: unknown): {
     errorCode === 'managed_page_document_generation_mismatch' ||
     errorCode === 'managed_page_record_version_mismatch' ||
     errorCode === 'managed_page_run_mismatch' ||
+    errorCode === 'bilibili_video_discussion_interaction_outcome_unknown' ||
     errorCode === 'video_discussion_strategy_document_context_changed' ||
     errorCode === 'video_discussion_managed_page_context_changed'
   ) return { state: 'failed', terminalReason: 'document_context_changed', errorCode, uncertainPageOutcome: true };
@@ -166,18 +190,21 @@ export class BilibiliVideoDiscussionHostRunner {
     return await this.#runWithPermit(
       permit,
       request.canonicalVideoUrl,
-      bilibiliVideoDiscussionBvid(request.canonicalVideoUrl)
+      bilibiliVideoDiscussionBvid(request.canonicalVideoUrl),
+      request.actions
     );
   }
 
   async #runWithPermit(
     permit: AccountSafetyRunPermit,
     canonicalVideoUrl: string,
-    bvid: string
+    bvid: string,
+    requestedActions: BilibiliVideoDiscussionInteractionAction[]
   ): Promise<BilibiliVideoDiscussionHostRunResult> {
     const navigation = navigationAction(permit.runId);
     const scroll = scrollAction(permit.runId);
-    const actions = [navigation, scroll];
+    const actions = [navigation, scroll, ...requestedActions.map((action) => interactionAction(permit.runId, action))];
+    const interactionResults: BilibiliVideoDiscussionInteractionResult[] = [];
     let deadline = 0;
     let acquired: AcquirePageResult | null = null;
     let discussion: BilibiliVideoDiscussionProjection | null = null;
@@ -329,6 +356,62 @@ export class BilibiliVideoDiscussionHostRunner {
             errorCode = null;
           }
         }
+        if (discussion && !discussion.loginGateVisible && requestedActions.length > 0) {
+          for (const requestedAction of requestedActions) {
+            const actionRecord = actions.find((candidate) => candidate.kind === requestedAction);
+            if (!actionRecord) throw new Error('video_discussion_interaction_action_missing');
+            try {
+              const context = await this.#leasedPageContext({
+                profileId: permit.profileId,
+                pageAlias: acquired.page.pageAlias,
+                pageLeaseId: acquired.lease.pageLeaseId,
+                runId: permit.runId
+              });
+              await this.#accountSafety.recordActionAttempt(
+                permit.profileId,
+                'bilibili',
+                permit.runId,
+                actionRecord.actionId
+              );
+              actionRecord.attempted = true;
+              actionRecord.attemptCount = 1;
+              const interaction = await this.#browserManager.clickBilibiliVideoDiscussionControl({
+                schemaVersion: BILIBILI_VIDEO_DISCUSSION_INTERACTION_SCHEMA_VERSION,
+                profileId: permit.profileId,
+                pageAlias: acquired.page.pageAlias,
+                pageLeaseId: acquired.lease.pageLeaseId,
+                runId: permit.runId,
+                expectedRecordVersion: context.recordVersion,
+                expectedDocumentGeneration: context.documentGeneration,
+                actionId: actionRecord.actionId,
+                action: requestedAction,
+                bvid,
+                timeoutMs: Math.min(20_000, remainingDeadline(deadline, 1_000))
+              });
+              interactionResults.push(interaction);
+              actionRecord.outcome = 'completed';
+              if (requestedAction === 'select_latest_comments') {
+                discussion = { ...discussion, sort: 'latest' };
+              } else {
+                discussion = { ...discussion, firstThreadExpandVisible: false, firstThreadExpanded: true };
+              }
+            } catch (error) {
+              const actionErrorCode = safeErrorCode(error);
+              actionRecord.errorCode = actionErrorCode;
+              if (error instanceof BrowserHostError && error.record.platformActionAttempted) throw error;
+              actionRecord.outcome = 'prerequisite_unmet';
+              state = 'partial';
+              terminalReason = 'interaction_prerequisite_unmet';
+              errorCode = actionErrorCode;
+              break;
+            }
+          }
+          if (state === 'completed' &&
+            actions.filter((action) => action.kind === 'select_latest_comments' || action.kind === 'expand_first_thread')
+              .every((action) => action.outcome === 'completed')) {
+            terminalReason = 'discussion_ready';
+          }
+        }
         visualEvidence = await this.#captureVisualEvidence({
           profileId: permit.profileId,
           pageAlias: acquired.page.pageAlias,
@@ -387,6 +470,7 @@ export class BilibiliVideoDiscussionHostRunner {
       state,
       errorCode,
       discussion,
+      interactions: interactionResults,
       visualEvidence,
       bindingDiagnostics,
       actions,
