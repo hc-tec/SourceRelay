@@ -286,3 +286,26 @@ currentMainFrameState     not_checked | unavailable | target_mismatch |
 根因是详情策略额外要求 `playerControlsVisible` 才宣布首屏 ready。这个条件源自播放器/访问状态研究，却与详情 MVP 的零 hover 边界不相容，并且不是详情字段的必要证据。`0.7.14 / revision 12` 因此删除该字段和所有 contract gating：首屏 ready 只要求规范 BVID、非空可见标题、可见播放器和既有 3 秒 document 稳定窗口。访问限制仍由正向、可见的门禁 DOM 单独记录；播放器控制条、字幕、播放、评论和多 P 操作继续属于独立能力，不再阻塞详情元数据。
 
 该修复后的新版受管闭环对同一正常公开视频执行了一次新的独立 run，并得到 `completed / detail_ready`：标题、简介、创作者、8 个标签和选集摘要均已捕获；登录浮层未出现，访问状态如实为 `indeterminate`。动作账本只有一次完成的导航，hover/click/scroll 均为零，response body 仍为 `not_read`；终态页保留供复核，Account Safety 回到 `ready` 且没有 active run。结论：**proved（当前桌面首屏详情 MVP）**。这次成功不扩大到字幕、播放、全量选集、评论或楼中楼；它只解除详情元数据对播放器控制条的错误耦合。
+
+## 15. 独立临时 Collection Profile 真实闭环（2026-07-23）
+
+为避免当前登录 Collection Profile 的页面池被一个历史 `quarantined` 页面占满，本轮没有关闭或劫持它的任何页面，而是创建了一个独立、可关闭的临时 Collection Profile，仅用于验证详情 MVP 的真实链路。该 Profile 未导入或读取任何现有认证材料。
+
+```text
+runId       6ce0c05f-4d6f-4b6b-aba5-6d7b6a819d2f
+artifactId  b913b3eb-5108-4df2-be6f-fcf1112022e9
+target      BV1qZSLBYEpa
+state       completed
+reason      detail_ready
+```
+
+本次动作和结果：
+
+- 真实 Chromium、MV3 扩展、Native Messaging、Browser Host、Gateway 全链路；
+- 导航 1 次，hover/click/scroll 0 次，自动平台重试 0 次；
+- 标题、简介、创作者、8 个标签、选集摘要均捕获；
+- `accessStatus=indeterminate`，登录浮层、验证码、限流和来源不可用均未观察到；
+- 页面终态为 `retained_for_review`，随后只关闭该临时 Profile，未关闭项目登录 Profile；
+- 公开扩展版本仍为 `0.7.17`，control-surface revision 仍为 `15`，本轮没有因为普通功能验证升级可见版本。
+
+结论仍限定为：**首屏公开视频详情 MVP 的真实闭环可用**。这不扩大到字幕正文、全量选集、评论、楼中楼、弹幕或推荐内容。
