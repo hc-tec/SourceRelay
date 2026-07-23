@@ -91,7 +91,7 @@ risk.sourceUnavailable: false
 | `a6318f7b-dcc9-472c-950c-c54de4704efc` | video | newest | 2 | 20/20，`search_ready` | 与第 1 页比较有 5 个重复 BVID，不能宣称跨页无重复 |
 | `91a24a7d-1f09-4f32-b44d-d39b64b836a4` | comprehensive | relevance | 1 | 20/20，`search_ready` | 综合页公开视频卡片可投影，混合对象仍被排除 |
 
-这些 run 进一步证明了类型和排序枚举的真实可行性，但没有把单页 runner 自动升级成多页任务。跨页任务必须在同一任务上下文内保存 query/type/sort/page、页间 BVID 去重和终止原因；本轮的 5 个重复项是必须保留的边界事实。
+这些 run 进一步证明了类型和排序枚举的真实可行性。Gateway 已补上按稳定 BVID 合并页窗口的纯逻辑 helper，并用单元测试固定“保留首个页面顺序、记录重复 BVID、重复即 partial”的规则；但尚未把单页 runner 自动升级成多页任务。跨页任务仍必须在同一任务上下文内保存 query/type/sort/page、页间 BVID 去重和终止原因；本轮的 5 个重复项是必须保留的边界事实。
 
 ## 结论
 

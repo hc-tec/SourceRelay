@@ -11,6 +11,7 @@ import {
   type BilibiliNativeSearchDomSnapshot
 } from '../src/bilibili-native-search-contract.js';
 import { bilibiliNativeSearchStrategyObservation } from '../src/bilibili-native-search-observation.js';
+import { mergeBilibiliNativeSearchPages } from '../src/bilibili-native-search-pagination.js';
 
 function dom(overrides: Partial<BilibiliNativeSearchDomSnapshot> = {}): BilibiliNativeSearchDomSnapshot {
   return {
@@ -53,6 +54,38 @@ function observation(domValue: unknown): StrategyObservationResult {
 }
 
 describe('Bilibili native-search contract', () => {
+  test('deduplicates overlapping page windows by stable BVID', () => {
+    const first = projectBilibiliNativeSearchDom(dom({
+      semanticResultCardCount: 2,
+      cards: [
+        { bvid: 'BV1qZSLBYEpa', title: '第一页结果', visibleText: '第一页结果', thumbnailUrl: null },
+        { bvid: 'BV1xx411c7mD', title: '第一页第二条', visibleText: '第一页第二条', thumbnailUrl: null }
+      ]
+    }), '2026-07-23T00:00:00.000Z', { resultType: 'comprehensive', sort: 'relevance', page: 1 });
+    const second = projectBilibiliNativeSearchDom(dom({
+      semanticResultCardCount: 2,
+      cards: [
+        { bvid: 'BV1xx411c7mD', title: '第二页重复结果', visibleText: '第二页重复结果', thumbnailUrl: null },
+        { bvid: 'BV1BoKD6ZEir', title: '第二页新结果', visibleText: '第二页新结果', thumbnailUrl: null }
+      ]
+    }), '2026-07-23T00:00:01.000Z', { resultType: 'comprehensive', sort: 'relevance', page: 2 });
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    const merged = mergeBilibiliNativeSearchPages([
+      { page: 2, projection: second! },
+      { page: 1, projection: first! }
+    ]);
+    expect(merged.pages).toEqual([1, 2]);
+    expect(merged.uniqueItems.map((item) => item.bvid)).toEqual([
+      'BV1qZSLBYEpa',
+      'BV1xx411c7mD',
+      'BV1BoKD6ZEir'
+    ]);
+    expect(merged.duplicateBvids).toEqual(['BV1xx411c7mD']);
+    expect(merged.duplicateCount).toBe(1);
+    expect(merged.partial).toBe(true);
+  });
+
   test('keeps a normalized query transient and projects ordered canonical BV cards', () => {
     expect(canonicalBilibiliNativeSearchUrlForQuery(' 人工智能 '))
       .toBe('https://search.bilibili.com/all?keyword=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD');
