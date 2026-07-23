@@ -13,6 +13,8 @@ export const BILIBILI_NATIVE_SEARCH_STRATEGY_ID = 'bilibili.search.breadth.dom.v
  */
 export const BILIBILI_TRANSCRIPT_STRATEGY_ID =
   'bilibili.video.transcript.trusted-response.v2' as const;
+export const BILIBILI_DISCUSSION_STRATEGY_ID =
+  'bilibili.video.discussion.dom.v1' as const;
 
 export type CollectorStrategyId =
   | typeof BILIBILI_DYNAMIC_STRATEGY_ID
@@ -20,7 +22,8 @@ export type CollectorStrategyId =
   | typeof BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID
   | typeof BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID
   | typeof BILIBILI_NATIVE_SEARCH_STRATEGY_ID
-  | typeof BILIBILI_TRANSCRIPT_STRATEGY_ID;
+  | typeof BILIBILI_TRANSCRIPT_STRATEGY_ID
+  | typeof BILIBILI_DISCUSSION_STRATEGY_ID;
 
 export type BridgeJsonValue =
   | null
@@ -55,6 +58,11 @@ export interface BilibiliNativeSearchStrategyTarget {
 }
 
 export interface BilibiliTranscriptStrategyTarget {
+  canonicalUrl: string;
+  bvid: string;
+}
+
+export interface BilibiliDiscussionStrategyTarget {
   canonicalUrl: string;
   bvid: string;
 }
@@ -118,6 +126,11 @@ export type StrategyObserverBindingRequest =
     target: BilibiliTranscriptStrategyTarget;
     /** Directory plus one public subtitle document; no generic response budget. */
     maximumResponseObservations: 2;
+  })
+  | (StrategyObserverBindingRequestBase & {
+    strategyId: typeof BILIBILI_DISCUSSION_STRATEGY_ID;
+    target: BilibiliDiscussionStrategyTarget;
+    maximumResponseObservations: 0;
   });
 
 export interface StrategyObservationReadRequest {

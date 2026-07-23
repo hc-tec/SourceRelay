@@ -2,6 +2,7 @@ import {
   BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID,
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
+  BILIBILI_DISCUSSION_STRATEGY_ID,
   BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
   BILIBILI_TRANSCRIPT_STRATEGY_ID,
   BILIBILI_VIDEO_DETAIL_STRATEGY_ID,
@@ -43,6 +44,11 @@ import {
   diagnoseBilibiliVideoDetailObserver,
   readBilibiliVideoDetailObservation
 } from './strategies/bilibili-video-detail-strategy';
+import {
+  bindBilibiliVideoDiscussionObserver,
+  diagnoseBilibiliVideoDiscussionObserver,
+  readBilibiliVideoDiscussionObservation
+} from './strategies/bilibili-video-discussion-strategy';
 import {
   bindBilibiliTranscriptObserver,
   readBilibiliTranscriptObservation
@@ -151,6 +157,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
       if (command.command.binding.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
         return await bindBilibiliVideoDetailObserver(command.command);
       }
+      if (command.command.binding.strategyId === BILIBILI_DISCUSSION_STRATEGY_ID) {
+        return await bindBilibiliVideoDiscussionObserver(command.command);
+      }
       if (command.command.binding.strategyId === BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID) {
         return await bindBilibiliAccountVideoInventoryObserver(command.command);
       }
@@ -171,6 +180,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
       if (command.command.request.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
         return await readBilibiliVideoDetailObservation(command.command);
       }
+      if (command.command.request.strategyId === BILIBILI_DISCUSSION_STRATEGY_ID) {
+        return await readBilibiliVideoDiscussionObservation(command.command);
+      }
       if (command.command.request.strategyId === BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID) {
         return await readBilibiliAccountVideoInventoryObservation(command.command);
       }
@@ -187,6 +199,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
     case 'collector_read_strategy_binding_diagnostics':
       if (command.command.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
         return await diagnoseBilibiliVideoDetailObserver(command.command);
+      }
+      if (command.command.strategyId === BILIBILI_DISCUSSION_STRATEGY_ID) {
+        return await diagnoseBilibiliVideoDiscussionObserver(command.command);
       }
       if (command.command.strategyId === BILIBILI_NATIVE_SEARCH_STRATEGY_ID) {
         return await diagnoseBilibiliNativeSearchObserver(command.command);

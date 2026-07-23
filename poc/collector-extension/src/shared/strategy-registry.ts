@@ -253,6 +253,45 @@ function bilibiliVideoTranscriptTrustedResponseStrategy(): StaticPlatformStrateg
   };
 }
 
+function bilibiliVideoDiscussionDomStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'bilibili.video.discussion.dom.v1',
+    version: '0.1.0',
+    platform: 'bilibili',
+    evidenceObjectives: ['discussion_sample'],
+    acquisition: ['detail_navigation', 'visible_dom', 'bounded_interaction', 'comment_navigation'],
+    maturity: 'build_ready',
+    surface: 'comment_thread',
+    nativeEntry: { kind: 'canonical_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['detail_navigation', 'visible_dom', 'bounded_interaction', 'comment_navigation']
+    },
+    bounds: {
+      maxRecords: 20,
+      maxReadOnlyActions: 3,
+      firstRenderedPageOnly: true,
+      allowsDetailNavigation: true,
+      allowsCommentNavigation: true,
+      allowsReadOnlyInteraction: true
+    },
+    output: {
+      kind: 'comment',
+      partialByDefault: true
+    },
+    browser: {
+      optionalHostPermissions: ['https://www.bilibili.com/*'],
+      domContentMatches: ['https://www.bilibili.com/video/*'],
+      responseBridgeMatches: []
+    },
+    approvedResponseRouteIds: [],
+    validation: {
+      mode: 'local_live_platform_only',
+      liveRecord: null
+    }
+  };
+}
+
 /**
  * A public account home is distinct from its upload inventory. The strategy
  * is deliberately DOM-only: historic research Network metadata is not a
@@ -352,6 +391,7 @@ export const STATIC_PLATFORM_STRATEGIES: readonly StaticPlatformStrategy[] = [
   bilibiliAccountVideoInventoryDomStrategy(),
   bilibiliVideoDetailDomStrategy(),
   bilibiliVideoTranscriptTrustedResponseStrategy(),
+  bilibiliVideoDiscussionDomStrategy(),
   nativeSearchDomStrategy('zhihu'),
   nativeSearchDomStrategy('weibo'),
   nativeSearchDomStrategy('xiaohongshu')

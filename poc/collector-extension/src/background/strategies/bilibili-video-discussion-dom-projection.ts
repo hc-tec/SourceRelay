@@ -1,0 +1,127 @@
+export interface BilibiliVideoDiscussionDomSnapshot {
+  bvid: string | null;
+  commentHostPresent: boolean;
+  commentHostVisible: boolean;
+  commentHostBounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
+  sortControls: {
+    hotVisible: boolean;
+    latestVisible: boolean;
+    latestState: 'active' | 'inactive' | 'unknown';
+  };
+  rootCommentTexts: string[];
+  firstThreadExpandVisible: boolean;
+  loginGateVisible: boolean;
+  risk: {
+    verificationRequired: boolean;
+    rateLimited: boolean;
+    sourceUnavailable: boolean;
+  };
+}
+
+/**
+ * Fixed Bilibili discussion DOM projection. Bilibili's current desktop
+ * comments component is an open Shadow DOM tree; this function explicitly
+ * walks only the composed subtree below #commentapp and never falls back to
+ * a page-wide text match or caller-provided selector/script.
+ */
+export async function captureBilibiliVideoDiscussionDom(
+  tabId: number,
+  documentId: string
+): Promise<BilibiliVideoDiscussionDomSnapshot> {
+  let results: chrome.scripting.InjectionResult<BilibiliVideoDiscussionDomSnapshot>[];
+  try {
+    results = await chrome.scripting.executeScript({
+      target: { tabId, documentIds: [documentId] },
+      world: 'ISOLATED',
+      func: () => {
+        const clean = (value: string | null | undefined, maximum: number): string =>
+          (value ?? '').replace(/\s+/g, ' ').trim().slice(0, maximum);
+        const rendered = (element: Element | null): element is HTMLElement => {
+          if (!(element instanceof HTMLElement)) return false;
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+            style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+        };
+        const composedText = (node: Node): string => {
+          if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+          if (!(node instanceof Element || node instanceof DocumentFragment)) return '';
+          const shadow = node instanceof Element ? node.shadowRoot : null;
+          const source = shadow ?? node;
+          return Array.from(source.childNodes).map(composedText).join(' ');
+        };
+        const composedElements = (root: Element): Element[] => {
+          const result: Element[] = [];
+          const visit = (container: Element | ShadowRoot): void => {
+            for (const element of Array.from(container.querySelectorAll('*'))) {
+              result.push(element);
+              if (element.shadowRoot) visit(element.shadowRoot);
+            }
+          };
+          visit(root);
+          if (root.shadowRoot) visit(root.shadowRoot);
+          return result;
+        };
+        const visibleSemanticButton = (elements: readonly Element[], label: string): Element | null =>
+          elements.find((element) => element.tagName.toLowerCase() === 'bili-text-button' &&
+            rendered(element) && clean(composedText(element), 100) === label) ?? null;
+        const bodyText = clean(composedText(document.body), 30_000);
+        const host = document.querySelector<HTMLElement>('#commentapp');
+        const commentRoot = host?.querySelector<HTMLElement>('bili-comments') ?? null;
+        const elements = commentRoot ? composedElements(commentRoot) : [];
+        const latest = visibleSemanticButton(elements, '最新');
+        const hot = visibleSemanticButton(elements, '最热');
+        const latestState = latest
+          ? latest.getAttribute('aria-pressed') === 'true' || latest.getAttribute('aria-selected') === 'true'
+            ? 'active' as const
+            : latest.getAttribute('aria-pressed') === 'false' || latest.getAttribute('aria-selected') === 'false'
+              ? 'inactive' as const
+              : 'unknown' as const
+          : 'unknown' as const;
+        const roots = elements
+          .filter((element) => element.tagName.toLowerCase() === 'bili-comment-thread-renderer' && rendered(element))
+          .slice(0, 20)
+          .map((element) => clean(composedText(element), 2_000))
+          .filter((value) => value.length > 0);
+        const firstThreadExpandVisible = elements
+          .filter((element) => element.tagName.toLowerCase() === 'bili-comment-replies-renderer')
+          .some((renderer) => visibleSemanticButton(composedElements(renderer), '点击查看') !== null);
+        const rect = host?.getBoundingClientRect();
+        const bvid = location.protocol === 'https:' && location.hostname === 'www.bilibili.com'
+          ? location.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/)?.[1] ?? null
+          : null;
+        return {
+          bvid,
+          commentHostPresent: Boolean(host && commentRoot),
+          commentHostVisible: Boolean(commentRoot && rendered(commentRoot)),
+          commentHostBounds: rect && rect.width > 0 && rect.height > 0
+            ? { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
+            : null,
+          sortControls: {
+            hotVisible: hot !== null,
+            latestVisible: latest !== null,
+            latestState
+          },
+          rootCommentTexts: roots,
+          firstThreadExpandVisible,
+          loginGateVisible: /登录后查看|登录参与社区互动/.test(bodyText),
+          risk: {
+            verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(bodyText),
+            rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(bodyText),
+            sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(bodyText)
+          }
+        };
+      }
+    });
+  } catch {
+    throw new Error('video_discussion_strategy_document_context_changed');
+  }
+  const result = results[0]?.result;
+  if (!result) throw new Error('video_discussion_strategy_document_context_changed');
+  return result;
+}

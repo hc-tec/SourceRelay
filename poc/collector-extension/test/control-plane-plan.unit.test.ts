@@ -193,11 +193,21 @@ describe('Evidence Plan control-plane', () => {
     }), true);
     expect(transcript.preflight).toMatchObject({ status: 'live_validation_required', releaseTrack: 'experimental' });
 
-    const unsupported = await planFor(task({ evidenceObjectives: ['discussion_sample'] }), true);
-    expect(unsupported.preflight).toMatchObject({
-      status: 'capability_unavailable',
-      strategy: null,
-      releaseTrack: 'unsupported'
+    const discussion = await planFor(task({
+      targets: [{ type: 'known_url', url: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }],
+      evidenceObjectives: ['discussion_sample'],
+      consent: {
+        approvedBy: 'user',
+        approvedAt: '2026-07-22T00:00:00.000Z',
+        approvedActions: ['detail_navigation', 'visible_dom', 'bounded_interaction', 'comment_navigation'],
+        approvedObjectives: ['discussion_sample'],
+        escalationPolicy: 'explicit_approval_required'
+      }
+    }), true);
+    expect(discussion.preflight).toMatchObject({
+      status: 'live_validation_required',
+      releaseTrack: 'experimental',
+      strategy: { strategyId: 'bilibili.video.discussion.dom.v1' }
     });
   });
 

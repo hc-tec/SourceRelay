@@ -4,6 +4,7 @@ import { canonicalBilibiliAccountProfileUrl } from './bilibili-account-profile.j
 import {
   BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID,
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
+  BILIBILI_DISCUSSION_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
   BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
   BILIBILI_TRANSCRIPT_STRATEGY_ID,
@@ -401,7 +402,8 @@ function isCollectorStrategyId(value: unknown): value is StrategyObserverBinding
     value === BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID ||
     value === BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID ||
     value === BILIBILI_NATIVE_SEARCH_STRATEGY_ID ||
-    value === BILIBILI_TRANSCRIPT_STRATEGY_ID;
+    value === BILIBILI_TRANSCRIPT_STRATEGY_ID ||
+    value === BILIBILI_DISCUSSION_STRATEGY_ID;
 }
 
 function validStrategyBindingTargetAndBudget(
@@ -425,6 +427,9 @@ function validStrategyBindingTargetAndBudget(
   }
   if (candidate.strategyId === BILIBILI_TRANSCRIPT_STRATEGY_ID) {
     return validVideoDetailTarget(candidate.target) && candidate.maximumResponseObservations === 2;
+  }
+  if (candidate.strategyId === BILIBILI_DISCUSSION_STRATEGY_ID) {
+    return validVideoDetailTarget(candidate.target) && candidate.maximumResponseObservations === 0;
   }
   return false;
 }
