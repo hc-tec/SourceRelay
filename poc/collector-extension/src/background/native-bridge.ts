@@ -1,6 +1,7 @@
 import {
   BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID,
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
+  BILIBILI_DANMAKU_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
   BILIBILI_DISCUSSION_STRATEGY_ID,
   BILIBILI_NATIVE_SEARCH_STRATEGY_ID,
@@ -34,6 +35,11 @@ import {
   bindBilibiliDynamicObserver,
   readBilibiliDynamicObservation
 } from './strategies/bilibili-dynamic-strategy';
+import {
+  bindBilibiliDanmakuObserver,
+  diagnoseBilibiliDanmakuObserver,
+  readBilibiliDanmakuObservation
+} from './strategies/bilibili-danmaku-strategy';
 import {
   bindBilibiliNativeSearchObserver,
   diagnoseBilibiliNativeSearchObserver,
@@ -154,6 +160,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
       if (command.command.binding.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID) {
         return await bindBilibiliDynamicObserver(command.command);
       }
+      if (command.command.binding.strategyId === BILIBILI_DANMAKU_STRATEGY_ID) {
+        return await bindBilibiliDanmakuObserver(command.command);
+      }
       if (command.command.binding.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
         return await bindBilibiliVideoDetailObserver(command.command);
       }
@@ -176,6 +185,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
     case 'collector_read_strategy_observation':
       if (command.command.request.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID) {
         return await readBilibiliDynamicObservation(command.command);
+      }
+      if (command.command.request.strategyId === BILIBILI_DANMAKU_STRATEGY_ID) {
+        return await readBilibiliDanmakuObservation(command.command);
       }
       if (command.command.request.strategyId === BILIBILI_VIDEO_DETAIL_STRATEGY_ID) {
         return await readBilibiliVideoDetailObservation(command.command);
@@ -202,6 +214,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
       }
       if (command.command.strategyId === BILIBILI_DISCUSSION_STRATEGY_ID) {
         return await diagnoseBilibiliVideoDiscussionObserver(command.command);
+      }
+      if (command.command.strategyId === BILIBILI_DANMAKU_STRATEGY_ID) {
+        return await diagnoseBilibiliDanmakuObserver(command.command);
       }
       if (command.command.strategyId === BILIBILI_NATIVE_SEARCH_STRATEGY_ID) {
         return await diagnoseBilibiliNativeSearchObserver(command.command);

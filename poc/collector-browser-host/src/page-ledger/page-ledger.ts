@@ -4,6 +4,8 @@ import {
   type BilibiliAccountVideoPageClickResult,
   type BilibiliTranscriptChineseSelectionRequest,
   type BilibiliTranscriptChineseSelectionResult,
+  type BilibiliDanmakuInteractionRequest,
+  type BilibiliDanmakuInteractionResult,
   type BilibiliVideoDiscussionInteractionRequest,
   type BilibiliVideoDiscussionInteractionResult,
   type AcquirePageRequest,
@@ -34,6 +36,7 @@ import { executeTrustedScroll } from './trusted-scroll.js';
 import { executeTrustedBilibiliAccountVideoPageClick } from './trusted-bilibili-account-video-page-click.js';
 import { executeTrustedBilibiliTranscriptChineseSelection } from './trusted-bilibili-transcript-chinese-selection.js';
 import { executeTrustedBilibiliVideoDiscussionInteraction } from './trusted-bilibili-video-discussion-interaction.js';
+import { executeTrustedBilibiliDanmakuInteraction } from './trusted-bilibili-danmaku-interaction.js';
 import { closeQuarantinedPageRecord } from './quarantine-maintenance.js';
 import {
   DEFAULT_MAX_IDLE_TRUST_MS,
@@ -269,6 +272,20 @@ export class PageLedger {
   ): Promise<BilibiliVideoDiscussionInteractionResult> {
     const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
     return await executeTrustedBilibiliVideoDiscussionInteraction({
+      record,
+      request,
+      visualEvidenceDirectory,
+      assertLeasedRunRecord: () => this.#assertLeasedRunRecord(record, request),
+      emit: (eventType, reason, actionId) => this.#emit(eventType, record, reason, actionId)
+    });
+  }
+
+  async interactBilibiliDanmaku(
+    request: BilibiliDanmakuInteractionRequest,
+    visualEvidenceDirectory: string
+  ): Promise<BilibiliDanmakuInteractionResult> {
+    const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
+    return await executeTrustedBilibiliDanmakuInteraction({
       record,
       request,
       visualEvidenceDirectory,

@@ -22,6 +22,7 @@ export type AccountSafetyRunPurpose =
   | 'authenticated_account_video_pagination_reconnaissance'
   | 'authenticated_video_detail_reconnaissance'
   | 'authenticated_transcript_reconnaissance'
+  | 'authenticated_danmaku_reconnaissance'
   | 'authenticated_transcript_validation'
   | 'formal_collection_stage';
 
@@ -103,6 +104,7 @@ function isSafetyRecord(value: unknown): value is PersistedAccountSafetyRecord {
         activeRun.purpose === 'authenticated_account_video_pagination_reconnaissance' ||
         activeRun.purpose === 'authenticated_video_detail_reconnaissance' ||
         activeRun.purpose === 'authenticated_transcript_reconnaissance' ||
+        activeRun.purpose === 'authenticated_danmaku_reconnaissance' ||
         activeRun.purpose === 'authenticated_transcript_validation' ||
         activeRun.purpose === 'formal_collection_stage') &&
       typeof activeRun.startedAt === 'string' &&

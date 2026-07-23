@@ -62,6 +62,7 @@ export const EVIDENCE_OBJECTIVES = [
   'breadth_search',
   'detail_read',
   'transcript_read',
+  'danmaku_read',
   'discussion_sample',
   'account_context',
   'account_archive',

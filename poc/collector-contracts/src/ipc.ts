@@ -33,6 +33,10 @@ import type {
   BilibiliTranscriptChineseSelectionResult
 } from './bilibili-transcript-interaction.js';
 import type {
+  BilibiliDanmakuInteractionRequest,
+  BilibiliDanmakuInteractionResult
+} from './bilibili-danmaku-interaction.js';
+import type {
   BilibiliVideoDiscussionInteractionRequest,
   BilibiliVideoDiscussionInteractionResult
 } from './bilibili-video-discussion-interaction.js';
@@ -77,6 +81,7 @@ export type BrowserHostCommandBody =
   | { type: 'scroll_page'; request: ScrollPageRequest }
   | { type: 'click_bilibili_account_video_page'; request: BilibiliAccountVideoPageClickRequest }
   | { type: 'select_bilibili_transcript_chinese'; request: BilibiliTranscriptChineseSelectionRequest }
+  | { type: 'interact_bilibili_danmaku'; request: BilibiliDanmakuInteractionRequest }
   | { type: 'click_bilibili_video_discussion_control'; request: BilibiliVideoDiscussionInteractionRequest }
   | { type: 'capture_page_visual_evidence'; request: CapturePageVisualEvidenceRequest }
   | { type: 'bind_strategy_observer'; request: StrategyObserverBindingRequest }
@@ -110,6 +115,7 @@ export type BrowserHostCommandResult =
   | PageScrollResult
   | BilibiliAccountVideoPageClickResult
   | BilibiliTranscriptChineseSelectionResult
+  | BilibiliDanmakuInteractionResult
   | BilibiliVideoDiscussionInteractionResult
   | PageVisualEvidence
   | ReclaimPlan

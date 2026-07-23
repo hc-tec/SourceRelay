@@ -14,6 +14,8 @@ import type { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-acco
 import type { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account-video-inventory-host-runner';
 import type { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import type { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
+import type { BilibiliDanmakuArtifactStore } from './bilibili-danmaku-artifacts';
+import type { BilibiliDanmakuHostRunner } from './bilibili-danmaku-host-runner';
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import { bilibiliNativeSearchInput } from './bilibili-native-search-contract';
 import type { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
@@ -23,6 +25,7 @@ import type { BilibiliVideoDiscussionArtifactStore } from './bilibili-video-disc
 import type { BilibiliVideoDiscussionHostRunner } from './bilibili-video-discussion-host-runner';
 import type { BilibiliTranscriptArtifactStore } from './bilibili-transcript-artifacts';
 import { bilibiliTranscriptInput } from './bilibili-transcript-contract';
+import { bilibiliDanmakuInput } from './bilibili-danmaku-contract';
 import { bilibiliVideoDiscussionInput } from './bilibili-video-discussion-contract';
 import type { BilibiliTranscriptHostRunner } from './bilibili-transcript-host-runner';
 import type { CollectionBrowserManager } from './browser-manager';
@@ -59,6 +62,8 @@ export interface GatewayRouteContext {
   discussionRunner: BilibiliVideoDiscussionHostRunner;
   transcriptArtifacts: BilibiliTranscriptArtifactStore;
   transcriptRunner: BilibiliTranscriptHostRunner;
+  danmakuArtifacts: BilibiliDanmakuArtifactStore;
+  danmakuRunner: BilibiliDanmakuHostRunner;
 }
 
 export async function handleGatewayRoute(
@@ -215,6 +220,10 @@ export async function handleGatewayRoute(
   }
   if (request.method === 'GET' && url.pathname === '/v1/bilibili-transcript-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.transcriptArtifacts.list() });
+    return true;
+  }
+  if (request.method === 'GET' && url.pathname === '/v1/bilibili-danmaku-artifacts') {
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.danmakuArtifacts.list() });
     return true;
   }
   const dynamicRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/dynamic/two-page$`, 'i'));
@@ -471,6 +480,27 @@ export async function handleGatewayRoute(
     });
     return true;
   }
+  const danmakuRun = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/video/danmaku$`, 'i'));
+  if (request.method === 'POST' && danmakuRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const danmaku = bilibiliDanmakuInput(await readJsonBody(request));
+    const result = await context.danmakuRunner.run({
+      profileId: danmakuRun[1]!,
+      canonicalVideoUrl: danmaku.canonicalVideoUrl
+    });
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        coverage: result.run.coverage,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
   const dynamicArtifact = url.pathname.match(new RegExp(`^/v1/dynamic-artifacts/(${PROFILE_ID})$`, 'i'));
   if (request.method === 'GET' && dynamicArtifact) {
     const artifact = await context.dynamicArtifacts.get(dynamicArtifact[1]!);
@@ -552,6 +582,13 @@ export async function handleGatewayRoute(
   if (request.method === 'GET' && transcriptArtifact) {
     const artifact = await context.transcriptArtifacts.get(transcriptArtifact[1]!);
     if (!artifact) throw new Error('bilibili_transcript_artifact_not_found');
+    sendJson(response, 200, { schemaVersion: 1, artifact });
+    return true;
+  }
+  const danmakuArtifact = url.pathname.match(new RegExp(`^/v1/bilibili-danmaku-artifacts/(${PROFILE_ID})$`, 'i'));
+  if (request.method === 'GET' && danmakuArtifact) {
+    const artifact = await context.danmakuArtifacts.get(danmakuArtifact[1]!);
+    if (!artifact) throw new Error('bilibili_danmaku_artifact_not_found');
     sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }

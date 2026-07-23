@@ -105,6 +105,8 @@ export class BrowserHostRuntime {
         return await this.#profile(body.request.profileId).selectBilibiliTranscriptChinese(body.request);
       case 'click_bilibili_video_discussion_control':
         return await this.#profile(body.request.profileId).clickBilibiliVideoDiscussionControl(body.request);
+      case 'interact_bilibili_danmaku':
+        return await this.#profile(body.request.profileId).interactBilibiliDanmaku(body.request);
       case 'capture_page_visual_evidence':
         return await this.#profile(body.request.profileId).captureVisualEvidence(body.request);
       case 'bind_strategy_observer':

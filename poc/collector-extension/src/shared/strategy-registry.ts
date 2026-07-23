@@ -26,7 +26,8 @@ export type StrategySurface =
   | 'account_listing'
   | 'content_detail'
   | 'transcript'
-  | 'comment_thread';
+  | 'comment_thread'
+  | 'danmaku';
 
 export type StrategyEntryKind = 'native_search_url' | 'canonical_url' | 'profile_url';
 
@@ -36,6 +37,7 @@ export type StrategyOutputKind =
   | 'content_detail'
   | 'transcript_document'
   | 'comment'
+  | 'danmaku'
   | 'collection_state';
 
 export interface StaticPlatformStrategy {
@@ -292,6 +294,45 @@ function bilibiliVideoDiscussionDomStrategy(): StaticPlatformStrategy {
   };
 }
 
+function bilibiliVideoDanmakuDomStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'bilibili.video.danmaku.dom.v1',
+    version: '0.1.0',
+    platform: 'bilibili',
+    evidenceObjectives: ['danmaku_read'],
+    acquisition: ['detail_navigation', 'visible_dom', 'bounded_interaction'],
+    maturity: 'build_ready',
+    surface: 'danmaku',
+    nativeEntry: { kind: 'canonical_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['detail_navigation', 'visible_dom', 'bounded_interaction']
+    },
+    bounds: {
+      maxRecords: 200,
+      maxReadOnlyActions: 4,
+      firstRenderedPageOnly: true,
+      allowsDetailNavigation: true,
+      allowsCommentNavigation: false,
+      allowsReadOnlyInteraction: true
+    },
+    output: {
+      kind: 'danmaku',
+      partialByDefault: true
+    },
+    browser: {
+      optionalHostPermissions: ['https://www.bilibili.com/*'],
+      domContentMatches: ['https://www.bilibili.com/video/*'],
+      responseBridgeMatches: []
+    },
+    approvedResponseRouteIds: [],
+    validation: {
+      mode: 'local_live_platform_only',
+      liveRecord: null
+    }
+  };
+}
+
 /**
  * A public account home is distinct from its upload inventory. The strategy
  * is deliberately DOM-only: historic research Network metadata is not a
@@ -392,6 +433,7 @@ export const STATIC_PLATFORM_STRATEGIES: readonly StaticPlatformStrategy[] = [
   bilibiliVideoDetailDomStrategy(),
   bilibiliVideoTranscriptTrustedResponseStrategy(),
   bilibiliVideoDiscussionDomStrategy(),
+  bilibiliVideoDanmakuDomStrategy(),
   nativeSearchDomStrategy('zhihu'),
   nativeSearchDomStrategy('weibo'),
   nativeSearchDomStrategy('xiaohongshu')
@@ -429,6 +471,14 @@ export function resolveTranscriptStrategy(platform: SupportedPlatform): StaticPl
     (candidate) => candidate.surface === 'transcript'
   );
   if (!strategy) throw new Error(`No static transcript strategy is registered for ${platform}.`);
+  return strategy;
+}
+
+export function resolveDanmakuStrategy(platform: SupportedPlatform): StaticPlatformStrategy {
+  const strategy = strategiesFor(platform, 'danmaku_read').find(
+    (candidate) => candidate.surface === 'danmaku'
+  );
+  if (!strategy) throw new Error(`No static danmaku strategy is registered for ${platform}.`);
   return strategy;
 }
 

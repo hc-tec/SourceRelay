@@ -12,6 +12,8 @@ import { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-v
 import { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account-video-inventory-host-runner';
 import { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
+import { BilibiliDanmakuArtifactStore } from './bilibili-danmaku-artifacts';
+import { BilibiliDanmakuHostRunner } from './bilibili-danmaku-host-runner';
 import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
@@ -43,6 +45,7 @@ const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(con
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const discussionArtifacts = await BilibiliVideoDiscussionArtifactStore.create(config.stateDirectory);
 const transcriptArtifacts = await BilibiliTranscriptArtifactStore.create(config.stateDirectory);
+const danmakuArtifacts = await BilibiliDanmakuArtifactStore.create(config.stateDirectory);
 const dynamicRunner = new BilibiliDynamicHostRunner({
   accountSafety,
   browserManager,
@@ -97,6 +100,12 @@ const transcriptRunner = new BilibiliTranscriptHostRunner({
   profiles: profileRegistry,
   artifacts: transcriptArtifacts
 });
+const danmakuRunner = new BilibiliDanmakuHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: danmakuArtifacts
+});
 const accountVideoDetailMaterializationRunner = new BilibiliAccountVideoDetailMaterializationHostRunner({
   accountSafety,
   profiles: profileRegistry,
@@ -137,7 +146,9 @@ const server = createServer(async (request, response) => {
       discussionArtifacts,
       discussionRunner,
       transcriptArtifacts,
-      transcriptRunner
+      transcriptRunner,
+      danmakuArtifacts,
+      danmakuRunner
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 1, ok: false, error: 'route_not_found' });
   } catch (error) {
