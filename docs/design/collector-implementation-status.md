@@ -13,7 +13,7 @@
 
 Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面。B站匿名首屏关键词搜索是目前唯一获得真实平台 admission、并完成正式 Research Task 调度与本地 Evidence batch 闭环的能力；其他平台和深度能力仍未发布。
 
-当前编译路径的 `bilibili.search.breadth.dom.v2 @ 0.2.0` 已在 UTF-8 中文关键词“人工智能”上完成一次受管 Collection Profile 真实首屏 canary：视频类型、最新发布、第 1 页、20 条可见 BVID 卡片，导航 1 次、自动重试 0 次，页面 retained，账号安全回到 `ready`。首次手动验证因 PowerShell 请求体编码错误把关键词变成 `????` 的 run 已明确排除，不计入能力证据。v2 仍为 `build_ready / admissionEligible=false`，第二页、综合/空结果、多样本与独立 review 尚未完成。
+当前编译路径的 `bilibili.search.breadth.dom.v2 @ 0.2.0` 已在 UTF-8 中文关键词“人工智能”上完成受管 Collection Profile 真实 canary：视频类型/最新发布第 1 页与第 2 页各 20 条、综合/相关性第 1 页 20 条，导航均一次、自动重试均为 0，页面按临时 canary 生命周期关闭。首次手动验证因 PowerShell 请求体编码错误把关键词变成 `????` 的 run 已明确排除，不计入能力证据。第 1/2 页有 5 个重复 BVID，因此 v2 仍为 `build_ready / admissionEligible=false`；跨页去重、恢复、空结果、多样本与独立 review 仍未完成。
 
 2026-07-20 已完成第 101–170 题 Browser Host / 受管多页面池产品设计、一致性审计，以及 Checkpoint 2 的独立 Contracts 与 Browser Host Core。Host 现在是页面账本唯一写入者，提供当前用户单实例、Windows Named Pipe/HMAC、controller generation、真实持久 Chromium、每 Profile 三页池、PageLease、idle/stale/quarantine/retain/reclaim、去敏 Snapshot/Journal 和显式关闭边界。真实可见 Chromium 门禁已证明失效 endpoint 替换、第二次 launcher 调用复用同一 Host PID/Chromium PID/Browser Session、Gateway controller 重连不关闭浏览器、release 后页面复用、idle stale 无平台输入 reconcile、retained 保护、意外导航隔离、两阶段回收和 command replay 去重；门禁加载生产扩展但只使用 `about:` / `data:`，`livePlatformRequests=0`，不冒充平台验证。
 

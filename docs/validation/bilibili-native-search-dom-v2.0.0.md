@@ -82,6 +82,17 @@ risk.sourceUnavailable: false
 - 未保存 Cookie、Token、请求头、请求体、完整 query 或 HAR；
 - 本次 run 只证明视频类型、最新发布、第一页、最多 20 条，不覆盖综合排序、第二页、更多筛选或完整搜索终点。
 
+## 后续有界变体
+
+在同一 UTF-8 请求约束下又执行了两个独立 run：
+
+| run | 类型 | 排序 | 页码 | 结果 | 备注 |
+|---|---|---|---:|---|---|
+| `a6318f7b-dcc9-472c-950c-c54de4704efc` | video | newest | 2 | 20/20，`search_ready` | 与第 1 页比较有 5 个重复 BVID，不能宣称跨页无重复 |
+| `91a24a7d-1f09-4f32-b44d-d39b64b836a4` | comprehensive | relevance | 1 | 20/20，`search_ready` | 综合页公开视频卡片可投影，混合对象仍被排除 |
+
+这些 run 进一步证明了类型和排序枚举的真实可行性，但没有把单页 runner 自动升级成多页任务。跨页任务必须在同一任务上下文内保存 query/type/sort/page、页间 BVID 去重和终止原因；本轮的 5 个重复项是必须保留的边界事实。
+
 ## 结论
 
 `bilibili.search.breadth.dom.v2 @ 0.2.0` 已在 UTF-8 中文查询上完成一次真实生产首屏闭环，但当前策略仍保持：
@@ -92,4 +103,4 @@ admissionEligible: false
 productionStatus: research-only
 ```
 
-下一门槛是以相同 UTF-8 请求约束复验第二页和至少一个综合排序/空结果样本，再做独立 review；不能把旧的 v1 admission 或本次单页 canary 自动扩大为 v2 admission。
+下一门槛是实现有界多页任务账本（页间去重、重复比例和恢复语义），再补空结果样本并做独立 review；不能把旧的 v1 admission 或本次单页 canary 自动扩大为 v2 admission。
