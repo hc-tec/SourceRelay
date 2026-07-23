@@ -1,6 +1,6 @@
 # B站视频评论与楼中楼 Source Reconnaissance v1.0
 
-- 状态：Action-to-route mapping complete for first-page sort and first thread；response schema mapping paused
+- 状态：DOM MVP complete for first-page sort and one thread；response schema mapping paused
 - 日期：2026-07-19
 - 页面角色：公开视频详情评论组件
 - Evidence objective：`discussion_sample`
@@ -349,3 +349,51 @@ bili-comments
 本轮还发现并修复了页面池的一个实际设计缺陷：B站导航会把视频 URL 改写成尾斜杠或合法 `vd_source` 变体，原 exact-target 选择只比较 URL digest，导致三个 retained tab 被错误判定为不可复用并返回 `page_pool_capacity_exhausted`。源码现在在 `bilibili + video_discussion` 角色下按已验证的同一 BVID URL 变体复用 retained tab；并增加了对应纯状态机测试。当前受管 Browser Host 进程尚未热加载该修复，因此本轮容量失败 run 只作为缺陷证据，不计入真实回复能力证明；下一次 Host 生命周期切换后再做一次新的认证单 root run。
 
 当前 MVP 结论仍为 `partial / research-only / admissionEligible=false`：真实回复字段已被页面结构证明，生产投影与 artifact 路径已实现并通过本地单元/类型门禁，但尚缺一次加载新 Host/扩展构建后的认证三面闭环、分页控件真实页码样本和去重/完整性验证。
+
+## Q. 2026-07-23 新 Host 认证楼中楼字段闭环完成
+
+为验证页面池 BVID 变体复用修复和新构建的回复 DOM 投影，本轮没有重启原有登录 Collection Profile，也没有关闭其中的 retained tab；而是在同一受管状态目录下使用另一个当前未运行的 B 站 Collection Profile 启动独立可见 Host/Gateway。新 Host 的 marker-first probe 精确通过：
+
+```yaml
+collectorVersion: 0.7.17
+controlSurfaceRevision: 15
+buildFingerprint: 3070e9e5d7998615ccc15bf2f6ef13273a199e29a3225d51e9c4b7ba9e4b9692
+visibleContextRestarted: false
+nativeBridgeConnected: true
+```
+
+该 Profile 首次启动时明确显示登录门禁，先记录为一个没有点击楼中楼入口的 `partial / login_required` run；用户完成登录后，才执行下面这次新的、独立预算的认证 run：
+
+```yaml
+runId: 3c240d00-e8fe-495d-95c5-8d9008ba5696
+artifactId: ca1ee990-45d4-4fcd-9363-8fe829dd84e3
+target: BV1qZSLBYEpa
+strategy: bilibili.video.discussion.dom.v1 @ 0.1.0
+state: completed
+terminalReason: discussion_ready
+navigationCount: 1
+trustedScrollCount: 1
+expandFirstThreadClickCount: 1
+automaticRetry: 0
+capturedRootComments: 20
+capturedFirstThreadReplies: 10
+replyCoverage: current_page
+replyPage: null
+replyPageCount: 165
+loginGateVisible: false
+targetTabSelection: reused_matching_managed_tab
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+动作前后证据满足三面交叉契约：
+
+- DOM：评论组件 Shadow DOM 内的“点击查看”入口在动作前可见，实时边界框为 `x=251,y=467,w=52,h=22`，`targetPointerHit=true`、`targetHovered=true`、`targetExpanded=false`；一次可信 mouse down/up 后入口消失，回复树出现，`firstThreadExpanded=true`、`replyPaginationVisible=true`；
+- 视觉：动作前截图 [57bcb0f6-20d4-410b-a6e8-d9b3e4243310.png](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/browser-host/visual-evidence/57bcb0f6-20d4-410b-a6e8-d9b3e4243310.png) 仍显示“共 1648 条回复，点击查看”，动作后截图 [81eb1176-5ad5-4107-a358-9223f15c9dcc.png](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/browser-host/visual-evidence/81eb1176-5ad5-4107-a358-9223f15c9dcc.png) 显示当前回复树和可见回复内容；
+- Network：动作后新增 `GET https://api.bilibili.com/x/v2/reply/reply`，status `200`；只保存去 query 的 origin/path/status 时间元数据，没有读取 query、请求头、请求体或 response body；
+- 字段投影：当前可见页保存 10 条回复，每条均按真实 DOM 的 `#user-name`、`#contents`、`#pubdate`、`#like #count` 投影为 `author/content/publishedAt/likeCount`；示例字段为 `涛涛同学1 / 已三连 / 2025-12-01 09:31 / 2`，缺失点赞数保持 `null`；
+- 分页：页面公开显示总页数 `165`，但当前分页控件没有提供可安全确认的当前页码和 `hasMore` 后置条件，因此 artifact 保留 `replyPage=null`、`replyHasMore=null`，覆盖诚实标记为 `current_page`。
+
+运行结束后页面池为 1 个 `retained_for_review`、0 个 active lease、0 个 quarantine page；没有点击下一页、没有展开第二个根评论、没有刷新或重放动作。对应 artifact 位于 [manifest.json](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/bilibili-video-discussion/ca1ee990-45d4-4fcd-9363-8fe829dd84e3/manifest.json) 与 [discussion.json](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/bilibili-video-discussion/ca1ee990-45d4-4fcd-9363-8fe829dd84e3/discussion.json)。
+
+结论是 `bilibili.video.discussion.dom.v1 @ 0.1.0` 的“一个根评论、当前可见一页回复、最多 20 条、DOM 字段投影”MVP 已完成真实认证闭环；`discussion` 仍保持 `research-only / admissionEligible=false`。回复全量分页、多个根评论、去重/连续性证明、response projector 和全量覆盖均未完成，不能由本次单根评论样本推断。
