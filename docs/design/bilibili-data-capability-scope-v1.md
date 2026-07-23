@@ -95,3 +95,5 @@ coverage / terminal_reason / status
 2026-07-23 又完成了 `bilibili.video.discussion.dom.v1 @ 0.1.0` 的独立临时 Profile 产品 canary：一次导航、一次可信滚动、0 次点击，捕获 2 条根评论；页面视觉与 DOM 均显示评论已就绪，但匿名登录门禁使 run 诚实结束为 `partial / login_required`，目标页面保留在 `retained_for_review`，response body 与 production response routes 仍为空。此次 canary 修复了“评论宿主出现但仍在加载时误报完成”和 Shadow DOM `<style>` 污染评论文本两个问题；该策略仍为 `build_ready`，`admissionEligible=false`，最新排序与楼中楼动作没有在本次 run 中尝试。
 
 随后对登录 Profile 的排序动作做了严格单动作验证。真实组件复核补上了 Shadow DOM slot 文本投影以及 `#sort-actions` 的 `hot/time` 状态解析，代码已提交为 `dbfb15c`；但一次可信“最新”点击的后置结果仍为 `outcome_unknown`，页面已 quarantine、账号安全已锁定，未重试、未刷新、未升级 `discussion` maturity。排序和楼中楼仍必须分别完成新的安全解锁后真实闭环，当前 `discussion` 继续保持 `build_ready / admissionEligible=false`。
+
+随后在固定安全解锁后的新 run 中，`BV1qZSLBYEpa` 已完成一次真实 `select_latest_comments` 闭环：导航 1 次、可信滚动 1 次、排序点击 1 次、自动重试 0 次；动作前 `latestState=inactive`，动作后 `latestState=active`，视觉显示“最新”选中，`/x/v2/reply/wbi/main` 返回 200，捕获 20 条根评论，页面 `retained_after_run`，账号安全回到 `ready`。证据 artifact 为 `a977831d-7a5a-427b-aa2b-fd6e53d6bac8`，该事实只把排序动作标记为真实已验证，不改变 `discussion` 的 `admissionEligible=false`。

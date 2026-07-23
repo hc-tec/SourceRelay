@@ -268,3 +268,29 @@ Host 可信交互探针和 MV3 DOM projector 已同步修复：读取 `slot.assi
 ### M.3 组件级公开源码与匿名对照
 
 独立匿名浏览器只做了公开页面的低频 DOM/网络观察和一次可信排序尝试。它确认 `#commentapp > bili-comments > bili-comments-header-renderer` 的开放 Shadow DOM 层级、`#sort-actions.hot/time` 组件语义以及 `/x/v2/reply/wbi/main` 的公开路由候选，但匿名页面有评论可见性上限，排序点击未形成可用的认证后置证据；这不能替代登录 Profile 的真实验证。认证 Profile 的安全锁定保持不变。
+
+## N. 2026-07-23 认证排序真实闭环完成
+
+在固定安全解锁后，以新的 run（不是重放已隔离 action ID）完成一次严格 scoped 的认证排序验证：
+
+```yaml
+runId: c854c1d5-5a9c-4363-ac29-ba808f40e31a
+artifactId: a977831d-7a5a-427b-aa2b-fd6e53d6bac8
+target: BV1qZSLBYEpa
+strategy: bilibili.video.discussion.dom.v1 @ 0.1.0
+state: completed
+terminalReason: discussion_ready
+navigationCount: 1
+trustedScrollCount: 1
+selectLatestClickCount: 1
+automaticRetry: 0
+capturedRootComments: 20
+sort: latest
+loginGateVisible: false
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+动作前 DOM 将“最新”判为 `inactive`，实时边界框为 `x=240,y=120,w=38,h=28`；Host 先移动真实鼠标并确认 hover、可见、viewport 与 composed hit-test，再发送一次 mouse down/up。动作后 DOM 变为 `latestState=active`，视觉截图 [557985d9-3c20-4d2c-9724-f6eff53ff177.png](../../../poc/collector-gateway/runtime/p2a-validation-20260717/browser-host/visual-evidence/557985d9-3c20-4d2c-9724-f6eff53ff177.png) 显示“最新”为蓝色选中态，Network 观察到 `/x/v2/reply/wbi/main` 的 GET 200。未读取 query 值、请求/响应正文或认证材料；楼中楼入口仅观察为可见，没有点击。
+
+这次 run 证明了“导航 → 延迟评论加载 → 一次可信滚动 → 一次最新评论排序 → DOM/视觉/Network 三面交叉后置条件”的真实闭环。`discussion` 仍保持 `admissionEligible=false`，因为 response projector、分页覆盖和楼中楼正文尚未完成；下一步只能在独立预算下验证一个根评论的楼中楼入口，不能把排序成功扩展成评论全量能力。
