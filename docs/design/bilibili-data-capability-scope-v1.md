@@ -87,3 +87,5 @@ coverage / terminal_reason / status
 | `account_inventory` | `bilibili.account.video-inventory.dom.v1 @ 0.1.0`：首页 40/40，并完成 2 页与 7 页有限分页；7 页为 263/263 unique、0 duplicate、0 unresolved | 仍只承诺声明页数（当前最多 7 页）；超出预算的全量分页、恢复、排序/筛选和独立 review/admission 未完成 |
 
 两次 run 均使用一次导航、无平台交互重放、无 response body 读取，且 `admissionEligible=false`。这份增量证据记录在[账号档案与投稿目录 MV3 真实闭环](../validation/bilibili-account-profile-inventory-mv3-v0.1.md)。
+
+本轮又在独立、可关闭的临时 Collection Profile 对 `BV1qZSLBYEpa` 完成一次真实视频详情闭环：`completed / detail_ready`，一次导航、零 hover/click/scroll、零自动重试，标题、简介、创作者、8 个标签和选集摘要均已捕获，`accessStatus=indeterminate`。临时 Profile 已关闭；登录 Collection Profile 的两个 retained 成功页保持不变。该证据只把 `video_detail` 的首屏 MVP 标记为“真实闭环已复核”，不把字幕、弹幕、评论、全量选集或推荐内容视为已完成。详见[视频详情 DOM MVP](../reconnaissance/bilibili/video-detail-dom-mvp-v0.1.md)。
