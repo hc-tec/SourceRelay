@@ -13,7 +13,7 @@
 
 Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面。B站匿名首屏关键词搜索是目前唯一获得真实平台 admission、并完成正式 Research Task 调度与本地 Evidence batch 闭环的能力；其他平台和深度能力仍未发布。
 
-当前编译路径的 `bilibili.search.breadth.dom.v2 @ 0.2.0` 已在 UTF-8 中文关键词“人工智能”上完成受管 Collection Profile 真实 canary：视频类型/最新发布第 1 页与第 2 页各 20 条、综合/相关性第 1 页 20 条，导航均一次、自动重试均为 0，页面按临时 canary 生命周期关闭。首次手动验证因 PowerShell 请求体编码错误把关键词变成 `????` 的 run 已明确排除，不计入能力证据。第 1/2 页有 5 个重复 BVID；Gateway 已补上稳定 BVID 页窗口合并 helper 和单元测试，但尚未接入多页 runner，因此 v2 仍为 `build_ready / admissionEligible=false`；跨页恢复、空结果、多样本与独立 review 仍未完成。
+当前编译路径的 `bilibili.search.breadth.dom.v2 @ 0.2.0` 已在 UTF-8 中文关键词“人工智能”上完成受管 Collection Profile 真实 canary：视频类型/最新发布第 1 页与第 2 页各 20 条、综合/相关性第 1 页 20 条，导航均一次、自动重试均为 0。早期 PowerShell 请求体编码错误把关键词变成 `????` 的 run 已明确排除，不计入能力证据。独立 page 1/page 2 run 有 5 个重复 BVID；随后 Gateway batch runner 在同一任务上下文内真实顺序采集两页并合并为 40 条 unique，`duplicateCount=0`、`search_batch_ready`，批量 artifact 和 merged digest 已保存到临时 runtime。两种事实同时保留：页窗口去重已在真实 batch 中运行，但结果随采集时刻漂移，不能把一次零重复推广为稳定分页。v2 仍为 `build_ready / admissionEligible=false`；空结果、多任务漂移/重复比例、batch 恢复、多样本与独立 review 仍未完成。
 
 2026-07-20 已完成第 101–170 题 Browser Host / 受管多页面池产品设计、一致性审计，以及 Checkpoint 2 的独立 Contracts 与 Browser Host Core。Host 现在是页面账本唯一写入者，提供当前用户单实例、Windows Named Pipe/HMAC、controller generation、真实持久 Chromium、每 Profile 三页池、PageLease、idle/stale/quarantine/retain/reclaim、去敏 Snapshot/Journal 和显式关闭边界。真实可见 Chromium 门禁已证明失效 endpoint 替换、第二次 launcher 调用复用同一 Host PID/Chromium PID/Browser Session、Gateway controller 重连不关闭浏览器、release 后页面复用、idle stale 无平台输入 reconcile、retained 保护、意外导航隔离、两阶段回收和 command replay 去重；门禁加载生产扩展但只使用 `about:` / `data:`，`livePlatformRequests=0`，不冒充平台验证。
 
@@ -269,7 +269,7 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 | Gateway 配对 | Profile 级显式配对已通过真实 Chromium loopback 权限与 HMAC 轮询 | 后续补撤销、身份变化与失败恢复的产品验收 |
 | Task dispatch | B站单阶段 preflight → approval → signed dispatch → lease → evidence → completed 已实测；多阶段使用无时间等待的显式 user resume，单元状态机已通过 | 详情策略重新 admission 后做真实双 stage 验证；再增加取消和加密重启恢复 |
 | Profile | 受管持久生命周期、可见 Chromium、生产扩展自动加载、关闭/重启、并发门禁、任务绑定与 B站固定官方登录页入口已实现 | 平台认证动作仍只由用户执行；完成扫码后的可见身份与关闭/重启持久性核验 |
-| B站 discovery | `v1.1.0 live_anonymous_verified`，正式闭环已验证；只覆盖首屏可见标题与规范 BV URL | 再扩展独立的 detail 策略，不复用 breadth admission |
+| B站 discovery | `v1.1.0 live_anonymous_verified`，正式闭环已验证；`v2 @ 0.2.0` 已真实验证 UTF-8 视频/最新发布第 1–2 页、综合/相关性第 1 页，并完成最多两页的 batch manifest、合并和页间 BVID 去重 | v2 仍不可 admission；补空结果、跨任务漂移/重复比例、多页恢复和独立 review；detail 策略不得复用 breadth admission |
 | B站账号档案/投稿目录 | 保存的登录 Profile 已完成公开档案 artifact 与 9 页 / 330 条目录真实闭环；头像/横幅/公开标识/统计/公告/充电/代表作、逐页 digest、去重、声明终点、artifact 恢复与 tab 复用均通过 | 将 DOM/response 观察迁移到 MV3 Extension；补多账号档案、零投稿、单页、置顶/重排、采集中新增和登录失效样本后独立 review/admission |
 | B站图文/专栏 | 保存的 Profile 已完成 1 页 / 1 条专栏目录与单篇详情 artifact；目录 DOM/response 精确互证，详情由来源目录 digest 绑定账号，保存完整文本、保序块、媒体、标签与五类指标；评论独立 | 补 `has_more=true` 多页、0 条、删除/锁定、超长/无图/外链、多账号样本；迁移 MV3 projector 后独立 review/admission |
 | B站合集/系列 | 总览 artifact 已保存 11 个稳定 series ID 并完成 DOM/response/0 条系列互证；单系列 runner 已真实完成 5 页 / 129 条默认顺序全目录、五页精确互证、0 重复和可恢复 artifact | 由 planner 遍历所有系列；补 season、0 条/单页、采集中变化、中断恢复与多账号样本，迁移 MV3 projector 后独立 review/admission |
@@ -287,7 +287,8 @@ P2a  Collection / Validation Profile launcher（完成）
   -> P2b B站匿名 discovery 真实验证与 admission（完成）
   -> P2c 正式 Gateway dispatch / Evidence 闭环（完成）
   -> B站 account profile / inventory research 闭环（完成，待 MV3 迁移与 admission）
-  -> B站原生搜索分页筛选、detail / multi-P / subtitle（各自独立策略与 admission）
+  -> B站原生搜索 batch 的空结果/漂移/恢复与独立 review
+  -> B站原生搜索 detail / multi-P / subtitle（各自独立策略与 admission）
   -> B站 dynamic 与 article feed 终点/边缘样本及 MV3 review
   -> B站 discussion / danmaku / collection planner / live replay
   -> B站 trend / relationship / 统一 provenance_coverage

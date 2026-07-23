@@ -91,7 +91,37 @@ risk.sourceUnavailable: false
 | `a6318f7b-dcc9-472c-950c-c54de4704efc` | video | newest | 2 | 20/20，`search_ready` | 与第 1 页比较有 5 个重复 BVID，不能宣称跨页无重复 |
 | `91a24a7d-1f09-4f32-b44d-d39b64b836a4` | comprehensive | relevance | 1 | 20/20，`search_ready` | 综合页公开视频卡片可投影，混合对象仍被排除 |
 
-这些 run 进一步证明了类型和排序枚举的真实可行性。Gateway 已补上按稳定 BVID 合并页窗口的纯逻辑 helper，并用单元测试固定“保留首个页面顺序、记录重复 BVID、重复即 partial”的规则；但尚未把单页 runner 自动升级成多页任务。跨页任务仍必须在同一任务上下文内保存 query/type/sort/page、页间 BVID 去重和终止原因；本轮的 5 个重复项是必须保留的边界事实。
+这些 run 进一步证明了类型和排序枚举的真实可行性。Gateway 先补上按稳定 BVID 合并页窗口的纯逻辑 helper，并用单元测试固定“保留首个页面顺序、记录重复 BVID、重复即 partial”的规则；随后才接入下一节记录的有界多页 runner。跨页任务仍必须在同一任务上下文内保存 query/type/sort/page、页间 BVID 去重和终止原因；本轮独立 run 的 5 个重复项是必须保留的边界事实。
+
+## 有界批量搜索真实 canary
+
+在上述独立 run 之后，Gateway 已接入有界的双页 batch runner，并在隔离的临时 Collection Profile 中完成一次真实闭环。该任务仍使用生产 MV3 DOM projector 和可见 Playwright Chromium；没有读取 response body，也没有把原始查询写入持久 artifact。
+
+```yaml
+batchId: de52d6b2-367c-46be-a178-9a2e51766db8
+artifactId: 427bbd8e-37c2-4479-bbc7-bcd1b040ab05
+profile: 9d8b8c87-5ae9-4bd2-a6f9-e49fa3943d3b
+query: sha256_only_in_persisted_artifacts
+queryPlaintextForCanary: 人工智能
+resultType: video
+sort: newest
+requestedPages: [1, 2]
+capturedPages: 2
+uniqueItems: 40
+duplicateCount: 0
+unresolvedCardCount: 0
+partial: false
+state: completed
+terminalReason: search_batch_ready
+strategy: bilibili.search.breadth.dom.v2 @ 0.2.0
+admissionEligible: false
+```
+
+批量 manifest 关联了两个单页 run：第 1 页 `ca485fea-694e-460c-8a72-3efad87911db`（20 条）和第 2 页 `7ff98729-64e2-476c-af68-e4eaa34b711b`（20 条）。合并文件的 SHA-256 为 `8538ce6a6de71b1662413b259b1f4e0064ed00fa3a98c9f2e7b4a323ead4c86f`；artifact 只保留 query digest、页面结果和 coverage，不保存 Cookie、Token、请求头、请求体或完整 HAR。
+
+本次 batch 在两页之间没有重复 BVID，但不能覆盖前一节独立 run 观察到的 5 个重复 BVID。B 站搜索结果会随时间变化，因而“本次 `duplicateCount=0`”只能作为本次任务的事实，不能推广为分页永不重复。batch runner 当前最多执行两页，遇到某页失败或 partial 会停止后续页，不自动重放平台导航；重复出现时按契约终止为 `partial / search_batch_duplicates`。
+
+临时 Gateway、Browser Host 和 Profile 已在 canary 结束后显式关闭；43131 监听端口已清理，其他受管 Gateway（43127/43128/43129）未受影响。
 
 ## 结论
 
@@ -103,4 +133,4 @@ admissionEligible: false
 productionStatus: research-only
 ```
 
-下一门槛是实现有界多页任务账本（页间去重、重复比例和恢复语义），再补空结果样本并做独立 review；不能把旧的 v1 admission 或本次单页 canary 自动扩大为 v2 admission。
+下一门槛不再是“有没有 batch runner”，而是补齐空结果样本、跨任务的结果漂移/重复比例 coverage、batch 中断恢复和独立 review；不能把本次 batch 的 40 条 unique 结果或旧的 v1 admission 自动扩大为 v2 admission。
