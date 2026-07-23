@@ -241,3 +241,30 @@ admissionEligible: false
 3. 只有同一 BVID 的上述 URL 变体被讨论区 Host 接受；其他 query、hash、host 或 BVID 均仍会隔离并停止。
 
 在该修复后的真实 run 中，导航 1 次、可信滚动 1 次，评论 DOM 投影捕获 20 条根评论，页面以 `retained_for_review` 保留。排序点击尚未证明：点击前探针在发送浏览器输入前超时，已记录为前置条件失败，不得自动重试；下一步需在产品层明确解锁后单独验证排序，不与滚动或楼中楼串联。
+
+## M. 2026-07-23 排序控件真实组件复核与安全停止
+
+本轮没有把失败的认证动作重放。所有认证动作仍使用 `ee439ada-a7d7-436f-a898-e959004316ee` 的持久 Profile；请求头、请求体、Cookie、Token、storage state 和 response body 均未读取。
+
+### M.1 代码缺陷与修复
+
+真实 Shadow DOM 复核发现两个此前未覆盖的组件事实：
+
+1. `<bili-text-button>最热</bili-text-button>` 与 `<bili-text-button>最新</bili-text-button>` 的可见文字在宿主 light DOM，通过组件 Shadow DOM 的 `<slot>` 投影；只遍历 `shadowRoot.childNodes` 会把两个语义标签都抹掉；
+2. B站评论组件的 `#sort-actions` 状态类是 `hot` 与 `time`，不是 `hot` 与 `latest`。公开组件源码显示“最新”按钮调用 `handleChangeMode(2)`，其 `sortClass` 为 `time`。
+
+Host 可信交互探针和 MV3 DOM projector 已同步修复：读取 `slot.assignedNodes({ flatten: true })`，并按组件容器把 `hot/time` 解析为“最热/最新”。修复提交为 `dbfb15c`，版本仍为 `0.7.17`；单元/类型门禁为 30 个测试文件、96 个测试全部通过，最新扩展构建 fingerprint 仅作为运行时门禁值，不改变版本号。
+
+### M.2 三次认证动作账本
+
+| run / artifact | 结果 | 平台输入 | 页面处置 |
+|---|---|---:|---|
+| `c223a86b…` / `122ad6e0…` | slot 修复前，排序目标探针超时 | `0` | `partial / interaction_prerequisite_unmet`，保留页 |
+| `54cedac3…` / `cc2d1c8d…` | slot 修复后识别到控件，但共同 `hot` 容器被错误继承为“最新 active” | `0` | `partial / interaction_prerequisite_unmet`，保留页 |
+| `e5bf61f4…` / `f2560db4…` | `hot/time` 修复前的真实认证点击已发出；动作尾窗未形成可交叉证明的后置条件 | `1` | `failed / document_context_changed`，页面 quarantine，账号 safety `locked` |
+
+第三次 run 的 `platformActionIds` 已登记该唯一可信点击，因此无论平台最终是否切换，都不能重放或用刷新确认。该 run 没有保存视觉后证据，不能宣称排序成功；当前只能结论为 `inconclusive / outcome_unknown`。下一次认证验证必须是新的 run，并先经过产品固定的人工安全解锁；在此之前不再发送任何 B站动作。
+
+### M.3 组件级公开源码与匿名对照
+
+独立匿名浏览器只做了公开页面的低频 DOM/网络观察和一次可信排序尝试。它确认 `#commentapp > bili-comments > bili-comments-header-renderer` 的开放 Shadow DOM 层级、`#sort-actions.hot/time` 组件语义以及 `/x/v2/reply/wbi/main` 的公开路由候选，但匿名页面有评论可见性上限，排序点击未形成可用的认证后置证据；这不能替代登录 Profile 的真实验证。认证 Profile 的安全锁定保持不变。
