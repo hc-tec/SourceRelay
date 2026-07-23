@@ -286,6 +286,15 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         }
         if (!(candidate instanceof Element || candidate instanceof DocumentFragment)) return '';
         if (candidate instanceof Element && ['STYLE', 'SCRIPT', 'TEMPLATE'].includes(candidate.tagName)) return '';
+        // Bilibili's bili-text-button keeps its visible label in the host's
+        // light DOM and renders it through a Shadow DOM <slot>. Once the
+        // composed walker enters the shadow root, childNodes alone no longer
+        // contain the assigned label ("最热" / "最新"). Preserve the real
+        // composed-tree semantics before falling back to shadow children.
+        if (candidate instanceof HTMLSlotElement) {
+          const assigned = candidate.assignedNodes({ flatten: true });
+          if (assigned.length > 0) return assigned.map(visit).join(' ');
+        }
         const source = candidate instanceof Element ? candidate.shadowRoot ?? candidate : candidate;
         const parts: string[] = [];
         for (const child of Array.from(source.childNodes)) {
@@ -348,6 +357,22 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
           if (pressed === 'false') return 'inactive';
           if (current.classList.contains('active') || current.classList.contains('selected') ||
             current.classList.contains('is-active') || current.classList.contains('is-selected')) return 'active';
+        }
+        if (current.parentNode) {
+          current = current.parentNode;
+          continue;
+        }
+        const root = current.getRootNode();
+        current = root instanceof ShadowRoot ? root.host : null;
+      }
+      return 'unknown';
+    };
+    const sortModeOf = (element: Element | null): 'hot' | 'latest' | 'unknown' => {
+      let current: Node | null = element;
+      while (current) {
+        if (current instanceof Element && current.id === 'sort-actions') {
+          if (current.classList.contains('hot')) return 'hot';
+          if (current.classList.contains('time') || current.classList.contains('latest')) return 'latest';
         }
         if (current.parentNode) {
           current = current.parentNode;
@@ -427,7 +452,14 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
     };
     const latestState = stateOf(latestControl);
     const hotState = stateOf(hotControl);
-    const resolvedLatestState = latestState === 'unknown' && hotState === 'active' ? 'inactive' : latestState;
+    const sortMode = sortModeOf(latestControl ?? hotControl);
+    const resolvedLatestState = sortMode === 'hot'
+      ? 'inactive' as const
+      : sortMode === 'latest'
+        ? 'active' as const
+        : latestState === 'unknown' && hotState === 'active'
+          ? 'inactive' as const
+          : latestState;
     return {
       dom: {
         commentHostPresent: Boolean(host && commentRoot),

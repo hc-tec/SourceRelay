@@ -54,6 +54,13 @@ export async function captureBilibiliVideoDiscussionDom(
           if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
           if (!(node instanceof Element || node instanceof DocumentFragment)) return '';
           if (node instanceof Element && ['STYLE', 'SCRIPT', 'TEMPLATE'].includes(node.tagName)) return '';
+          // The visible label of Bilibili's bili-text-button is assigned to a
+          // slot from the host light DOM. Walking only shadowRoot.childNodes
+          // otherwise erases the "最热" / "最新" label used for discovery.
+          if (node instanceof HTMLSlotElement) {
+            const assigned = node.assignedNodes({ flatten: true });
+            if (assigned.length > 0) return assigned.map(composedText).join(' ');
+          }
           const shadow = node instanceof Element ? node.shadowRoot : null;
           const source = shadow ?? node;
           return Array.from(source.childNodes).map(composedText).join(' ');
@@ -110,6 +117,22 @@ export async function captureBilibiliVideoDiscussionDom(
           }
           return 'unknown';
         };
+        const sortModeOf = (element: Element | null): 'hot' | 'latest' | 'unknown' => {
+          let current: Node | null = element;
+          while (current) {
+            if (current instanceof Element && current.id === 'sort-actions') {
+              if (current.classList.contains('hot')) return 'hot';
+              if (current.classList.contains('time') || current.classList.contains('latest')) return 'latest';
+            }
+            if (current.parentNode) {
+              current = current.parentNode;
+              continue;
+            }
+            const root = current.getRootNode();
+            current = root instanceof ShadowRoot ? root.host : null;
+          }
+          return 'unknown';
+        };
         const host = document.querySelector<HTMLElement>('#commentapp');
         const commentRoot = host?.querySelector<HTMLElement>('bili-comments') ?? null;
         const elements = commentRoot ? composedElements(commentRoot) : [];
@@ -117,9 +140,14 @@ export async function captureBilibiliVideoDiscussionDom(
         const hot = visibleSemanticButton(elements, '最热');
         const latestState = stateOf(latest);
         const hotState = stateOf(hot);
-        const resolvedLatestState = latestState === 'unknown' && hotState === 'active'
+        const sortMode = sortModeOf(latest ?? hot);
+        const resolvedLatestState = sortMode === 'hot'
           ? 'inactive' as const
-          : latestState;
+          : sortMode === 'latest'
+            ? 'active' as const
+            : latestState === 'unknown' && hotState === 'active'
+              ? 'inactive' as const
+              : latestState;
         const roots = elements
           .filter((element) => element.tagName.toLowerCase() === 'bili-comment-thread-renderer' && rendered(element))
           .slice(0, 20)
