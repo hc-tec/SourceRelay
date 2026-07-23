@@ -93,6 +93,8 @@ export class BrowserHostRuntime {
         return await this.#profile(body.request.profileId).acquire(body.request, controllerGeneration);
       case 'release_page':
         return this.#profile(body.request.profileId).release(body.request);
+      case 'close_quarantined_page':
+        return await this.#profile(body.request.profileId).closeQuarantinedPage(body.request);
       case 'navigate_page':
         return await this.#profile(body.request.profileId).navigate(body.request);
       case 'scroll_page':

@@ -178,6 +178,17 @@ export interface ReconcilePageRequest {
   pageAlias: string;
 }
 
+/**
+ * Explicit local maintenance action for a page that was quarantined after an
+ * uncertain platform outcome. A quarantined page is never implicitly
+ * reusable and may only be closed with an exact record version.
+ */
+export interface CloseQuarantinedPageRequest {
+  profileId: string;
+  pageAlias: string;
+  recordVersion: number;
+}
+
 export interface CreateReclaimPlanRequest {
   profileId: string;
   maximumPagesToClose: number;

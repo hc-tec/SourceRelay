@@ -22,6 +22,7 @@ import {
   type BrowserHostCommandBody,
   type BrowserHostCommandResult,
   type CapturePageVisualEvidenceRequest,
+  type CloseQuarantinedPageRequest,
   type ManagedPageSummary,
   type NavigatePageRequest,
   type PagePoolSnapshot,
@@ -132,6 +133,10 @@ export class GatewayBrowserHostRuntime {
 
   async releasePage(request: ReleasePageRequest): Promise<ManagedPageSummary> {
     return managedPageResult(await this.#command({ type: 'release_page', request }, false));
+  }
+
+  async closeQuarantinedPage(request: CloseQuarantinedPageRequest): Promise<ManagedPageSummary> {
+    return managedPageResult(await this.#command({ type: 'close_quarantined_page', request }, false));
   }
 
   async bindStrategyObserver(request: StrategyObserverBindingRequest): Promise<StrategyObserverBindingResult> {

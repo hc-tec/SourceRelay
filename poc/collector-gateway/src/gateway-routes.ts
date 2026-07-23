@@ -131,6 +131,27 @@ export async function handleGatewayRoute(
     return true;
   }
 
+  const quarantinedPage = url.pathname.match(
+    new RegExp(`^/v1/profiles/(${PROFILE_ID})/browser/pages/(page-[1-9][0-9]*)/close-quarantined$`, 'i')
+  );
+  if (request.method === 'POST' && quarantinedPage) {
+    if (!sameOrigin(request, response, context)) return true;
+    const body = await readJsonBody(request);
+    if (
+      !body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).length !== 1 ||
+      !Number.isSafeInteger((body as { recordVersion?: unknown }).recordVersion) ||
+      (body as { recordVersion: number }).recordVersion < 1
+    ) throw new Error('close_quarantined_page_input_invalid');
+    const page = await context.browserManager.closeQuarantinedPage({
+      profileId: quarantinedPage[1]!,
+      pageAlias: quarantinedPage[2]!,
+      recordVersion: (body as { recordVersion: number }).recordVersion
+    });
+    sendJson(response, 200, { schemaVersion: 1, page });
+    return true;
+  }
+
   const safety = url.pathname.match(new RegExp(`^/v1/profiles/(${PROFILE_ID})/account-safety(?:/(pause|unlock))?$`, 'i'));
   if (safety && request.method === 'GET' && !safety[2]) {
     const profile = context.profileRegistry.get(safety[1]!);

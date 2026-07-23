@@ -6,6 +6,7 @@ import type {
   AcquirePageRequest,
   AcquirePageResult,
   CapturePageVisualEvidenceRequest,
+  CloseQuarantinedPageRequest,
   ManagedPageSummary,
   NavigatePageRequest,
   PagePoolSnapshot,
@@ -122,6 +123,11 @@ export class CollectionBrowserManager {
   async releasePage(request: ReleasePageRequest): Promise<ManagedPageSummary> {
     this.#registry.get(request.profileId);
     return await this.#runtime.releasePage(request);
+  }
+
+  async closeQuarantinedPage(request: CloseQuarantinedPageRequest): Promise<ManagedPageSummary> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.closeQuarantinedPage(request);
   }
 
   disconnect(): void {

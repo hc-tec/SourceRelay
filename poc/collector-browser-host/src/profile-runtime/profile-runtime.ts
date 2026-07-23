@@ -8,9 +8,11 @@ import {
   type AcquirePageResult,
   type BrowserProfilePagePoolSummary,
   type CapturePageVisualEvidenceRequest,
+  type CloseQuarantinedPageRequest,
   type CreateReclaimPlanRequest,
   type ExtensionRuntimeExpectation,
   type ExtensionRuntimeSummary,
+  type ManagedPageSummary,
   type NavigatePageRequest,
   type PageScrollResult,
   type ReclaimExecutionResult,
@@ -174,6 +176,10 @@ export class ProfileRuntime {
 
   release(request: ReleasePageRequest) {
     return this.#ledger.release(request);
+  }
+
+  closeQuarantinedPage(request: CloseQuarantinedPageRequest): Promise<ManagedPageSummary> {
+    return this.#ledger.closeQuarantinedPage(request);
   }
 
   navigate(request: NavigatePageRequest) {

@@ -1,6 +1,7 @@
 import type {
   AcquirePageRequest,
   AcquirePageResult,
+  CloseQuarantinedPageRequest,
   CreateReclaimPlanRequest,
   ExecuteReclaimPlanRequest,
   LaunchProfileRequest,
@@ -77,6 +78,7 @@ export type BrowserHostCommandBody =
   | { type: 'read_strategy_observation'; request: StrategyObservationReadRequest }
   | { type: 'read_strategy_binding_diagnostics'; request: StrategyBindingDiagnosticsRequest }
   | { type: 'reconcile_page'; request: ReconcilePageRequest }
+  | { type: 'close_quarantined_page'; request: CloseQuarantinedPageRequest }
   | { type: 'create_reclaim_plan'; request: CreateReclaimPlanRequest }
   | { type: 'execute_reclaim_plan'; request: ExecuteReclaimPlanRequest }
   | { type: 'close_profile'; profileId: string }

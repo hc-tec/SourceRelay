@@ -7,6 +7,7 @@ import {
   type AcquirePageRequest,
   type AcquirePageResult,
   type CapturePageVisualEvidenceRequest,
+  type CloseQuarantinedPageRequest,
   type ManagedPageSummary,
   type NavigatePageRequest,
   type PageScrollResult,
@@ -30,6 +31,7 @@ import { captureManagedPageVisualEvidence } from './page-visual-evidence.js';
 import { executeTrustedScroll } from './trusted-scroll.js';
 import { executeTrustedBilibiliAccountVideoPageClick } from './trusted-bilibili-account-video-page-click.js';
 import { executeTrustedBilibiliTranscriptChineseSelection } from './trusted-bilibili-transcript-chinese-selection.js';
+import { closeQuarantinedPageRecord } from './quarantine-maintenance.js';
 import {
   DEFAULT_MAX_IDLE_TRUST_MS,
   leaseSelectedPage,
@@ -307,6 +309,13 @@ export class PageLedger {
       transitionRecord(record, 'quarantined', request.quarantineReason ?? 'explicit_quarantine');
     }
     this.#emit('page_released', record, record.quarantineReason, null);
+    return recordSummary(record);
+  }
+
+  async closeQuarantinedPage(request: CloseQuarantinedPageRequest): Promise<ManagedPageSummary> {
+    const record = this.#record(request.profileId, request.pageAlias);
+    await closeQuarantinedPageRecord(record, request.recordVersion);
+    this.#emit('quarantined_page_closed', record, null, null);
     return recordSummary(record);
   }
 
