@@ -385,6 +385,8 @@ locked
 
 每个 run 具有唯一 runId；每个语义动作在真实输入前写入 attemptedActionIds。输入已投递但结果未知，也视为已经尝试。网络超时、DOM 未变化、结果丢失或页面卡住，不能成为第二次点击、刷新、重新导航或自动补发旧动作的理由。
 
+这里要区分“动作意图登记”和“真实平台输入”：`attemptedActionIds` 是 Host 调用前的不可重复预约；Host 前置条件失败时，平台动作记录仍为 `attempted=false`。只有 Host 确认真实 mouse/wheel 输入已经发出（包括输入后结果未知），才把动作写入 `platformActionIds` 并标记 `attempted=true`。两者不能合并，否则会把没有发出输入的探针超时误报成平台动作。
+
 以下信号一旦出现，当前 run 必须停止新的平台动作：
 
 | 信号 | 页面 / Profile 处置 | 自动恢复是否允许 |

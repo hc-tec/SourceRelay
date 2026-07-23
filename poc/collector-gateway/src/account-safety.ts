@@ -36,7 +36,10 @@ export interface AccountSafetyRecord {
     runId: string;
     purpose: AccountSafetyRunPurpose;
     startedAt: string;
+    /** Action IDs reserved before a browser-host call is made. */
     attemptedActionIds: string[];
+    /** Action IDs for which trusted platform input was actually sent. */
+    platformActionIds: string[];
   } | null;
   lastRunAt: string | null;
   updatedAt: string;
@@ -104,7 +107,10 @@ function isSafetyRecord(value: unknown): value is PersistedAccountSafetyRecord {
         activeRun.purpose === 'formal_collection_stage') &&
       typeof activeRun.startedAt === 'string' &&
       Array.isArray(activeRun.attemptedActionIds) &&
-      activeRun.attemptedActionIds.every((actionId) => typeof actionId === 'string' && safeCodePattern.test(actionId))
+      activeRun.attemptedActionIds.every((actionId) => typeof actionId === 'string' && safeCodePattern.test(actionId)) &&
+      (!('platformActionIds' in activeRun) ||
+        (Array.isArray(activeRun.platformActionIds) &&
+          activeRun.platformActionIds.every((actionId) => typeof actionId === 'string' && safeCodePattern.test(actionId))))
     )) &&
     (candidate.lastRunAt === null || typeof candidate.lastRunAt === 'string') &&
     typeof candidate.updatedAt === 'string'
@@ -170,12 +176,16 @@ export class AccountSafetyRegistry {
           const record: AccountSafetyRecord = {
             ...persisted,
             schemaVersion: 2,
-            state: persistedState === 'cooldown' ? 'ready' : persistedState
+            state: persistedState === 'cooldown' ? 'ready' : persistedState,
+            activeRun: persisted.activeRun
+              ? { ...persisted.activeRun, platformActionIds: persisted.activeRun.platformActionIds ?? [] }
+              : null
           };
           if (
             candidate.schemaVersion !== 2 ||
             candidate.state === 'cooldown' ||
-            candidate.cooldownUntil !== undefined
+            candidate.cooldownUntil !== undefined ||
+            Boolean(candidate.activeRun && !('platformActionIds' in candidate.activeRun))
           ) {
             record.updatedAt = now.toISOString();
             changed = true;
@@ -266,7 +276,8 @@ export class AccountSafetyRegistry {
       runId,
       purpose,
       startedAt: now.toISOString(),
-      attemptedActionIds: []
+      attemptedActionIds: [],
+      platformActionIds: []
     };
     record.updatedAt = now.toISOString();
     await this.#save();
@@ -307,19 +318,52 @@ export class AccountSafetyRegistry {
     return structuredClone(record);
   }
 
+  /**
+   * Records the second half of the action ledger. `recordActionAttempt` is a
+   * reservation made before a host call; this method is called only after the
+   * host confirms that trusted browser input was sent (including an unknown
+   * postcondition outcome). Keeping both lists prevents a prerequisite
+   * rejection from being reported as a real platform input.
+   */
+  async recordPlatformActionAttempt(
+    profileId: string,
+    platform: SupportedPlatform,
+    runId: string,
+    actionId: string,
+    now = new Date()
+  ): Promise<AccountSafetyRecord> {
+    if (!safeCodePattern.test(actionId)) throw new Error('account_safety_action_invalid');
+    const record = this.#record(profileId, platform, now);
+    if (record.state !== 'running' || record.activeRun?.runId !== runId) {
+      throw new Error('account_safety_run_not_active');
+    }
+    if (!record.activeRun.attemptedActionIds.includes(actionId)) {
+      throw new Error('account_safety_action_intent_missing');
+    }
+    if (record.activeRun.platformActionIds.includes(actionId)) {
+      throw new Error('account_safety_platform_action_already_recorded');
+    }
+    record.activeRun.platformActionIds.push(actionId);
+    record.updatedAt = now.toISOString();
+    await this.#save();
+    return structuredClone(record);
+  }
+
   async finishAuthenticatedRun(
     profileId: string,
     platform: SupportedPlatform,
     runId: string,
     reasonCode: string,
-    now = new Date()
+    now = new Date(),
+    uncertainPlatformAction = true
   ): Promise<AccountSafetyRecord> {
     if (!safeCodePattern.test(reasonCode)) throw new Error('account_safety_reason_invalid');
     const record = this.#record(profileId, platform, now);
     if (record.state !== 'running' || record.activeRun?.runId !== runId) {
       throw new Error('account_safety_run_not_active');
     }
-    const hardLock = /verification_required|rate_limited|risk_control|captcha|authentication_lost|user_safety_pause|outcome_unknown|document_context_changed|bilibili_page_click_response_invalid|run_deadline_exceeded/.test(reasonCode);
+    const hardLock = /verification_required|rate_limited|risk_control|captcha|authentication_lost|user_safety_pause|bilibili_page_click_response_invalid/.test(reasonCode) ||
+      (uncertainPlatformAction && /outcome_unknown|document_context_changed|run_deadline_exceeded/.test(reasonCode));
     record.state = hardLock ? 'locked' : 'ready';
     record.reasonCode = reasonCode;
     record.manualUnlockRequired = hardLock;

@@ -1,5 +1,6 @@
 import type { Page, Response } from 'playwright';
 import {
+  BrowserHostError,
   BILIBILI_VIDEO_DISCUSSION_INTERACTION_ACTIONS,
   BILIBILI_VIDEO_DISCUSSION_INTERACTION_MAX_NETWORK_OBSERVATIONS,
   BILIBILI_VIDEO_DISCUSSION_INTERACTION_MAX_TIMEOUT_MS,
@@ -13,8 +14,9 @@ import {
   type PageVisualEvidence
 } from '@intelligence/collector-contracts';
 import { hostError } from '../host-errors.js';
-import { digestUrl, touchRecord, transitionRecord, type ManagedPageRecord } from './page-record.js';
+import { touchRecord, transitionRecord, type ManagedPageRecord } from './page-record.js';
 import { captureManagedPageVisualEvidence } from './page-visual-evidence.js';
+import { matchesBilibiliVideoDiscussionPageIdentity } from './bilibili-video-discussion-page-identity.js';
 
 const ACTION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const BVID_PATTERN = /^BV[0-9A-Za-z]{10}$/;
@@ -137,7 +139,16 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
       record.page.off('response', onResponse);
     }
   } catch (error) {
-    if (!browserInputAttempted) throw error;
+    if (!browserInputAttempted) {
+      if (error instanceof BrowserHostError) throw error;
+      throw hostError({
+        code: safeDiscussionPreconditionErrorCode(error),
+        category: 'browser_input',
+        scope: 'action',
+        retryClass: 'local_query_only',
+        safeDetails: { errorType: error instanceof Error ? error.name : 'unknown' }
+      });
+    }
     record.activeLease = null;
     transitionRecord(record, 'quarantined', 'bilibili_video_discussion_interaction_outcome_unknown');
     input.emit(
@@ -158,6 +169,14 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
   }
 }
 
+function safeDiscussionPreconditionErrorCode(error: unknown): string {
+  const candidate = error instanceof Error ? error.message : '';
+  if (candidate === 'run_deadline_exceeded') return 'bilibili_video_discussion_interaction_precondition_timeout';
+  return /^[a-z0-9_]{1,100}$/.test(candidate)
+    ? candidate
+    : 'bilibili_video_discussion_interaction_precondition_unmet';
+}
+
 function assertDiscussionPage(
   record: ManagedPageRecord,
   request: BilibiliVideoDiscussionInteractionRequest
@@ -176,8 +195,7 @@ function assertDiscussionPage(
       retryClass: 'local_query_only'
     });
   }
-  if (record.page.isClosed() || digestUrl(record.page.url()) !== record.expectedIdentity.targetUrlDigest ||
-    !record.page.url().includes(`/video/${request.bvid}`)) {
+  if (!matchesBilibiliVideoDiscussionPageIdentity(record.page.url(), request.bvid)) {
     throw hostError({
       code: 'bilibili_video_discussion_interaction_page_identity_unverified',
       category: 'page_identity',
@@ -257,24 +275,53 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
       return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
         style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
     };
-    const composedText = (node: Node): string => {
-      if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
-      if (!(node instanceof Element || node instanceof DocumentFragment)) return '';
-      if (node instanceof Element && ['STYLE', 'SCRIPT', 'TEMPLATE'].includes(node.tagName)) return '';
-      const source = node instanceof Element ? node.shadowRoot ?? node : node;
-      return Array.from(source.childNodes).map(composedText).join(' ');
-    };
-    const composedElements = (root: Element): Element[] => {
-      const result: Element[] = [];
-      const visit = (container: Element | ShadowRoot): void => {
-        for (const element of Array.from(container.querySelectorAll('*'))) {
-          result.push(element);
-          if (element.shadowRoot) visit(element.shadowRoot);
+    const composedText = (node: Node, maximum = 20_000): string => {
+      let remaining = maximum;
+      const visit = (candidate: Node): string => {
+        if (remaining <= 0) return '';
+        if (candidate.nodeType === Node.TEXT_NODE) {
+          const text = (candidate.textContent ?? '').slice(0, remaining);
+          remaining -= text.length;
+          return text;
         }
+        if (!(candidate instanceof Element || candidate instanceof DocumentFragment)) return '';
+        if (candidate instanceof Element && ['STYLE', 'SCRIPT', 'TEMPLATE'].includes(candidate.tagName)) return '';
+        const source = candidate instanceof Element ? candidate.shadowRoot ?? candidate : candidate;
+        const parts: string[] = [];
+        for (const child of Array.from(source.childNodes)) {
+          if (remaining <= 0) break;
+          parts.push(visit(child));
+        }
+        return parts.join(' ');
       };
-      visit(root);
-      if (root.shadowRoot) visit(root.shadowRoot);
-      return result;
+      return visit(node);
+    };
+    const findComposed = (
+      root: Element,
+      predicate: (element: Element) => boolean,
+      maximumNodes = 2_000
+    ): Element | null => {
+      let visited = 0;
+      const visit = (container: Element | ShadowRoot): Element | null => {
+        for (const element of Array.from(container.children)) {
+          visited += 1;
+          if (visited > maximumNodes) return null;
+          if (predicate(element)) return element;
+          if (element.shadowRoot) {
+            const shadowMatch = visit(element.shadowRoot);
+            if (shadowMatch) return shadowMatch;
+          }
+          const lightMatch = visit(element);
+          if (lightMatch) return lightMatch;
+        }
+        return null;
+      };
+      if (predicate(root)) return root;
+      if (root.shadowRoot) {
+        const shadowMatch = visit(root.shadowRoot);
+        if (shadowMatch) return shadowMatch;
+      }
+      return visit(root);
     };
     const renderedControl = (element: Element): boolean =>
       rendered(element) || Boolean(element.shadowRoot &&
@@ -296,26 +343,29 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
       return 'unknown';
     };
     const targetFor = (root: Element, label: string): Element | null =>
-      composedElements(root).find((element) => interactive(element) && renderedControl(element) &&
-        clean(composedText(element), 100) === label) ?? null;
+      findComposed(root, (element) => interactive(element) && renderedControl(element) &&
+        clean(composedText(element), 100) === label);
     const host = document.querySelector<HTMLElement>('#commentapp');
     const commentRoot = host?.querySelector<HTMLElement>('bili-comments') ?? null;
-    const elements = commentRoot ? composedElements(commentRoot) : [];
     const commentText = clean(composedText(commentRoot ?? host ?? document.body), 20_000);
-    const threads = elements.filter((element) =>
-      element.tagName.toLowerCase() === 'bili-comment-thread-renderer' && rendered(element));
+    const firstThread = commentRoot
+      ? findComposed(commentRoot, (element) =>
+        element.tagName.toLowerCase() === 'bili-comment-thread-renderer' && rendered(element), 3_000)
+      : null;
     let target: Element | null = null;
     let latestControl: Element | null = null;
     let targetExpanded = false;
     let replyPaginationVisible = false;
     if (targetAction === 'select_latest_comments') {
-      latestControl = targetFor(commentRoot ?? host ?? document.body, '最新');
+      const header = commentRoot
+        ? findComposed(commentRoot, (element) => element.tagName.toLowerCase() === 'bili-comments-header-renderer', 400)
+        : null;
+      latestControl = targetFor(header ?? commentRoot ?? host ?? document.body, '最新');
       target = latestControl;
     } else {
-      const firstThread = threads[0] ?? null;
       const replyRenderer = firstThread
-        ? composedElements(firstThread).find((element) =>
-          element.tagName.toLowerCase() === 'bili-comment-replies-renderer' && rendered(element)) ?? null
+        ? findComposed(firstThread, (element) =>
+          element.tagName.toLowerCase() === 'bili-comment-replies-renderer' && rendered(element), 800)
         : null;
       target = replyRenderer ? targetFor(replyRenderer, '点击查看') : null;
       targetExpanded = Boolean(replyRenderer &&
@@ -330,11 +380,33 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
     const centerX = rect ? Math.floor(rect.x + rect.width / 2) : -1;
     const centerY = rect ? Math.floor(rect.y + rect.height / 2) : -1;
     const hit = rect ? document.elementFromPoint(centerX, centerY) : null;
-    const hitText = clean(hit?.textContent, 100);
-    const targetText = clean(target ? composedText(target) : null, 100);
-    const pointerHit = Boolean(hit && target && (hit === target || target.contains(hit) ||
-      hitText === targetText || hit?.closest('bili-text-button') === target));
-    const targetState = stateOf(target);
+    const isComposedAncestor = (candidate: Element | null, descendant: Element | null): boolean => {
+      if (!candidate || !descendant) return false;
+      let current: Node | null = descendant;
+      while (current) {
+        if (current === candidate) return true;
+        if (current.parentNode) {
+          current = current.parentNode;
+          continue;
+        }
+        const root = current.getRootNode();
+        current = root instanceof ShadowRoot ? root.host : null;
+      }
+      return false;
+    };
+    const composedHovered = (element: Element | null): boolean => {
+      if (!element) return false;
+      if (element.matches(':hover') || Array.from(element.querySelectorAll('*')).some((candidate) => candidate.matches(':hover'))) {
+        return true;
+      }
+      let current: Node | null = element;
+      while (current) {
+        if (current instanceof Element && current.matches(':hover')) return true;
+        const root = current.getRootNode();
+        current = root instanceof ShadowRoot ? root.host : current.parentNode;
+      }
+      return false;
+    };
     return {
       dom: {
         commentHostPresent: Boolean(host && commentRoot),
@@ -348,10 +420,11 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         targetVisible: Boolean(target && renderedControl(target)),
         targetInViewport: Boolean(rect && rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth),
         targetBounds: bounds,
-        targetPointerHit: pointerHit,
-        targetHovered: Boolean(target && (target.matches(':hover') || Array.from(target.querySelectorAll('*')).some((element) => element.matches(':hover')))),
+        targetPointerHit: Boolean(hit && target && (hit === target || target.contains(hit) ||
+          isComposedAncestor(hit, target) || isComposedAncestor(target, hit))),
+        targetHovered: composedHovered(target),
         targetExpanded,
-        rootCommentCount: Math.min(20, threads.length),
+        rootCommentCount: firstThread ? 1 : 0,
         replyPaginationVisible
       }
     };

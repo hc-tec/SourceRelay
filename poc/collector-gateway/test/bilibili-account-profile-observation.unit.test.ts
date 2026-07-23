@@ -48,10 +48,10 @@ describe('Bilibili account profile observation', () => {
     });
 
     expect(result.dom.statistics).toEqual([{ label: '粉丝数', value: '254.5万' }]);
-    expect(result.dom.navigation[0]).toEqual({
+    expect(result.dom.navigation).toEqual([{
       label: '动态',
       value: null,
       href: 'https://space.bilibili.com/7481602/dynamic'
-    });
+    }]);
   });
 });

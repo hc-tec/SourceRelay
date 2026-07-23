@@ -11,6 +11,40 @@ export interface BilibiliVideoDiscussionStrategyObservation {
   dom: BilibiliVideoDiscussionDomSnapshot;
 }
 
+export type BilibiliVideoDiscussionObservationWaitState =
+  | 'risk_stopped'
+  | 'ready'
+  | 'waiting_for_host'
+  | 'waiting_for_viewport'
+  | 'waiting_for_content';
+
+export function isBilibiliVideoDiscussionContentReady(
+  dom: BilibiliVideoDiscussionDomSnapshot
+): boolean {
+  return dom.commentContentState === 'ready' || dom.commentContentState === 'empty';
+}
+
+/**
+ * Classifies one DOM observation without performing any browser action. The
+ * gateway uses this result to distinguish a lazy-loading comment tree from a
+ * genuine empty result. In particular, `loading` and `unknown` never become
+ * `ready` merely because the host element exists.
+ */
+export function bilibiliVideoDiscussionObservationWaitState(
+  dom: BilibiliVideoDiscussionDomSnapshot,
+  options: { requireViewport: boolean; requireContentReady: boolean }
+): BilibiliVideoDiscussionObservationWaitState {
+  if (dom.risk.verificationRequired || dom.risk.rateLimited || dom.risk.sourceUnavailable) {
+    return 'risk_stopped';
+  }
+  if (!dom.commentHostPresent || !dom.commentHostVisible) return 'waiting_for_host';
+  if (options.requireViewport && !dom.commentHostInViewport) return 'waiting_for_viewport';
+  if (options.requireContentReady && !isBilibiliVideoDiscussionContentReady(dom)) {
+    return 'waiting_for_content';
+  }
+  return 'ready';
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }

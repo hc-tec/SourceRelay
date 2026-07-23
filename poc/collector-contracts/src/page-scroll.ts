@@ -15,6 +15,8 @@ export interface ScrollPageRequest {
   actionId: string;
   deltaY: number;
   timeoutMs: number;
+  /** Optional source-scoped identity policy used only by Bilibili discussion. */
+  bilibiliVideoBvid?: string;
 }
 
 export interface PageScrollPosition {

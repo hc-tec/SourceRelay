@@ -109,6 +109,52 @@ describe('Account safety state machine', () => {
     });
   });
 
+  test('does not hard-lock a profile for a run timeout after all platform actions completed', async () => {
+    const { registry } = await createRegistry('2026-07-22T00:00:00.000Z');
+    const permit = await registry.beginAuthenticatedRun(profileId, 'bilibili');
+    const completed = await registry.finishAuthenticatedRun(
+      profileId,
+      'bilibili',
+      permit.runId,
+      'run_deadline_exceeded',
+      new Date('2026-07-22T00:00:01.000Z'),
+      false
+    );
+    expect(completed).toMatchObject({ state: 'ready', manualUnlockRequired: false });
+  });
+
+  test('keeps reserved action intent separate from trusted platform input', async () => {
+    const { registry } = await createRegistry('2026-07-22T00:00:00.000Z');
+    const permit = await registry.beginAuthenticatedRun(profileId, 'bilibili');
+    const reserved = await registry.recordActionAttempt(
+      profileId,
+      'bilibili',
+      permit.runId,
+      'scroll_comments_once'
+    );
+    expect(reserved.activeRun).toMatchObject({
+      attemptedActionIds: ['scroll_comments_once'],
+      platformActionIds: []
+    });
+
+    const afterHostInput = await registry.recordPlatformActionAttempt(
+      profileId,
+      'bilibili',
+      permit.runId,
+      'scroll_comments_once'
+    );
+    expect(afterHostInput.activeRun).toMatchObject({
+      attemptedActionIds: ['scroll_comments_once'],
+      platformActionIds: ['scroll_comments_once']
+    });
+    await expect(registry.recordPlatformActionAttempt(
+      profileId,
+      'bilibili',
+      permit.runId,
+      'scroll_comments_once'
+    )).rejects.toThrow('account_safety_platform_action_already_recorded');
+  });
+
   test('keeps action budgets and locks isolated to one profile-platform pair', async () => {
     const { registry } = await createRegistry('2026-07-21T00:00:00.000Z');
     const permit = await registry.beginAuthenticatedRun(

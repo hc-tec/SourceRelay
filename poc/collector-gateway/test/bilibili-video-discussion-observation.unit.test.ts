@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { BILIBILI_DISCUSSION_STRATEGY_ID } from '@intelligence/collector-contracts';
+import { BILIBILI_DISCUSSION_STRATEGY_ID, type BridgeJsonValue } from '@intelligence/collector-contracts';
 import {
+  bilibiliVideoDiscussionObservationWaitState,
   bilibiliVideoDiscussionStrategyObservation
 } from '../src/bilibili-video-discussion-observation';
 import {
@@ -28,7 +29,7 @@ function result(dom: Record<string, unknown>) {
       strategyId: BILIBILI_DISCUSSION_STRATEGY_ID,
       bvid,
       documentId: 'document-1',
-      dom
+      dom: dom as BridgeJsonValue
     }
   };
 }
@@ -119,5 +120,65 @@ describe('Bilibili discussion DOM contract', () => {
       risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
     }), bvid);
     expect(projectBilibiliVideoDiscussionDom(observed.dom, bvid, true, '2026-07-23T01:00:01.000Z')).toBeNull();
+  });
+
+  test('keeps polling a lazy comment host until loading becomes ready', () => {
+    const loading = bilibiliVideoDiscussionStrategyObservation(result({
+      bvid,
+      commentHostPresent: true,
+      commentHostVisible: true,
+      commentHostInViewport: true,
+      commentHostBounds: { x: 0, y: 32, width: 800, height: 500 },
+      sortControls: { hotVisible: false, latestVisible: false, latestState: 'unknown' },
+      commentContentState: 'loading',
+      rootCommentTexts: [],
+      firstThreadExpandVisible: false,
+      loginGateVisible: false,
+      risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+    }), bvid);
+    expect(bilibiliVideoDiscussionObservationWaitState(loading.dom, {
+      requireViewport: true,
+      requireContentReady: true
+    })).toBe('waiting_for_content');
+
+    const ready = bilibiliVideoDiscussionStrategyObservation(result({
+      bvid,
+      commentHostPresent: true,
+      commentHostVisible: true,
+      commentHostInViewport: true,
+      commentHostBounds: { x: 0, y: 32, width: 800, height: 500 },
+      sortControls: { hotVisible: true, latestVisible: true, latestState: 'inactive' },
+      commentContentState: 'ready',
+      rootCommentTexts: ['延迟出现的评论'],
+      firstThreadExpandVisible: false,
+      loginGateVisible: false,
+      risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+    }), bvid);
+    expect(bilibiliVideoDiscussionObservationWaitState(ready.dom, {
+      requireViewport: true,
+      requireContentReady: true
+    })).toBe('ready');
+  });
+
+  test('classifies a loading timeout as waiting, never as empty', () => {
+    const loading = bilibiliVideoDiscussionStrategyObservation(result({
+      bvid,
+      commentHostPresent: true,
+      commentHostVisible: true,
+      commentHostInViewport: true,
+      commentHostBounds: { x: 0, y: 32, width: 800, height: 500 },
+      sortControls: { hotVisible: false, latestVisible: false, latestState: 'unknown' },
+      commentContentState: 'loading',
+      rootCommentTexts: [],
+      firstThreadExpandVisible: false,
+      loginGateVisible: false,
+      risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+    }), bvid);
+    expect(bilibiliVideoDiscussionObservationWaitState(loading.dom, {
+      requireViewport: true,
+      requireContentReady: true
+    })).not.toBe('ready');
+    expect(projectBilibiliVideoDiscussionDom(loading.dom, bvid, true, '2026-07-23T01:00:02.000Z'))
+      .toBeNull();
   });
 });

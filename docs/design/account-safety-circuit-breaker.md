@@ -78,6 +78,8 @@ Gateway 启动时若发现上次状态仍为 `running`，必须转换为 `locked
 
 每次 run 创建不可重复的 `runId`；每个语义动作在执行前写入 `attemptedActionIds`。动作结果未知也视为已尝试，不能因没有看到 DOM 或网络结果而再次触发。
 
+认证交互还保留 `platformActionIds`，用于记录 Host 已实际发出 trusted mouse/wheel 输入的动作。前置条件失败只能进入意图列表，不能伪造平台输入；输入已发出但后置条件未知则必须同时出现在两者中并停止本轮。
+
 ```text
 check risk state
   -> write action intent once

@@ -24,7 +24,10 @@ import {
   type BilibiliVideoDiscussionRunRecord,
   type BilibiliVideoDiscussionTerminalReason
 } from './bilibili-video-discussion-contract';
-import { bilibiliVideoDiscussionStrategyObservation } from './bilibili-video-discussion-observation';
+import {
+  bilibiliVideoDiscussionObservationWaitState,
+  bilibiliVideoDiscussionStrategyObservation
+} from './bilibili-video-discussion-observation';
 import { createBilibiliVideoDiscussionRunRecord } from './bilibili-video-discussion-run-record';
 import type { CollectionBrowserManager } from './browser-manager';
 import type { BrowserProfileRegistry } from './profiles';
@@ -33,6 +36,14 @@ const PROFILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 const RUN_DEADLINE_MS = 60_000;
 const NAVIGATION_TIMEOUT_MS = 20_000;
 const OBSERVATION_DEADLINE_MS = 15_000;
+const INITIAL_OBSERVATION_MAX_WAIT_MS = 8_000;
+const DOCUMENT_STABILITY_QUIET_MS = 2_500;
+const DOCUMENT_STABILITY_MAX_WAIT_MS = 8_000;
+// Keep the short-lived extension binding alive through the full run deadline
+// plus a small IPC/cleanup margin. It is still removed by the next bind or
+// expiry cleanup and does not extend the platform-action budget.
+const OBSERVER_BINDING_TTL_MS = RUN_DEADLINE_MS + 2_000;
+const OBSERVATION_POLL_MS = 250;
 
 export interface BilibiliVideoDiscussionHostRunInput {
   profileId: string;
@@ -134,10 +145,12 @@ function failureFor(error: unknown): {
   if (
     errorCode === 'navigation_outcome_unknown' ||
     errorCode === 'scroll_outcome_unknown' ||
+    errorCode === 'scroll_page_identity_unverified' ||
     errorCode === 'managed_page_document_generation_mismatch' ||
     errorCode === 'managed_page_record_version_mismatch' ||
     errorCode === 'managed_page_run_mismatch' ||
     errorCode === 'bilibili_video_discussion_interaction_outcome_unknown' ||
+    errorCode === 'video_discussion_document_stability_timeout' ||
     errorCode === 'video_discussion_strategy_document_context_changed' ||
     errorCode === 'video_discussion_managed_page_context_changed'
   ) return { state: 'failed', terminalReason: 'document_context_changed', errorCode, uncertainPageOutcome: true };
@@ -242,7 +255,7 @@ export class BilibiliVideoDiscussionHostRunner {
         observerBindingId,
         strategyId: BILIBILI_DISCUSSION_STRATEGY_ID,
         target: { canonicalUrl: canonicalVideoUrl, bvid },
-        expiresAt: new Date(Date.now() + 55_000).toISOString(),
+        expiresAt: new Date(Date.now() + OBSERVER_BINDING_TTL_MS).toISOString(),
         maximumResponseObservations: 0,
         maximumPayloadBytes: 128 * 1024,
         documentBindingMode: acquired.selection === 'reused_exact_target' ? 'next_navigation_only' : 'current_document_or_next_navigation'
@@ -264,6 +277,18 @@ export class BilibiliVideoDiscussionHostRunner {
       releaseDisposition = 'retained_for_review';
       releaseReason = 'video_discussion_review_retained';
 
+      // Bilibili can commit a second main-frame document shortly after the
+      // first DOMContentLoaded while keeping the same BVID. Wait for a quiet
+      // document-generation window before taking the single scroll action;
+      // this is local ledger observation, not a navigation or retry.
+      await this.#waitForDocumentStability({
+        profileId: permit.profileId,
+        pageAlias: acquired.page.pageAlias,
+        pageLeaseId: acquired.lease.pageLeaseId,
+        runId: permit.runId,
+        deadline
+      });
+
       const observedBeforeScroll = await this.#observeUntil({
         profileId: permit.profileId,
         pageAlias: acquired.page.pageAlias,
@@ -273,7 +298,8 @@ export class BilibiliVideoDiscussionHostRunner {
         deadline,
         bvid,
         requireViewport: false,
-        requireContentReady: false
+        requireContentReady: false,
+        maxWaitMs: INITIAL_OBSERVATION_MAX_WAIT_MS
       });
       const initialRisk = riskOutcome(observedBeforeScroll.dom);
       if (initialRisk) {
@@ -288,26 +314,58 @@ export class BilibiliVideoDiscussionHostRunner {
         if (capturedAfterScroll) {
           scroll.outcome = 'completed';
         } else {
+          // Register the bounded intent before crossing into the browser
+          // host. The action record is only marked `attempted` after the host
+          // confirms that trusted wheel input was actually sent.
           await this.#accountSafety.recordActionAttempt(permit.profileId, 'bilibili', permit.runId, scroll.actionId);
-          scroll.attempted = true;
-          scroll.attemptCount = 1;
           const context = await this.#leasedPageContext({
             profileId: permit.profileId,
             pageAlias: acquired.page.pageAlias,
             pageLeaseId: acquired.lease.pageLeaseId,
             runId: permit.runId
           });
-          await this.#browserManager.scrollPage({
-            profileId: permit.profileId,
-            pageAlias: acquired.page.pageAlias,
-            pageLeaseId: acquired.lease.pageLeaseId,
-            runId: permit.runId,
-            expectedRecordVersion: context.recordVersion,
-            expectedDocumentGeneration: context.documentGeneration,
-            actionId: scroll.actionId,
-            deltaY: scrollDeltaY(observedBeforeScroll.dom),
-            timeoutMs: Math.min(10_000, remainingDeadline(deadline, 1_000))
-          });
+          let hostCallStarted = false;
+          try {
+            hostCallStarted = true;
+            await this.#browserManager.scrollPage({
+              profileId: permit.profileId,
+              pageAlias: acquired.page.pageAlias,
+              pageLeaseId: acquired.lease.pageLeaseId,
+              runId: permit.runId,
+              expectedRecordVersion: context.recordVersion,
+              expectedDocumentGeneration: context.documentGeneration,
+              actionId: scroll.actionId,
+              deltaY: scrollDeltaY(observedBeforeScroll.dom),
+              timeoutMs: Math.min(10_000, remainingDeadline(deadline, 1_000)),
+              bilibiliVideoBvid: bvid
+            });
+            scroll.attempted = true;
+            scroll.attemptCount = 1;
+            await this.#accountSafety.recordPlatformActionAttempt(
+              permit.profileId,
+              'bilibili',
+              permit.runId,
+              scroll.actionId
+            );
+          } catch (error) {
+            const platformActionAttempted = hostCallStarted &&
+              (!(error instanceof BrowserHostError) || error.record.platformActionAttempted);
+            if (platformActionAttempted) {
+              scroll.attempted = true;
+              scroll.attemptCount = 1;
+              await this.#accountSafety.recordPlatformActionAttempt(
+                permit.profileId,
+                'bilibili',
+                permit.runId,
+                scroll.actionId
+              );
+              scroll.outcome = 'postcondition_unmet';
+            } else {
+              scroll.outcome = 'prerequisite_unmet';
+            }
+            scroll.errorCode = safeErrorCode(error);
+            throw error;
+          }
           scroll.outcome = 'completed';
           capturedAfterScroll = true;
           observedAfterScroll = await this.#observeUntil({
@@ -319,7 +377,8 @@ export class BilibiliVideoDiscussionHostRunner {
             deadline,
             bvid,
             requireViewport: true,
-            requireContentReady: true
+            requireContentReady: true,
+            maxWaitMs: remainingDeadline(deadline, 1_000)
           });
         }
         if (capturedAfterScroll && observedAfterScroll === observedBeforeScroll) {
@@ -332,7 +391,8 @@ export class BilibiliVideoDiscussionHostRunner {
             deadline,
             bvid,
             requireViewport: true,
-            requireContentReady: true
+            requireContentReady: true,
+            maxWaitMs: remainingDeadline(deadline, 1_000)
           });
         }
         const afterRisk = riskOutcome(observedAfterScroll.dom);
@@ -360,6 +420,7 @@ export class BilibiliVideoDiscussionHostRunner {
           for (const requestedAction of requestedActions) {
             const actionRecord = actions.find((candidate) => candidate.kind === requestedAction);
             if (!actionRecord) throw new Error('video_discussion_interaction_action_missing');
+            let hostCallStarted = false;
             try {
               const context = await this.#leasedPageContext({
                 profileId: permit.profileId,
@@ -373,8 +434,7 @@ export class BilibiliVideoDiscussionHostRunner {
                 permit.runId,
                 actionRecord.actionId
               );
-              actionRecord.attempted = true;
-              actionRecord.attemptCount = 1;
+              hostCallStarted = true;
               const interaction = await this.#browserManager.clickBilibiliVideoDiscussionControl({
                 schemaVersion: BILIBILI_VIDEO_DISCUSSION_INTERACTION_SCHEMA_VERSION,
                 profileId: permit.profileId,
@@ -389,6 +449,14 @@ export class BilibiliVideoDiscussionHostRunner {
                 timeoutMs: Math.min(20_000, remainingDeadline(deadline, 1_000))
               });
               interactionResults.push(interaction);
+              actionRecord.attempted = true;
+              actionRecord.attemptCount = 1;
+              await this.#accountSafety.recordPlatformActionAttempt(
+                permit.profileId,
+                'bilibili',
+                permit.runId,
+                actionRecord.actionId
+              );
               actionRecord.outcome = 'completed';
               if (requestedAction === 'select_latest_comments') {
                 discussion = { ...discussion, sort: 'latest' };
@@ -398,7 +466,20 @@ export class BilibiliVideoDiscussionHostRunner {
             } catch (error) {
               const actionErrorCode = safeErrorCode(error);
               actionRecord.errorCode = actionErrorCode;
-              if (error instanceof BrowserHostError && error.record.platformActionAttempted) throw error;
+              const platformActionAttempted = hostCallStarted &&
+                (!(error instanceof BrowserHostError) || error.record.platformActionAttempted);
+              if (platformActionAttempted) {
+                actionRecord.attempted = true;
+                actionRecord.attemptCount = 1;
+                await this.#accountSafety.recordPlatformActionAttempt(
+                  permit.profileId,
+                  'bilibili',
+                  permit.runId,
+                  actionRecord.actionId
+                );
+                actionRecord.outcome = 'postcondition_unmet';
+                throw error;
+              }
               actionRecord.outcome = 'prerequisite_unmet';
               state = 'partial';
               terminalReason = 'interaction_prerequisite_unmet';
@@ -427,8 +508,8 @@ export class BilibiliVideoDiscussionHostRunner {
       terminalReason = failure.terminalReason;
       errorCode = failure.errorCode;
       uncertainPageOutcome = failure.uncertainPageOutcome;
-      const attemptedAction = navigation.attempted ? navigation : scroll.attempted ? scroll : null;
-      if (attemptedAction && attemptedAction.outcome !== 'completed') {
+      const attemptedAction = actions.find((candidate) => candidate.attempted && candidate.outcome !== 'completed') ?? null;
+      if (attemptedAction && attemptedAction.outcome !== 'completed' && attemptedAction.errorCode === null) {
         attemptedAction.outcome = failure.uncertainPageOutcome ? 'postcondition_unmet' : 'failed';
         attemptedAction.errorCode = failure.errorCode;
       }
@@ -483,8 +564,41 @@ export class BilibiliVideoDiscussionHostRunner {
       const artifact = await this.#artifacts.record(run);
       return { run, artifact };
     } finally {
-      await this.#accountSafety.finishAuthenticatedRun(permit.profileId, 'bilibili', permit.runId, safetyReason);
+      await this.#accountSafety.finishAuthenticatedRun(
+        permit.profileId,
+        'bilibili',
+        permit.runId,
+        safetyReason,
+        new Date(),
+        actions.some((action) => action.attempted && action.outcome !== 'completed')
+      );
     }
+  }
+
+  async #waitForDocumentStability(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    runId: string;
+    deadline: number;
+  }): Promise<{ recordVersion: number; documentGeneration: number }> {
+    const startedAt = Date.now();
+    let context = await this.#leasedPageContext(input);
+    let generation = context.documentGeneration;
+    let stableSince = Date.now();
+    while (Date.now() - stableSince < DOCUMENT_STABILITY_QUIET_MS) {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed >= DOCUMENT_STABILITY_MAX_WAIT_MS || Date.now() >= input.deadline) {
+        throw new Error('video_discussion_document_stability_timeout');
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, OBSERVATION_POLL_MS));
+      context = await this.#leasedPageContext(input);
+      if (context.documentGeneration !== generation) {
+        generation = context.documentGeneration;
+        stableSince = Date.now();
+      }
+    }
+    return context;
   }
 
   async #observeUntil(input: {
@@ -497,19 +611,25 @@ export class BilibiliVideoDiscussionHostRunner {
     bvid: string;
     requireViewport: boolean;
     requireContentReady: boolean;
+    maxWaitMs?: number;
   }): Promise<ReturnType<typeof bilibiliVideoDiscussionStrategyObservation>> {
     let observed: ReturnType<typeof bilibiliVideoDiscussionStrategyObservation> | null = null;
-    while (Date.now() < input.deadline) {
-      const result = await this.#readStrategyObservation(input);
+    const observationDeadline = Math.min(
+      input.deadline,
+      Date.now() + (input.maxWaitMs ?? Math.max(0, input.deadline - Date.now()))
+    );
+    while (Date.now() < observationDeadline) {
+      const result = await this.#readStrategyObservation({ ...input, deadline: observationDeadline });
       observed = bilibiliVideoDiscussionStrategyObservation(result, input.bvid);
-      const risk = riskOutcome(observed.dom);
-      const contentReady = observed.dom.commentContentState === 'ready' || observed.dom.commentContentState === 'empty';
-      if (risk || (observed.dom.commentHostPresent && (!input.requireViewport || observed.dom.commentHostInViewport) &&
-        (!input.requireContentReady || contentReady))) return observed;
-      await new Promise<void>((resolve) => setTimeout(resolve, 250));
+      const waitState = bilibiliVideoDiscussionObservationWaitState(observed.dom, input);
+      if (waitState === 'risk_stopped' || waitState === 'ready') return observed;
+      const remaining = observationDeadline - Date.now();
+      if (remaining <= 0) break;
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.min(OBSERVATION_POLL_MS, remaining)));
     }
     if (!observed) throw new Error('video_discussion_strategy_observation_unavailable');
-    if (input.requireContentReady && observed.dom.commentContentState === 'loading') {
+    if (input.requireContentReady &&
+      bilibiliVideoDiscussionObservationWaitState(observed.dom, input) !== 'ready') {
       throw new Error('run_deadline_exceeded');
     }
     return observed;

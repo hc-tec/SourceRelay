@@ -12,10 +12,12 @@ import {
   transitionRecord,
   type ManagedPageRecord
 } from './page-record.js';
+import { matchesBilibiliVideoDiscussionPageIdentity } from './bilibili-video-discussion-page-identity.js';
 
 const ACTION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const MAX_DELTA_Y = 1_200;
 const MAX_TIMEOUT_MS = 10_000;
+const BVID_PATTERN = /^BV[0-9A-Za-z]{10}$/;
 
 export function validateTrustedScrollRequest(request: ScrollPageRequest): void {
   if (!ACTION_ID_PATTERN.test(request.actionId)) {
@@ -37,6 +39,18 @@ export function validateTrustedScrollRequest(request: ScrollPageRequest): void {
       safeDetails: { maximumTimeoutMs: MAX_TIMEOUT_MS }
     });
   }
+  if (request.bilibiliVideoBvid !== undefined && !BVID_PATTERN.test(request.bilibiliVideoBvid)) {
+    throw hostError({ code: 'scroll_bilibili_bvid_invalid', category: 'action', scope: 'action' });
+  }
+}
+
+function pageIdentityMatches(record: ManagedPageRecord, request: ScrollPageRequest): boolean {
+  if (record.page.isClosed()) return false;
+  if (request.bilibiliVideoBvid !== undefined) {
+    return record.platform === 'bilibili' && record.pageRole === 'video_discussion' &&
+      matchesBilibiliVideoDiscussionPageIdentity(record.page.url(), request.bilibiliVideoBvid);
+  }
+  return digestUrl(record.page.url()) === record.expectedIdentity.targetUrlDigest;
 }
 
 export async function readTrustedScrollPosition(page: Page, timeoutMs: number): Promise<PageScrollPosition> {
@@ -101,7 +115,7 @@ export async function executeTrustedScroll(input: {
       retryClass: 'local_query_only'
     });
   }
-  if (record.page.isClosed() || digestUrl(record.page.url()) !== record.expectedIdentity.targetUrlDigest) {
+  if (!pageIdentityMatches(record, request)) {
     record.activeLease = null;
     transitionRecord(record, 'quarantined', 'unexpected_navigation');
     input.emit('scroll_context_changed', 'unexpected_navigation', null);
@@ -156,8 +170,7 @@ export async function executeTrustedScroll(input: {
       timeoutMs: request.timeoutMs
     });
     const contextChanged = record.documentGeneration !== request.expectedDocumentGeneration ||
-      record.page.isClosed() ||
-      digestUrl(record.page.url()) !== record.expectedIdentity.targetUrlDigest;
+      !pageIdentityMatches(record, request);
     if (contextChanged || after.scrollY <= before.scrollY) {
       throw new Error(contextChanged ? 'trusted_scroll_context_changed' : 'trusted_scroll_postcondition_unmet');
     }
