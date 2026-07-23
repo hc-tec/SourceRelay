@@ -19,7 +19,7 @@ Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gat
 
 已完成的 B站 dynamic 真实侦察和两页 raw-first artifact contract 已接入新 Host/PageLease/Native Messaging/Gateway 控制链路做低频 canary：新 Gateway 复用运行中的 Browser Host，不关闭 retained tab；两页共 24 条动态、0 重复、0 unresolved card evidence，`budget_exhausted` 作为有界预算终态。该能力仍是 research-only，尚未覆盖 feed 终点、边缘样本、MV3 正式 admission。
 
-B站弹幕已完成独立、无扩展的真实三面侦察。公开播放器覆盖层可读当前弹幕；真实打开“弹幕列表”后，DOM 提供 `data-index`、时间、文本和发送时间，且列表是需要可信内嵌滚动的虚拟长列表（本样本约 199 个位置）。Network 观察确认 `/x/v2/dm/web/view` 与 `/x/v2/dm/wbi/web/seg.so` 为 `application/octet-stream` 二进制响应；本轮没有读取 body，也没有把二进制协议误加入 JSON projector。当前 `danmaku` 仍为 `research-only / admissionEligible=false`，下一步按 DOM-first 方式实现有界列表采集和真实低频 canary。
+B站弹幕已完成独立、无扩展的真实三面侦察，并完成生产 DOM-first 有界 canary。公开播放器覆盖层可读当前弹幕；真实打开“弹幕列表”后，DOM 提供 `data-index`、时间、文本和发送时间，且列表是需要可信内嵌滚动的虚拟长列表。Network 观察确认 `/x/v2/dm/web/view` 与 `/x/v2/dm/wbi/web/seg.so` 为 `application/octet-stream` 二进制响应；本轮没有读取 body，也没有把二进制协议误加入 JSON projector。生产 canary 已完成一次导航、一次可信打开、一次可信滚动，取得 47/62 条 unique DOM 行并保存 raw-first artifact，页面 retained、账号安全回到 `ready`；结果诚实为 `partial / budget_exhausted`。当前 `danmaku` 仍为 `build_ready / research-only / admissionEligible=false`，下一步是可恢复的虚拟列表连续覆盖、多样本与 review，不是增加动作重试。
 
 B站字幕目前已具备“按需真实采集”的产品底层能力，但仍是 research-only validation、`admissionEligible=false`，没有进入正式 Task production routes。v0.4.23 的 Gateway + 生产 MV3 扩展已在真实登录 Profile 中完成轨道目录、中文选择、字幕正文和本地 raw-first artifact 闭环；这证明能力可用，不等于把单一样本升级为正式策略 admission。
 
@@ -81,7 +81,7 @@ B站详情正式 Task 的 receipt / Evidence race 已加入控制面修复：acc
 已完成：Browser Host Contracts、单实例 Host 与真实本地 Chromium 页面池 foundation
 待切换：Gateway/Extension/全部 runner 零兼容迁移并删除旧单 tab 路径
 已验证：B站 dynamic 通过新页面池的两页低频真实 canary（仍待边缘样本、MV3 review 与 admission）
-已完成侦察：B站 danmaku 公开覆盖层、弹幕列表与二进制分段 Network 事实（待 DOM-first runner、真实 canary 与 admission）
+已完成：B站 danmaku DOM-first runner、真实 canary（47/62 unique，partial / budget_exhausted，尚未 admission）
 未开始：P3 加密 Evidence Vault
 未开始：P4 EvidencePackage / DeepResearch 正式接入
 ```

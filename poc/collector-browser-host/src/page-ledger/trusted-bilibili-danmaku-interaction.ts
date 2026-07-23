@@ -52,12 +52,20 @@ export async function executeTrustedBilibiliDanmakuInteraction(input: {
   assertPage(record, request);
   const deadline = Date.now() + request.timeoutMs;
   let browserInputAttempted = false;
+  let phase:
+    | 'probe'
+    | 'target_bounds'
+    | 'before_evidence'
+    | 'hover'
+    | 'action'
+    | 'postcondition'
+    | 'after_evidence' = 'probe';
   try {
     const before = await waitForProbe(record.page, request, deadline, (candidate) =>
-      candidate.dom.playerVisible &&
+      candidate.playerVisible &&
       (request.action === 'open_list'
-        ? candidate.dom.listControlVisible && !candidate.dom.listOpen
-        : candidate.dom.listOpen && candidate.dom.listContainerVisible)
+        ? candidate.listControlVisible && !candidate.listOpen
+        : candidate.listOpen && candidate.listContainerVisible)
     );
     if (before.dom.loginGateVisible && request.action === 'open_list') {
       // Login only gates sending; retain the read-only list path. This field is
@@ -66,10 +74,13 @@ export async function executeTrustedBilibiliDanmakuInteraction(input: {
     if (before.dom.verificationRequired || before.dom.rateLimited || before.dom.sourceUnavailable) {
       throw new Error('bilibili_danmaku_interaction_risk_stopped');
     }
+    phase = 'target_bounds';
     const target = await targetBounds(record.page, request.action, remaining(deadline));
     if (!target.bounds) throw new Error(target.reason);
     if (!target.pointerHit) throw new Error('bilibili_danmaku_interaction_pointer_precondition_unmet');
+    phase = 'before_evidence';
     const beforeVisualEvidence = await captureEvidence(record, input.visualEvidenceDirectory, remaining(deadline));
+    phase = 'hover';
     await withinDeadline(record.page.mouse.move(target.bounds.x + target.bounds.width / 2,
       target.bounds.y + target.bounds.height / 2), remaining(deadline));
     const hoveredTarget = await targetBounds(record.page, request.action, remaining(deadline));
@@ -81,13 +92,16 @@ export async function executeTrustedBilibiliDanmakuInteraction(input: {
     input.emit('action_attempted', null, request.actionId);
     browserInputAttempted = true;
 
+    phase = 'action';
     if (request.action === 'open_list') {
       await withinDeadline(record.page.mouse.down({ button: 'left' }), remaining(deadline));
       await withinDeadline(record.page.mouse.up({ button: 'left' }), remaining(deadline));
     } else {
       await withinDeadline(record.page.mouse.wheel(0, BILIBILI_DANMAKU_LIST_SCROLL_DELTA), remaining(deadline));
     }
+    phase = 'postcondition';
     const after = await waitForPostcondition(record.page, request, before.dom, deadline);
+    phase = 'after_evidence';
     const afterVisualEvidence = await captureEvidence(record, input.visualEvidenceDirectory, remaining(deadline));
     input.emit('bilibili_danmaku_interaction_completed', null, request.actionId);
     return {
@@ -108,10 +122,11 @@ export async function executeTrustedBilibiliDanmakuInteraction(input: {
         throw hostError({ code: error.message, category: 'browser_input', scope: 'action', retryClass: 'local_query_only' });
       }
       throw hostError({
-        code: 'bilibili_danmaku_interaction_precondition_unmet',
+        code: safeDanmakuPreconditionErrorCode(phase, error),
         category: 'browser_input',
         scope: 'action',
-        retryClass: 'local_query_only'
+        retryClass: 'local_query_only',
+        safeDetails: { errorType: error instanceof Error ? error.name : 'unknown' }
       });
     }
     record.activeLease = null;
@@ -128,6 +143,17 @@ export async function executeTrustedBilibiliDanmakuInteraction(input: {
       safeDetails: { errorType: error instanceof Error ? error.name : 'unknown' }
     });
   }
+}
+
+function safeDanmakuPreconditionErrorCode(
+  phase: 'probe' | 'target_bounds' | 'before_evidence' | 'hover' | 'action' | 'postcondition' | 'after_evidence',
+  error: unknown
+): string {
+  const errorType = error instanceof Error ? error.name : 'unknown';
+  const normalisedType = errorType.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'unknown';
+  const message = error instanceof Error ? error.message : '';
+  const normalisedMessage = message.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48);
+  return `bilibili_danmaku_${phase}_${normalisedType}${normalisedMessage ? `_${normalisedMessage}` : ''}`.slice(0, 95);
 }
 
 function assertPage(record: ManagedPageRecord, request: BilibiliDanmakuInteractionRequest): void {
