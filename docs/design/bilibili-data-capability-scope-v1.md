@@ -89,3 +89,5 @@ coverage / terminal_reason / status
 两次 run 均使用一次导航、无平台交互重放、无 response body 读取，且 `admissionEligible=false`。这份增量证据记录在[账号档案与投稿目录 MV3 真实闭环](../validation/bilibili-account-profile-inventory-mv3-v0.1.md)。
 
 本轮又在独立、可关闭的临时 Collection Profile 对 `BV1qZSLBYEpa` 完成一次真实视频详情闭环：`completed / detail_ready`，一次导航、零 hover/click/scroll、零自动重试，标题、简介、创作者、8 个标签和选集摘要均已捕获，`accessStatus=indeterminate`。临时 Profile 已关闭；登录 Collection Profile 的两个 retained 成功页保持不变。该证据只把 `video_detail` 的首屏 MVP 标记为“真实闭环已复核”，不把字幕、弹幕、评论、全量选集或推荐内容视为已完成。详见[视频详情 DOM MVP](../reconnaissance/bilibili/video-detail-dom-mvp-v0.1.md)。
+
+评论能力本轮完成了新的匿名 Shadow DOM 结构复核：`#commentapp > bili-comments` 的开放 shadow tree 中可稳定发现 `最热/最新` 与首个 `点击查看` 语义控件，滚动后 `/x/v2/reply/wbi/main` 返回 200；一次全页面文本误点打开登录对话框，已记录为 `inconclusive` 并停止，不计入能力完成度。`discussion` 仍保持“route 因果已研究、response projector 未 admission”，下一步只在登录 Profile 清理出可用页面后做严格组件 scoped 的认证动作闭环。

@@ -180,3 +180,22 @@ comment_navigation
 - production response routes 仍为空；
 - 未经用户新的明确批准，不继续下一页、更多 root 或正文映射。
 
+## K. 2026-07-23 匿名页面 DOM 复核与误点复盘
+
+本轮在两个独立的、可见、临时持久 Chromium Profile 中做了三次窄验证；每次均只导航到 `BV1qZSLBYEpa` 一次，未加载 Collector 扩展，不读取 Cookie、Token、storage、请求头、请求体或 response body。
+
+### K.1 已重新证明的事实
+
+- 评论区视觉上可见，评论标题、数量、`最热/最新` 和首屏评论卡在滚动后出现；一次 `scrollIntoViewIfNeeded` 后新增的精确公开 route 为 `/x/v2/reply/subject/description` 与 `/x/v2/reply/wbi/main`，均为 200；
+- 评论宿主是 `#commentapp > bili-comments`，`bili-comments` 使用**开放 Shadow DOM**；评论标题位于 `bili-comments-header-renderer` 的 shadow tree，排序控件是语义为 `最新` 的 `bili-text-button`；首个楼中楼入口位于 `bili-comment-thread-renderer > bili-comment-replies-renderer` 的 shadow tree，同样是语义为 `点击查看` 的 `bili-text-button`；当前没有 iframe；
+- 因此，普通 `document.querySelector`、全页面 `getByText('最新')` 或全页面 `getByText('点击查看')` 都不足以建立目标身份。生产 DOM projector 必须显式穿透当前开放 Shadow DOM，并把控件绑定到当前 `#commentapp` 组件层级，再由 Host 重新读取实时边界框。
+
+### K.2 误点的安全结论
+
+第一次匿名探索中，全页面文本匹配把一个非评论语义入口当成了 `点击查看`，浏览器级点击打开了登录对话框；没有触发 `/x/v2/reply/reply`，该 run 不能算“楼中楼完成”，也不能把 action 结果记为 proved。随后没有重放该动作。该事实还说明：
+
+- 匿名页面遇到登录门控时必须立刻停止后续评论动作；
+- 生产后置条件必须检查评论组件 shadow tree 的排序/回复状态和登录对话框风险，而不能只看“点击调用成功”；
+- `select_latest_comments` 与 `expand_first_thread` 的动作预算仍各自最多一次；目标未通过组件层级和可见边界框校验时，`attempted=false / prerequisite_unmet`，不得尝试全页面兜底。
+
+本轮没有把匿名登录门控误报成平台 route 不可用，也没有把错误点击产生的对话框当成评论能力证据。认证样本中既有的 `/x/v2/reply/wbi/main` 与 `/x/v2/reply/reply` 因果记录仍是候选研究证据，但 response schema projector 和 production response routes 继续为空；下一步应在现有登录 Collection Profile 清理出可用页面后，执行一次严格 scoped 的认证 `select_latest_comments`，再执行一次 scoped 的单 root `expand_first_thread`。
