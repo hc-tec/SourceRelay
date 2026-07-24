@@ -693,3 +693,39 @@ accountSafety: ready
 动作账本证明：导航与三次根评论滚动各一次；首楼展开一次；第二根评论 reveal 在本次状态下已满足可见条件，因此没有 wheel；第二楼展开一次；首楼 reveal 为 no-op；首楼下一页一次可信点击；第二楼分页控件通过一次 `432`px wheel 进入 viewport；第二楼下一页一次可信点击。四个 click 动作均由实时 DOM rect、hover、composed hit-test、视觉后置条件和 `/x/v2/reply/reply` status 200 交叉证明，没有自动重试。
 
 `discussion.replyThreads` 最终同时保存 ordinal `0` 与 `1` 的当前页字段和分页元数据；旧的 `firstThread*` 字段仍只代表 ordinal `0`。本 run 没有读取 response body、没有遍历第 3 页或 165 页、没有稳定 root id/跨页去重连续性证明，仍不能宣称全量评论能力；`admissionEligible` 保持 `false`。
+
+## X. 2026-07-24 双楼两页结果持久化闭环
+
+上一节已经证明两个楼中楼的真实动作可行，但当时 runner 仍会用下一页覆盖当前页。本轮只修复 artifact 数据路径，不增加平台动作：
+
+- `discussion.replyThreads[].pages[]` 保存本次 run 的有界观察页，`observedPageOrdinal` 从 1 开始，仅表示本 run 的观察顺序，不冒充 B 站页码；
+- 每页保留 `replyPage`、`replyPageCount`、`replyHasMore`、`paginationVisible` 和回复 DOM 投影；B 站没有稳定页码语义时 `replyPage` 继续为 `null`；
+- 每页记录规范化 `contentDigest`、受 DOM 投影上限约束的 `rawReplyCount`、页内 `uniqueReplyCount`、跨前序观察页的 `crossPageDuplicateCount`、累计 `cumulativeUniqueReplyCount` 以及 `contentChanged`；
+- 分页揭示动作只刷新当前页元数据，不产生重复页；expand/next 动作追加页，单个楼中楼最多保存两页；`maxReplyPages=2` 同步写入 safeguards。
+
+使用同一已登录 Profile、同一真实 B 站页面和新构建完成双楼两页 canary：
+
+```yaml
+runId: 04504411-fe44-40f6-926c-57e472ac0a07
+artifactId: a3c20a5a-232d-4669-8aa6-403e9af79ae0
+target: BV1qZSLBYEpa
+collectorVersion: 0.7.17
+strategy: bilibili.video.discussion.dom.v1 @ 0.1.0
+state: completed
+terminalReason: discussion_ready
+capturedRootComments: 20
+capturedReplyThreads: 2
+firstThreadPages: 2
+secondThreadPages: 2
+firstThreadRepliesByPage: [10, 10]
+secondThreadRepliesByPage: [10, 10]
+firstThreadReplyPage: null
+secondThreadReplyPage: null
+firstThreadCumulativeUniqueReplies: 20
+secondThreadCumulativeUniqueReplies: 20
+networkStatusByClickAction: [200, 200, 200, 200]
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+artifact：[manifest.json](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/bilibili-video-discussion/a3c20a5a-232d-4669-8aa6-403e9af79ae0/manifest.json)、[discussion.json](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/bilibili-video-discussion/a3c20a5a-232d-4669-8aa6-403e9af79ae0/discussion.json)。本次动作仍是 at-most-once；没有读取 response body、Cookie、Token 或请求体，没有遍历第 3 页/165 页。两个页面 digest 均为规范化 DOM 投影的 SHA-256，当前样本跨页重复数均为 0；这只证明该 run 的两页样本可被持久化和审计，不能推断全量评论或稳定跨页身份。`admissionEligible` 继续保持 `false`。
