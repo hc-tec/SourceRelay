@@ -178,7 +178,9 @@ nativeBridgeConnected: true
 admissionEligible: false
 ```
 
-该 run 的 checkpoint 与 batch artifact 均在真实 Gateway 重启前后可读，页面 1、2 均只执行一次；结束时 Profile、Browser Host 和 43131 临时 Gateway 已显式清理。此前另一次内联脚本把中文 query 变成 `????` 的 run 仍按 UTF-8 规则排除，不计入本次证据。当前恢复接口和 checkpoint 已完成构建/单元覆盖，但尚未做“真实进程在某个页面动作中途被终止后再恢复”的平台实网演练，因此恢复能力暂不升级 admission。
+该 run 的 checkpoint 与 batch artifact 均在真实 Gateway 重启前后可读，页面 1、2 均只执行一次；结束时 Profile、Browser Host 和 43131 临时 Gateway 已显式清理。此前另一次内联脚本把中文 query 变成 `????` 的 run 仍按 UTF-8 规则排除，不计入本次证据。
+
+随后又做了一次真实 Gateway 中断 canary：在 batch checkpoint 已持久化 `inFlightPage=1`、尚无页级结果时终止 Gateway 进程；重新启动 Gateway 后，checkpoint 仍为 `state=running / inFlightPage=1 / pageRuns=[] / artifactId=null`。对该 batch 调用 resume 得到 HTTP 409 和 `bilibili_native_search_batch_recovery_outcome_unknown`，checkpoint 不发生变化，也没有重放第 1 页；最后通过隔离 Host 的显式 exit 清理浏览器。这个 canary 证明了“未知动作结果拒绝重放”，不证明导航已经抵达 B 站页面后置条件；页面动作是否已发出仍按未知处理。账号安全门禁因进程中断保持人工解锁状态，符合风险停止规则。
 
 ## 结论
 
