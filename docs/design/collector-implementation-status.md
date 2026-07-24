@@ -269,7 +269,7 @@ P2a 另外在隔离的 Gateway runtime 和可见浏览器中完成了本地功�
 | Gateway 配对 | Profile 级显式配对已通过真实 Chromium loopback 权限与 HMAC 轮询 | 后续补撤销、身份变化与失败恢复的产品验收 |
 | Task dispatch | B站单阶段 preflight → approval → signed dispatch → lease → evidence → completed 已实测；多阶段使用无时间等待的显式 user resume，单元状态机已通过 | 详情策略重新 admission 后做真实双 stage 验证；再增加取消和加密重启恢复 |
 | Profile | 受管持久生命周期、可见 Chromium、生产扩展自动加载、关闭/重启、并发门禁、任务绑定与 B站固定官方登录页入口已实现 | 平台认证动作仍只由用户执行；完成扫码后的可见身份与关闭/重启持久性核验 |
-| B站 discovery | `v1.1.0 live_anonymous_verified`，正式闭环已验证；`v2 @ 0.2.0` 已真实验证 UTF-8 视频/最新发布第 1–2 页、综合/相关性第 1 页、空结果终止，并完成最多两页的 batch manifest、合并、页间 BVID 去重、checkpoint 持久化和未知动作拒绝重放 | v2 仍不可 admission；补跨任务漂移/重复比例、恢复后的人工处置和独立 review；detail 策略不得复用 breadth admission |
+| B站 discovery | `v1.1.0 live_anonymous_verified`，正式闭环已验证；`v2 @ 0.2.0` 已真实验证 UTF-8 视频/最新发布第 1–2 页、综合/相关性第 1 页、空结果终止，并完成最多两页的 batch manifest、合并、页间 BVID 去重、checkpoint 持久化、未知动作拒绝重放和本地显式处置 | v2 仍不可 admission；补跨任务漂移/重复比例与独立 review；detail 策略不得复用 breadth admission |
 | B站账号档案/投稿目录 | 保存的登录 Profile 已完成公开档案 artifact 与 9 页 / 330 条目录真实闭环；头像/横幅/公开标识/统计/公告/充电/代表作、逐页 digest、去重、声明终点、artifact 恢复与 tab 复用均通过 | 将 DOM/response 观察迁移到 MV3 Extension；补多账号档案、零投稿、单页、置顶/重排、采集中新增和登录失效样本后独立 review/admission |
 | B站图文/专栏 | 保存的 Profile 已完成 1 页 / 1 条专栏目录与单篇详情 artifact；目录 DOM/response 精确互证，详情由来源目录 digest 绑定账号，保存完整文本、保序块、媒体、标签与五类指标；评论独立 | 补 `has_more=true` 多页、0 条、删除/锁定、超长/无图/外链、多账号样本；迁移 MV3 projector 后独立 review/admission |
 | B站合集/系列 | 总览 artifact 已保存 11 个稳定 series ID 并完成 DOM/response/0 条系列互证；单系列 runner 已真实完成 5 页 / 129 条默认顺序全目录、五页精确互证、0 重复和可恢复 artifact | 由 planner 遍历所有系列；补 season、0 条/单页、采集中变化、中断恢复与多账号样本，迁移 MV3 projector 后独立 review/admission |
@@ -287,7 +287,7 @@ P2a  Collection / Validation Profile launcher（完成）
   -> P2b B站匿名 discovery 真实验证与 admission（完成）
   -> P2c 正式 Gateway dispatch / Evidence 闭环（完成）
   -> B站 account profile / inventory research 闭环（完成，待 MV3 迁移与 admission）
-  -> B站原生搜索 batch 的漂移/恢复后人工处置与独立 review
+  -> B站原生搜索 batch 的跨任务漂移/重复 coverage 与独立 review
   -> B站原生搜索 detail / multi-P / subtitle（各自独立策略与 admission）
   -> B站 dynamic 与 article feed 终点/边缘样本及 MV3 review
   -> B站 discussion / danmaku / collection planner / live replay
