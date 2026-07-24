@@ -187,6 +187,38 @@ admissionEligible: false
 
 随后对同一中断 checkpoint 执行了一次本地 `resolve`：处置后仍为 `state=outcome_unknown / inFlightPage=1`，新增 `resolution.disposition=abandon` 与 `resolvedAt`；重启读取仍保留该证据，再次 resume 返回 HTTP 409 `bilibili_native_search_batch_checkpoint_not_resumable`，没有创建新 artifact，也没有触碰 B 站页面。该步骤只证明未知动作的人工处置边界，不把未知页面结果升级为成功。
 
+## 2026-07-24 跨任务漂移 coverage 增量
+
+为比较同一中文查询在不同采集时刻的结果稳定性，Gateway 新增了只读本地 coverage 路由：
+
+```text
+POST /v1/bilibili-native-search-batch-coverage-artifacts
+GET  /v1/bilibili-native-search-batch-coverage-artifacts
+GET  /v1/bilibili-native-search-batch-coverage-artifacts/:coverageId
+```
+
+请求只提交已保存 batch artifact 的 ID，最多 5 个；计算要求所有样本都是相同 query digest、搜索类型/排序/页窗口、完整且无页内重复的 `search_batch_ready` artifact。比较在内存中基于稳定 BVID 集合计算 intersection、union、overlap、Jaccard 和 drift；coverage manifest 只保存样本 artifact ID、query digest、计数和比例，不保存原始 query 或 BVID 列表。
+
+对两个真实 UTF-8 “人工智能”双页 batch artifact 做了本地 Gateway route 验证：
+
+```yaml
+coverageId: beb42cef-db5f-4a48-90a9-37ece8ae2ac6
+sampleArtifactIds:
+  - 427bbd8e-37c2-4479-bbc7-bcd1b040ab05
+  - 7db363bb-dbfb-46bd-ac95-91217e6ec10c
+sampleCount: 2
+pairCount: 1
+leftUniqueItems: 40
+rightUniqueItems: 40
+intersectionCount: 0
+unionCount: 80
+overlapRate: 0
+jaccardRate: 0
+driftRate: 1
+```
+
+coverage artifact 重启读取和 SHA-256 manifest 校验均通过，原始 BVID 扫描为 0。这个两样本事实说明 B 站搜索结果会随采集时刻发生显著漂移，不能把一次双页 40 条结果推广为稳定分页；它仍不是 admission，只是把长期 coverage 的测量能力和当前风险证据补齐。
+
 ## 结论
 
 `bilibili.search.breadth.dom.v2 @ 0.2.0` 已在 UTF-8 中文查询上完成一次真实生产首屏闭环，但当前策略仍保持：
@@ -197,4 +229,4 @@ admissionEligible: false
 productionStatus: research-only
 ```
 
-下一门槛不再是“有没有 batch runner”或“能否识别空结果”，而是补齐跨任务的结果漂移/重复比例 coverage、batch 中断恢复和独立 review；不能把本次 batch 的 40 条 unique 结果、空结果终止或旧的 v1 admission 自动扩大为 v2 admission。
+下一门槛不再是“有没有 batch runner”或“能否识别空结果”，而是继续积累跨任务漂移/重复比例样本并完成独立 review；不能把本次 batch 的 40 条 unique 结果、两样本 drift=1、空结果终止或旧的 v1 admission 自动扩大为 v2 admission。

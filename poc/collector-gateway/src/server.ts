@@ -17,6 +17,7 @@ import { BilibiliDanmakuHostRunner } from './bilibili-danmaku-host-runner';
 import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import { BilibiliNativeSearchBatchArtifactStore } from './bilibili-native-search-batch-artifacts';
+import { BilibiliNativeSearchBatchCoverageArtifactStore } from './bilibili-native-search-batch-coverage-artifacts';
 import { BilibiliNativeSearchBatchHostRunner } from './bilibili-native-search-batch-host-runner';
 import { BilibiliNativeSearchBatchCheckpointStore } from './bilibili-native-search-batch-checkpoints';
 import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
@@ -46,6 +47,7 @@ const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifa
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
 const nativeSearchBatchArtifacts = await BilibiliNativeSearchBatchArtifactStore.create(config.stateDirectory);
+const nativeSearchBatchCoverageArtifacts = await BilibiliNativeSearchBatchCoverageArtifactStore.create(config.stateDirectory);
 const nativeSearchBatchCheckpoints = await BilibiliNativeSearchBatchCheckpointStore.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const discussionArtifacts = await BilibiliVideoDiscussionArtifactStore.create(config.stateDirectory);
@@ -153,6 +155,7 @@ const server = createServer(async (request, response) => {
       nativeSearchArtifacts,
       nativeSearchRunner,
       nativeSearchBatchArtifacts,
+      nativeSearchBatchCoverageArtifacts,
       nativeSearchBatchCheckpoints,
       nativeSearchBatchRunner,
       videoDetailArtifacts,

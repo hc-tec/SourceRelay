@@ -20,6 +20,11 @@ import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search
 import { bilibiliNativeSearchInput } from './bilibili-native-search-contract';
 import type { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import type { BilibiliNativeSearchBatchArtifactStore } from './bilibili-native-search-batch-artifacts';
+import {
+  bilibiliNativeSearchBatchCoverageInput,
+  computeBilibiliNativeSearchBatchCoverage
+} from './bilibili-native-search-batch-coverage';
+import type { BilibiliNativeSearchBatchCoverageArtifactStore } from './bilibili-native-search-batch-coverage-artifacts';
 import type { BilibiliNativeSearchBatchHostRunner } from './bilibili-native-search-batch-host-runner';
 import type { BilibiliNativeSearchBatchCheckpointStore } from './bilibili-native-search-batch-checkpoints';
 import {
@@ -64,6 +69,7 @@ export interface GatewayRouteContext {
   nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
   nativeSearchRunner: BilibiliNativeSearchHostRunner;
   nativeSearchBatchArtifacts: BilibiliNativeSearchBatchArtifactStore;
+  nativeSearchBatchCoverageArtifacts: BilibiliNativeSearchBatchCoverageArtifactStore;
   nativeSearchBatchCheckpoints: BilibiliNativeSearchBatchCheckpointStore;
   nativeSearchBatchRunner: BilibiliNativeSearchBatchHostRunner;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
@@ -206,6 +212,24 @@ export async function handleGatewayRoute(
   }
   if (request.method === 'GET' && url.pathname === '/v1/bilibili-native-search-batch-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.nativeSearchBatchArtifacts.list() });
+    return true;
+  }
+  if (request.method === 'GET' && url.pathname === '/v1/bilibili-native-search-batch-coverage-artifacts') {
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.nativeSearchBatchCoverageArtifacts.list() });
+    return true;
+  }
+  if (request.method === 'POST' && url.pathname === '/v1/bilibili-native-search-batch-coverage-artifacts') {
+    if (!sameOrigin(request, response, context)) return true;
+    const input = bilibiliNativeSearchBatchCoverageInput(await readJsonBody(request));
+    const views = [];
+    for (const artifactId of input.artifactIds) {
+      const artifact = await context.nativeSearchBatchArtifacts.get(artifactId);
+      if (!artifact) throw new Error('bilibili_native_search_batch_artifact_not_found');
+      views.push(artifact);
+    }
+    const computation = computeBilibiliNativeSearchBatchCoverage(views);
+    const artifact = await context.nativeSearchBatchCoverageArtifacts.record(computation);
+    sendJson(response, 201, { schemaVersion: 1, artifact });
     return true;
   }
   if (request.method === 'GET' && url.pathname === '/v1/bilibili-native-search-batch-checkpoints') {
@@ -600,6 +624,15 @@ export async function handleGatewayRoute(
   if (request.method === 'GET' && nativeSearchBatchArtifact) {
     const artifact = await context.nativeSearchBatchArtifacts.get(nativeSearchBatchArtifact[1]!);
     if (!artifact) throw new Error('bilibili_native_search_batch_artifact_not_found');
+    sendJson(response, 200, { schemaVersion: 1, artifact });
+    return true;
+  }
+  const nativeSearchBatchCoverageArtifact = url.pathname.match(
+    new RegExp(`^/v1/bilibili-native-search-batch-coverage-artifacts/(${PROFILE_ID})$`, 'i')
+  );
+  if (request.method === 'GET' && nativeSearchBatchCoverageArtifact) {
+    const artifact = await context.nativeSearchBatchCoverageArtifacts.get(nativeSearchBatchCoverageArtifact[1]!);
+    if (!artifact) throw new Error('bilibili_native_search_batch_coverage_artifact_not_found');
     sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }
