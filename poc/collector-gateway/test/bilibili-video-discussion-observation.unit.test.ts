@@ -92,8 +92,10 @@ describe('Bilibili discussion DOM contract', () => {
       actions: [
         'select_latest_comments',
         'expand_first_thread',
+        'reveal_first_thread_pagination',
         'next_first_thread_page',
         'expand_second_thread',
+        'reveal_second_thread_pagination',
         'next_second_thread_page'
       ]
     })).toEqual({
@@ -101,8 +103,10 @@ describe('Bilibili discussion DOM contract', () => {
       actions: [
         'select_latest_comments',
         'expand_first_thread',
+        'reveal_first_thread_pagination',
         'next_first_thread_page',
         'expand_second_thread',
+        'reveal_second_thread_pagination',
         'next_second_thread_page'
       ]
     });
@@ -116,6 +120,14 @@ describe('Bilibili discussion DOM contract', () => {
         'next_second_thread_page',
         'expand_first_thread'
       ]
+    })).toThrow('bilibili_video_discussion_input_invalid');
+    expect(() => bilibiliVideoDiscussionInput({
+      canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
+      actions: ['reveal_first_thread_pagination', 'expand_first_thread']
+    })).toThrow('bilibili_video_discussion_input_invalid');
+    expect(() => bilibiliVideoDiscussionInput({
+      canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
+      actions: ['expand_first_thread', 'next_first_thread_page', 'reveal_first_thread_pagination']
     })).toThrow('bilibili_video_discussion_input_invalid');
     expect(() => bilibiliVideoDiscussionInput({
       canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,

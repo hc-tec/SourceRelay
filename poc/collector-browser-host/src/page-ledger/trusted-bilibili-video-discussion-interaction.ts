@@ -32,11 +32,16 @@ const TARGET_ROUTES = {
 } as const;
 
 function threadOrdinalForAction(action: BilibiliVideoDiscussionInteractionAction): number {
-  return action === 'expand_second_thread' || action === 'next_second_thread_page' ? 1 : 0;
+  return action === 'expand_second_thread' || action === 'reveal_second_thread_pagination' ||
+    action === 'next_second_thread_page' ? 1 : 0;
 }
 
 function isNextReplyPageAction(action: BilibiliVideoDiscussionInteractionAction): boolean {
   return action === 'next_first_thread_page' || action === 'next_second_thread_page';
+}
+
+function isRevealReplyPaginationAction(action: BilibiliVideoDiscussionInteractionAction): boolean {
+  return action === 'reveal_first_thread_pagination' || action === 'reveal_second_thread_pagination';
 }
 
 interface DiscussionProbe {
@@ -60,10 +65,11 @@ export function validateTrustedBilibiliVideoDiscussionInteractionRequest(
 }
 
 /**
- * Executes one source-specific, browser-trusted discussion click. The caller
- * supplies only a semantic action. The Host discovers the live open Shadow DOM
- * target, rechecks its bounds after pointer movement, and records only route
- * metadata for the corresponding public response.
+ * Executes one source-specific, browser-trusted discussion input. The caller
+ * supplies only a semantic action. Click actions discover the live open Shadow
+ * DOM target and recheck its bounds after pointer movement. The explicit
+ * pagination-reveal action is a single bounded wheel and never a hidden page
+ * click. Only route metadata for a corresponding public response is kept.
  */
 export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
   record: ManagedPageRecord;
@@ -82,37 +88,21 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
 
   const deadline = Date.now() + request.timeoutMs;
   let browserInputAttempted = false;
+  let wheelOutcomeConfirmed = false;
+  let wheelDeltaY: number | null = null;
   try {
     let beforeProbe = await waitForProbe(record.page, request, deadline, (candidate) =>
       candidate.dom.commentHostPresent && candidate.dom.commentHostVisible &&
       candidate.dom.commentHostInViewport && candidate.dom.targetVisible &&
-      (isNextReplyPageAction(request.action) ? candidate.dom.targetBounds !== null : candidate.dom.targetInViewport)
+      (isNextReplyPageAction(request.action)
+        ? candidate.dom.targetBounds !== null && candidate.dom.targetInViewport
+        : isRevealReplyPaginationAction(request.action)
+          ? candidate.dom.targetBounds !== null && candidate.dom.targetExpanded
+          : candidate.dom.targetInViewport)
     );
     if (beforeProbe.dom.loginGateVisible || beforeProbe.dom.verificationRequired ||
       beforeProbe.dom.rateLimited || beforeProbe.dom.sourceUnavailable) {
       throw new Error('bilibili_video_discussion_interaction_risk_stopped');
-    }
-    if (isNextReplyPageAction(request.action) && !beforeProbe.dom.targetInViewport) {
-      // The page keeps the reply pagination below the current viewport after
-      // an expand. Reveal it with one bounded trusted wheel before reading the
-      // final target rect; this is still precondition discovery, not a second
-      // semantic page click.
-      const targetBounds = beforeProbe.dom.targetBounds;
-      if (!targetBounds) throw new Error('bilibili_video_discussion_reply_page_precondition_unmet');
-      const viewportHeight = await withinDeadline(
-        record.page.evaluate(() => window.innerHeight),
-        remaining(deadline)
-      );
-      const requiredDelta = targetBounds.y < 0
-        ? targetBounds.y - 120
-        : targetBounds.y + targetBounds.height - viewportHeight + 120;
-      const deltaY = Math.sign(requiredDelta) * Math.max(200, Math.min(1_200, Math.abs(Math.ceil(requiredDelta))));
-      browserInputAttempted = true;
-      await withinDeadline(record.page.mouse.wheel(0, deltaY), remaining(deadline));
-      beforeProbe = await waitForProbe(record.page, request, deadline, (candidate) =>
-        candidate.dom.commentHostPresent && candidate.dom.commentHostVisible &&
-        candidate.dom.commentHostInViewport && candidate.dom.targetVisible && candidate.dom.targetInViewport
-      );
     }
     assertActionPrecondition(beforeProbe, request.action);
     const targetBounds = beforeProbe.dom.targetBounds!;
@@ -121,6 +111,58 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
       input.visualEvidenceDirectory,
       remaining(deadline)
     );
+
+    if (isRevealReplyPaginationAction(request.action)) {
+      const viewportHeight = await withinDeadline(
+        record.page.evaluate(() => window.innerHeight),
+        remaining(deadline)
+      );
+      const requiredDelta = targetBounds.y < 0
+        ? targetBounds.y - 120
+        : targetBounds.y + targetBounds.height - viewportHeight + 120;
+      wheelDeltaY = Math.sign(requiredDelta) === 0
+        ? 240
+        : Math.sign(requiredDelta) * Math.max(200, Math.min(1_200, Math.abs(Math.ceil(requiredDelta))));
+
+      record.attemptedActionIds.add(request.actionId);
+      touchRecord(record);
+      input.emit('action_attempted', null, request.actionId);
+      browserInputAttempted = true;
+      await withinDeadline(record.page.mouse.wheel(0, wheelDeltaY), remaining(deadline));
+      // A successful local scroll-position read distinguishes a known wheel
+      // outcome from a context loss. If the pagination control still does not
+      // appear, the run can be retained for review without guessing a click.
+      await withinDeadline(record.page.evaluate(() => window.scrollY), remaining(deadline));
+      wheelOutcomeConfirmed = true;
+      const afterProbe = await waitForPostcondition(record.page, request, [], beforeProbe, deadline);
+      const afterVisualEvidence = await captureEvidence(
+        record,
+        input.visualEvidenceDirectory,
+        remaining(deadline)
+      );
+      input.emit('bilibili_video_discussion_interaction_completed', null, request.actionId);
+      return {
+        schemaVersion: BILIBILI_VIDEO_DISCUSSION_INTERACTION_SCHEMA_VERSION,
+        pageAlias: record.pageAlias,
+        actionId: request.actionId,
+        action: request.action,
+        inputKind: 'wheel',
+        bvid: request.bvid,
+        threadOrdinal: threadOrdinalForAction(request.action),
+        clickAttempted: false,
+        wheelDeltaY,
+        completedAt: new Date().toISOString(),
+        before: {
+          dom: beforeProbe.dom,
+          targetBounds,
+          pointerHitTarget: beforeProbe.dom.targetPointerHit,
+          pointerHoveredTarget: beforeProbe.dom.targetHovered,
+          visualEvidence: beforeVisualEvidence
+        },
+        after: { dom: afterProbe.dom, visualEvidence: afterVisualEvidence },
+        network: { observations: [] }
+      };
+    }
 
     const pointerX = Math.floor(targetBounds.x + targetBounds.width / 2);
     const pointerY = Math.floor(targetBounds.y + targetBounds.height / 2);
@@ -156,9 +198,11 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
         pageAlias: record.pageAlias,
         actionId: request.actionId,
         action: request.action,
+        inputKind: 'click',
         bvid: request.bvid,
         threadOrdinal: threadOrdinalForAction(request.action),
         clickAttempted: true,
+        wheelDeltaY: null,
         completedAt: new Date().toISOString(),
         before: {
           dom: hoveredProbe.dom,
@@ -181,6 +225,19 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
         category: 'browser_input',
         scope: 'action',
         retryClass: 'local_query_only',
+        safeDetails: { errorType: error instanceof Error ? error.name : 'unknown' }
+      });
+    }
+    if (isRevealReplyPaginationAction(request.action) && wheelOutcomeConfirmed &&
+      !(error instanceof BrowserHostError)) {
+      throw hostError({
+        code: 'bilibili_video_discussion_reply_pagination_reveal_postcondition_unmet',
+        category: 'browser_input',
+        scope: 'action',
+        retryClass: 'local_query_only',
+        platformActionAttempted: true,
+        pageDisposition: 'retained_for_review',
+        profileSafetyDisposition: 'ready',
         safeDetails: { errorType: error instanceof Error ? error.name : 'unknown' }
       });
     }
@@ -250,8 +307,16 @@ function assertActionPrecondition(
     }
     return;
   }
+  if (isRevealReplyPaginationAction(action)) {
+    if (!probe.dom.targetExpanded ||
+      probe.dom.replyHasMore === false || !probe.dom.targetVisible || !probe.dom.targetBounds ||
+      (probe.dom.replyNextPageVisible && probe.dom.targetInViewport)) {
+      throw new Error('bilibili_video_discussion_reply_page_reveal_precondition_unmet');
+    }
+    return;
+  }
   if (isNextReplyPageAction(action)) {
-    if (!probe.dom.targetExpanded || !probe.dom.replyPaginationVisible ||
+    if (!probe.dom.targetExpanded || !probe.dom.replyPaginationVisible || !probe.dom.replyNextPageVisible ||
       probe.dom.replyHasMore === false || !probe.dom.targetPointerHit) {
       throw new Error('bilibili_video_discussion_reply_page_precondition_unmet');
     }
@@ -284,10 +349,13 @@ async function waitForPostcondition(
       latest.dom.replyPage !== before.dom.replyPage;
     const domReady = request.action === 'select_latest_comments'
       ? latest.dom.latestState === 'active'
+      : isRevealReplyPaginationAction(request.action)
+        ? latest.dom.targetExpanded && latest.dom.replyPaginationVisible && latest.dom.replyNextPageVisible &&
+          latest.dom.targetInViewport
       : isNextReplyPageAction(request.action)
         ? latest.dom.targetExpanded && latest.dom.replyPaginationVisible && pageContentChanged
         : latest.dom.targetExpanded && latest.dom.replyPaginationVisible;
-    if (domReady && routeSeen) return latest;
+    if (domReady && (isRevealReplyPaginationAction(request.action) || routeSeen)) return latest;
     if (latest.dom.verificationRequired || latest.dom.rateLimited || latest.dom.sourceUnavailable) break;
     await delay(Math.min(PROBE_INTERVAL_MS, Math.max(1, deadline - Date.now())));
   }
@@ -507,13 +575,16 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
       ? findComposedAll(commentRoot, (element) =>
         element.tagName.toLowerCase() === 'bili-comment-thread-renderer' && rendered(element), 3_000)
       : [];
-    const threadOrdinal = input.action === 'expand_second_thread' || input.action === 'next_second_thread_page' ? 1 : 0;
+    const threadOrdinal = input.action === 'expand_second_thread' ||
+      input.action === 'reveal_second_thread_pagination' ||
+      input.action === 'next_second_thread_page' ? 1 : 0;
     const selectedThread = threadRenderers[threadOrdinal] ?? null;
     let target: Element | null = null;
     let latestControl: Element | null = null;
     let hotControl: Element | null = null;
     let targetExpanded = false;
     let replyPaginationVisible = false;
+    let replyNextPageVisible = false;
     let firstThreadReplies: Array<{
       author: string | null;
       content: string;
@@ -542,7 +613,12 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
           /下一页/.test(clean(composedText(element), 20)), 500)[0] ?? null
         : null;
       const nextReplyPage = input.action === 'next_first_thread_page' || input.action === 'next_second_thread_page';
-      target = nextReplyPage ? nextButton : expandTarget;
+      const revealReplyPagination = input.action === 'reveal_first_thread_pagination' ||
+        input.action === 'reveal_second_thread_pagination';
+      // A reveal action targets the already-expanded reply renderer when the
+      // next control is not mounted yet; once mounted, the live next control
+      // becomes the target used for the postcondition read.
+      target = nextReplyPage ? nextButton : revealReplyPagination ? (nextButton ?? replyRenderer) : expandTarget;
       const replyText = clean(replyRenderer ? composedText(replyRenderer) : '', 20_000);
       const expandVisible = Boolean(expandTarget);
       const replyRenderers = replyRenderer
@@ -577,6 +653,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         nextButton.classList.contains('disabled') ||
         nextButton.classList.contains('is-disabled')
       ));
+      replyNextPageVisible = Boolean(nextButton && renderedControl(nextButton));
       const visiblePaginationText = Boolean(replyRenderer && findComposedAll(replyRenderer, (element) =>
         renderedControl(element) && /第\s*\d+\s*页|共\s*\d+\s*页|上一页/.test(clean(composedText(element), 100)), 500).length > 0);
       replyPaginationVisible = Boolean(replyRenderer && (nextButton || collapseButton || activePageButton || visiblePaginationText));
@@ -657,6 +734,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         threadOrdinal,
         rootCommentCount: threadRenderers.length,
         replyPaginationVisible,
+        replyNextPageVisible,
         firstThreadReplies,
         replyPage,
         replyPageCount,
@@ -705,7 +783,7 @@ function validateProbe(value: unknown): DiscussionProbe {
     typeof dom.sourceUnavailable !== 'boolean' || typeof dom.targetVisible !== 'boolean' ||
     typeof dom.targetInViewport !== 'boolean' || typeof dom.targetPointerHit !== 'boolean' ||
     typeof dom.targetHovered !== 'boolean' || typeof dom.targetExpanded !== 'boolean' ||
-    typeof dom.replyPaginationVisible !== 'boolean' || !validReplies ||
+    typeof dom.replyPaginationVisible !== 'boolean' || typeof dom.replyNextPageVisible !== 'boolean' || !validReplies ||
     !validPage(replyPage) || !validPage(replyPageCount) ||
     (replyHasMore !== null && typeof replyHasMore !== 'boolean') ||
     (replyCoverage !== 'not_expanded' && replyCoverage !== 'current_page' &&
@@ -733,6 +811,7 @@ function validateProbe(value: unknown): DiscussionProbe {
       targetExpanded: dom.targetExpanded,
       rootCommentCount,
       replyPaginationVisible: dom.replyPaginationVisible,
+      replyNextPageVisible: dom.replyNextPageVisible,
       firstThreadReplies: firstThreadReplies as BilibiliVideoDiscussionInteractionDomState['firstThreadReplies'],
       replyPage,
       replyPageCount,
@@ -747,6 +826,7 @@ function routeObservation(
   action: BilibiliVideoDiscussionInteractionAction
 ): BilibiliVideoDiscussionInteractionNetworkObservation | null {
   try {
+    if (isRevealReplyPaginationAction(action)) return null;
     const request = response.request();
     if (request.method() !== 'GET') return null;
     const url = new URL(response.url());

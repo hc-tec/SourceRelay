@@ -8,6 +8,7 @@ import type {
   PageVisualEvidence,
   StrategyBindingDiagnostics
 } from '@intelligence/collector-contracts';
+import { BILIBILI_VIDEO_DISCUSSION_MAX_SEMANTIC_ACTIONS as MAX_SEMANTIC_ACTIONS } from '@intelligence/collector-contracts';
 
 /**
  * Root comments are collected from several bounded DOM snapshots.  Bilibili
@@ -221,13 +222,35 @@ export function bilibiliVideoDiscussionInput(value: unknown): BilibiliVideoDiscu
   const canonicalVideoUrl = canonicalBilibiliVideoDiscussionUrl(candidate.canonicalVideoUrl);
   if (!canonicalVideoUrl) throw new Error('bilibili_video_discussion_input_invalid');
   const actions = candidate.actions === undefined ? [] : candidate.actions;
-  if (!Array.isArray(actions) || actions.length > 5 ||
+  if (!Array.isArray(actions) || actions.length > MAX_SEMANTIC_ACTIONS ||
     actions.some((action) => action !== 'select_latest_comments' && action !== 'expand_first_thread' &&
-      action !== 'expand_second_thread' && action !== 'next_first_thread_page' && action !== 'next_second_thread_page') ||
+      action !== 'reveal_first_thread_pagination' && action !== 'expand_second_thread' &&
+      action !== 'reveal_second_thread_pagination' && action !== 'next_first_thread_page' &&
+      action !== 'next_second_thread_page') ||
     new Set(actions).size !== actions.length) {
     throw new Error('bilibili_video_discussion_input_invalid');
   }
+  validateDiscussionActionDependencies(actions as BilibiliVideoDiscussionInteractionAction[]);
   return { canonicalVideoUrl, actions: [...actions] };
+}
+
+function validateDiscussionActionDependencies(actions: readonly BilibiliVideoDiscussionInteractionAction[]): void {
+  const index = (action: BilibiliVideoDiscussionInteractionAction): number => actions.indexOf(action);
+  for (const ordinal of [0, 1] as const) {
+    const expand = ordinal === 0 ? 'expand_first_thread' : 'expand_second_thread';
+    const reveal = ordinal === 0 ? 'reveal_first_thread_pagination' : 'reveal_second_thread_pagination';
+    const next = ordinal === 0 ? 'next_first_thread_page' : 'next_second_thread_page';
+    const expandIndex = index(expand);
+    const revealIndex = index(reveal);
+    const nextIndex = index(next);
+    if (revealIndex >= 0 && (expandIndex < 0 || revealIndex < expandIndex)) {
+      throw new Error('bilibili_video_discussion_input_invalid');
+    }
+    if (nextIndex >= 0 && (expandIndex < 0 || nextIndex < expandIndex ||
+      (revealIndex >= 0 && nextIndex < revealIndex))) {
+      throw new Error('bilibili_video_discussion_input_invalid');
+    }
+  }
 }
 
 export function bilibiliVideoDiscussionBvid(canonicalVideoUrl: string): string {

@@ -567,7 +567,8 @@ export class BilibiliVideoDiscussionHostRunner {
           }
           if (state === 'completed' &&
             actions.filter((action) => action.kind === 'select_latest_comments' || action.kind === 'expand_first_thread' ||
-              action.kind === 'expand_second_thread' || action.kind === 'next_first_thread_page' ||
+              action.kind === 'reveal_first_thread_pagination' || action.kind === 'expand_second_thread' ||
+              action.kind === 'reveal_second_thread_pagination' || action.kind === 'next_first_thread_page' ||
               action.kind === 'next_second_thread_page')
               .every((action) => action.outcome === 'completed')) {
             terminalReason = 'discussion_ready';

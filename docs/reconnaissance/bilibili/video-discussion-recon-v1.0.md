@@ -538,3 +538,73 @@ accountSafety: ready
 - 由于当前 B 站分页组件没有提供稳定可依赖的 `aria-current`/页码 active DOM 语义，Host 不猜测当前页码，artifact 保留 `replyPage=null`，但保存 `replyPageCount=3`、`replyHasMore=true` 与真实视觉/Network 证据。对应 artifact：[manifest.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/3f35874b-dd8d-4724-96ef-88b91b345117/manifest.json)、[discussion.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/3f35874b-dd8d-4724-96ef-88b91b345117/discussion.json)；分页动作前后视觉 evidence id 为 `192b18bc-c619-436e-bd40-513cda093c4d` 与 `4231fd7e-4b52-464e-9706-845305c9d45d`。
 
 运行结束后页面池再次保持 `activeLease=0`、一个 `retained_for_review` 目标页、`quarantinedPages=0`，Browser Host/Chromium 未因 run 终态关闭，账号安全为 `ready`。这一节证明了“楼中楼展开 → 有界 reveal → 单次下一页 → 当前页 DOM 字段替换 → 视觉/Network 交叉证明”的核心分页能力；仍未证明第 3 页、全量回复、跨页去重/连续性或 response body projector，`admissionEligible` 继续保持 `false`。
+
+## V. 2026-07-24 独立分页揭示动作真实闭环与失败边界收敛
+
+上一节的真实 canary 证明了分页可行，但当时 `next_*_page` 内部仍包含一次目标揭示 wheel。为避免把“寻找控件”和“点击下一页”混成一个不可解释的语义动作，本轮将两者拆开，版本保持不变：
+
+```text
+expand_first_thread
+  -> reveal_first_thread_pagination
+  -> next_first_thread_page
+
+expand_second_thread
+  -> reveal_second_thread_pagination
+  -> next_second_thread_page
+```
+
+新增动作的边界如下：
+
+- `reveal_*_thread_pagination` 只允许在对应楼中楼已经展开后执行；Host 以当前回复 renderer 或已挂载的“下一页”控件的实时 DOM rect 计算一次有界可信 wheel；它不是下一页点击，也不监听或保存 response body；
+- reveal 的后置条件是“真实的下一页控件已经挂载并进入 viewport”，使用动作前后视觉与 DOM 两面证明；若 wheel 结果已被本地滚动位置读回但控件仍未出现，只记录 postcondition unmet 并保留页面，不猜测点击；若文档上下文丢失，仍按未知结果隔离；
+- `next_*_page` 不再隐含滚动，只在实时 DOM 已发现、可命中、已 hover 且位于 viewport 的真实“下一页”控件时允许一次 mouse down/up；
+- 输入校验要求 reveal 位于对应 expand 之后、next 位于 expand 之后且（如果请求 reveal）位于 reveal 之后；单次任务最多 8 个语义动作，仍是 at-most-once；
+- interaction evidence 明确记录 `inputKind=click|wheel`、`wheelDeltaY` 和 `replyNextPageVisible`，不再用 `clickAttempted=true` 掩盖 wheel。
+
+### V.1 首楼失败边界的保留记录
+
+以下三个历史 run 不重新执行，仅作为设计约束：
+
+| run / artifact | 事实 | 处置 |
+|---|---|---|
+| `b1dda042-3776-470d-9d90-15539024b287` / `14e5637f-029d-4ec0-86ec-2444290319d0` | 首个楼中楼展开后公开显示约 165 页，但下一页节点在当前 DOM 中未及时挂载；没有发送下一页点击，动作是 `attempted=false / prerequisite_unmet`、`bilibili_video_discussion_interaction_precondition_timeout` | `partial`，目标页保留，账号安全回到 `ready` |
+| `3a3a5ca3-6658-4bb1-9dbf-65a04d52c511` / `bcfdeea3-de10-4c42-a6b7-3d9829d507a6` | 曾把回复宿主 rect 冒充下一页控件揭示提示；wheel 后未确认真实控件就继续等待，结果为 `document_context_changed` | 页面 quarantine、账号 safety 锁定；随后只用本地 `resume_authenticated_platform_actions` acknowledgement 解锁，未重放原 action |
+| `ee7ee675-d389-41ec-8379-30219f8f55cb` / `befadf47-f4ca-4b66-ad50-bb8f9b7342b5` | 无条件遍历整个 thread Shadow DOM 的分页探针拖慢普通展开后置条件，展开结果未知 | 页面 quarantine；该全 thread 探针已回退，未把失败当作平台能力否定 |
+
+这些记录说明：分页节点缺失只能由独立、可审计的 reveal 语义动作处理；不能通过 next 动作猜测滚轮，也不能用更宽的全树搜索拖慢所有交互。
+
+### V.2 新版本代码的真实认证 canary
+
+在新的 Browser Host 进程和同一已登录 Collection Profile 中执行了一个只验证第二楼的完整三动作链：
+
+```yaml
+runId: 474d8084-fc20-449d-a4c7-4fdf151c010f
+artifactId: d80c2465-51c7-4b3a-9156-4688897320ae
+target: BV1qZSLBYEpa
+collectorVersion: 0.7.17
+strategy: bilibili.video.discussion.dom.v1 @ 0.1.0
+state: completed
+terminalReason: discussion_ready
+actions:
+  - expand_second_thread
+  - reveal_second_thread_pagination
+  - next_second_thread_page
+actionAttemptCounts: [1, 1, 1]
+capturedRootComments: 22
+capturedReplyThreads: 1
+threadOrdinal: 1
+pageOneReplies: 10
+pageTwoReplies: 10
+revealWheelDeltaY: 431
+replyPageCount: 3
+replyPage: null
+replyHasMore: true
+networkStatusByClickAction: [200, 200]
+targetTabSelection: created_new_managed_tab
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+动作前 reveal 探针发现真实“下一页”控件已经挂载但位于 viewport 外（`y=1009`）；一次 wheel 后滚动位置由 `1218` 变为 `1649`，控件进入 viewport（`y=578`），没有发送点击。随后下一页动作重新读取 DOM、移动鼠标并确认 composed hit-test/hover，只点击一次；动作后回复正文从首组 10 条替换为另一组 10 条，视觉截图显示分页从 1 切换到 2，Network 新增 `/x/v2/reply/reply` status 200。B站当前组件没有稳定的 active 页码语义，因此 `replyPage` 仍诚实保留为 `null`，不猜测为 2。
+
+该 run 只证明第二个可见根评论的“展开 → 独立揭示 → 单次下一页”。它没有重放首楼历史失败、没有读取 response body、没有遍历全量分页、没有稳定 root id 或跨页去重证明；`admissionEligible` 继续为 `false`。下一项核心验证应是使用同一独立 reveal 语义动作验证首个楼中楼，但在首楼 reveal 本身未通过前不得发送 `next_first_thread_page`。

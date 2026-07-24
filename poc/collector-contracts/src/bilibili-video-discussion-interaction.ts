@@ -15,13 +15,20 @@ export const BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS = 20 as const;
 export const BILIBILI_VIDEO_DISCUSSION_INTERACTION_ACTIONS = [
   'select_latest_comments',
   'expand_first_thread',
+  'reveal_first_thread_pagination',
   'expand_second_thread',
+  'reveal_second_thread_pagination',
   'next_first_thread_page',
   'next_second_thread_page'
 ] as const;
 
+/** The MVP keeps semantic platform actions bounded per run. */
+export const BILIBILI_VIDEO_DISCUSSION_MAX_SEMANTIC_ACTIONS = 8 as const;
+
 export type BilibiliVideoDiscussionInteractionAction =
   typeof BILIBILI_VIDEO_DISCUSSION_INTERACTION_ACTIONS[number];
+
+export type BilibiliVideoDiscussionInteractionInputKind = 'click' | 'wheel';
 
 export interface BilibiliVideoDiscussionInteractionRequest {
   schemaVersion: typeof BILIBILI_VIDEO_DISCUSSION_INTERACTION_SCHEMA_VERSION;
@@ -80,6 +87,8 @@ export interface BilibiliVideoDiscussionInteractionDomState {
   targetExpanded: boolean;
   rootCommentCount: number;
   replyPaginationVisible: boolean;
+  /** True only when a real "下一页" control is mounted in the current reply renderer. */
+  replyNextPageVisible: boolean;
   firstThreadReplies: BilibiliVideoDiscussionReply[];
   replyPage: number | null;
   replyPageCount: number | null;
@@ -101,16 +110,19 @@ export interface BilibiliVideoDiscussionInteractionResult {
   pageAlias: string;
   actionId: string;
   action: BilibiliVideoDiscussionInteractionAction;
+  inputKind: BilibiliVideoDiscussionInteractionInputKind;
   /** Zero-based visible root-thread ordinal selected for an expand action. */
   threadOrdinal: number;
   bvid: string;
   clickAttempted: boolean;
+  /** Non-null only for the explicit pagination-reveal wheel action. */
+  wheelDeltaY: number | null;
   completedAt: string;
   before: {
     dom: BilibiliVideoDiscussionInteractionDomState;
     targetBounds: BilibiliVideoDiscussionInteractionBounds;
-    pointerHitTarget: true;
-    pointerHoveredTarget: true;
+    pointerHitTarget: boolean;
+    pointerHoveredTarget: boolean;
     visualEvidence: PageVisualEvidence;
   };
   after: {
