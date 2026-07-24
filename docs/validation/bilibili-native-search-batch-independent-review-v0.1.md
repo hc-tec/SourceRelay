@@ -4,7 +4,7 @@
 - Review 类型：`machine_precheck_handoff`
 - Review 状态：`pending_independent_review`
 - Admission：`false`
-- 覆盖 artifact：[4ac86631-9bbe-4e02-986c-39479d8d3499](../../poc/collector-gateway/runtime/p2a-search-coverage-20260724b/bilibili-native-search-batch-coverages/4ac86631-9bbe-4e02-986c-39479d8d3499/manifest.json)
+- 覆盖 artifact：[39fb7c35-888e-44fd-b73a-a28385647c68](../../poc/collector-gateway/runtime/p2a-search-coverage-20260724b/bilibili-native-search-batch-coverages/39fb7c35-888e-44fd-b73a-a28385647c68/manifest.json)
 - 机器预审接口：`GET /v1/bilibili-native-search-batch-coverage-artifacts/:coverageId/review`
 
 ## 1. Review 范围
@@ -37,6 +37,10 @@ meanOverlapRate: 0.9
 meanJaccardRate: 0.8206913859
 meanDriftRate: 0.1793086141
 maximumPairDriftRate: 0.2608695652
+attemptedCount: 4
+excludedCount: 1
+excludedArtifactIds:
+  - a012802c-a836-4eff-bb80-59bf7d7887a2
 ```
 
 三个 pair 的 intersection 分别为 `38 / 34 / 36`，Jaccard 分别约为 `0.905 / 0.739 / 0.818`。coverage manifest 只保存 query digest、artifact ID、计数和比例，未保存原始 query 或 BVID 列表；重启读取与 manifest digest 校验通过。
@@ -53,7 +57,7 @@ capturedPages: 1
 capturedItems: 20
 ```
 
-该失败发生在 3 个 `retained_for_review` 页面占满 managed page pool 后。它没有被重放；Profile 被显式关闭、重新启动后才执行新的独立第三轮。失败 artifact 保留，但当前 coverage API 是显式选择完整 artifact，因此 reviewer 必须把它作为同一采样窗口的失败记录一并考虑，不能只看成功样本。
+该失败发生在 3 个 `retained_for_review` 页面占满 managed page pool 后。它没有被重放；Profile 被显式关闭、重新启动后才执行新的独立第三轮。失败 artifact 保留，并通过 `attemptedArtifactIds` 写入同一 coverage manifest 的 `excludedArtifacts`，因此 reviewer 不会只看到成功样本。
 
 ## 3. 已通过的门禁
 
@@ -75,9 +79,9 @@ capturedItems: 20
 
 机器 policy 当前只要求平均 Jaccard `>=0.75` 和最大 pair drift `<=0.5`，因此整体通过；但第二个 pair 的 Jaccard 约为 `0.739`，应由独立 reviewer 决定是否需要增加“单 pair Jaccard 下限”或按任务类型区分广度/稳定性要求。不能为了让本次样本通过而事后修改 policy。
 
-### R3：页面池容量失败不能从 coverage 成功样本中消失
+### R3：页面池容量失败需要影响 coverage 解释
 
-`page_pool_capacity_exhausted` 证明“保留 review 页面”和“连续发起新 batch”之间存在容量冲突。正式 coverage ledger 需要把同一采样窗口的失败尝试、未执行页和 page pool 状态纳入审查，不能只提交成功 artifact ID。
+`page_pool_capacity_exhausted` 证明“保留 review 页面”和“连续发起新 batch”之间存在容量冲突。当前 coverage ledger 已记录 attempted/excluded artifact，但独立 reviewer 仍需决定：这种调度失败是否降低 coverage 可信度、是否需要单独的 page-pool 预算，还是只作为采集能力之外的运营缺口。
 
 ### R4：公开匿名可见性与登录态能力仍未分离证明
 
@@ -100,7 +104,7 @@ recommendedAction: review_pair_drift_and_failure_ledger
 
 1. 两分钟内的三样本是否足以作为当前任务的稳定性证据；
 2. 单 pair Jaccard 约 `0.739` 是否可接受；
-3. page pool 容量失败是否需要进入正式 coverage ledger 和 admission 阈值；
+3. page pool 容量失败进入 coverage ledger 后，是否还需要进入正式 admission 阈值；
 4. 公开匿名结果能否满足产品对登录 Collection Profile 的目标，还是必须另建认证样本集；
 5. 对“广度优先”任务和“排名/分页稳定性优先”任务，是否采用不同策略契约。
 

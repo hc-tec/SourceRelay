@@ -8,9 +8,11 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const BVID_PATTERN = /^BV[0-9A-Za-z]{10}$/;
 export const BILIBILI_NATIVE_SEARCH_BATCH_COVERAGE_MAX_SAMPLES = 5 as const;
+export const BILIBILI_NATIVE_SEARCH_BATCH_COVERAGE_MAX_ATTEMPTS = 10 as const;
 
 export interface BilibiliNativeSearchBatchCoverageInput {
   artifactIds: string[];
+  attemptedArtifactIds: string[];
 }
 
 export interface BilibiliNativeSearchBatchCoveragePair {
@@ -36,6 +38,18 @@ export interface BilibiliNativeSearchBatchCoverageComputation {
   search: BilibiliNativeSearchBatchRunRecord['search'];
   sampleArtifactIds: string[];
   sampleCount: number;
+  attemptedArtifactIds: string[];
+  attemptedCount: number;
+  excludedArtifactIds: string[];
+  excludedCount: number;
+  excludedArtifacts: Array<{
+    artifactId: string;
+    capturedAt: string;
+    state: BilibiliNativeSearchBatchArtifactSummary['state'];
+    terminalReason: BilibiliNativeSearchBatchArtifactSummary['terminalReason'];
+    capturedPages: number;
+    uniqueItems: number;
+  }>;
   pairCount: number;
   pairwise: BilibiliNativeSearchBatchCoveragePair[];
   aggregate: {
@@ -53,6 +67,7 @@ export interface BilibiliNativeSearchBatchCoverageComputation {
     rawBvids: 'not_persisted_in_coverage_artifact';
     sampleBudget: 5;
     comparison: 'set_intersection_and_jaccard_over_stable_bvids';
+    attemptLedger: 'explicit_attempted_artifact_ids';
   };
 }
 
@@ -65,6 +80,10 @@ export interface BilibiliNativeSearchBatchCoverageArtifactSummary {
   search: BilibiliNativeSearchBatchRunRecord['search'];
   sampleArtifactIds: string[];
   sampleCount: number;
+  attemptedArtifactIds?: string[];
+  attemptedCount?: number;
+  excludedArtifactIds?: string[];
+  excludedCount?: number;
   pairCount: number;
   meanOverlapRate: number;
   meanJaccardRate: number;
@@ -119,7 +138,7 @@ function eligibleSummary(summary: BilibiliNativeSearchBatchArtifactSummary): boo
 
 export function bilibiliNativeSearchBatchCoverageInput(value: unknown): BilibiliNativeSearchBatchCoverageInput {
   const candidate = record(value);
-  if (!candidate || Object.keys(candidate).some((key) => key !== 'artifactIds') ||
+  if (!candidate || Object.keys(candidate).some((key) => !['artifactIds', 'attemptedArtifactIds'].includes(key)) ||
     !Array.isArray(candidate.artifactIds) ||
     candidate.artifactIds.length < 2 || candidate.artifactIds.length > BILIBILI_NATIVE_SEARCH_BATCH_COVERAGE_MAX_SAMPLES ||
     candidate.artifactIds.some((artifactId) => typeof artifactId !== 'string' || !UUID_PATTERN.test(artifactId))) {
@@ -129,19 +148,44 @@ export function bilibiliNativeSearchBatchCoverageInput(value: unknown): Bilibili
   if (new Set(artifactIds).size !== artifactIds.length) {
     throw new Error('bilibili_native_search_batch_coverage_input_invalid');
   }
-  return { artifactIds: [...artifactIds] };
+  const attemptedArtifactIds = candidate.attemptedArtifactIds === undefined
+    ? artifactIds
+    : candidate.attemptedArtifactIds;
+  if (!Array.isArray(attemptedArtifactIds) || attemptedArtifactIds.length < artifactIds.length ||
+    attemptedArtifactIds.length > BILIBILI_NATIVE_SEARCH_BATCH_COVERAGE_MAX_ATTEMPTS ||
+    attemptedArtifactIds.some((artifactId) => typeof artifactId !== 'string' || !UUID_PATTERN.test(artifactId)) ||
+    new Set(attemptedArtifactIds).size !== attemptedArtifactIds.length ||
+    artifactIds.some((artifactId) => !attemptedArtifactIds.includes(artifactId))) {
+    throw new Error('bilibili_native_search_batch_coverage_input_invalid');
+  }
+  return { artifactIds: [...artifactIds], attemptedArtifactIds: [...attemptedArtifactIds] };
 }
 
 export function computeBilibiliNativeSearchBatchCoverage(
   views: readonly BilibiliNativeSearchBatchArtifactView[],
-  capturedAt = new Date().toISOString()
+  capturedAt = new Date().toISOString(),
+  attemptedViews: readonly BilibiliNativeSearchBatchArtifactView[] = views
 ): BilibiliNativeSearchBatchCoverageComputation {
   if (views.length < 2 || views.length > BILIBILI_NATIVE_SEARCH_BATCH_COVERAGE_MAX_SAMPLES) {
     throw new Error('bilibili_native_search_batch_coverage_sample_count_invalid');
   }
+  if (attemptedViews.length < views.length || attemptedViews.length > BILIBILI_NATIVE_SEARCH_BATCH_COVERAGE_MAX_ATTEMPTS) {
+    throw new Error('bilibili_native_search_batch_coverage_attempt_count_invalid');
+  }
+  const attemptIds = attemptedViews.map((view) => view.summary.artifactId);
+  const sampleIds = views.map((view) => view.summary.artifactId);
+  if (new Set(attemptIds).size !== attemptIds.length || new Set(sampleIds).size !== sampleIds.length ||
+    sampleIds.some((artifactId) => !attemptIds.includes(artifactId))) {
+    throw new Error('bilibili_native_search_batch_coverage_attempt_ledger_invalid');
+  }
   const ordered = [...views].sort((left, right) => Date.parse(left.summary.capturedAt) - Date.parse(right.summary.capturedAt));
+  const orderedAttempts = [...attemptedViews].sort((left, right) => Date.parse(left.summary.capturedAt) - Date.parse(right.summary.capturedAt));
   const first = ordered[0]!.summary;
-  if (!SHA256_PATTERN.test(first.queryDigest) || !ordered.every((view) =>
+  if (!SHA256_PATTERN.test(first.queryDigest) || !orderedAttempts.every((view) =>
+    UUID_PATTERN.test(view.summary.artifactId) &&
+    view.summary.queryDigest === first.queryDigest &&
+    sameSearch(view.summary.search, first.search)
+  ) || !ordered.every((view) =>
     UUID_PATTERN.test(view.summary.artifactId) &&
     view.summary.queryDigest === first.queryDigest &&
     sameSearch(view.summary.search, first.search) &&
@@ -149,6 +193,18 @@ export function computeBilibiliNativeSearchBatchCoverage(
   )) {
     throw new Error('bilibili_native_search_batch_coverage_sample_ineligible');
   }
+
+  const sampleArtifactIds = new Set(ordered.map((view) => view.summary.artifactId));
+  const excludedArtifacts = orderedAttempts
+    .filter((view) => !sampleArtifactIds.has(view.summary.artifactId))
+    .map((view) => ({
+      artifactId: view.summary.artifactId,
+      capturedAt: view.summary.capturedAt,
+      state: view.summary.state,
+      terminalReason: view.summary.terminalReason,
+      capturedPages: view.summary.capturedPages,
+      uniqueItems: view.summary.uniqueItems
+    }));
 
   const sampleSets = ordered.map((view) => ({
     summary: view.summary,
@@ -190,6 +246,11 @@ export function computeBilibiliNativeSearchBatchCoverage(
     search: structuredClone(first.search),
     sampleArtifactIds: ordered.map((view) => view.summary.artifactId),
     sampleCount: ordered.length,
+    attemptedArtifactIds: orderedAttempts.map((view) => view.summary.artifactId),
+    attemptedCount: orderedAttempts.length,
+    excludedArtifactIds: excludedArtifacts.map((artifact) => artifact.artifactId),
+    excludedCount: excludedArtifacts.length,
+    excludedArtifacts,
     pairCount: pairwise.length,
     pairwise,
     aggregate: {
@@ -206,7 +267,8 @@ export function computeBilibiliNativeSearchBatchCoverage(
       query: 'sha256_only',
       rawBvids: 'not_persisted_in_coverage_artifact',
       sampleBudget: BILIBILI_NATIVE_SEARCH_BATCH_COVERAGE_MAX_SAMPLES,
-      comparison: 'set_intersection_and_jaccard_over_stable_bvids'
+      comparison: 'set_intersection_and_jaccard_over_stable_bvids',
+      attemptLedger: 'explicit_attempted_artifact_ids'
     }
   };
 }

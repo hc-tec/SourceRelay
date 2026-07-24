@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { canonicalJson } from '../../collector-extension/src/shared/cryptography';
 import type { BilibiliNativeSearchBatchRunRecord } from './bilibili-native-search-batch-contract';
+import { BILIBILI_NATIVE_SEARCH_BATCH_COVERAGE_MAX_ATTEMPTS } from './bilibili-native-search-batch-coverage';
 import type {
   BilibiliNativeSearchBatchCoverageArtifactManifest,
   BilibiliNativeSearchBatchCoverageArtifactSummary,
@@ -38,6 +39,14 @@ function isSummary(value: unknown): value is BilibiliNativeSearchBatchCoverageAr
     typeof candidate.queryDigest === 'string' && SHA256_PATTERN.test(candidate.queryDigest) && isSearch(candidate.search) &&
     Array.isArray(candidate.sampleArtifactIds) && candidate.sampleArtifactIds.length >= 2 && candidate.sampleArtifactIds.length <= 5 &&
     candidate.sampleArtifactIds.every((artifactId) => typeof artifactId === 'string' && UUID_PATTERN.test(artifactId)) &&
+    (candidate.attemptedArtifactIds === undefined ||
+      (Array.isArray(candidate.attemptedArtifactIds) && candidate.attemptedArtifactIds.length >= candidate.sampleArtifactIds.length &&
+        candidate.attemptedArtifactIds.length <= BILIBILI_NATIVE_SEARCH_BATCH_COVERAGE_MAX_ATTEMPTS &&
+        candidate.attemptedArtifactIds.every((artifactId) => typeof artifactId === 'string' && UUID_PATTERN.test(artifactId)))) &&
+    (candidate.attemptedCount === undefined || (typeof candidate.attemptedCount === 'number' && Number.isSafeInteger(candidate.attemptedCount))) &&
+    (candidate.excludedArtifactIds === undefined ||
+      (Array.isArray(candidate.excludedArtifactIds) && candidate.excludedArtifactIds.every((artifactId) => typeof artifactId === 'string' && UUID_PATTERN.test(artifactId)))) &&
+    (candidate.excludedCount === undefined || (typeof candidate.excludedCount === 'number' && Number.isSafeInteger(candidate.excludedCount) && candidate.excludedCount >= 0)) &&
     typeof candidate.sampleCount === 'number' && Number.isSafeInteger(candidate.sampleCount) && candidate.sampleCount >= 2 && candidate.sampleCount <= 5 &&
     typeof candidate.pairCount === 'number' && Number.isSafeInteger(candidate.pairCount) && candidate.pairCount >= 1 &&
     isNumber(candidate.meanOverlapRate) && isNumber(candidate.meanJaccardRate) && isNumber(candidate.meanDriftRate) &&
@@ -101,6 +110,10 @@ export class BilibiliNativeSearchBatchCoverageArtifactStore {
       search: manifest.search,
       sampleArtifactIds: manifest.sampleArtifactIds,
       sampleCount: manifest.sampleCount,
+      attemptedArtifactIds: manifest.attemptedArtifactIds,
+      attemptedCount: manifest.attemptedCount,
+      excludedArtifactIds: manifest.excludedArtifactIds,
+      excludedCount: manifest.excludedCount,
       pairCount: manifest.pairCount,
       meanOverlapRate: manifest.aggregate.meanOverlapRate,
       meanJaccardRate: manifest.aggregate.meanJaccardRate,

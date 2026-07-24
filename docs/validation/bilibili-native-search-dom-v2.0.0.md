@@ -231,7 +231,7 @@ coverage 的机器预审接口使用固定 policy `0.1.0`，要求至少 3 个�
 纳入 coverage 的 3 个真实完整 artifact 为：
 
 ```yaml
-coverageId: 4ac86631-9bbe-4e02-986c-39479d8d3499
+coverageId: 39fb7c35-888e-44fd-b73a-a28385647c68
 sampleArtifactIds:
   - 29b90d7f-2200-4054-b24d-1a717228d328
   - 72af4ca2-a442-4271-b46b-202f6020dd26
@@ -242,6 +242,9 @@ meanOverlapRate: 0.9
 meanJaccardRate: 0.8206913859
 meanDriftRate: 0.1793086141
 maximumPairDriftRate: 0.2608695652
+attemptedCount: 4
+excludedCount: 1
+excludedArtifactId: a012802c-a836-4eff-bb80-59bf7d7887a2
 ```
 
 三个 pair 的交集分别为 38、34、36，Jaccard 分别约为 0.905、0.739、0.818。该 coverage 通过 machine policy `0.1.0`，返回 `candidate_for_independent_review`；这只表示“统计条件达到人工复核入口”，不表示 admission。Profile 最后显式关闭，临时 Gateway 43132 已清理，失败 batch artifact 和 page-pool 容量证据均保留。

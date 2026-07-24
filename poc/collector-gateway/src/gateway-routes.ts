@@ -222,13 +222,15 @@ export async function handleGatewayRoute(
   if (request.method === 'POST' && url.pathname === '/v1/bilibili-native-search-batch-coverage-artifacts') {
     if (!sameOrigin(request, response, context)) return true;
     const input = bilibiliNativeSearchBatchCoverageInput(await readJsonBody(request));
-    const views = [];
-    for (const artifactId of input.artifactIds) {
+    const attemptedViews = [];
+    for (const artifactId of input.attemptedArtifactIds) {
       const artifact = await context.nativeSearchBatchArtifacts.get(artifactId);
       if (!artifact) throw new Error('bilibili_native_search_batch_artifact_not_found');
-      views.push(artifact);
+      attemptedViews.push(artifact);
     }
-    const computation = computeBilibiliNativeSearchBatchCoverage(views);
+    const attemptedById = new Map(attemptedViews.map((artifact) => [artifact.summary.artifactId, artifact]));
+    const sampleViews = input.artifactIds.map((artifactId) => attemptedById.get(artifactId)!);
+    const computation = computeBilibiliNativeSearchBatchCoverage(sampleViews, undefined, attemptedViews);
     const artifact = await context.nativeSearchBatchCoverageArtifacts.record(computation);
     sendJson(response, 201, { schemaVersion: 1, artifact });
     return true;

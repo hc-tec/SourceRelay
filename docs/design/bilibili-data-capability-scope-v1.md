@@ -127,4 +127,4 @@ coverage / terminal_reason / status
 
 coverage 之后又加入 `machine_precheck`：policy `0.1.0` 固定最少 3 个样本/3 个 pair、平均 drift ≤ 0.25、单 pair drift ≤ 0.5、平均 Jaccard ≥ 0.75。当前两样本 coverage 被明确判为 `blocked`；即使未来统计条件通过，结果也只能是 `candidate_for_independent_review`，不能自动转成 admission。
 
-随后使用全新隔离临时 Profile 完成 3 个真实完整双页 batch（每次 40 条、0 重复），并把第一次因 3 个 retained 页面占满 page pool 而失败的 batch 单独保留为 `page_pool_capacity_exhausted`，没有重放。三样本 coverage `4ac86631-9bbe-4e02-986c-39479d8d3499` 得到 `meanOverlap=0.9 / meanJaccard=0.8206913859 / meanDrift=0.1793086141 / maxPairDrift=0.2608695652`，通过 machine policy，状态为 `candidate_for_independent_review`；临时 Profile 与 43132 已清理，仍未 admission。
+随后使用全新隔离临时 Profile 完成 3 个真实完整双页 batch（每次 40 条、0 重复），并把第一次因 3 个 retained 页面占满 page pool 而失败的 batch 单独保留为 `page_pool_capacity_exhausted`，没有重放。三样本 coverage `39fb7c35-888e-44fd-b73a-a28385647c68` 记录 4 个 attempted artifact、排除 1 个失败 artifact，得到 `meanOverlap=0.9 / meanJaccard=0.8206913859 / meanDrift=0.1793086141 / maxPairDrift=0.2608695652`，通过 machine policy，状态为 `candidate_for_independent_review`；临时 Profile 与 43132 已清理，仍未 admission。

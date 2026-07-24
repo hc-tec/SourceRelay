@@ -135,6 +135,10 @@ describe('Bilibili native-search batch coverage', () => {
       artifactIds: [
         '11111111-1111-4111-8111-111111111111',
         '22222222-2222-4222-8222-222222222222'
+      ],
+      attemptedArtifactIds: [
+        '11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222'
       ]
     });
     expect(() => bilibiliNativeSearchBatchCoverageInput({
@@ -146,5 +150,42 @@ describe('Bilibili native-search batch coverage', () => {
         '11111111-1111-4111-8111-111111111111'
       ]
     })).toThrow('bilibili_native_search_batch_coverage_input_invalid');
+  });
+
+  test('records an attempted but ineligible failure instead of silently dropping it', () => {
+    const first = view(
+      '66666666-6666-4666-8666-666666666666',
+      '2026-07-24T00:00:00.000Z',
+      ['BV1qZSLBYEpa']
+    );
+    const second = view(
+      '77777777-7777-4777-8777-777777777777',
+      '2026-07-24T00:01:00.000Z',
+      ['BV1BoKD6ZEir']
+    );
+    const failed = view(
+      '88888888-8888-4888-8888-888888888888',
+      '2026-07-24T00:02:00.000Z',
+      ['BV1xx411c7mD'],
+      { state: 'failed', terminalReason: 'search_batch_page_failed', capturedPages: 1 }
+    );
+    const computation = computeBilibiliNativeSearchBatchCoverage(
+      [first, second],
+      '2026-07-24T00:03:00.000Z',
+      [first, second, failed]
+    );
+    expect(computation).toMatchObject({
+      sampleCount: 2,
+      attemptedCount: 3,
+      excludedCount: 1,
+      excludedArtifactIds: ['88888888-8888-4888-8888-888888888888'],
+      excludedArtifacts: [{
+        artifactId: '88888888-8888-4888-8888-888888888888',
+        state: 'failed',
+        terminalReason: 'search_batch_page_failed',
+        capturedPages: 1,
+        uniqueItems: 1
+      }]
+    });
   });
 });

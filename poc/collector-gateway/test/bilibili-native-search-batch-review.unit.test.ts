@@ -19,6 +19,10 @@ function artifact(input: {
       search: { resultType: 'video', sort: 'newest', pages: [1, 2] },
       sampleArtifactIds: [],
       sampleCount: input.sampleCount,
+      attemptedArtifactIds: [],
+      attemptedCount: input.sampleCount,
+      excludedArtifactIds: [],
+      excludedCount: 0,
       pairCount: input.pairCount,
       meanOverlapRate: 1 - input.meanDriftRate,
       meanJaccardRate: input.meanJaccardRate,
@@ -34,6 +38,11 @@ function artifact(input: {
       search: { resultType: 'video', sort: 'newest', pages: [1, 2] },
       sampleArtifactIds: [],
       sampleCount: input.sampleCount,
+      attemptedArtifactIds: [],
+      attemptedCount: input.sampleCount,
+      excludedArtifactIds: [],
+      excludedCount: 0,
+      excludedArtifacts: [],
       pairCount: input.pairCount,
       pairwise: input.pairDrifts.map((driftRate, index) => ({
         leftArtifactId: '22222222-2222-4222-8222-222222222222',
@@ -63,7 +72,8 @@ function artifact(input: {
         query: 'sha256_only',
         rawBvids: 'not_persisted_in_coverage_artifact',
         sampleBudget: 5,
-        comparison: 'set_intersection_and_jaccard_over_stable_bvids'
+        comparison: 'set_intersection_and_jaccard_over_stable_bvids',
+        attemptLedger: 'explicit_attempted_artifact_ids'
       }
     }
   };
