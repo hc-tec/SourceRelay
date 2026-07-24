@@ -608,3 +608,43 @@ accountSafety: ready
 动作前 reveal 探针发现真实“下一页”控件已经挂载但位于 viewport 外（`y=1009`）；一次 wheel 后滚动位置由 `1218` 变为 `1649`，控件进入 viewport（`y=578`），没有发送点击。随后下一页动作重新读取 DOM、移动鼠标并确认 composed hit-test/hover，只点击一次；动作后回复正文从首组 10 条替换为另一组 10 条，视觉截图显示分页从 1 切换到 2，Network 新增 `/x/v2/reply/reply` status 200。B站当前组件没有稳定的 active 页码语义，因此 `replyPage` 仍诚实保留为 `null`，不猜测为 2。
 
 该 run 只证明第二个可见根评论的“展开 → 独立揭示 → 单次下一页”。它没有重放首楼历史失败、没有读取 response body、没有遍历全量分页、没有稳定 root id 或跨页去重证明；`admissionEligible` 继续为 `false`。下一项核心验证应是使用同一独立 reveal 语义动作验证首个楼中楼，但在首楼 reveal 本身未通过前不得发送 `next_first_thread_page`。
+
+### V.3 首楼分页探针修复后的真实闭环
+
+为解释首楼两次 reveal 失败，本轮暂停受管 runner，使用同一项目登录 Profile 做独立、可见、只读 DOM 侦察（未加载生产扩展交互代码，不读取 Cookie、Token、storage、请求/响应正文）。真实页面事实为：
+
+- 首个 `bili-comment-thread-renderer` 展开后包含 `bili-comment-replies-renderer`，其 Shadow DOM 中的 `#replies` 是普通文档流，不是独立 `overflow` 滚动容器；当前页有 10 个 `bili-comment-reply-renderer`；
+- “下一页”控件在动作后已经挂载，只是位于 viewport 外（独立 DOM 侦察时约为 `y=1101`）；一次过大的 1200px wheel 会把窗口直接推过控件，因此应优先使用真实控件 rect 推导最小揭示距离；
+- 动作后新增公开 route 为 `/x/v2/reply/reply` status 200；没有读取 query、请求体或 response body。
+
+真正的代码根因是 Host 的通用 Shadow DOM 深搜：它在 500 节点预算内先遍历 10 条回复 renderer 的用户、富文本和操作按钮，达到上限后才可能看到分页兄弟节点，于是把已挂载的“下一页”误报为不存在。修复后的分页探针只在找分页控件时跳过 `bili-comment-reply-renderer` 的深层 Shadow DOM；回复字段投影仍使用原有的独立 renderer 搜索，不降低字段采集范围。
+
+修复后真实认证 run：
+
+```yaml
+runId: 7fe99c73-4866-43db-aa29-f16b5ef9dfc4
+artifactId: 42eda865-0ed1-41b6-b4be-b0a5e1292a4c
+target: BV1qZSLBYEpa
+collectorVersion: 0.7.17
+strategy: bilibili.video.discussion.dom.v1 @ 0.1.0
+state: completed
+terminalReason: discussion_ready
+actions:
+  - expand_first_thread
+  - reveal_first_thread_pagination
+  - next_first_thread_page
+actionAttemptCounts: [1, 0, 1]
+revealInputKind: none
+capturedRootComments: 22
+capturedFirstThreadReplies: [10, 10]
+replyPageCount: 165
+replyHasMore: true
+replyPage: null
+networkStatusByClickAction: [200, 200]
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+这里 `reveal_first_thread_pagination` 的 `inputKind=none` 不是漏记：动作前 DOM 已确认真实“下一页”控件位于 viewport 内，因此没有发送多余 wheel；动作账本明确为 `attempted=false / outcome=completed`。随后 `next_first_thread_page` 重新读取实时 rect（动作前 `x=349,y=67,w=39,h=22`），通过 hover 与 composed hit-test 后只点击一次；动作后 rect 变为 `x=396,y=67`，当前 10 条回复替换为下一组 10 条，新增 `/x/v2/reply/reply` status 200。视觉证据显示分页从第 1 页切换到第 2 页；B站仍没有稳定的 active 页码 DOM 语义，所以 `replyPage` 保持 `null`。
+
+这次 run 首次完成了“首楼 165 页回复的当前页 → 单次下一页”真实闭环，也验证了“控件已在 viewport 时 reveal 不发送滚轮”的安全边界。首楼与第二楼都已具备有界单次翻页能力，但仍未完成全量分页、跨页去重/连续性、response projector 或 admission；`admissionEligible` 继续为 `false`。

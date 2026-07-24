@@ -113,6 +113,41 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
     );
 
     if (isRevealReplyPaginationAction(request.action)) {
+      // The control may already be mounted and inside the viewport by the
+      // time the independent reveal action is evaluated. Treat that as a
+      // completed local discovery, not as a reason to send an unnecessary
+      // wheel. The following next-page action will still perform its own
+      // fresh hover/hit-test before clicking.
+      if (beforeProbe.dom.replyNextPageVisible && beforeProbe.dom.targetInViewport) {
+        const afterProbe = await readProbe(record.page, request.action, remaining(deadline));
+        const afterVisualEvidence = await captureEvidence(
+          record,
+          input.visualEvidenceDirectory,
+          remaining(deadline)
+        );
+        input.emit('bilibili_video_discussion_interaction_completed', null, request.actionId);
+        return {
+          schemaVersion: BILIBILI_VIDEO_DISCUSSION_INTERACTION_SCHEMA_VERSION,
+          pageAlias: record.pageAlias,
+          actionId: request.actionId,
+          action: request.action,
+          inputKind: 'none',
+          bvid: request.bvid,
+          threadOrdinal: threadOrdinalForAction(request.action),
+          clickAttempted: false,
+          wheelDeltaY: null,
+          completedAt: new Date().toISOString(),
+          before: {
+            dom: beforeProbe.dom,
+            targetBounds,
+            pointerHitTarget: beforeProbe.dom.targetPointerHit,
+            pointerHoveredTarget: beforeProbe.dom.targetHovered,
+            visualEvidence: beforeVisualEvidence
+          },
+          after: { dom: afterProbe.dom, visualEvidence: afterVisualEvidence },
+          network: { observations: [] }
+        };
+      }
       const viewportHeight = await withinDeadline(
         record.page.evaluate(() => window.innerHeight),
         remaining(deadline)
@@ -120,9 +155,29 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
       const requiredDelta = targetBounds.y < 0
         ? targetBounds.y - 120
         : targetBounds.y + targetBounds.height - viewportHeight + 120;
-      wheelDeltaY = Math.sign(requiredDelta) === 0
-        ? 240
-        : Math.sign(requiredDelta) * Math.max(200, Math.min(1_200, Math.abs(Math.ceil(requiredDelta))));
+      // When Bilibili has not mounted a next-page control yet, the reply
+      // renderer's rect describes only the currently painted window. Use one
+      // explicit bounded reveal wheel instead of pretending that rect is the
+      // missing button's location. Once the real control exists, use its
+      // smaller rect-derived delta to avoid unnecessary movement.
+      wheelDeltaY = !beforeProbe.dom.replyNextPageVisible
+        ? 1_200
+        : Math.sign(requiredDelta) === 0
+          ? 240
+          : Math.sign(requiredDelta) * Math.max(200, Math.min(1_200, Math.abs(Math.ceil(requiredDelta))));
+
+      if (!beforeProbe.dom.replyNextPageVisible) {
+        // The first reply thread exposes a tall, lazily-mounted renderer. Put
+        // the real pointer over the renderer's currently visible portion so
+        // the trusted wheel follows the same nested-scroll path as a person;
+        // do not use a synthetic event or an element.click fallback.
+        const pointerX = Math.floor(targetBounds.x + targetBounds.width / 2);
+        const pointerY = Math.max(10, Math.min(
+          viewportHeight - 10,
+          targetBounds.y + Math.min(targetBounds.height / 2, viewportHeight / 2)
+        ));
+        await withinDeadline(record.page.mouse.move(pointerX, pointerY), remaining(deadline));
+      }
 
       record.attemptedActionIds.add(request.actionId);
       touchRecord(record);
@@ -309,8 +364,7 @@ function assertActionPrecondition(
   }
   if (isRevealReplyPaginationAction(action)) {
     if (!probe.dom.targetExpanded ||
-      probe.dom.replyHasMore === false || !probe.dom.targetVisible || !probe.dom.targetBounds ||
-      (probe.dom.replyNextPageVisible && probe.dom.targetInViewport)) {
+      probe.dom.replyHasMore === false || !probe.dom.targetVisible || !probe.dom.targetBounds) {
       throw new Error('bilibili_video_discussion_reply_page_reveal_precondition_unmet');
     }
     return;
@@ -469,6 +523,37 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
       visit(root);
       return matches;
     };
+    /**
+     * Pagination controls are siblings of the visible reply renderers. Do
+     * not spend the probe budget walking every reply's user/rich-text Shadow
+     * DOM before looking for "下一页"; that made the first (large) thread
+     * look as if its real control was absent and slowed ordinary expansion.
+     */
+    const findReplyPaginationAll = (
+      root: Element,
+      predicate: (element: Element) => boolean,
+      maximumNodes = 1_200
+    ): Element[] => {
+      const matches: Element[] = [];
+      let visited = 0;
+      const visit = (container: Element | ShadowRoot): void => {
+        for (const element of Array.from(container.children)) {
+          visited += 1;
+          if (visited > maximumNodes) return;
+          if (predicate(element)) matches.push(element);
+          // Reply item fields are data, not pagination controls. Keep the
+          // search structural and bounded by skipping their deep renderer.
+          if (element.tagName.toLowerCase() === 'bili-comment-reply-renderer') continue;
+          if (element.shadowRoot) visit(element.shadowRoot);
+          visit(element);
+          if (visited > maximumNodes) return;
+        }
+      };
+      if (predicate(root)) matches.push(root);
+      if (root.shadowRoot) visit(root.shadowRoot);
+      visit(root);
+      return matches;
+    };
     const renderedControl = (element: Element): boolean =>
       rendered(element) || Boolean(element.shadowRoot &&
         Array.from(element.shadowRoot.querySelectorAll('*')).some((candidate) => rendered(candidate)));
@@ -609,7 +694,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         : null;
       const expandTarget = replyRenderer ? targetFor(replyRenderer, '点击查看') : null;
       const nextButton = replyRenderer
-        ? findComposedAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
+        ? findReplyPaginationAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
           /下一页/.test(clean(composedText(element), 20)), 500)[0] ?? null
         : null;
       const nextReplyPage = input.action === 'next_first_thread_page' || input.action === 'next_second_thread_page';
@@ -630,7 +715,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         .map(replyRecord)
         .filter((value): value is NonNullable<ReturnType<typeof replyRecord>> => value !== null);
       const activePageButton = replyRenderer
-        ? findComposedAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
+        ? findReplyPaginationAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
           /^\d+$/.test(clean(composedText(element), 20)), 500)
           .find((element) => stateOf(element) === 'active')
         : null;
@@ -644,7 +729,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
             : null;
       replyPageCount = pageCountMatch ? Number(pageCountMatch[1]) : slashMatch ? Number(slashMatch[2]) : null;
       const collapseButton = replyRenderer
-        ? findComposedAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
+        ? findReplyPaginationAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
           /收起/.test(clean(composedText(element), 20)), 500)[0] ?? null
         : null;
       const nextDisabled = Boolean(nextButton && (
@@ -654,7 +739,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         nextButton.classList.contains('is-disabled')
       ));
       replyNextPageVisible = Boolean(nextButton && renderedControl(nextButton));
-      const visiblePaginationText = Boolean(replyRenderer && findComposedAll(replyRenderer, (element) =>
+      const visiblePaginationText = Boolean(replyRenderer && findReplyPaginationAll(replyRenderer, (element) =>
         renderedControl(element) && /第\s*\d+\s*页|共\s*\d+\s*页|上一页/.test(clean(composedText(element), 100)), 500).length > 0);
       replyPaginationVisible = Boolean(replyRenderer && (nextButton || collapseButton || activePageButton || visiblePaginationText));
       targetExpanded = Boolean(replyRenderer && !expandVisible && (

@@ -462,14 +462,17 @@ export class BilibiliVideoDiscussionHostRunner {
                 timeoutMs: Math.min(20_000, remainingDeadline(deadline, 1_000))
               });
               interactionResults.push(interaction);
-              actionRecord.attempted = true;
-              actionRecord.attemptCount = 1;
-              await this.#accountSafety.recordPlatformActionAttempt(
-                permit.profileId,
-                'bilibili',
-                permit.runId,
-                actionRecord.actionId
-              );
+              const platformInputAttempted = interaction.inputKind !== 'none';
+              actionRecord.attempted = platformInputAttempted;
+              actionRecord.attemptCount = platformInputAttempted ? 1 : 0;
+              if (platformInputAttempted) {
+                await this.#accountSafety.recordPlatformActionAttempt(
+                  permit.profileId,
+                  'bilibili',
+                  permit.runId,
+                  actionRecord.actionId
+                );
+              }
               actionRecord.outcome = 'completed';
               if (requestedAction === 'select_latest_comments') {
                 // Sorting replaces the visible virtualised root window. Read

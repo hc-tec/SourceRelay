@@ -28,7 +28,7 @@ export const BILIBILI_VIDEO_DISCUSSION_MAX_SEMANTIC_ACTIONS = 8 as const;
 export type BilibiliVideoDiscussionInteractionAction =
   typeof BILIBILI_VIDEO_DISCUSSION_INTERACTION_ACTIONS[number];
 
-export type BilibiliVideoDiscussionInteractionInputKind = 'click' | 'wheel';
+export type BilibiliVideoDiscussionInteractionInputKind = 'none' | 'click' | 'wheel';
 
 export interface BilibiliVideoDiscussionInteractionRequest {
   schemaVersion: typeof BILIBILI_VIDEO_DISCUSSION_INTERACTION_SCHEMA_VERSION;
