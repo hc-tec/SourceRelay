@@ -501,3 +501,40 @@ expand_second_thread
 多线程投影保存在 `discussion.replyThreads`：ordinal `0` 与 `1` 各自保留真实 DOM 可见页的 `author/content/publishedAt/likeCount` 字段和分页元数据；旧的 `firstThread*` 字段仍只代表 ordinal `0`。对应 artifact：[manifest.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/9f547500-0967-4562-9e82-0d5e6a82cae1/manifest.json)、[discussion.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/9f547500-0967-4562-9e82-0d5e6a82cae1/discussion.json)。动作前后及最终视觉证据位于 `poc/collector-gateway/runtime/p2a-reply-canary-20260723/browser-host/visual-evidence/`，其中双动作对应的 evidence id 为 `62ee2ac7-5625-4982-925c-39f40f5d6016`、`2156ea9a-f1f5-495d-b6ca-ad9c23d02fbe`、`5d5ff2d6-bbc0-40f5-8fc8-8c06f1304adc`、`24b0a75c-6f11-4b6f-b90c-ebc5c6c941b9`。
 
 运行结束后再次核对页面池：`activeLease=0`、`retainedPages=1`、`quarantinedPages=0`，目标页面仍为 `retained_for_review`；Browser Host/Chromium 没有关闭，账号安全为 `ready`。这证明了“有界根评论滚动 → 同 run 实时定位并连续展开两个可见根评论楼中楼 → DOM/视觉/Network 三面后置条件 → 页面保留”的核心闭环。它仍不等同于回复全量：没有点击下一页、没有读取 response body、没有稳定 root id 或跨页连续性证明，`admissionEligible` 继续保持 `false`。
+
+## U. 2026-07-24 楼中楼单次下一页真实闭环
+
+在确认分页控件位于展开回复树下方、可能不在当前 viewport 后，新增了两个按根评论序号区分的只读动作：`next_first_thread_page` 与 `next_second_thread_page`。分页动作的前置阶段只根据实时 DOM rect 发送一次有界可信 wheel，把“下一页”控件带入 viewport；随后重新读取 DOM、hover 和 composed hit-test，再发送一次可信 mouse down/up。它不遍历分页、不重放点击；wheel 属于该语义动作的目标揭示阶段，视觉 evidence 的 `scrollY` 变化保留了这一事实。
+
+使用新 Browser Host 构建，在同一已登录 Profile 上完成了 ordinal `1` 的单次翻页 canary：
+
+```yaml
+runId: ce0037fc-5e34-4d9e-9fb2-19ef05d6d039
+artifactId: 3f35874b-dd8d-4724-96ef-88b91b345117
+target: BV1qZSLBYEpa
+strategy: bilibili.video.discussion.dom.v1 @ 0.1.0
+state: completed
+terminalReason: discussion_ready
+actions: [expand_second_thread, next_second_thread_page]
+actionAttemptCounts: [1, 1]
+capturedRootComments: 21
+threadOrdinal: 1
+replyPageCount: 3
+replyPage: null
+replyHasMore: true
+pageOneReplies: 10
+pageTwoReplies: 10
+networkRoute: /x/v2/reply/reply
+networkStatusByAction: [200, 200]
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+动作前后证据如下：
+
+- ordinal `1` 展开动作后，回复树投影为 10 条，公开分页总数为 3，下一页入口存在但尚在当前 viewport 之外；
+- `next_second_thread_page` 的动作前视觉 evidence 显示一次 reveal 后 `scrollY=1649`，实时目标边界框为 `x=256,y=578,w=39,h=22`，目标可见、可命中且已 hover；
+- 动作后视觉截图显示分页从 `1` 的蓝色选中态切换为 `2` 的蓝色选中态，回复正文更换为另一页的 10 条公开回复；Network 在动作后新增 `GET https://api.bilibili.com/x/v2/reply/reply`、status `200`；
+- 由于当前 B 站分页组件没有提供稳定可依赖的 `aria-current`/页码 active DOM 语义，Host 不猜测当前页码，artifact 保留 `replyPage=null`，但保存 `replyPageCount=3`、`replyHasMore=true` 与真实视觉/Network 证据。对应 artifact：[manifest.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/3f35874b-dd8d-4724-96ef-88b91b345117/manifest.json)、[discussion.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/3f35874b-dd8d-4724-96ef-88b91b345117/discussion.json)；分页动作前后视觉 evidence id 为 `192b18bc-c619-436e-bd40-513cda093c4d` 与 `4231fd7e-4b52-464e-9706-845305c9d45d`。
+
+运行结束后页面池再次保持 `activeLease=0`、一个 `retained_for_review` 目标页、`quarantinedPages=0`，Browser Host/Chromium 未因 run 终态关闭，账号安全为 `ready`。这一节证明了“楼中楼展开 → 有界 reveal → 单次下一页 → 当前页 DOM 字段替换 → 视觉/Network 交叉证明”的核心分页能力；仍未证明第 3 页、全量回复、跨页去重/连续性或 response body projector，`admissionEligible` 继续保持 `false`。

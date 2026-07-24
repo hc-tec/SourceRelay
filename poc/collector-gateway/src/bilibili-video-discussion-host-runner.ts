@@ -509,6 +509,10 @@ export class BilibiliVideoDiscussionHostRunner {
                 discussion = { ...resortedDiscussion, sort: 'latest' };
               } else {
                 const threadOrdinal = interaction.threadOrdinal;
+                // Expansion and page advance both replace the bounded
+                // current-page sample for this thread. The page/hasMore
+                // fields remain the explicit coverage boundary; no cumulative
+                // or full-thread claim is inferred.
                 const replyThread = {
                   threadOrdinal,
                   replies: interaction.after.dom.firstThreadReplies,
@@ -562,7 +566,9 @@ export class BilibiliVideoDiscussionHostRunner {
             }
           }
           if (state === 'completed' &&
-            actions.filter((action) => action.kind === 'select_latest_comments' || action.kind === 'expand_first_thread' || action.kind === 'expand_second_thread')
+            actions.filter((action) => action.kind === 'select_latest_comments' || action.kind === 'expand_first_thread' ||
+              action.kind === 'expand_second_thread' || action.kind === 'next_first_thread_page' ||
+              action.kind === 'next_second_thread_page')
               .every((action) => action.outcome === 'completed')) {
             terminalReason = 'discussion_ready';
           }

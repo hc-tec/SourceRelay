@@ -89,11 +89,34 @@ describe('Bilibili discussion DOM contract', () => {
     expect(bilibiliVideoDiscussionBvid(`https://www.bilibili.com/video/${bvid}`)).toBe(bvid);
     expect(bilibiliVideoDiscussionInput({
       canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
-      actions: ['select_latest_comments', 'expand_first_thread', 'expand_second_thread']
+      actions: [
+        'select_latest_comments',
+        'expand_first_thread',
+        'next_first_thread_page',
+        'expand_second_thread',
+        'next_second_thread_page'
+      ]
     })).toEqual({
       canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
-      actions: ['select_latest_comments', 'expand_first_thread', 'expand_second_thread']
+      actions: [
+        'select_latest_comments',
+        'expand_first_thread',
+        'next_first_thread_page',
+        'expand_second_thread',
+        'next_second_thread_page'
+      ]
     });
+    expect(() => bilibiliVideoDiscussionInput({
+      canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
+      actions: [
+        'select_latest_comments',
+        'expand_first_thread',
+        'next_first_thread_page',
+        'expand_second_thread',
+        'next_second_thread_page',
+        'expand_first_thread'
+      ]
+    })).toThrow('bilibili_video_discussion_input_invalid');
     expect(() => bilibiliVideoDiscussionInput({
       canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
       actions: ['select_latest_comments', 'select_latest_comments']

@@ -26,11 +26,17 @@ const MINIMUM_TIMEOUT_MS = 1_000;
 const TARGET_ROUTES = {
   select_latest_comments: '/x/v2/reply/wbi/main',
   expand_first_thread: '/x/v2/reply/reply',
-  expand_second_thread: '/x/v2/reply/reply'
+  expand_second_thread: '/x/v2/reply/reply',
+  next_first_thread_page: '/x/v2/reply/reply',
+  next_second_thread_page: '/x/v2/reply/reply'
 } as const;
 
 function threadOrdinalForAction(action: BilibiliVideoDiscussionInteractionAction): number {
-  return action === 'expand_second_thread' ? 1 : 0;
+  return action === 'expand_second_thread' || action === 'next_second_thread_page' ? 1 : 0;
+}
+
+function isNextReplyPageAction(action: BilibiliVideoDiscussionInteractionAction): boolean {
+  return action === 'next_first_thread_page' || action === 'next_second_thread_page';
 }
 
 interface DiscussionProbe {
@@ -77,14 +83,36 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
   const deadline = Date.now() + request.timeoutMs;
   let browserInputAttempted = false;
   try {
-    const beforeProbe = await waitForProbe(record.page, request, deadline, (candidate) =>
+    let beforeProbe = await waitForProbe(record.page, request, deadline, (candidate) =>
       candidate.dom.commentHostPresent && candidate.dom.commentHostVisible &&
       candidate.dom.commentHostInViewport && candidate.dom.targetVisible &&
-      candidate.dom.targetInViewport
+      (isNextReplyPageAction(request.action) ? candidate.dom.targetBounds !== null : candidate.dom.targetInViewport)
     );
     if (beforeProbe.dom.loginGateVisible || beforeProbe.dom.verificationRequired ||
       beforeProbe.dom.rateLimited || beforeProbe.dom.sourceUnavailable) {
       throw new Error('bilibili_video_discussion_interaction_risk_stopped');
+    }
+    if (isNextReplyPageAction(request.action) && !beforeProbe.dom.targetInViewport) {
+      // The page keeps the reply pagination below the current viewport after
+      // an expand. Reveal it with one bounded trusted wheel before reading the
+      // final target rect; this is still precondition discovery, not a second
+      // semantic page click.
+      const targetBounds = beforeProbe.dom.targetBounds;
+      if (!targetBounds) throw new Error('bilibili_video_discussion_reply_page_precondition_unmet');
+      const viewportHeight = await withinDeadline(
+        record.page.evaluate(() => window.innerHeight),
+        remaining(deadline)
+      );
+      const requiredDelta = targetBounds.y < 0
+        ? targetBounds.y - 120
+        : targetBounds.y + targetBounds.height - viewportHeight + 120;
+      const deltaY = Math.sign(requiredDelta) * Math.max(200, Math.min(1_200, Math.abs(Math.ceil(requiredDelta))));
+      browserInputAttempted = true;
+      await withinDeadline(record.page.mouse.wheel(0, deltaY), remaining(deadline));
+      beforeProbe = await waitForProbe(record.page, request, deadline, (candidate) =>
+        candidate.dom.commentHostPresent && candidate.dom.commentHostVisible &&
+        candidate.dom.commentHostInViewport && candidate.dom.targetVisible && candidate.dom.targetInViewport
+      );
     }
     assertActionPrecondition(beforeProbe, request.action);
     const targetBounds = beforeProbe.dom.targetBounds!;
@@ -116,7 +144,7 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
     try {
       await withinDeadline(record.page.mouse.down({ button: 'left' }), remaining(deadline));
       await withinDeadline(record.page.mouse.up({ button: 'left' }), remaining(deadline));
-      const afterProbe = await waitForPostcondition(record.page, request, observations, deadline);
+      const afterProbe = await waitForPostcondition(record.page, request, observations, beforeProbe, deadline);
       const afterVisualEvidence = await captureEvidence(
         record,
         input.visualEvidenceDirectory,
@@ -222,6 +250,13 @@ function assertActionPrecondition(
     }
     return;
   }
+  if (isNextReplyPageAction(action)) {
+    if (!probe.dom.targetExpanded || !probe.dom.replyPaginationVisible ||
+      probe.dom.replyHasMore === false || !probe.dom.targetPointerHit) {
+      throw new Error('bilibili_video_discussion_reply_page_precondition_unmet');
+    }
+    return;
+  }
   if (probe.dom.targetExpanded || probe.dom.replyPaginationVisible || !probe.dom.targetPointerHit) {
     throw new Error('bilibili_video_discussion_thread_precondition_unmet');
   }
@@ -238,15 +273,20 @@ async function waitForPostcondition(
   page: Page,
   request: BilibiliVideoDiscussionInteractionRequest,
   observations: readonly BilibiliVideoDiscussionInteractionNetworkObservation[],
+  before: DiscussionProbe,
   deadline: number
 ): Promise<DiscussionProbe> {
   let latest: DiscussionProbe | null = null;
   while (Date.now() < deadline) {
     latest = await readProbe(page, request.action, remaining(deadline));
     const routeSeen = observations.some((observation) => observation.status >= 200 && observation.status < 300);
+    const pageContentChanged = JSON.stringify(latest.dom.firstThreadReplies) !== JSON.stringify(before.dom.firstThreadReplies) ||
+      latest.dom.replyPage !== before.dom.replyPage;
     const domReady = request.action === 'select_latest_comments'
       ? latest.dom.latestState === 'active'
-      : latest.dom.targetExpanded && latest.dom.replyPaginationVisible;
+      : isNextReplyPageAction(request.action)
+        ? latest.dom.targetExpanded && latest.dom.replyPaginationVisible && pageContentChanged
+        : latest.dom.targetExpanded && latest.dom.replyPaginationVisible;
     if (domReady && routeSeen) return latest;
     if (latest.dom.verificationRequired || latest.dom.rateLimited || latest.dom.sourceUnavailable) break;
     await delay(Math.min(PROBE_INTERVAL_MS, Math.max(1, deadline - Date.now())));
@@ -375,8 +415,11 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         const pressed = candidate.getAttribute('aria-pressed') ?? candidate.getAttribute('aria-selected');
         if (pressed === 'true') return 'active';
         if (pressed === 'false') return 'inactive';
+        const current = candidate.getAttribute('aria-current');
+        if (current === 'page' || current === 'true') return 'active';
         if (candidate.classList.contains('active') || candidate.classList.contains('selected') ||
-          candidate.classList.contains('is-active') || candidate.classList.contains('is-selected')) return 'active';
+          candidate.classList.contains('is-active') || candidate.classList.contains('is-selected') ||
+          candidate.classList.contains('current')) return 'active';
       }
       let current: Node | null = element;
       while (current) {
@@ -384,8 +427,11 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
           const pressed = current.getAttribute('aria-pressed') ?? current.getAttribute('aria-selected');
           if (pressed === 'true') return 'active';
           if (pressed === 'false') return 'inactive';
+          const currentPage = current.getAttribute('aria-current');
+          if (currentPage === 'page' || currentPage === 'true') return 'active';
           if (current.classList.contains('active') || current.classList.contains('selected') ||
-            current.classList.contains('is-active') || current.classList.contains('is-selected')) return 'active';
+            current.classList.contains('is-active') || current.classList.contains('is-selected') ||
+            current.classList.contains('current')) return 'active';
         }
         if (current.parentNode) {
           current = current.parentNode;
@@ -461,7 +507,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
       ? findComposedAll(commentRoot, (element) =>
         element.tagName.toLowerCase() === 'bili-comment-thread-renderer' && rendered(element), 3_000)
       : [];
-    const threadOrdinal = input.action === 'expand_second_thread' ? 1 : 0;
+    const threadOrdinal = input.action === 'expand_second_thread' || input.action === 'next_second_thread_page' ? 1 : 0;
     const selectedThread = threadRenderers[threadOrdinal] ?? null;
     let target: Element | null = null;
     let latestControl: Element | null = null;
@@ -490,9 +536,15 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         ? findComposed(selectedThread, (element) =>
           element.tagName.toLowerCase() === 'bili-comment-replies-renderer' && rendered(element), 800)
         : null;
-      target = replyRenderer ? targetFor(replyRenderer, '点击查看') : null;
+      const expandTarget = replyRenderer ? targetFor(replyRenderer, '点击查看') : null;
+      const nextButton = replyRenderer
+        ? findComposedAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
+          /下一页/.test(clean(composedText(element), 20)), 500)[0] ?? null
+        : null;
+      const nextReplyPage = input.action === 'next_first_thread_page' || input.action === 'next_second_thread_page';
+      target = nextReplyPage ? nextButton : expandTarget;
       const replyText = clean(replyRenderer ? composedText(replyRenderer) : '', 20_000);
-      const expandVisible = Boolean(target);
+      const expandVisible = Boolean(expandTarget);
       const replyRenderers = replyRenderer
         ? findComposedAll(replyRenderer, (element) =>
           element.tagName.toLowerCase() === 'bili-comment-reply-renderer' && rendered(element), 2_000)
@@ -515,10 +567,6 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
           : activePageText ? Number(activePageText)
             : null;
       replyPageCount = pageCountMatch ? Number(pageCountMatch[1]) : slashMatch ? Number(slashMatch[2]) : null;
-      const nextButton = replyRenderer
-        ? findComposedAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
-          /下一页/.test(clean(composedText(element), 20)), 500)[0] ?? null
-        : null;
       const collapseButton = replyRenderer
         ? findComposedAll(replyRenderer, (element) => renderedControl(element) && interactive(element) &&
           /收起/.test(clean(composedText(element), 20)), 500)[0] ?? null

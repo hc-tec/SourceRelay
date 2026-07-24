@@ -221,8 +221,9 @@ export function bilibiliVideoDiscussionInput(value: unknown): BilibiliVideoDiscu
   const canonicalVideoUrl = canonicalBilibiliVideoDiscussionUrl(candidate.canonicalVideoUrl);
   if (!canonicalVideoUrl) throw new Error('bilibili_video_discussion_input_invalid');
   const actions = candidate.actions === undefined ? [] : candidate.actions;
-  if (!Array.isArray(actions) || actions.length > 3 ||
-    actions.some((action) => action !== 'select_latest_comments' && action !== 'expand_first_thread' && action !== 'expand_second_thread') ||
+  if (!Array.isArray(actions) || actions.length > 5 ||
+    actions.some((action) => action !== 'select_latest_comments' && action !== 'expand_first_thread' &&
+      action !== 'expand_second_thread' && action !== 'next_first_thread_page' && action !== 'next_second_thread_page') ||
     new Set(actions).size !== actions.length) {
     throw new Error('bilibili_video_discussion_input_invalid');
   }
