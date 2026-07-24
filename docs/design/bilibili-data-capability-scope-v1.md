@@ -124,3 +124,5 @@ coverage / terminal_reason / status
 同一中断 checkpoint 随后通过本地显式 `resolve(abandon)` 完成一次人工处置验证：checkpoint 仍保留 `state=outcome_unknown`、`inFlightPage=1` 和原有 artifact 引用（本次中断为 `null`），只新增 `resolution.disposition=abandon`、固定 acknowledgement 与 `resolvedAt`；Gateway 不导航、不创建新页级 artifact、不解锁账号安全。处置后再次 resume 返回 HTTP 409 `bilibili_native_search_batch_checkpoint_not_resumable`，证明“未知动作已处置”与“平台动作成功”仍是两个独立事实。
 
 随后新增的 batch coverage 路由对真实双页 batch artifact `427bbd8e-37c2-4479-bbc7-bcd1b040ab05` 与 `7db363bb-dbfb-46bd-ac95-91217e6ec10c` 做了同 query digest 的跨任务比较：两次均为 40 条完整结果，但交集为 0、union 为 80、Jaccard/overlap 为 0、drift 为 1；coverage manifest 只保存 artifact ID、query digest 和比例摘要，未保存 BVID 列表。这个两样本结果明确证明采集时刻漂移风险，当前仍需更多样本和独立 review，不能 admission。
+
+coverage 之后又加入 `machine_precheck`：policy `0.1.0` 固定最少 3 个样本/3 个 pair、平均 drift ≤ 0.25、单 pair drift ≤ 0.5、平均 Jaccard ≥ 0.75。当前两样本 coverage 被明确判为 `blocked`；即使未来统计条件通过，结果也只能是 `candidate_for_independent_review`，不能自动转成 admission。

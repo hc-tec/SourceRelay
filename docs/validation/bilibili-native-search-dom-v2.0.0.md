@@ -195,6 +195,7 @@ admissionEligible: false
 POST /v1/bilibili-native-search-batch-coverage-artifacts
 GET  /v1/bilibili-native-search-batch-coverage-artifacts
 GET  /v1/bilibili-native-search-batch-coverage-artifacts/:coverageId
+GET  /v1/bilibili-native-search-batch-coverage-artifacts/:coverageId/review
 ```
 
 请求只提交已保存 batch artifact 的 ID，最多 5 个；计算要求所有样本都是相同 query digest、搜索类型/排序/页窗口、完整且无页内重复的 `search_batch_ready` artifact。比较在内存中基于稳定 BVID 集合计算 intersection、union、overlap、Jaccard 和 drift；coverage manifest 只保存样本 artifact ID、query digest、计数和比例，不保存原始 query 或 BVID 列表。
@@ -218,6 +219,8 @@ driftRate: 1
 ```
 
 coverage artifact 重启读取和 SHA-256 manifest 校验均通过，原始 BVID 扫描为 0。这个两样本事实说明 B 站搜索结果会随采集时刻发生显著漂移，不能把一次双页 40 条结果推广为稳定分页；它仍不是 admission，只是把长期 coverage 的测量能力和当前风险证据补齐。
+
+coverage 的机器预审接口使用固定 policy `0.1.0`，要求至少 3 个样本、至少 3 个 pair、平均 drift 不超过 0.25、单 pair drift 不超过 0.5、平均 Jaccard 不低于 0.75。对上述 coverage 的预审结果为 `decision=blocked`，原因包括样本不足、pair 不足、平均 drift 超阈值、单 pair drift 超阈值、平均 Jaccard 不足以及 `independent_review_required`。这个接口明确叫 `machine_precheck`，即使统计门禁通过也只返回 `candidate_for_independent_review`，不会自动产生 admission 或替代人工 review。
 
 ## 结论
 
