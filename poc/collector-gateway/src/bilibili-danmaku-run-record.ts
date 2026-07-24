@@ -7,6 +7,7 @@ import type {
   BilibiliDanmakuRunRecord,
   BilibiliDanmakuTerminalReason
 } from './bilibili-danmaku-contract';
+import { BILIBILI_DANMAKU_MAX_SCROLL_WINDOWS } from './bilibili-danmaku-contract';
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -78,6 +79,7 @@ export function createBilibiliDanmakuRunRecord(input: {
       responseBodies: 'not_read',
       semanticActionDelivery: 'at_most_once',
       navigationCount: 1,
+      maxScrollWindows: BILIBILI_DANMAKU_MAX_SCROLL_WINDOWS,
       targetTabSelection: input.targetTabSelection,
       targetPage: input.targetPage,
       admissionEligible: false

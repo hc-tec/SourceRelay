@@ -7,6 +7,9 @@ import type {
   BilibiliDanmakuListRow
 } from '../../collector-extension/src/shared/bilibili-danmaku-capture';
 
+/** Three bounded virtual-list windows are enough for the danmaku MVP. */
+export const BILIBILI_DANMAKU_MAX_SCROLL_WINDOWS = 3 as const;
+
 export interface BilibiliDanmakuInput {
   canonicalVideoUrl: string;
 }
@@ -86,6 +89,7 @@ export interface BilibiliDanmakuRunRecord {
     responseBodies: 'not_read';
     semanticActionDelivery: 'at_most_once';
     navigationCount: 1;
+    maxScrollWindows: typeof BILIBILI_DANMAKU_MAX_SCROLL_WINDOWS;
     targetTabSelection: 'not_acquired' | 'created_new_managed_tab' | 'reused_matching_managed_tab' | 'reused_retained_managed_tab';
     targetPage: 'not_acquired' | 'retained_after_run' | 'quarantined_on_uncertain_outcome';
     admissionEligible: false;

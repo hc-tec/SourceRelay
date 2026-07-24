@@ -14,6 +14,7 @@ import type { CollectionBrowserManager } from './browser-manager';
 import type { BrowserProfileRegistry } from './profiles';
 import {
   bvidFromCanonicalBilibiliDanmakuUrl,
+  BILIBILI_DANMAKU_MAX_SCROLL_WINDOWS,
   type BilibiliDanmakuNavigationAction,
   type BilibiliDanmakuRunRecord,
   type BilibiliDanmakuTerminalReason
@@ -167,18 +168,34 @@ export class BilibiliDanmakuHostRunner {
         state = 'partial';
         terminalReason = 'list_unavailable';
       } else {
-        await this.#runInteraction(permit, acquired, bvid, 'scroll_list', interactions);
-        const second = await this.#read(permit, acquired, observerBindingId, bvid);
-        dom = second.dom;
-        rows = deduplicateRows([...rows, ...second.rows]);
-        const total = dom.listTotalEstimate;
-        if (total !== null && rows.length >= total) {
-          state = 'completed';
-          terminalReason = 'danmaku_ready';
-        } else {
-          state = 'partial';
-          terminalReason = 'budget_exhausted';
+        let capturedAll = dom.listTotalEstimate !== null && rows.length >= dom.listTotalEstimate;
+        for (let windowOrdinal = 1;
+          windowOrdinal <= BILIBILI_DANMAKU_MAX_SCROLL_WINDOWS && !capturedAll;
+          windowOrdinal += 1) {
+          const beforeUniqueRows = rows.length;
+          await this.#runInteraction(
+            permit,
+            acquired,
+            bvid,
+            'scroll_list',
+            interactions,
+            windowOrdinal
+          );
+          const observed = await this.#read(permit, acquired, observerBindingId, bvid);
+          dom = observed.dom;
+          rows = deduplicateRows([...rows, ...observed.rows]);
+          const total = dom.listTotalEstimate;
+          if (total !== null && rows.length >= total) {
+            capturedAll = true;
+            break;
+          }
+          // A real wheel that leaves the same virtual-list window mounted is
+          // a valid stop condition; do not keep sending platform input just
+          // to manufacture more rows.
+          if (rows.length === beforeUniqueRows) break;
         }
+        state = capturedAll ? 'completed' : 'partial';
+        terminalReason = capturedAll ? 'danmaku_ready' : 'budget_exhausted';
       }
     } catch (error) {
       const failure = failureFor(error);
@@ -246,9 +263,10 @@ export class BilibiliDanmakuHostRunner {
     acquired: AcquirePageResult,
     bvid: string,
     action: BilibiliDanmakuInteractionAction,
-    interactions: BilibiliDanmakuInteractionResult[]
+    interactions: BilibiliDanmakuInteractionResult[],
+    scrollOrdinal = 1
   ): Promise<void> {
-    const actionId = `${action}_bilibili_danmaku_${permit.runId.replace(/-/g, '_')}`;
+    const actionId = `${action === 'scroll_list' ? `${action}_${scrollOrdinal}` : action}_bilibili_danmaku_${permit.runId.replace(/-/g, '_')}`;
     await this.#accountSafety.recordActionAttempt(permit.profileId, 'bilibili', permit.runId, actionId);
     const context = await this.#pageContext(permit.profileId, acquired.page.pageAlias, permit.runId, acquired.lease.pageLeaseId, false);
     const result = await this.#browserManager.interactBilibiliDanmaku({
