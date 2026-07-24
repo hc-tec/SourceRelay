@@ -7,6 +7,7 @@ import {
 import type { BilibiliNativeSearchHostRunResult, BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import {
   bilibiliNativeSearchBatchInput,
+  bilibiliNativeSearchBatchResumeInput,
   type BilibiliNativeSearchBatchInput,
   type BilibiliNativeSearchBatchPageRun,
   type BilibiliNativeSearchBatchRunRecord,
@@ -16,6 +17,10 @@ import type {
   BilibiliNativeSearchBatchArtifactStore,
   BilibiliNativeSearchBatchArtifactSummary
 } from './bilibili-native-search-batch-artifacts';
+import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
+import {
+  BilibiliNativeSearchBatchCheckpointStore
+} from './bilibili-native-search-batch-checkpoints';
 import { mergeBilibiliNativeSearchPages } from './bilibili-native-search-pagination';
 
 export interface BilibiliNativeSearchBatchHostRunResult {
@@ -75,27 +80,90 @@ function terminalForPage(result: BilibiliNativeSearchHostRunResult): {
 
 export class BilibiliNativeSearchBatchHostRunner {
   readonly #singleRunner: BilibiliNativeSearchHostRunner;
+  readonly #singleArtifacts: BilibiliNativeSearchArtifactStore;
   readonly #artifacts: BilibiliNativeSearchBatchArtifactStore;
+  readonly #checkpoints: BilibiliNativeSearchBatchCheckpointStore;
 
   constructor(input: {
     singleRunner: BilibiliNativeSearchHostRunner;
+    singleArtifacts: BilibiliNativeSearchArtifactStore;
     artifacts: BilibiliNativeSearchBatchArtifactStore;
+    checkpoints: BilibiliNativeSearchBatchCheckpointStore;
   }) {
     this.#singleRunner = input.singleRunner;
+    this.#singleArtifacts = input.singleArtifacts;
     this.#artifacts = input.artifacts;
+    this.#checkpoints = input.checkpoints;
   }
 
   async run(rawInput: unknown): Promise<BilibiliNativeSearchBatchHostRunResult> {
     const request = bilibiliNativeSearchBatchInput(rawInput);
     const batchId = randomUUID();
     const startedAt = new Date().toISOString();
-    const pageRuns: BilibiliNativeSearchBatchPageRun[] = [];
+    await this.#checkpoints.start({
+      batchId,
+      profileId: request.profileId,
+      search: { resultType: request.resultType, sort: request.sort, pages: request.pages },
+      queryDigest: sha256(request.query),
+      startedAt
+    });
+    return this.#execute(request, { batchId, startedAt, pageRuns: [], projections: [] });
+  }
+
+  async resume(rawInput: unknown): Promise<BilibiliNativeSearchBatchHostRunResult> {
+    const input = bilibiliNativeSearchBatchResumeInput(rawInput);
+    const checkpoint = this.#checkpoints.get(input.batchId);
+    if (!checkpoint) throw new Error('bilibili_native_search_batch_checkpoint_not_found');
+    if (checkpoint.profileId !== input.profileId) throw new Error('bilibili_native_search_batch_profile_mismatch');
+    if (checkpoint.state !== 'running') throw new Error('bilibili_native_search_batch_checkpoint_not_resumable');
+    if (checkpoint.inFlightPage !== null) throw new Error('bilibili_native_search_batch_recovery_outcome_unknown');
+    if (checkpoint.queryDigest !== sha256(input.query)) throw new Error('bilibili_native_search_batch_query_mismatch');
+
     const projections: Array<{ page: number; projection: NonNullable<BilibiliNativeSearchHostRunResult['run']['results']> }> = [];
+    for (const pageRun of checkpoint.pageRuns) {
+      const artifact = await this.#singleArtifacts.get(pageRun.artifactId);
+      if (!artifact || artifact.summary.runId !== pageRun.runId || artifact.summary.queryDigest !== checkpoint.queryDigest ||
+        artifact.summary.search.resultType !== checkpoint.search.resultType ||
+        artifact.summary.search.sort !== checkpoint.search.sort || artifact.summary.search.page !== pageRun.page ||
+        artifact.results === null) {
+        throw new Error('bilibili_native_search_batch_checkpoint_artifact_invalid');
+      }
+      projections.push({ page: pageRun.page, projection: artifact.results });
+    }
+    return this.#execute({
+      profileId: checkpoint.profileId,
+      query: input.query,
+      resultType: checkpoint.search.resultType,
+      sort: checkpoint.search.sort,
+      pages: checkpoint.search.pages
+    }, {
+      batchId: checkpoint.batchId,
+      startedAt: checkpoint.startedAt,
+      pageRuns: checkpoint.pageRuns,
+      projections
+    });
+  }
+
+  async #execute(
+    request: BilibiliNativeSearchBatchInput,
+    initial: {
+      batchId: string;
+      startedAt: string;
+      pageRuns: BilibiliNativeSearchBatchPageRun[];
+      projections: Array<{ page: number; projection: NonNullable<BilibiliNativeSearchHostRunResult['run']['results']> }>;
+    }
+  ): Promise<BilibiliNativeSearchBatchHostRunResult> {
+    const pageRuns = initial.pageRuns.map((pageRun) => structuredClone(pageRun));
+    const projections = initial.projections.map((entry) => ({ page: entry.page, projection: structuredClone(entry.projection) }));
+    const completedPages = new Set(pageRuns.map((pageRun) => pageRun.page));
     let state: BilibiliNativeSearchBatchRunRecord['state'] = 'completed';
-    let terminalReason: BilibiliNativeSearchBatchTerminalReason = 'search_batch_ready';
+    let terminalReason: BilibiliNativeSearchBatchTerminalReason = this.#terminalFromPageRuns(pageRuns);
     let errorCode: string | null = null;
+    let preserveInFlightPage = false;
 
     for (const page of request.pages) {
+      if (completedPages.has(page)) continue;
+      await this.#checkpoints.markPageStarted(initial.batchId, page);
       let result: BilibiliNativeSearchHostRunResult;
       try {
         result = await this.#singleRunner.run({
@@ -109,10 +177,14 @@ export class BilibiliNativeSearchBatchHostRunner {
         state = 'failed';
         terminalReason = 'search_batch_run_failed';
         errorCode = safeErrorCode(error);
+        preserveInFlightPage = true;
         break;
       }
-      pageRuns.push(pageRun(result));
+      const capturedPageRun = pageRun(result);
+      pageRuns.push(capturedPageRun);
+      completedPages.add(page);
       if (result.run.results) projections.push({ page, projection: result.run.results });
+      await this.#checkpoints.recordPage(initial.batchId, capturedPageRun);
       const pageTerminal = terminalForPage(result);
       if (pageTerminal.terminalReason === 'search_batch_empty') {
         terminalReason = pageTerminal.terminalReason;
@@ -135,7 +207,7 @@ export class BilibiliNativeSearchBatchHostRunner {
     }
     const run: BilibiliNativeSearchBatchRunRecord = {
       schemaVersion: 1,
-      batchId,
+      batchId: initial.batchId,
       collectorVersion: COLLECTOR_EXTENSION_VERSION,
       platform: 'bilibili',
       accountCategory: 'user_managed',
@@ -153,7 +225,7 @@ export class BilibiliNativeSearchBatchHostRunner {
       },
       state,
       errorCode,
-      startedAt,
+      startedAt: initial.startedAt,
       completedAt: new Date().toISOString(),
       pageRuns,
       mergedItems: merged.uniqueItems,
@@ -182,6 +254,22 @@ export class BilibiliNativeSearchBatchHostRunner {
       }
     };
     const artifact = await this.#artifacts.record(run);
+    await this.#checkpoints.finish({
+      batchId: initial.batchId,
+      state: preserveInFlightPage ? 'outcome_unknown' : state,
+      terminalReason,
+      artifactId: artifact.artifactId,
+      ...(preserveInFlightPage ? { preserveInFlightPage: true } : {})
+    });
     return { run, artifact };
+  }
+
+  #terminalFromPageRuns(pageRuns: BilibiliNativeSearchBatchPageRun[]): BilibiliNativeSearchBatchTerminalReason {
+    const last = pageRuns.at(-1);
+    if (!last) return 'search_batch_ready';
+    if (last.terminalReason === 'search_empty') return 'search_batch_empty';
+    if (last.state === 'failed') return 'search_batch_page_failed';
+    if (last.state !== 'completed') return 'search_batch_page_partial';
+    return 'search_batch_ready';
   }
 }

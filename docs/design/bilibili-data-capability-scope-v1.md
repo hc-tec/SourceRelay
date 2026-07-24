@@ -118,3 +118,5 @@ coverage / terminal_reason / status
 这个 batch 的零重复不能覆盖同日独立 page 1/page 2 run 观察到的 5 个重复 BVID；B 站搜索结果会随采集时刻漂移，重复比例、页间稳定性和终止语义必须在后续任务中持续记录。runner 当前最多两页，任何单页失败或 partial 都停止后续平台导航；重复则按契约进入 `partial / search_batch_duplicates`，不会自动重放。该增量只证明 batch 基础设施和一次真实样本，不改变 `native_search` 的 `build_ready / admissionEligible=false` 状态。
 
 同一 Profile 随后完成了空结果终止 canary：第一次真实空态截图暴露旧分类器漏掉 `.search-nodata-container` / `.no-data`、并把 `.login-panel-popover` 误判为登录门禁；修复后独立 run `9b9a12e3-dac9-454d-9113-68633c7256e0` 在 page 1 得到 `uniqueItems=0`、`capturedPages=1`、`state=completed`、`terminalReason=search_batch_empty`，没有发出 page 2 导航。该事实补齐了空结果的稳定终止语义，但不改变 v2 的 admission 状态。
+
+2026-07-24 又为原生搜索 batch 加入了持久 checkpoint 和显式 resume 边界：页动作开始前写入 `inFlightPage`，页级 artifact 成功后才记录完成；恢复只能复用已完成页 artifact，遇到非空 `inFlightPage` 必须返回 `recovery_outcome_unknown`，不得自动重放。真实 UTF-8 双页 canary `fa7a92b9-67de-43a1-a3bc-7fbbcd7ad8cb` 完成 2 页 / 40 条 unique，checkpoint 为 `completed`、`inFlightPage=null`、页级记录 `[1,2]`；此前 query 编码成 `????` 的 run 被明确排除。该能力已具备 build-ready 的本地恢复契约，但尚未完成真实进程中途终止后的平台恢复演练，因此 `native_search` 仍为 `build_ready / admissionEligible=false`。

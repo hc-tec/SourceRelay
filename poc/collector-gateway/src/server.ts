@@ -18,6 +18,7 @@ import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-arti
 import { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import { BilibiliNativeSearchBatchArtifactStore } from './bilibili-native-search-batch-artifacts';
 import { BilibiliNativeSearchBatchHostRunner } from './bilibili-native-search-batch-host-runner';
+import { BilibiliNativeSearchBatchCheckpointStore } from './bilibili-native-search-batch-checkpoints';
 import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
 import { BilibiliVideoDiscussionArtifactStore } from './bilibili-video-discussion-artifacts';
@@ -45,6 +46,7 @@ const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifa
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
 const nativeSearchBatchArtifacts = await BilibiliNativeSearchBatchArtifactStore.create(config.stateDirectory);
+const nativeSearchBatchCheckpoints = await BilibiliNativeSearchBatchCheckpointStore.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const discussionArtifacts = await BilibiliVideoDiscussionArtifactStore.create(config.stateDirectory);
 const transcriptArtifacts = await BilibiliTranscriptArtifactStore.create(config.stateDirectory);
@@ -75,7 +77,9 @@ const nativeSearchRunner = new BilibiliNativeSearchHostRunner({
 });
 const nativeSearchBatchRunner = new BilibiliNativeSearchBatchHostRunner({
   singleRunner: nativeSearchRunner,
-  artifacts: nativeSearchBatchArtifacts
+  singleArtifacts: nativeSearchArtifacts,
+  artifacts: nativeSearchBatchArtifacts,
+  checkpoints: nativeSearchBatchCheckpoints
 });
 const accountVideoPageTwoRunner = new BilibiliAccountVideoPageTwoHostRunner({
   accountSafety,
@@ -149,6 +153,7 @@ const server = createServer(async (request, response) => {
       nativeSearchArtifacts,
       nativeSearchRunner,
       nativeSearchBatchArtifacts,
+      nativeSearchBatchCheckpoints,
       nativeSearchBatchRunner,
       videoDetailArtifacts,
       videoDetailRunner,
@@ -164,7 +169,9 @@ const server = createServer(async (request, response) => {
     process.stderr.write(`[gateway_request_error] ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     if (!response.headersSent) {
       const code = safeErrorCode(error);
-      const status = code === 'browser_host_not_running' || code === 'profile_has_active_page_leases'
+      const status = code === 'browser_host_not_running' || code === 'profile_has_active_page_leases' ||
+        code === 'bilibili_native_search_batch_recovery_outcome_unknown' ||
+        code === 'bilibili_native_search_batch_checkpoint_not_resumable'
         ? 409
         : 400;
       sendJson(response, status, { schemaVersion: 1, ok: false, error: code });

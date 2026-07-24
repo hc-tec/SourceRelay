@@ -21,6 +21,7 @@ import { bilibiliNativeSearchInput } from './bilibili-native-search-contract';
 import type { BilibiliNativeSearchHostRunner } from './bilibili-native-search-host-runner';
 import type { BilibiliNativeSearchBatchArtifactStore } from './bilibili-native-search-batch-artifacts';
 import type { BilibiliNativeSearchBatchHostRunner } from './bilibili-native-search-batch-host-runner';
+import type { BilibiliNativeSearchBatchCheckpointStore } from './bilibili-native-search-batch-checkpoints';
 import { bilibiliNativeSearchBatchInput } from './bilibili-native-search-batch-contract';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import type { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
@@ -60,6 +61,7 @@ export interface GatewayRouteContext {
   nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
   nativeSearchRunner: BilibiliNativeSearchHostRunner;
   nativeSearchBatchArtifacts: BilibiliNativeSearchBatchArtifactStore;
+  nativeSearchBatchCheckpoints: BilibiliNativeSearchBatchCheckpointStore;
   nativeSearchBatchRunner: BilibiliNativeSearchBatchHostRunner;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
   videoDetailRunner: BilibiliVideoDetailHostRunner;
@@ -203,6 +205,10 @@ export async function handleGatewayRoute(
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.nativeSearchBatchArtifacts.list() });
     return true;
   }
+  if (request.method === 'GET' && url.pathname === '/v1/bilibili-native-search-batch-checkpoints') {
+    sendJson(response, 200, { schemaVersion: 1, checkpoints: context.nativeSearchBatchCheckpoints.list() });
+    return true;
+  }
   if (request.method === 'GET' && url.pathname === '/v1/account-video-inventory-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.accountVideoInventoryArtifacts.list() });
     return true;
@@ -294,6 +300,28 @@ export async function handleGatewayRoute(
       profileId: nativeSearchBatchRun[1]!
     });
     const result = await context.nativeSearchBatchRunner.run(body);
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        batchId: result.run.batchId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        coverage: result.run.coverage,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
+  const nativeSearchBatchResume = url.pathname.match(
+    new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/search/native/batch/resume$`, 'i')
+  );
+  if (request.method === 'POST' && nativeSearchBatchResume) {
+    if (!sameOrigin(request, response, context)) return true;
+    const result = await context.nativeSearchBatchRunner.resume({
+      ...(await readJsonBody(request) as Record<string, unknown>),
+      profileId: nativeSearchBatchResume[1]!
+    });
     sendJson(response, 201, {
       schemaVersion: 1,
       result: {

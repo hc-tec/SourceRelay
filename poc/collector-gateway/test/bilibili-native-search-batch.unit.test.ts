@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, test, vi } from 'vitest';
 import {
-  bilibiliNativeSearchBatchInput
+  bilibiliNativeSearchBatchInput,
+  bilibiliNativeSearchBatchResumeInput
 } from '../src/bilibili-native-search-batch-contract.js';
 import { BilibiliNativeSearchBatchHostRunner } from '../src/bilibili-native-search-batch-host-runner.js';
 import type { BilibiliNativeSearchHostRunResult } from '../src/bilibili-native-search-host-runner.js';
@@ -49,6 +51,16 @@ function pageResult(page: number, bvids: string[], terminalReason: 'search_ready
   } as unknown as BilibiliNativeSearchHostRunResult;
 }
 
+function checkpointStore() {
+  return {
+    start: vi.fn(async () => undefined),
+    markPageStarted: vi.fn(async () => undefined),
+    recordPage: vi.fn(async () => undefined),
+    finish: vi.fn(async () => undefined),
+    get: vi.fn(() => null)
+  };
+}
+
 describe('Bilibili native-search batch contract', () => {
   test('normalizes a bounded ordered page list and rejects unsafe variants', () => {
     expect(bilibiliNativeSearchBatchInput({
@@ -71,6 +83,17 @@ describe('Bilibili native-search batch contract', () => {
     expect(() => bilibiliNativeSearchBatchInput({
       profileId, query: '人工智能', resultType: 'comprehensive', sort: 'newest', pages: [1, 2]
     })).toThrow('bilibili_native_search_input_invalid');
+    expect(bilibiliNativeSearchBatchResumeInput({
+      profileId,
+      batchId: '66666666-6666-4666-8666-666666666666',
+      query: ' recoverable search '
+    })).toEqual({
+      profileId,
+      batchId: '66666666-6666-4666-8666-666666666666',
+      query: 'recoverable search'
+    });
+    expect(() => bilibiliNativeSearchBatchResumeInput({ profileId, batchId: 'not-a-uuid', query: 'search' }))
+      .toThrow('bilibili_native_search_batch_resume_input_invalid');
   });
 
   test('runs pages sequentially and records overlap as a partial batch', async () => {
@@ -97,7 +120,9 @@ describe('Bilibili native-search batch contract', () => {
     }));
     const runner = new BilibiliNativeSearchBatchHostRunner({
       singleRunner: singleRunner as never,
-      artifacts: { record } as never
+      singleArtifacts: {} as never,
+      artifacts: { record } as never,
+      checkpoints: checkpointStore() as never
     });
     const result = await runner.run({
       profileId,
@@ -142,7 +167,9 @@ describe('Bilibili native-search batch contract', () => {
     }));
     const runner = new BilibiliNativeSearchBatchHostRunner({
       singleRunner: singleRunner as never,
-      artifacts: { record } as never
+      singleArtifacts: {} as never,
+      artifacts: { record } as never,
+      checkpoints: checkpointStore() as never
     });
     const result = await runner.run({
       profileId,
@@ -161,5 +188,121 @@ describe('Bilibili native-search batch contract', () => {
       partial: false,
       terminalReason: 'search_batch_empty'
     });
+  });
+
+  test('resume reuses completed page artifacts and dispatches only the missing page', async () => {
+    const batchId = '66666666-6666-4666-8666-666666666666';
+    const query = 'recoverable search';
+    const queryDigest = createHash('sha256').update(query).digest('hex');
+    const firstPage = pageResult(1, ['BV1qZSLBYEpa']);
+    const secondPage = pageResult(2, ['BV1BoKD6ZEir']);
+    const checkpoint = {
+      schemaVersion: 1 as const,
+      batchId,
+      profileId,
+      platform: 'bilibili' as const,
+      search: { resultType: 'video' as const, sort: 'newest' as const, pages: [1, 2] },
+      queryDigest,
+      state: 'running' as const,
+      terminalReason: null,
+      inFlightPage: null,
+      pageRuns: [{
+        page: 1,
+        runId: firstPage.run.runId,
+        artifactId: firstPage.artifact.artifactId,
+        state: 'completed' as const,
+        terminalReason: 'search_ready' as const,
+        capturedItems: 1,
+        unresolvedCardCount: 0
+      }],
+      artifactId: null,
+      startedAt: '2026-07-24T00:00:00.000Z',
+      updatedAt: '2026-07-24T00:00:01.000Z'
+    };
+    const checkpoints = {
+      start: vi.fn(async () => undefined),
+      markPageStarted: vi.fn(async () => undefined),
+      recordPage: vi.fn(async () => undefined),
+      finish: vi.fn(async () => undefined),
+      get: vi.fn(() => checkpoint)
+    };
+    const singleRunner = { run: vi.fn().mockResolvedValue(secondPage) };
+    const singleArtifacts = {
+      get: vi.fn(async () => ({
+        summary: {
+          runId: firstPage.run.runId,
+          artifactId: firstPage.artifact.artifactId,
+          queryDigest,
+          search: firstPage.run.search
+        },
+        results: firstPage.run.results
+      }))
+    };
+    const record = vi.fn(async () => ({
+      schemaVersion: 1 as const,
+      artifactId: '77777777-7777-4777-8777-777777777777',
+      batchId,
+      platform: 'bilibili' as const,
+      capturedAt: '2026-07-24T00:00:02.000Z',
+      state: 'completed' as const,
+      search: { resultType: 'video' as const, sort: 'newest' as const, pages: [1, 2] },
+      queryDigest,
+      requestedPages: 2,
+      capturedPages: 2,
+      uniqueItems: 2,
+      duplicateCount: 0,
+      terminalReason: 'search_batch_ready' as const,
+      manifestSha256: 'b'.repeat(64)
+    }));
+    const runner = new BilibiliNativeSearchBatchHostRunner({
+      singleRunner: singleRunner as never,
+      singleArtifacts: singleArtifacts as never,
+      artifacts: { record } as never,
+      checkpoints: checkpoints as never
+    });
+
+    const result = await runner.resume({ profileId, batchId, query });
+
+    expect(singleArtifacts.get).toHaveBeenCalledOnce();
+    expect(singleRunner.run).toHaveBeenCalledOnce();
+    expect(singleRunner.run.mock.calls[0]?.[0]).toMatchObject({ page: 2 });
+    expect(checkpoints.markPageStarted).toHaveBeenCalledWith(batchId, 2);
+    expect(result.run.coverage).toMatchObject({ capturedPages: 2, uniqueItems: 2, terminalReason: 'search_batch_ready' });
+  });
+
+  test('never replays a page whose action was in flight when the process stopped', async () => {
+    const batchId = '88888888-8888-4888-8888-888888888888';
+    const checkpoints = {
+      start: vi.fn(async () => undefined),
+      markPageStarted: vi.fn(async () => undefined),
+      recordPage: vi.fn(async () => undefined),
+      finish: vi.fn(async () => undefined),
+      get: vi.fn(() => ({
+        schemaVersion: 1 as const,
+        batchId,
+        profileId,
+        platform: 'bilibili' as const,
+        search: { resultType: 'video' as const, sort: 'newest' as const, pages: [1, 2] },
+        queryDigest: createHash('sha256').update('recoverable search').digest('hex'),
+        state: 'running' as const,
+        terminalReason: null,
+        inFlightPage: 2,
+        pageRuns: [],
+        artifactId: null,
+        startedAt: '2026-07-24T00:00:00.000Z',
+        updatedAt: '2026-07-24T00:00:01.000Z'
+      }))
+    };
+    const singleRunner = { run: vi.fn() };
+    const runner = new BilibiliNativeSearchBatchHostRunner({
+      singleRunner: singleRunner as never,
+      singleArtifacts: {} as never,
+      artifacts: { record: vi.fn() } as never,
+      checkpoints: checkpoints as never
+    });
+
+    await expect(runner.resume({ profileId, batchId, query: 'recoverable search' }))
+      .rejects.toThrow('bilibili_native_search_batch_recovery_outcome_unknown');
+    expect(singleRunner.run).not.toHaveBeenCalled();
   });
 });

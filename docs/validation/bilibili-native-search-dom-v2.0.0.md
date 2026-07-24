@@ -147,6 +147,39 @@ admissionEligible: false
 
 视觉证据显示搜索框、视频类型、最新发布排序和 B 站真实空态文案“今天真是寂寞如雪啊~”；DOM 证据对应 `.search-nodata-container` 与 `.no-data`，动作账本只有一次 page 1 导航。batch 在空态成立后不再导航 page 2，`capturedPages=1` 是有意的稳定终止，不是异常丢页；未读取 response body、请求参数值或认证材料。
 
+## 2026-07-24 checkpoint / recovery 增量
+
+为避免进程在页间切换或平台导航期间崩溃后盲目重放，Gateway 新增了本地 batch checkpoint：
+
+```text
+GET  /v1/bilibili-native-search-batch-checkpoints
+POST /v1/profiles/:profileId/bilibili/search/native/batch/resume
+```
+
+checkpoint 只保存 `batchId`、Profile ID、搜索类型/排序/页码、query digest、已完成页的 artifact 引用、`inFlightPage` 和终态；不保存原始 query、Cookie、Token、请求头、请求体或响应正文。每个页动作前先原子写入 `inFlightPage`，单页 runner 返回并成功保存页 artifact 后才清空它。恢复时会重新校验页 artifact 的 run ID、页码、搜索选择和 query digest，只复用已经完成的页；如果发现 `inFlightPage` 非空，接口返回 `bilibili_native_search_batch_recovery_outcome_unknown`，绝不自动重放该页。
+
+使用正确的 UTF-8 code point 请求方式，对同一隔离 Collection Profile 完成了一次新的真实双页 batch：
+
+```yaml
+batchId: fa7a92b9-67de-43a1-a3bc-7fbbcd7ad8cb
+artifactId: 7db363bb-dbfb-46bd-ac95-91217e6ec10c
+queryDigest: 161332dd5ba244f14566d9ccfc214dbbd620bcd401cded068fc230e3d4e2815b
+requestedPages: [1, 2]
+capturedPages: 2
+uniqueItems: 40
+duplicateCount: 0
+unresolvedCardCount: 0
+state: completed
+terminalReason: search_batch_ready
+checkpointState: completed
+checkpointInFlightPage: null
+checkpointPageRuns: [1, 2]
+nativeBridgeConnected: true
+admissionEligible: false
+```
+
+该 run 的 checkpoint 与 batch artifact 均在真实 Gateway 重启前后可读，页面 1、2 均只执行一次；结束时 Profile、Browser Host 和 43131 临时 Gateway 已显式清理。此前另一次内联脚本把中文 query 变成 `????` 的 run 仍按 UTF-8 规则排除，不计入本次证据。当前恢复接口和 checkpoint 已完成构建/单元覆盖，但尚未做“真实进程在某个页面动作中途被终止后再恢复”的平台实网演练，因此恢复能力暂不升级 admission。
+
 ## 结论
 
 `bilibili.search.breadth.dom.v2 @ 0.2.0` 已在 UTF-8 中文查询上完成一次真实生产首屏闭环，但当前策略仍保持：
