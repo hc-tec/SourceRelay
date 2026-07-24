@@ -129,6 +129,13 @@ describe('Bilibili discussion DOM contract', () => {
       canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
       actions: ['expand_first_thread', 'next_first_thread_page', 'reveal_first_thread_pagination']
     })).toThrow('bilibili_video_discussion_input_invalid');
+    expect(bilibiliVideoDiscussionInput({
+      canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
+      actions: ['expand_first_thread', 'reveal_second_thread', 'expand_second_thread']
+    })).toEqual({
+      canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
+      actions: ['expand_first_thread', 'reveal_second_thread', 'expand_second_thread']
+    });
     expect(() => bilibiliVideoDiscussionInput({
       canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
       actions: ['select_latest_comments', 'select_latest_comments']

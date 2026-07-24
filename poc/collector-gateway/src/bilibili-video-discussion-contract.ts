@@ -224,7 +224,7 @@ export function bilibiliVideoDiscussionInput(value: unknown): BilibiliVideoDiscu
   const actions = candidate.actions === undefined ? [] : candidate.actions;
   if (!Array.isArray(actions) || actions.length > MAX_SEMANTIC_ACTIONS ||
     actions.some((action) => action !== 'select_latest_comments' && action !== 'expand_first_thread' &&
-      action !== 'reveal_first_thread_pagination' && action !== 'expand_second_thread' &&
+      action !== 'reveal_second_thread' && action !== 'reveal_first_thread_pagination' && action !== 'expand_second_thread' &&
       action !== 'reveal_second_thread_pagination' && action !== 'next_first_thread_page' &&
       action !== 'next_second_thread_page') ||
     new Set(actions).size !== actions.length) {
@@ -250,6 +250,13 @@ function validateDiscussionActionDependencies(actions: readonly BilibiliVideoDis
       (revealIndex >= 0 && nextIndex < revealIndex))) {
       throw new Error('bilibili_video_discussion_input_invalid');
     }
+  }
+  const revealSecondIndex = index('reveal_second_thread');
+  const firstExpandIndex = index('expand_first_thread');
+  const secondExpandIndex = index('expand_second_thread');
+  if (revealSecondIndex >= 0 && (firstExpandIndex < 0 || revealSecondIndex < firstExpandIndex ||
+    (secondExpandIndex >= 0 && revealSecondIndex > secondExpandIndex))) {
+    throw new Error('bilibili_video_discussion_input_invalid');
   }
 }
 

@@ -15,6 +15,7 @@ export const BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS = 20 as const;
 export const BILIBILI_VIDEO_DISCUSSION_INTERACTION_ACTIONS = [
   'select_latest_comments',
   'expand_first_thread',
+  'reveal_second_thread',
   'reveal_first_thread_pagination',
   'expand_second_thread',
   'reveal_second_thread_pagination',

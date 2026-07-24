@@ -648,3 +648,48 @@ accountSafety: ready
 这里 `reveal_first_thread_pagination` 的 `inputKind=none` 不是漏记：动作前 DOM 已确认真实“下一页”控件位于 viewport 内，因此没有发送多余 wheel；动作账本明确为 `attempted=false / outcome=completed`。随后 `next_first_thread_page` 重新读取实时 rect（动作前 `x=349,y=67,w=39,h=22`），通过 hover 与 composed hit-test 后只点击一次；动作后 rect 变为 `x=396,y=67`，当前 10 条回复替换为下一组 10 条，新增 `/x/v2/reply/reply` status 200。视觉证据显示分页从第 1 页切换到第 2 页；B站仍没有稳定的 active 页码 DOM 语义，所以 `replyPage` 保持 `null`。
 
 这次 run 首次完成了“首楼 165 页回复的当前页 → 单次下一页”真实闭环，也验证了“控件已在 viewport 时 reveal 不发送滚轮”的安全边界。首楼与第二楼都已具备有界单次翻页能力，但仍未完成全量分页、跨页去重/连续性、response projector 或 admission；`admissionEligible` 继续为 `false`。
+
+## W. 2026-07-24 同一 run 双楼分页与根评论重新定位闭环
+
+在首楼单次翻页完成后，进一步验证同一任务是否能安全处理两个根评论。前一版动作顺序曾出现真实边界：首楼翻页会让第二根评论离开当前虚拟化 DOM，直接执行 `expand_second_thread` 会前置超时且不发送输入。为此加入独立的 `reveal_second_thread` 动作：它只负责把第二根评论重新带回可见 DOM；若已经可见则记录 `inputKind=none`，否则最多一次可信 wheel。该动作不把自己投影为回复线程，也不复用旧坐标。
+
+最终真实认证 run 使用顺序：
+
+```text
+expand_first_thread
+reveal_second_thread
+expand_second_thread
+reveal_first_thread_pagination
+next_first_thread_page
+reveal_second_thread_pagination
+next_second_thread_page
+```
+
+```yaml
+runId: 7c50e2dd-162d-4d7d-8e8c-ffa4e6b53f62
+artifactId: b49ed9d1-8c19-4c10-9a52-95d07ef261a2
+target: BV1qZSLBYEpa
+collectorVersion: 0.7.17
+strategy: bilibili.video.discussion.dom.v1 @ 0.1.0
+state: completed
+terminalReason: discussion_ready
+capturedRootComments: 22
+capturedReplyThreads: 2
+threadOrdinals: [0, 1]
+revealSecondThreadInputKind: none
+revealFirstPaginationInputKind: none
+revealSecondPaginationInputKind: wheel
+revealSecondPaginationWheelDeltaY: 432
+firstThreadPageCount: 165
+secondThreadPageCount: 3
+firstThreadRepliesByPage: [10, 10]
+secondThreadRepliesByPage: [10, 10]
+clickAttemptCounts: [1, 1, 1, 1]
+networkStatusByClickAction: [200, 200, 200, 200]
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+动作账本证明：导航与三次根评论滚动各一次；首楼展开一次；第二根评论 reveal 在本次状态下已满足可见条件，因此没有 wheel；第二楼展开一次；首楼 reveal 为 no-op；首楼下一页一次可信点击；第二楼分页控件通过一次 `432`px wheel 进入 viewport；第二楼下一页一次可信点击。四个 click 动作均由实时 DOM rect、hover、composed hit-test、视觉后置条件和 `/x/v2/reply/reply` status 200 交叉证明，没有自动重试。
+
+`discussion.replyThreads` 最终同时保存 ordinal `0` 与 `1` 的当前页字段和分页元数据；旧的 `firstThread*` 字段仍只代表 ordinal `0`。本 run 没有读取 response body、没有遍历第 3 页或 165 页、没有稳定 root id/跨页去重连续性证明，仍不能宣称全量评论能力；`admissionEligible` 保持 `false`。

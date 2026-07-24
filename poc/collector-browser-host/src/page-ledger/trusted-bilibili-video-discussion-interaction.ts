@@ -32,7 +32,8 @@ const TARGET_ROUTES = {
 } as const;
 
 function threadOrdinalForAction(action: BilibiliVideoDiscussionInteractionAction): number {
-  return action === 'expand_second_thread' || action === 'reveal_second_thread_pagination' ||
+  return action === 'expand_second_thread' || action === 'reveal_second_thread' ||
+    action === 'reveal_second_thread_pagination' ||
     action === 'next_second_thread_page' ? 1 : 0;
 }
 
@@ -42,6 +43,14 @@ function isNextReplyPageAction(action: BilibiliVideoDiscussionInteractionAction)
 
 function isRevealReplyPaginationAction(action: BilibiliVideoDiscussionInteractionAction): boolean {
   return action === 'reveal_first_thread_pagination' || action === 'reveal_second_thread_pagination';
+}
+
+function isRevealSecondThreadAction(action: BilibiliVideoDiscussionInteractionAction): boolean {
+  return action === 'reveal_second_thread';
+}
+
+function isRevealAction(action: BilibiliVideoDiscussionInteractionAction): boolean {
+  return isRevealReplyPaginationAction(action) || isRevealSecondThreadAction(action);
 }
 
 interface DiscussionProbe {
@@ -96,7 +105,9 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
       candidate.dom.commentHostInViewport && candidate.dom.targetVisible &&
       (isNextReplyPageAction(request.action)
         ? candidate.dom.targetBounds !== null && candidate.dom.targetInViewport
-        : isRevealReplyPaginationAction(request.action)
+        : isRevealSecondThreadAction(request.action)
+          ? candidate.dom.targetBounds !== null
+          : isRevealReplyPaginationAction(request.action)
           ? candidate.dom.targetBounds !== null && candidate.dom.targetExpanded
           : candidate.dom.targetInViewport)
     );
@@ -112,13 +123,16 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
       remaining(deadline)
     );
 
-    if (isRevealReplyPaginationAction(request.action)) {
+    if (isRevealAction(request.action)) {
       // The control may already be mounted and inside the viewport by the
       // time the independent reveal action is evaluated. Treat that as a
       // completed local discovery, not as a reason to send an unnecessary
       // wheel. The following next-page action will still perform its own
       // fresh hover/hit-test before clicking.
-      if (beforeProbe.dom.replyNextPageVisible && beforeProbe.dom.targetInViewport) {
+      const revealAlreadyReady = isRevealSecondThreadAction(request.action)
+        ? beforeProbe.dom.rootCommentCount >= 2 && beforeProbe.dom.targetInViewport
+        : beforeProbe.dom.replyNextPageVisible && beforeProbe.dom.targetInViewport;
+      if (revealAlreadyReady) {
         const afterProbe = await readProbe(record.page, request.action, remaining(deadline));
         const afterVisualEvidence = await captureEvidence(
           record,
@@ -160,13 +174,16 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
       // explicit bounded reveal wheel instead of pretending that rect is the
       // missing button's location. Once the real control exists, use its
       // smaller rect-derived delta to avoid unnecessary movement.
-      wheelDeltaY = !beforeProbe.dom.replyNextPageVisible
+      const targetIsMissing = isRevealSecondThreadAction(request.action)
+        ? beforeProbe.dom.rootCommentCount < 2
+        : !beforeProbe.dom.replyNextPageVisible;
+      wheelDeltaY = targetIsMissing
         ? 1_200
         : Math.sign(requiredDelta) === 0
           ? 240
           : Math.sign(requiredDelta) * Math.max(200, Math.min(1_200, Math.abs(Math.ceil(requiredDelta))));
 
-      if (!beforeProbe.dom.replyNextPageVisible) {
+      if (targetIsMissing) {
         // The first reply thread exposes a tall, lazily-mounted renderer. Put
         // the real pointer over the renderer's currently visible portion so
         // the trusted wheel follows the same nested-scroll path as a person;
@@ -283,7 +300,7 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
         safeDetails: { errorType: error instanceof Error ? error.name : 'unknown' }
       });
     }
-    if (isRevealReplyPaginationAction(request.action) && wheelOutcomeConfirmed &&
+    if (isRevealAction(request.action) && wheelOutcomeConfirmed &&
       !(error instanceof BrowserHostError)) {
       throw hostError({
         code: 'bilibili_video_discussion_reply_pagination_reveal_postcondition_unmet',
@@ -369,6 +386,12 @@ function assertActionPrecondition(
     }
     return;
   }
+  if (isRevealSecondThreadAction(action)) {
+    if (!probe.dom.targetVisible || !probe.dom.targetBounds) {
+      throw new Error('bilibili_video_discussion_second_thread_reveal_precondition_unmet');
+    }
+    return;
+  }
   if (isNextReplyPageAction(action)) {
     if (!probe.dom.targetExpanded || !probe.dom.replyPaginationVisible || !probe.dom.replyNextPageVisible ||
       probe.dom.replyHasMore === false || !probe.dom.targetPointerHit) {
@@ -406,10 +429,12 @@ async function waitForPostcondition(
       : isRevealReplyPaginationAction(request.action)
         ? latest.dom.targetExpanded && latest.dom.replyPaginationVisible && latest.dom.replyNextPageVisible &&
           latest.dom.targetInViewport
+      : isRevealSecondThreadAction(request.action)
+        ? latest.dom.rootCommentCount >= 2 && latest.dom.targetVisible && latest.dom.targetInViewport
       : isNextReplyPageAction(request.action)
         ? latest.dom.targetExpanded && latest.dom.replyPaginationVisible && pageContentChanged
         : latest.dom.targetExpanded && latest.dom.replyPaginationVisible;
-    if (domReady && (isRevealReplyPaginationAction(request.action) || routeSeen)) return latest;
+    if (domReady && (isRevealAction(request.action) || routeSeen)) return latest;
     if (latest.dom.verificationRequired || latest.dom.rateLimited || latest.dom.sourceUnavailable) break;
     await delay(Math.min(PROBE_INTERVAL_MS, Math.max(1, deadline - Date.now())));
   }
@@ -661,6 +686,7 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
         element.tagName.toLowerCase() === 'bili-comment-thread-renderer' && rendered(element), 3_000)
       : [];
     const threadOrdinal = input.action === 'expand_second_thread' ||
+      input.action === 'reveal_second_thread' ||
       input.action === 'reveal_second_thread_pagination' ||
       input.action === 'next_second_thread_page' ? 1 : 0;
     const selectedThread = threadRenderers[threadOrdinal] ?? null;
@@ -698,12 +724,14 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
           /下一页/.test(clean(composedText(element), 20)), 500)[0] ?? null
         : null;
       const nextReplyPage = input.action === 'next_first_thread_page' || input.action === 'next_second_thread_page';
+      const revealSecondThread = input.action === 'reveal_second_thread';
       const revealReplyPagination = input.action === 'reveal_first_thread_pagination' ||
         input.action === 'reveal_second_thread_pagination';
       // A reveal action targets the already-expanded reply renderer when the
       // next control is not mounted yet; once mounted, the live next control
       // becomes the target used for the postcondition read.
-      target = nextReplyPage ? nextButton : revealReplyPagination ? (nextButton ?? replyRenderer) : expandTarget;
+      target = nextReplyPage ? nextButton : revealReplyPagination ? (nextButton ?? replyRenderer) :
+        revealSecondThread ? (expandTarget ?? selectedThread ?? commentRoot ?? host) : expandTarget;
       const replyText = clean(replyRenderer ? composedText(replyRenderer) : '', 20_000);
       const expandVisible = Boolean(expandTarget);
       const replyRenderers = replyRenderer
@@ -911,7 +939,7 @@ function routeObservation(
   action: BilibiliVideoDiscussionInteractionAction
 ): BilibiliVideoDiscussionInteractionNetworkObservation | null {
   try {
-    if (isRevealReplyPaginationAction(action)) return null;
+    if (isRevealAction(action)) return null;
     const request = response.request();
     if (request.method() !== 'GET') return null;
     const url = new URL(response.url());
