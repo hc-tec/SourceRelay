@@ -559,7 +559,7 @@ expand_second_thread
 - reveal 的后置条件是“真实的下一页控件已经挂载并进入 viewport”，使用动作前后视觉与 DOM 两面证明；若 wheel 结果已被本地滚动位置读回但控件仍未出现，只记录 postcondition unmet 并保留页面，不猜测点击；若文档上下文丢失，仍按未知结果隔离；
 - `next_*_page` 不再隐含滚动，只在实时 DOM 已发现、可命中、已 hover 且位于 viewport 的真实“下一页”控件时允许一次 mouse down/up；
 - 输入校验要求 reveal 位于对应 expand 之后、next 位于 expand 之后且（如果请求 reveal）位于 reveal 之后；单次任务最多 8 个语义动作，仍是 at-most-once；
-- interaction evidence 明确记录 `inputKind=click|wheel`、`wheelDeltaY` 和 `replyNextPageVisible`，不再用 `clickAttempted=true` 掩盖 wheel。
+- interaction evidence 明确记录 `inputKind=none|click|wheel`、`wheelDeltaY` 和 `replyNextPageVisible`，不再用 `clickAttempted=true` 掩盖 wheel；`none` 表示控件已经满足 reveal 后置条件、没有发送平台输入。
 
 ### V.1 首楼失败边界的保留记录
 
