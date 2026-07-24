@@ -220,6 +220,8 @@ driftRate: 1
 
 coverage artifact 重启读取和 SHA-256 manifest 校验均通过，原始 BVID 扫描为 0。这个两样本事实说明 B 站搜索结果会随采集时刻发生显著漂移，不能把一次双页 40 条结果推广为稳定分页；它仍不是 admission，只是把长期 coverage 的测量能力和当前风险证据补齐。
 
+三样本的 review 交接记录见[原生搜索 batch 独立 Review 准备稿](./bilibili-native-search-batch-independent-review-v0.1.md)。该 dossier 状态为 `pending_independent_review`，不是自动批准；它同时记录了一个 `page_pool_capacity_exhausted` 失败尝试、单 pair Jaccard 约 `0.739` 和当前公开匿名样本边界。
+
 coverage 的机器预审接口使用固定 policy `0.1.0`，要求至少 3 个样本、至少 3 个 pair、平均 drift 不超过 0.25、单 pair drift 不超过 0.5、平均 Jaccard 不低于 0.75。对上述 coverage 的预审结果为 `decision=blocked`，原因包括样本不足、pair 不足、平均 drift 超阈值、单 pair drift 超阈值、平均 Jaccard 不足以及 `independent_review_required`。这个接口明确叫 `machine_precheck`，即使统计门禁通过也只返回 `candidate_for_independent_review`，不会自动产生 admission 或替代人工 review。
 
 ## 2026-07-24 三样本真实 coverage 增量
