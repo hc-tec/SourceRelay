@@ -61,7 +61,9 @@ function platformForCurrentPage(): SupportedPlatform | null {
     platform === 'bilibili' &&
     url.protocol === 'https:' &&
     ((url.hostname === 'www.bilibili.com' && /^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname)) ||
-      (url.hostname === 'space.bilibili.com' && /^\/\d{1,20}\/dynamic\/?$/.test(url.pathname)))
+      (url.hostname === 'space.bilibili.com' &&
+        (/^\/\d{1,20}\/dynamic\/?$/.test(url.pathname) ||
+          /^\/\d{1,20}\/lists\/?$/.test(url.pathname))))
   ) return 'bilibili';
   return null;
 }

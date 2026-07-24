@@ -374,14 +374,18 @@ export function crossCheckBilibiliCollectionSeriesOverview(
 ): BilibiliCollectionSeriesOverviewProjection | null {
   const expectedAccountId = stableAccountIdFromProfileUrl(canonicalProfileUrl);
   if (dom.stableAccountId !== expectedAccountId) return null;
-  const domByIdentity = new Map(dom.items.map((item) => [`${item.listType}\n${item.title}`, item]));
+  const comparableTitle = (value: string): string => value.replace(/^(?:合集|系列)·/, '').trim();
+  const domByIdentity = new Map(dom.items.map((item) => [
+    `${item.listType}\n${comparableTitle(item.title)}`,
+    item
+  ]));
   let matchedTitles = 0;
   let matchedDeclaredCounts = 0;
   let matchedPreviewBvids = 0;
   let domPreviewBvids = 0;
   const itemChecks: BilibiliCollectionSeriesOverviewProjection['domCrossCheck']['itemChecks'] = [];
   for (const item of response.items) {
-    const domItem = domByIdentity.get(`${item.listType}\n${item.title}`);
+    const domItem = domByIdentity.get(`${item.listType}\n${comparableTitle(item.title)}`);
     if (!domItem) continue;
     matchedTitles += 1;
     if (domItem.declaredItemCount === item.declaredItemCount) matchedDeclaredCounts += 1;

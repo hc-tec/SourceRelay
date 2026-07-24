@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
   BILIBILI_COLLECTION_SERIES_STRATEGY_ID,
+  BrowserHostError,
   COLLECTOR_EXTENSION_VERSION,
   type AcquirePageResult,
   type PageReleaseDisposition,
@@ -206,15 +207,12 @@ export class BilibiliCollectionSeriesHostRunner {
       action.outcome = 'completed';
       releaseDisposition = 'retained_for_review';
       quarantineReason = 'collection_series_review_retained';
-      const context = await this.#pageContext(permit.profileId, acquired.page.pageAlias, acquired.lease.pageLeaseId, permit.runId);
       const observed = await this.#observe({
         profileId: permit.profileId,
         pageAlias: acquired.page.pageAlias,
         pageLeaseId: acquired.lease.pageLeaseId,
         runId: permit.runId,
         observerBindingId,
-        expectedRecordVersion: context.recordVersion,
-        documentGeneration: context.documentGeneration,
         deadline
       });
       const risk = riskOutcome(observed.dom);
@@ -345,24 +343,12 @@ export class BilibiliCollectionSeriesHostRunner {
     pageLeaseId: string;
     runId: string;
     observerBindingId: string;
-    expectedRecordVersion: number;
-    documentGeneration: number;
     deadline: number;
   }): Promise<{ dom: BilibiliCollectionSeriesDomSnapshot; responses: Array<Record<string, unknown>> }> {
     const observationDeadline = Math.min(input.deadline, Date.now() + OBSERVATION_TIMEOUT_MS);
     let latest: { dom: BilibiliCollectionSeriesDomSnapshot; responses: Array<Record<string, unknown>> } | null = null;
     while (Date.now() < observationDeadline) {
-      const result = await this.#browserManager.readStrategyObservation({
-        schemaVersion: 1,
-        profileId: input.profileId,
-        pageAlias: input.pageAlias,
-        pageLeaseId: input.pageLeaseId,
-        expectedRecordVersion: input.expectedRecordVersion,
-        runId: input.runId,
-        observerBindingId: input.observerBindingId,
-        strategyId: BILIBILI_COLLECTION_SERIES_STRATEGY_ID,
-        deadlineMs: Math.min(3_000, Math.max(250, observationDeadline - Date.now()))
-      });
+      const result = await this.#readStrategyResult(input, Math.min(3_000, Math.max(250, observationDeadline - Date.now())));
       latest = observationPayload(result);
       if (latest.dom.risk.verificationRequired || latest.dom.risk.rateLimited || latest.dom.risk.sourceUnavailable ||
         latest.responses.some((candidate) => candidate.status === 'captured')) return latest;
@@ -370,5 +356,40 @@ export class BilibiliCollectionSeriesHostRunner {
     }
     if (!latest) throw new Error('collection_series_observation_timeout');
     return latest;
+  }
+
+  async #readStrategyResult(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    runId: string;
+    observerBindingId: string;
+  }, deadlineMs: number): Promise<StrategyObservationResult> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const context = await this.#pageContext(
+        input.profileId,
+        input.pageAlias,
+        input.pageLeaseId,
+        input.runId
+      );
+      try {
+        return await this.#browserManager.readStrategyObservation({
+          schemaVersion: 1,
+          profileId: input.profileId,
+          pageAlias: input.pageAlias,
+          pageLeaseId: input.pageLeaseId,
+          expectedRecordVersion: context.recordVersion,
+          runId: input.runId,
+          observerBindingId: input.observerBindingId,
+          strategyId: BILIBILI_COLLECTION_SERIES_STRATEGY_ID,
+          deadlineMs
+        });
+      } catch (error) {
+        if (!(error instanceof BrowserHostError) ||
+          error.record.code !== 'managed_page_record_version_mismatch' ||
+          attempt === 1) throw error;
+      }
+    }
+    throw new Error('collection_series_local_version_unavailable');
   }
 }
