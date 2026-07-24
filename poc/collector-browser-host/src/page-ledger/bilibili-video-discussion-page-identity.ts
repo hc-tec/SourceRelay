@@ -1,11 +1,14 @@
 const BVID_PATTERN = /^BV[0-9A-Za-z]{10}$/;
+const VD_SOURCE_PATTERN = /^[0-9a-f]{32}$/i;
+const SPM_ID_FROM_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
+const PART_NUMBER_PATTERN = /^[1-9][0-9]{0,5}$/;
 
 /**
  * Bilibili may rewrite a video URL between the first document and the lazy
- * comment document (for example by adding the public `vd_source` marker or a
- * trailing slash). The discussion runner may accept only these exact URL
- * shapes for the same BVID; arbitrary query parameters and other paths remain
- * rejected.
+ * comment document (for example by adding the public `vd_source` marker, a
+ * player `spm_id_from` marker, a multipart `p` number, or a trailing slash).
+ * The discussion runner accepts only these observed public query shapes for
+ * the same BVID; unknown query parameters and other paths remain rejected.
  */
 export function matchesBilibiliVideoDiscussionPageIdentity(urlValue: string, expectedBvid: string): boolean {
   if (!BVID_PATTERN.test(expectedBvid)) return false;
@@ -16,8 +19,12 @@ export function matchesBilibiliVideoDiscussionPageIdentity(urlValue: string, exp
     const observedBvid = url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/)?.[1] ?? null;
     if (observedBvid !== expectedBvid) return false;
     const entries = [...url.searchParams.entries()];
-    return entries.length === 0 ||
-      (entries.length === 1 && entries[0]?.[0] === 'vd_source' && /^[0-9a-f]{32}$/i.test(entries[0][1]));
+    if (new Set(entries.map(([key]) => key)).size !== entries.length) return false;
+    return entries.every(([key, value]) =>
+      (key === 'vd_source' && VD_SOURCE_PATTERN.test(value)) ||
+      (key === 'spm_id_from' && SPM_ID_FROM_PATTERN.test(value)) ||
+      (key === 'p' && PART_NUMBER_PATTERN.test(value))
+    );
   } catch {
     return false;
   }
