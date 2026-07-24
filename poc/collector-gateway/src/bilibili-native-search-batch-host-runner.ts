@@ -130,6 +130,7 @@ export class BilibiliNativeSearchBatchHostRunner {
       }
       projections.push({ page: pageRun.page, projection: artifact.results });
     }
+    this.#checkpoints.activate(input.batchId);
     return this.#execute({
       profileId: checkpoint.profileId,
       query: input.query,

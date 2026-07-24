@@ -171,7 +171,9 @@ const server = createServer(async (request, response) => {
       const code = safeErrorCode(error);
       const status = code === 'browser_host_not_running' || code === 'profile_has_active_page_leases' ||
         code === 'bilibili_native_search_batch_recovery_outcome_unknown' ||
-        code === 'bilibili_native_search_batch_checkpoint_not_resumable'
+        code === 'bilibili_native_search_batch_checkpoint_not_resumable' ||
+        code === 'bilibili_native_search_batch_checkpoint_not_resolvable' ||
+        code === 'bilibili_native_search_batch_checkpoint_active'
         ? 409
         : 400;
       sendJson(response, status, { schemaVersion: 1, ok: false, error: code });

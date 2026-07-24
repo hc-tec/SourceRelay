@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test, vi } from 'vitest';
 import {
+  bilibiliNativeSearchBatchCheckpointResolveInput,
   bilibiliNativeSearchBatchInput,
   bilibiliNativeSearchBatchResumeInput
 } from '../src/bilibili-native-search-batch-contract.js';
@@ -54,6 +55,7 @@ function pageResult(page: number, bvids: string[], terminalReason: 'search_ready
 function checkpointStore() {
   return {
     start: vi.fn(async () => undefined),
+    activate: vi.fn(() => undefined),
     markPageStarted: vi.fn(async () => undefined),
     recordPage: vi.fn(async () => undefined),
     finish: vi.fn(async () => undefined),
@@ -94,6 +96,23 @@ describe('Bilibili native-search batch contract', () => {
     });
     expect(() => bilibiliNativeSearchBatchResumeInput({ profileId, batchId: 'not-a-uuid', query: 'search' }))
       .toThrow('bilibili_native_search_batch_resume_input_invalid');
+    expect(bilibiliNativeSearchBatchCheckpointResolveInput({
+      profileId,
+      batchId: '66666666-6666-4666-8666-666666666666',
+      disposition: 'abandon',
+      acknowledgement: 'acknowledge_unknown_platform_action'
+    })).toEqual({
+      profileId,
+      batchId: '66666666-6666-4666-8666-666666666666',
+      disposition: 'abandon',
+      acknowledgement: 'acknowledge_unknown_platform_action'
+    });
+    expect(() => bilibiliNativeSearchBatchCheckpointResolveInput({
+      profileId,
+      batchId: '66666666-6666-4666-8666-666666666666',
+      disposition: 'abandon',
+      acknowledgement: 'anything_else'
+    })).toThrow('bilibili_native_search_batch_checkpoint_resolution_input_invalid');
   });
 
   test('runs pages sequentially and records overlap as a partial batch', async () => {
@@ -221,6 +240,7 @@ describe('Bilibili native-search batch contract', () => {
     };
     const checkpoints = {
       start: vi.fn(async () => undefined),
+      activate: vi.fn(() => undefined),
       markPageStarted: vi.fn(async () => undefined),
       recordPage: vi.fn(async () => undefined),
       finish: vi.fn(async () => undefined),
@@ -266,6 +286,7 @@ describe('Bilibili native-search batch contract', () => {
     expect(singleArtifacts.get).toHaveBeenCalledOnce();
     expect(singleRunner.run).toHaveBeenCalledOnce();
     expect(singleRunner.run.mock.calls[0]?.[0]).toMatchObject({ page: 2 });
+    expect(checkpoints.activate).toHaveBeenCalledWith(batchId);
     expect(checkpoints.markPageStarted).toHaveBeenCalledWith(batchId, 2);
     expect(result.run.coverage).toMatchObject({ capturedPages: 2, uniqueItems: 2, terminalReason: 'search_batch_ready' });
   });
@@ -274,6 +295,7 @@ describe('Bilibili native-search batch contract', () => {
     const batchId = '88888888-8888-4888-8888-888888888888';
     const checkpoints = {
       start: vi.fn(async () => undefined),
+      activate: vi.fn(() => undefined),
       markPageStarted: vi.fn(async () => undefined),
       recordPage: vi.fn(async () => undefined),
       finish: vi.fn(async () => undefined),

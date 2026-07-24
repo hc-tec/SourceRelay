@@ -27,6 +27,16 @@ export interface BilibiliNativeSearchBatchResumeInput {
   query: string;
 }
 
+export const BILIBILI_NATIVE_SEARCH_BATCH_CHECKPOINT_RESOLUTION_ACKNOWLEDGEMENT =
+  'acknowledge_unknown_platform_action' as const;
+
+export interface BilibiliNativeSearchBatchCheckpointResolutionInput {
+  profileId: string;
+  batchId: string;
+  disposition: 'abandon';
+  acknowledgement: typeof BILIBILI_NATIVE_SEARCH_BATCH_CHECKPOINT_RESOLUTION_ACKNOWLEDGEMENT;
+}
+
 export type BilibiliNativeSearchBatchTerminalReason =
   | 'search_batch_ready'
   | 'search_batch_empty'
@@ -108,6 +118,29 @@ function pages(value: unknown): number[] | null {
   return unique.length === result.length ? unique : null;
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function bilibiliNativeSearchBatchCheckpointResolveInput(
+  value: unknown
+): BilibiliNativeSearchBatchCheckpointResolutionInput {
+  const candidate = record(value);
+  if (!candidate || Object.keys(candidate).some((key) =>
+    !['profileId', 'batchId', 'disposition', 'acknowledgement'].includes(key)
+  ) ||
+    typeof candidate.profileId !== 'string' || !UUID_PATTERN.test(candidate.profileId) ||
+    typeof candidate.batchId !== 'string' || !UUID_PATTERN.test(candidate.batchId) ||
+    candidate.disposition !== 'abandon' ||
+    candidate.acknowledgement !== BILIBILI_NATIVE_SEARCH_BATCH_CHECKPOINT_RESOLUTION_ACKNOWLEDGEMENT) {
+    throw new Error('bilibili_native_search_batch_checkpoint_resolution_input_invalid');
+  }
+  return {
+    profileId: candidate.profileId,
+    batchId: candidate.batchId,
+    disposition: 'abandon',
+    acknowledgement: BILIBILI_NATIVE_SEARCH_BATCH_CHECKPOINT_RESOLUTION_ACKNOWLEDGEMENT
+  };
+}
+
 export function bilibiliNativeSearchBatchResumeInput(value: unknown): BilibiliNativeSearchBatchResumeInput {
   const candidate = record(value);
   if (!candidate || Object.keys(candidate).some((key) => !['profileId', 'batchId', 'query'].includes(key)) ||
@@ -117,7 +150,7 @@ export function bilibiliNativeSearchBatchResumeInput(value: unknown): BilibiliNa
     throw new Error('bilibili_native_search_batch_resume_input_invalid');
   }
   const single = bilibiliNativeSearchInput({ query: candidate.query });
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate.batchId)) {
+  if (!UUID_PATTERN.test(candidate.batchId)) {
     throw new Error('bilibili_native_search_batch_resume_input_invalid');
   }
   return { profileId: candidate.profileId, batchId: candidate.batchId, query: single.query };

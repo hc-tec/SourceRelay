@@ -22,7 +22,10 @@ import type { BilibiliNativeSearchHostRunner } from './bilibili-native-search-ho
 import type { BilibiliNativeSearchBatchArtifactStore } from './bilibili-native-search-batch-artifacts';
 import type { BilibiliNativeSearchBatchHostRunner } from './bilibili-native-search-batch-host-runner';
 import type { BilibiliNativeSearchBatchCheckpointStore } from './bilibili-native-search-batch-checkpoints';
-import { bilibiliNativeSearchBatchInput } from './bilibili-native-search-batch-contract';
+import {
+  bilibiliNativeSearchBatchCheckpointResolveInput,
+  bilibiliNativeSearchBatchInput
+} from './bilibili-native-search-batch-contract';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import type { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host-runner';
 import type { BilibiliVideoDiscussionArtifactStore } from './bilibili-video-discussion-artifacts';
@@ -333,6 +336,20 @@ export async function handleGatewayRoute(
         artifact: result.artifact
       }
     });
+    return true;
+  }
+  const nativeSearchBatchResolve = url.pathname.match(
+    new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/search/native/batch/resolve$`, 'i')
+  );
+  if (request.method === 'POST' && nativeSearchBatchResolve) {
+    if (!sameOrigin(request, response, context)) return true;
+    const body = await readJsonBody(request);
+    const input = bilibiliNativeSearchBatchCheckpointResolveInput({
+      ...(body as Record<string, unknown>),
+      profileId: nativeSearchBatchResolve[1]!
+    });
+    const checkpoint = await context.nativeSearchBatchCheckpoints.resolveUnknown(input);
+    sendJson(response, 200, { schemaVersion: 1, checkpoint });
     return true;
   }
   const accountProfileRun = url.pathname.match(

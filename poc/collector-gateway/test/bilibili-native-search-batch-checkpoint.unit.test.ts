@@ -56,4 +56,79 @@ describe('Bilibili native-search batch checkpoints', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  test('resolves an unknown platform action locally without clearing its in-flight page', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'bilibili-native-search-checkpoint-resolution-'));
+    try {
+      const store = await BilibiliNativeSearchBatchCheckpointStore.create(directory);
+      await store.start({
+        batchId,
+        profileId,
+        search: { resultType: 'video', sort: 'newest', pages: [1, 2] },
+        queryDigest: 'b'.repeat(64),
+        startedAt: '2026-07-24T00:00:00.000Z'
+      });
+      await store.markPageStarted(batchId, 2);
+
+      const resolveInput = {
+        profileId,
+        batchId,
+        disposition: 'abandon' as const,
+        acknowledgement: 'acknowledge_unknown_platform_action' as const
+      };
+      await expect(store.resolveUnknown(resolveInput))
+        .rejects.toThrow('bilibili_native_search_batch_checkpoint_active');
+      const rehydratedBeforeResolve = await BilibiliNativeSearchBatchCheckpointStore.create(directory);
+
+      const resolved = await rehydratedBeforeResolve.resolveUnknown(resolveInput);
+      expect(resolved).toMatchObject({
+        state: 'outcome_unknown',
+        inFlightPage: 2,
+        artifactId: null,
+        resolution: {
+          disposition: 'abandon',
+          acknowledgement: 'acknowledge_unknown_platform_action'
+        }
+      });
+      expect(Date.parse(resolved.resolution!.resolvedAt)).not.toBeNaN();
+
+      const rehydrated = await BilibiliNativeSearchBatchCheckpointStore.create(directory);
+      expect(rehydrated.get(batchId)).toMatchObject({
+        state: 'outcome_unknown',
+        inFlightPage: 2,
+        resolution: { disposition: 'abandon' }
+      });
+      await expect(rehydrated.resolveUnknown(resolveInput))
+        .rejects.toThrow('bilibili_native_search_batch_checkpoint_not_resolvable');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects resolution for a different profile or a known checkpoint', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'bilibili-native-search-checkpoint-resolution-invalid-'));
+    try {
+      const store = await BilibiliNativeSearchBatchCheckpointStore.create(directory);
+      await store.start({
+        batchId,
+        profileId,
+        search: { resultType: 'video', sort: 'newest', pages: [1] },
+        queryDigest: 'c'.repeat(64),
+        startedAt: '2026-07-24T00:00:00.000Z'
+      });
+      const input = {
+        profileId,
+        batchId,
+        disposition: 'abandon' as const,
+        acknowledgement: 'acknowledge_unknown_platform_action' as const
+      };
+      const rehydrated = await BilibiliNativeSearchBatchCheckpointStore.create(directory);
+      await expect(rehydrated.resolveUnknown({ ...input, profileId: '99999999-9999-4999-8999-999999999999' }))
+        .rejects.toThrow('bilibili_native_search_batch_checkpoint_profile_mismatch');
+      await expect(rehydrated.resolveUnknown(input))
+        .rejects.toThrow('bilibili_native_search_batch_checkpoint_not_resolvable');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
