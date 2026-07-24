@@ -729,3 +729,42 @@ accountSafety: ready
 ```
 
 artifact：[manifest.json](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/bilibili-video-discussion/a3c20a5a-232d-4669-8aa6-403e9af79ae0/manifest.json)、[discussion.json](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/bilibili-video-discussion/a3c20a5a-232d-4669-8aa6-403e9af79ae0/discussion.json)。本次动作仍是 at-most-once；没有读取 response body、Cookie、Token 或请求体，没有遍历第 3 页/165 页。两个页面 digest 均为规范化 DOM 投影的 SHA-256，当前样本跨页重复数均为 0；这只证明该 run 的两页样本可被持久化和审计，不能推断全量评论或稳定跨页身份。`admissionEligible` 继续保持 `false`。
+
+## Y. 2026-07-24 B站 multipart URL 变体与 retained tab 复用修复
+
+双楼分页闭环之后，连续两次同一 BVID 任务仍然创建新 tab。真实 Profile 的只读 Chrome History 证明，B站会把同一视频改写成如下公开 URL 变体：
+
+```text
+https://www.bilibili.com/video/BV1qZSLBYEpa?vd_source=<32 hex>&spm_id_from=333.788.player.switch&p=4
+```
+
+旧身份判定只允许空 query 或单独 `vd_source`，因此把同 BVID 的 multipart 播放地址错误地视为不同目标。修复后的讨论页面身份规则只增加了真实观察到的三类公开参数：
+
+- `vd_source`：32 位十六进制值；
+- `spm_id_from`：有界播放器来源标记；
+- `p`：1 到 6 位正整数分集编号；
+
+未知参数、重复参数、不同 BVID、不同 host、hash 和非法分集编号仍然拒绝。runner 复用后仍会导航到任务的 canonical URL，不会把用户停留的分集地址直接当成最终任务页面。
+
+在加载新 Browser Host 构建后，使用同一已登录 Profile 连续执行两次真实 B 站任务：
+
+```yaml
+firstRun:
+  runId: d4044410-3c56-4956-a423-138c729bbec2
+  artifactId: 3af1ec66-91ff-4620-acef-871f9b63b43c
+  targetTabSelection: created_new_managed_tab
+  state: completed
+secondRun:
+  runId: 60fdb3af-9256-4f0b-ad1b-0e8bb0c15a83
+  artifactId: 0304d06d-9d7a-4864-b146-34ee43364d9f
+  targetTabSelection: reused_matching_managed_tab
+  state: completed
+afterSecondRun:
+  managedPages: 1
+  retainedPages: 1
+  activeLease: 0
+  quarantinedPages: 0
+  accountSafety: ready
+```
+
+这次验证证明了同一受管 Profile 的第二次同目标任务复用原 tab，没有继续增长 `page-2/page-3`，且没有关闭 run 终态页面。相关身份单测覆盖 canonical、尾斜杠、`vd_source`、`spm_id_from+p`、未知参数、重复参数和不同 BVID；`collectorVersion` 仍保持 `0.7.17`，没有为了这个修复升级版本。`admissionEligible` 和 response-body 禁止边界均保持不变。
