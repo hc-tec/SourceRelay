@@ -458,4 +458,46 @@ accountSafety: ready
 
 本轮还修复了一个会影响审计和多动作扩展的本地设计缺陷：此前动作数组在初始化时就放入交互动作，而额外滚动是在执行时追加，导致真实执行顺序为“导航 → 滚动 1/2/3 → 点击”，artifact 却可能写成“导航 → 滚动 1 → 点击 → 滚动 2/3”。现在由独立的有界动作账本组件按阶段追加：导航和首轮滚动先登记，后续可信滚动按实际发生顺序登记，所有请求交互在滚动阶段结束后一次性登记；重复 finalize 不会复制动作，滚动阶段关闭后也不能再追加滚动。单元门禁验证了动作 ID、顺序和 `at-most-once` 语义。
 
-当前事实边界仍然是：本轮只证明了序号为 `1` 的第二个可见根评论；尚未证明同一 run 连续展开序号 `0` 和 `1` 两个楼中楼，也尚未点击回复分页。旧字段 `firstThread*` 只代表 ordinal `0`，多线程结果必须读取 `discussion.replyThreads`；本次 `capturedFirstThreadReplies=0` 不表示本次没有回复，而是表示 ordinal `0` 没有在该 run 中展开。`admissionEligible` 继续保持 `false`。
+截至本节 run 结束，事实边界仍然是：该 run 只证明了序号为 `1` 的第二个可见根评论；当时尚未证明同一 run 连续展开序号 `0` 和 `1` 两个楼中楼，也尚未点击回复分页。紧接后的 T 节记录了新的双动作 run。旧字段 `firstThread*` 只代表 ordinal `0`，多线程结果必须读取 `discussion.replyThreads`；本次 `capturedFirstThreadReplies=0` 不表示本次没有回复，而是表示 ordinal `0` 没有在该 run 中展开。`admissionEligible` 继续保持 `false`。
+
+## T. 2026-07-24 同一 run 连续展开两个楼中楼真实闭环
+
+在动作账本修复和新 Gateway 构建加载后，使用同一已登录 Profile 执行了唯一一次双动作 run：
+
+```yaml
+runId: 2761f616-d09b-4b80-a72f-dcea94a32714
+artifactId: 9f547500-0967-4562-9e82-0d5e6a82cae1
+target: BV1qZSLBYEpa
+strategy: bilibili.video.discussion.dom.v1 @ 0.1.0
+state: completed
+terminalReason: discussion_ready
+navigationCount: 1
+trustedScrollCount: 3
+actions: [expand_first_thread, expand_second_thread]
+actionAttemptCounts: [1, 1]
+capturedRootComments: 21
+capturedReplyThreads: 2
+threadOrdinals: [0, 1]
+capturedRepliesByThread: [10, 10]
+network200ByThread: [1, 1]
+targetTabSelection: reused_matching_managed_tab
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+这次 run 的动作顺序由 artifact 明确记录为：
+
+```text
+navigate
+scroll 1
+scroll 2
+scroll 3
+expand_first_thread
+expand_second_thread
+```
+
+两个交互均重新读取实时 DOM，不复用第一个入口的坐标或 element handle。第一个动作前 `threadOrdinal=0`、目标可见且通过 hover/composed hit-test；一次可信 mouse down/up 后入口消失、回复树出现、当前页 10 条回复、分页总页数 165，动作后新增 `GET https://api.bilibili.com/x/v2/reply/reply` status `200`。第一个楼中楼展开后，第二个动作再次从实时 DOM 找到 `threadOrdinal=1`，动作前边界框为 `x=236,y=341,w=52,h=22`，目标仍可见、位于 viewport、可命中且已 hover；一次可信点击后入口消失、当前页再次得到 10 条回复、分页总页数 3，动作后同一路由再次得到独立 `200`。两个动作都没有重试，`attemptCount=1`，没有出现未知结果。
+
+多线程投影保存在 `discussion.replyThreads`：ordinal `0` 与 `1` 各自保留真实 DOM 可见页的 `author/content/publishedAt/likeCount` 字段和分页元数据；旧的 `firstThread*` 字段仍只代表 ordinal `0`。对应 artifact：[manifest.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/9f547500-0967-4562-9e82-0d5e6a82cae1/manifest.json)、[discussion.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/9f547500-0967-4562-9e82-0d5e6a82cae1/discussion.json)。动作前后及最终视觉证据位于 `poc/collector-gateway/runtime/p2a-reply-canary-20260723/browser-host/visual-evidence/`，其中双动作对应的 evidence id 为 `62ee2ac7-5625-4982-925c-39f40f5d6016`、`2156ea9a-f1f5-495d-b6ca-ad9c23d02fbe`、`5d5ff2d6-bbc0-40f5-8fc8-8c06f1304adc`、`24b0a75c-6f11-4b6f-b90c-ebc5c6c941b9`。
+
+运行结束后再次核对页面池：`activeLease=0`、`retainedPages=1`、`quarantinedPages=0`，目标页面仍为 `retained_for_review`；Browser Host/Chromium 没有关闭，账号安全为 `ready`。这证明了“有界根评论滚动 → 同 run 实时定位并连续展开两个可见根评论楼中楼 → DOM/视觉/Network 三面后置条件 → 页面保留”的核心闭环。它仍不等同于回复全量：没有点击下一页、没有读取 response body、没有稳定 root id 或跨页连续性证明，`admissionEligible` 继续保持 `false`。
