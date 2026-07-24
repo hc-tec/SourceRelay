@@ -397,3 +397,31 @@ accountSafety: ready
 运行结束后页面池为 1 个 `retained_for_review`、0 个 active lease、0 个 quarantine page；没有点击下一页、没有展开第二个根评论、没有刷新或重放动作。对应 artifact 位于 [manifest.json](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/bilibili-video-discussion/ca1ee990-45d4-4fcd-9363-8fe829dd84e3/manifest.json) 与 [discussion.json](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/bilibili-video-discussion/ca1ee990-45d4-4fcd-9363-8fe829dd84e3/discussion.json)。
 
 结论是 `bilibili.video.discussion.dom.v1 @ 0.1.0` 的“一个根评论、当前可见一页回复、最多 20 条、DOM 字段投影”MVP 已完成真实认证闭环；`discussion` 仍保持 `research-only / admissionEligible=false`。回复全量分页、多个根评论、去重/连续性证明、response projector 和全量覆盖均未完成，不能由本次单根评论样本推断。
+
+## R. 2026-07-24 根评论连续滚动 MVP 真实闭环
+
+本轮只验证“导航后通过多次低频可信滚动，跨虚拟化 DOM 快照累积根评论”这一核心增量；没有排序点击、楼中楼点击、分页点击或 response body 读取。使用已登录的持久 B 站 Collection Profile `67f9abed-4d5a-4e2e-9043-74dfbeae83b0`，新构建运行时 marker 精确匹配，未导出认证材料。
+
+```yaml
+runId: afca400e-5806-407a-910a-e1eb662824a7
+artifactId: 23aca610-2915-442b-bd40-88939766c0a2
+target: BV1qZSLBYEpa
+state: completed
+terminalReason: discussion_ready
+navigationCount: 1
+trustedScrollCount: 3
+scrollAttemptCounts: [1, 1, 1]
+capturedRootComments: 21
+sort: hot
+loginGateVisible: false
+duplicatePolicy: normalized_visible_text_within_60_item_bound
+targetPage: retained_after_run
+accountSafety: ready
+responseBodies: not_read
+```
+
+三次滚动均由 Host 发送真实 wheel 输入并在动作账本中各记录一次；观察窗口在没有新增根评论时停止，不刷新、不回退、不重放。DOM 投影将 successive snapshot 中的可见根线程文本按规范化文本去重并限制为最多 60 条。视觉证据 [f81f637d-4c5f-4000-ae43-6fe93effcb1d.png](../../../poc/collector-gateway/runtime/p2a-reply-canary-20260723/browser-host/visual-evidence/f81f637d-4c5f-4000-ae43-6fe93effcb1d.png) 显示页面停留在评论区（`scrollY=1218`），artifact 的根评论数从单视口 20 条扩展为 21 条。
+
+对应 artifact：[manifest.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/23aca610-2915-442b-bd40-88939766c0a2/manifest.json)；[discussion.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/23aca610-2915-442b-bd40-88939766c0a2/discussion.json)。
+
+这证明了“根评论跨快照有界累积”已经具备真实生产闭环，但不等同于全量评论覆盖：当前仍没有稳定公开 root id、没有跨更多页的分页终止证明，也没有把多个 root 的楼中楼展开串入同一任务。下一步应在独立预算下完成根评论稳定身份/覆盖字段，再推进多个 root 的楼中楼采样；`admissionEligible` 继续保持 `false`。

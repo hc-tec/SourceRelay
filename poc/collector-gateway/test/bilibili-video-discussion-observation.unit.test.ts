@@ -8,6 +8,7 @@ import {
   bilibiliVideoDiscussionBvid,
   bilibiliVideoDiscussionInput,
   canonicalBilibiliVideoDiscussionUrl,
+  mergeBilibiliVideoDiscussionRootComments,
   projectBilibiliVideoDiscussionDom
 } from '../src/bilibili-video-discussion-contract';
 
@@ -125,7 +126,7 @@ describe('Bilibili discussion DOM contract', () => {
       risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
     }), bvid)).toThrow('video_discussion_observation_dom_invalid');
 
-    const tooMany = Array.from({ length: 21 }, (_, index) => `comment-${index}`);
+    const tooMany = Array.from({ length: 61 }, (_, index) => `comment-${index}`);
     expect(() => bilibiliVideoDiscussionStrategyObservation(result({
       bvid,
       commentHostPresent: true,
@@ -139,6 +140,17 @@ describe('Bilibili discussion DOM contract', () => {
       loginGateVisible: false,
       risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
     }), bvid)).toThrow('video_discussion_observation_dom_invalid');
+  });
+
+  test('merges bounded root snapshots without duplicating visible threads', () => {
+    expect(mergeBilibiliVideoDiscussionRootComments(
+      ['第一条', '重复内容'],
+      ['重复内容', '第二条', '  第三条  ']
+    )).toEqual(['第一条', '重复内容', '第二条', '第三条']);
+    expect(mergeBilibiliVideoDiscussionRootComments(
+      [],
+      Array.from({ length: 61 }, (_, index) => `根评论-${index}`)
+    )).toHaveLength(60);
   });
 
   test('does not project a loading spinner as a completed discussion', () => {

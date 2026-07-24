@@ -18,7 +18,9 @@ import type {
 import {
   bilibiliVideoDiscussionBvid,
   bilibiliVideoDiscussionInput,
+  mergeBilibiliVideoDiscussionRootComments,
   projectBilibiliVideoDiscussionDom,
+  BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS,
   type BilibiliVideoDiscussionAction,
   type BilibiliVideoDiscussionProjection,
   type BilibiliVideoDiscussionRunRecord,
@@ -37,6 +39,8 @@ const RUN_DEADLINE_MS = 60_000;
 const NAVIGATION_TIMEOUT_MS = 20_000;
 const OBSERVATION_DEADLINE_MS = 15_000;
 const INITIAL_OBSERVATION_MAX_WAIT_MS = 8_000;
+const ROOT_SCROLL_MAX_ACTIONS = 3;
+const ROOT_PROGRESS_OBSERVATION_MAX_WAIT_MS = 3_000;
 const DOCUMENT_STABILITY_QUIET_MS = 2_500;
 const DOCUMENT_STABILITY_MAX_WAIT_MS = 8_000;
 // Keep the short-lived extension binding alive through the full run deadline
@@ -87,9 +91,9 @@ function navigationAction(runId: string): BilibiliVideoDiscussionAction {
   };
 }
 
-function scrollAction(runId: string): BilibiliVideoDiscussionAction {
+function scrollAction(runId: string, ordinal = 1): BilibiliVideoDiscussionAction {
   return {
-    actionId: `scroll_video_discussion_${runId.replace(/-/g, '_')}`,
+    actionId: `scroll_video_discussion_${runId.replace(/-/g, '_')}${ordinal === 1 ? '' : `_${ordinal}`}`,
     kind: 'scroll',
     attempted: false,
     attemptCount: 0,
@@ -215,8 +219,8 @@ export class BilibiliVideoDiscussionHostRunner {
     requestedActions: BilibiliVideoDiscussionInteractionAction[]
   ): Promise<BilibiliVideoDiscussionHostRunResult> {
     const navigation = navigationAction(permit.runId);
-    const scroll = scrollAction(permit.runId);
-    const actions = [navigation, scroll, ...requestedActions.map((action) => interactionAction(permit.runId, action))];
+    const firstScroll = scrollAction(permit.runId, 1);
+    const actions = [navigation, firstScroll, ...requestedActions.map((action) => interactionAction(permit.runId, action))];
     const interactionResults: BilibiliVideoDiscussionInteractionResult[] = [];
     let deadline = 0;
     let acquired: AcquirePageResult | null = null;
@@ -282,8 +286,8 @@ export class BilibiliVideoDiscussionHostRunner {
 
       // Bilibili can commit a second main-frame document shortly after the
       // first DOMContentLoaded while keeping the same BVID. Wait for a quiet
-      // document-generation window before taking the single scroll action;
-      // this is local ledger observation, not a navigation or retry.
+      // document-generation window before taking any scroll action; this is
+      // local ledger observation, not a navigation or retry.
       await this.#waitForDocumentStability({
         profileId: permit.profileId,
         pageAlias: acquired.page.pageAlias,
@@ -309,81 +313,112 @@ export class BilibiliVideoDiscussionHostRunner {
         state = initialRisk.state;
         terminalReason = initialRisk.terminalReason;
         errorCode = initialRisk.errorCode;
-        scroll.outcome = 'risk_stopped';
-        scroll.errorCode = errorCode;
+        firstScroll.outcome = 'risk_stopped';
+        firstScroll.errorCode = errorCode;
       } else {
         let observedAfterScroll = observedBeforeScroll;
         let capturedAfterScroll = observedBeforeScroll.dom.commentHostInViewport;
+        let accumulatedRootComments = mergeBilibiliVideoDiscussionRootComments(
+          [],
+          observedBeforeScroll.dom.rootCommentTexts
+        );
+        let rootProgressed = false;
         if (capturedAfterScroll) {
-          scroll.outcome = 'completed';
+          // The retained target may already be at the discussion viewport.
+          // This is a local precondition result, not a synthetic scroll.
+          firstScroll.outcome = 'completed';
         } else {
-          // Register the bounded intent before crossing into the browser
-          // host. The action record is only marked `attempted` after the host
-          // confirms that trusted wheel input was actually sent.
-          await this.#accountSafety.recordActionAttempt(permit.profileId, 'bilibili', permit.runId, scroll.actionId);
-          const context = await this.#leasedPageContext({
-            profileId: permit.profileId,
-            pageAlias: acquired.page.pageAlias,
-            pageLeaseId: acquired.lease.pageLeaseId,
-            runId: permit.runId
-          });
-          let hostCallStarted = false;
           try {
-            hostCallStarted = true;
-            await this.#browserManager.scrollPage({
+            await this.#performRootScroll({
               profileId: permit.profileId,
               pageAlias: acquired.page.pageAlias,
               pageLeaseId: acquired.lease.pageLeaseId,
               runId: permit.runId,
-              expectedRecordVersion: context.recordVersion,
-              expectedDocumentGeneration: context.documentGeneration,
-              actionId: scroll.actionId,
-              deltaY: scrollDeltaY(observedBeforeScroll.dom),
-              timeoutMs: Math.min(10_000, remainingDeadline(deadline, 1_000)),
-              bilibiliVideoBvid: bvid
+              bvid,
+              action: firstScroll,
+              dom: observedBeforeScroll.dom,
+              deadline
             });
-            scroll.attempted = true;
-            scroll.attemptCount = 1;
-            await this.#accountSafety.recordPlatformActionAttempt(
-              permit.profileId,
-              'bilibili',
-              permit.runId,
-              scroll.actionId
+            firstScroll.outcome = 'completed';
+            capturedAfterScroll = true;
+            const progress = await this.#observeRootProgress({
+              profileId: permit.profileId,
+              pageAlias: acquired.page.pageAlias,
+              pageLeaseId: acquired.lease.pageLeaseId,
+              runId: permit.runId,
+              observerBindingId,
+              deadline,
+              bvid,
+              previousRootComments: accumulatedRootComments,
+              fallbackObserved: observedBeforeScroll
+            });
+            observedAfterScroll = progress.observed;
+            accumulatedRootComments = mergeBilibiliVideoDiscussionRootComments(
+              accumulatedRootComments,
+              progress.observed.dom.rootCommentTexts
             );
+            rootProgressed = progress.progressed;
           } catch (error) {
-            const platformActionAttempted = hostCallStarted &&
-              (!(error instanceof BrowserHostError) || error.record.platformActionAttempted);
-            if (platformActionAttempted) {
-              scroll.attempted = true;
-              scroll.attemptCount = 1;
-              await this.#accountSafety.recordPlatformActionAttempt(
-                permit.profileId,
-                'bilibili',
-                permit.runId,
-                scroll.actionId
-              );
-              scroll.outcome = 'postcondition_unmet';
+            if (safeErrorCode(error) === 'scroll_precondition_unmet' && !firstScroll.attempted) {
+              firstScroll.outcome = 'prerequisite_unmet';
+              firstScroll.errorCode = safeErrorCode(error);
             } else {
-              scroll.outcome = 'prerequisite_unmet';
+              throw error;
             }
-            scroll.errorCode = safeErrorCode(error);
-            throw error;
           }
-          scroll.outcome = 'completed';
-          capturedAfterScroll = true;
-          observedAfterScroll = await this.#observeUntil({
-            profileId: permit.profileId,
-            pageAlias: acquired.page.pageAlias,
-            pageLeaseId: acquired.lease.pageLeaseId,
-            runId: permit.runId,
-            observerBindingId,
-            deadline,
-            bvid,
-            requireViewport: true,
-            requireContentReady: true,
-            maxWaitMs: remainingDeadline(deadline, 1_000)
-          });
         }
+
+        // Once the first scroll has produced new visible roots, take at most
+        // two more trusted wheel snapshots.  Stop on the first no-progress
+        // window or a local scroll precondition failure; never keep clicking
+        // or scrolling just to force a larger result.
+        if (capturedAfterScroll && firstScroll.attempted && rootProgressed) {
+          for (let ordinal = 2; ordinal <= ROOT_SCROLL_MAX_ACTIONS; ordinal += 1) {
+            if (accumulatedRootComments.length >= BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS) break;
+            const nextScroll = scrollAction(permit.runId, ordinal);
+            actions.push(nextScroll);
+            try {
+              await this.#performRootScroll({
+                profileId: permit.profileId,
+                pageAlias: acquired.page.pageAlias,
+                pageLeaseId: acquired.lease.pageLeaseId,
+                runId: permit.runId,
+                bvid,
+                action: nextScroll,
+                dom: observedAfterScroll.dom,
+                deadline
+              });
+              nextScroll.outcome = 'completed';
+              const progress = await this.#observeRootProgress({
+                profileId: permit.profileId,
+                pageAlias: acquired.page.pageAlias,
+                pageLeaseId: acquired.lease.pageLeaseId,
+                runId: permit.runId,
+                observerBindingId,
+                deadline,
+                bvid,
+                previousRootComments: accumulatedRootComments,
+                fallbackObserved: observedAfterScroll
+              });
+              observedAfterScroll = progress.observed;
+              const nextRootComments = mergeBilibiliVideoDiscussionRootComments(
+                accumulatedRootComments,
+                progress.observed.dom.rootCommentTexts
+              );
+              rootProgressed = nextRootComments.length > accumulatedRootComments.length;
+              accumulatedRootComments = nextRootComments;
+              if (!rootProgressed) break;
+            } catch (error) {
+              if (safeErrorCode(error) === 'scroll_precondition_unmet' && !nextScroll.attempted) {
+                nextScroll.outcome = 'prerequisite_unmet';
+                nextScroll.errorCode = safeErrorCode(error);
+                break;
+              }
+              throw error;
+            }
+          }
+        }
+
         if (capturedAfterScroll && observedAfterScroll === observedBeforeScroll) {
           observedAfterScroll = await this.#observeUntil({
             profileId: permit.profileId,
@@ -404,7 +439,11 @@ export class BilibiliVideoDiscussionHostRunner {
           terminalReason = afterRisk.terminalReason;
           errorCode = afterRisk.errorCode;
         } else {
-          discussion = projectBilibiliVideoDiscussionDom(observedAfterScroll.dom, bvid, capturedAfterScroll, new Date().toISOString());
+          const projectedDom = {
+            ...observedAfterScroll.dom,
+            rootCommentTexts: accumulatedRootComments
+          };
+          discussion = projectBilibiliVideoDiscussionDom(projectedDom, bvid, capturedAfterScroll, new Date().toISOString());
           if (!discussion) {
             state = 'failed';
             terminalReason = 'dom_projection_failed';
@@ -462,7 +501,41 @@ export class BilibiliVideoDiscussionHostRunner {
               );
               actionRecord.outcome = 'completed';
               if (requestedAction === 'select_latest_comments') {
-                discussion = { ...discussion, sort: 'latest' };
+                // Sorting replaces the visible virtualised root window. Read
+                // the strategy observation again so the saved roots belong
+                // to the selected order instead of mixing hot and latest
+                // snapshots.
+                const resorted = await this.#observeUntil({
+                  profileId: permit.profileId,
+                  pageAlias: acquired.page.pageAlias,
+                  pageLeaseId: acquired.lease.pageLeaseId,
+                  runId: permit.runId,
+                  observerBindingId,
+                  deadline,
+                  bvid,
+                  requireViewport: true,
+                  requireContentReady: true,
+                  maxWaitMs: Math.min(5_000, remainingDeadline(deadline, 1_000))
+                });
+                const resortedRisk = riskOutcome(resorted.dom);
+                if (resortedRisk) {
+                  state = resortedRisk.state;
+                  terminalReason = resortedRisk.terminalReason;
+                  errorCode = resortedRisk.errorCode;
+                  break;
+                }
+                accumulatedRootComments = mergeBilibiliVideoDiscussionRootComments(
+                  [],
+                  resorted.dom.rootCommentTexts
+                );
+                const resortedDiscussion = projectBilibiliVideoDiscussionDom(
+                  { ...resorted.dom, rootCommentTexts: accumulatedRootComments },
+                  bvid,
+                  capturedAfterScroll,
+                  new Date().toISOString()
+                );
+                if (!resortedDiscussion) throw new Error('video_discussion_dom_projection_failed');
+                discussion = { ...resortedDiscussion, sort: 'latest' };
               } else {
                 discussion = {
                   ...discussion,
@@ -586,6 +659,141 @@ export class BilibiliVideoDiscussionHostRunner {
         actions.some((action) => action.attempted && action.outcome !== 'completed')
       );
     }
+  }
+
+  async #performRootScroll(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    runId: string;
+    bvid: string;
+    action: BilibiliVideoDiscussionAction;
+    dom: ReturnType<typeof bilibiliVideoDiscussionStrategyObservation>['dom'];
+    deadline: number;
+  }): Promise<void> {
+    await this.#accountSafety.recordActionAttempt(
+      input.profileId,
+      'bilibili',
+      input.runId,
+      input.action.actionId
+    );
+    const context = await this.#leasedPageContext({
+      profileId: input.profileId,
+      pageAlias: input.pageAlias,
+      pageLeaseId: input.pageLeaseId,
+      runId: input.runId
+    });
+    let hostCallStarted = false;
+    try {
+      hostCallStarted = true;
+      await this.#browserManager.scrollPage({
+        profileId: input.profileId,
+        pageAlias: input.pageAlias,
+        pageLeaseId: input.pageLeaseId,
+        runId: input.runId,
+        expectedRecordVersion: context.recordVersion,
+        expectedDocumentGeneration: context.documentGeneration,
+        actionId: input.action.actionId,
+        deltaY: scrollDeltaY(input.dom),
+        timeoutMs: Math.min(10_000, remainingDeadline(input.deadline, 1_000)),
+        bilibiliVideoBvid: input.bvid
+      });
+      input.action.attempted = true;
+      input.action.attemptCount = 1;
+      await this.#accountSafety.recordPlatformActionAttempt(
+        input.profileId,
+        'bilibili',
+        input.runId,
+        input.action.actionId
+      );
+    } catch (error) {
+      const platformActionAttempted = hostCallStarted &&
+        (!(error instanceof BrowserHostError) || error.record.platformActionAttempted);
+      if (platformActionAttempted) {
+        input.action.attempted = true;
+        input.action.attemptCount = 1;
+        await this.#accountSafety.recordPlatformActionAttempt(
+          input.profileId,
+          'bilibili',
+          input.runId,
+          input.action.actionId
+        );
+        input.action.outcome = 'postcondition_unmet';
+      } else {
+        input.action.outcome = 'prerequisite_unmet';
+      }
+      input.action.errorCode = safeErrorCode(error);
+      throw error;
+    }
+  }
+
+  async #observeRootProgress(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    runId: string;
+    observerBindingId: string;
+    deadline: number;
+    bvid: string;
+    previousRootComments: readonly string[];
+    fallbackObserved: ReturnType<typeof bilibiliVideoDiscussionStrategyObservation>;
+  }): Promise<{
+    observed: ReturnType<typeof bilibiliVideoDiscussionStrategyObservation>;
+    progressed: boolean;
+  }> {
+    const observationDeadline = Math.min(
+      input.deadline,
+      Date.now() + ROOT_PROGRESS_OBSERVATION_MAX_WAIT_MS
+    );
+    let observed: ReturnType<typeof bilibiliVideoDiscussionStrategyObservation> | null = input.fallbackObserved;
+    while (Date.now() < observationDeadline) {
+      try {
+        observed = bilibiliVideoDiscussionStrategyObservation(
+          await this.#readStrategyObservation({
+            profileId: input.profileId,
+            pageAlias: input.pageAlias,
+            pageLeaseId: input.pageLeaseId,
+            runId: input.runId,
+            observerBindingId: input.observerBindingId,
+            deadline: observationDeadline,
+            bvid: input.bvid
+          }),
+          input.bvid
+        );
+      } catch (error) {
+        // A local lazy-load observation window expiring is not a platform
+        // action failure.  Keep the last valid DOM snapshot and let the
+        // caller stop on no-progress; only propagate errors while the run's
+        // actual deadline or document binding is still meaningful.
+        const errorCode = safeErrorCode(error);
+        const localObservationTimeout = errorCode === 'run_deadline_exceeded' ||
+          errorCode === 'video_discussion_strategy_observation_unavailable';
+        // #readStrategyObservation reserves a 100ms local tail, so its
+        // bounded read can report this just before the wall-clock window.
+        if (Date.now() >= observationDeadline - 250 && localObservationTimeout) {
+          return { observed, progressed: false };
+        }
+        throw error;
+      }
+      const merged = mergeBilibiliVideoDiscussionRootComments(
+        input.previousRootComments,
+        observed.dom.rootCommentTexts
+      );
+      if (riskOutcome(observed.dom) || merged.length > input.previousRootComments.length) {
+        return { observed, progressed: merged.length > input.previousRootComments.length };
+      }
+      const remaining = observationDeadline - Date.now();
+      if (remaining <= 0) break;
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.min(OBSERVATION_POLL_MS, remaining)));
+    }
+    if (!observed) throw new Error('video_discussion_strategy_observation_unavailable');
+    return {
+      observed,
+      progressed: mergeBilibiliVideoDiscussionRootComments(
+        input.previousRootComments,
+        observed.dom.rootCommentTexts
+      ).length > input.previousRootComments.length
+    };
   }
 
   async #waitForDocumentStability(input: {

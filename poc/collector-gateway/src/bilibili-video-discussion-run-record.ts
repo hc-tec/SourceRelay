@@ -76,7 +76,7 @@ export function createBilibiliVideoDiscussionRunRecord(input: {
     safeguards: {
       environment: 'local_user_controlled_collection_profile',
       browser: 'visible_playwright_chromium',
-      acquisition: 'trusted_navigation_plus_one_bounded_scroll_plus_shadow_dom_projection',
+      acquisition: 'trusted_navigation_plus_three_bounded_scrolls_plus_shadow_dom_projection',
       requestHeaders: 'not_read',
       requestBody: 'not_read',
       cookiesAndTokens: 'not_read',

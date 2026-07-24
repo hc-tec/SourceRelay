@@ -9,7 +9,13 @@ import type {
   StrategyBindingDiagnostics
 } from '@intelligence/collector-contracts';
 
-export const BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS = 20;
+/**
+ * Root comments are collected from several bounded DOM snapshots.  Bilibili
+ * currently virtualises roughly twenty thread renderers at a time, so the
+ * Gateway keeps a larger, still finite cross-scroll budget instead of
+ * pretending that one viewport is the whole discussion.
+ */
+export const BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS = 60;
 export const BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS = SHARED_MAX_REPLY_ITEMS;
 export const BILIBILI_VIDEO_DISCUSSION_STRATEGY_VERSION = '0.1.0' as const;
 
@@ -44,6 +50,29 @@ export interface BilibiliVideoDiscussionDomSnapshot {
     rateLimited: boolean;
     sourceUnavailable: boolean;
   };
+}
+
+/**
+ * Merge the visible root-thread texts from successive snapshots.  The
+ * platform does not expose a stable public id in this DOM-only MVP, so the
+ * normalized visible text is the only safe local deduplication key.  A
+ * repeated text is retained once; no inferred identity is written.
+ */
+export function mergeBilibiliVideoDiscussionRootComments(
+  existing: readonly string[],
+  incoming: readonly string[]
+): string[] {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+  for (const value of [...existing, ...incoming]) {
+    if (typeof value !== 'string') continue;
+    const clean = value.replace(/\s+/g, ' ').trim();
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    merged.push(clean);
+    if (merged.length >= BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS) break;
+  }
+  return merged;
 }
 
 export interface BilibiliVideoDiscussionProjection {
@@ -125,7 +154,7 @@ export interface BilibiliVideoDiscussionRunRecord {
   safeguards: {
     environment: 'local_user_controlled_collection_profile';
     browser: 'visible_playwright_chromium';
-    acquisition: 'trusted_navigation_plus_one_bounded_scroll_plus_shadow_dom_projection';
+    acquisition: 'trusted_navigation_plus_three_bounded_scrolls_plus_shadow_dom_projection';
     requestHeaders: 'not_read';
     requestBody: 'not_read';
     cookiesAndTokens: 'not_read';
