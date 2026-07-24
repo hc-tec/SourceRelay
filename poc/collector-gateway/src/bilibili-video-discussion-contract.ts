@@ -18,6 +18,8 @@ import { BILIBILI_VIDEO_DISCUSSION_MAX_SEMANTIC_ACTIONS as MAX_SEMANTIC_ACTIONS 
  */
 export const BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS = 60;
 export const BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS = SHARED_MAX_REPLY_ITEMS;
+/** The MVP records the first observed page and at most one explicit next page. */
+export const BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_PAGES = 2 as const;
 export const BILIBILI_VIDEO_DISCUSSION_STRATEGY_VERSION = '0.1.0' as const;
 
 export interface BilibiliVideoDiscussionInput {
@@ -105,6 +107,39 @@ export interface BilibiliVideoDiscussionReplyThread {
   pageCount: number | null;
   hasMore: boolean | null;
   coverage: BilibiliVideoDiscussionReplyCoverage;
+  /** Pages observed in this run; observedPageOrdinal is not a platform page number. */
+  pages: BilibiliVideoDiscussionReplyPage[];
+}
+
+export interface BilibiliVideoDiscussionReplyPage {
+  /** One-based order in which this run observed a page for this thread. */
+  observedPageOrdinal: number;
+  /** Bilibili's page number is intentionally nullable when the DOM does not expose it. */
+  replyPage: number | null;
+  replyPageCount: number | null;
+  replyHasMore: boolean | null;
+  paginationVisible: boolean;
+  replies: BilibiliVideoDiscussionReply[];
+  /** Count in the bounded DOM projection, not a server-side total. */
+  rawReplyCount: number;
+  /** Unique normalized replies within this observed page. */
+  uniqueReplyCount: number;
+  /** Occurrences whose normalized key was already observed on an earlier page. */
+  crossPageDuplicateCount: number;
+  /** Unique normalized replies accumulated through this observed page. */
+  cumulativeUniqueReplyCount: number;
+  /** Whether this observation changed the current page content digest. */
+  contentChanged: boolean;
+  contentDigest: string;
+}
+
+export interface BilibiliVideoDiscussionReplyPageObservation {
+  replies: readonly BilibiliVideoDiscussionReply[];
+  paginationVisible: boolean;
+  replyPage: number | null;
+  replyPageCount: number | null;
+  replyHasMore: boolean | null;
+  coverage: BilibiliVideoDiscussionReplyCoverage;
 }
 
 export interface BilibiliVideoDiscussionAction {
@@ -177,6 +212,7 @@ export interface BilibiliVideoDiscussionRunRecord {
     productionResponseRoutes: [];
     maxRootComments: typeof BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS;
     maxReplyItems: typeof BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS;
+    maxReplyPages: typeof BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_PAGES;
     semanticActionDelivery: 'at_most_once';
     runDeadlineMs: 60_000;
     targetTabSelection: 'reused_matching_managed_tab' | 'reused_retained_managed_tab' | 'created_new_managed_tab' | 'not_acquired';
@@ -303,7 +339,7 @@ export function projectBilibiliVideoDiscussionDom(
     replyThreads: [],
     firstThreadExpandVisible: dom.firstThreadExpandVisible,
     firstThreadExpanded: false,
-    firstThreadReplies: normaliseReplies(dom.firstThreadReplies),
+    firstThreadReplies: normaliseBilibiliVideoDiscussionReplies(dom.firstThreadReplies),
     replyPaginationVisible: dom.replyPaginationVisible ?? false,
     replyPage: safePage(dom.replyPage),
     replyPageCount: safePage(dom.replyPageCount),
@@ -321,7 +357,7 @@ function safePage(value: unknown): number | null {
     : null;
 }
 
-function normaliseReplies(value: unknown): BilibiliVideoDiscussionReply[] {
+export function normaliseBilibiliVideoDiscussionReplies(value: unknown): BilibiliVideoDiscussionReply[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS).flatMap((entry) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
@@ -334,6 +370,99 @@ function normaliseReplies(value: unknown): BilibiliVideoDiscussionReply[] {
       : null;
     return content ? [{ author, content, publishedAt, likeCount }] : [];
   });
+}
+
+function normaliseReplyForKey(reply: BilibiliVideoDiscussionReply): string {
+  return JSON.stringify({
+    author: cleanText(reply.author, 200),
+    content: cleanText(reply.content, 4_000) ?? '',
+    publishedAt: cleanText(reply.publishedAt, 100)
+  });
+}
+
+function normaliseReplyForDigest(reply: BilibiliVideoDiscussionReply): BilibiliVideoDiscussionReply {
+  const likeCount = typeof reply.likeCount === 'number' && Number.isSafeInteger(reply.likeCount) && reply.likeCount >= 0
+    ? reply.likeCount
+    : null;
+  return {
+    author: cleanText(reply.author, 200),
+    content: cleanText(reply.content, 4_000) ?? '',
+    publishedAt: cleanText(reply.publishedAt, 100),
+    likeCount
+  };
+}
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+/** A stable digest of the bounded, normalized reply projection in order. */
+export function bilibiliVideoDiscussionReplyContentDigest(
+  replies: readonly BilibiliVideoDiscussionReply[]
+): string {
+  return sha256(JSON.stringify(replies.map(normaliseReplyForDigest)));
+}
+
+function replyKeys(replies: readonly BilibiliVideoDiscussionReply[]): string[] {
+  return replies.map(normaliseReplyForKey);
+}
+
+/**
+ * Records one page observation without claiming that observedPageOrdinal is
+ * the platform's page number.  `append` is used by expand/next actions;
+ * `refresh` updates the current page after a pagination-reveal action.
+ */
+export function recordBilibiliVideoDiscussionReplyPage(
+  existing: BilibiliVideoDiscussionReplyThread | undefined,
+  input: {
+    threadOrdinal: number;
+    observation: BilibiliVideoDiscussionReplyPageObservation;
+    mode: 'append' | 'refresh';
+  }
+): BilibiliVideoDiscussionReplyThread {
+  const replies = normaliseBilibiliVideoDiscussionReplies(input.observation.replies);
+  const existingPages = existing?.pages ?? [];
+  if (input.mode === 'append' && existingPages.length >= BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_PAGES) {
+    throw new Error('bilibili_video_discussion_reply_page_limit');
+  }
+  const refreshing = input.mode === 'refresh' && existingPages.length > 0;
+  const previousPages = refreshing ? existingPages.slice(0, -1) : existingPages;
+  const priorKeys = new Set(previousPages.flatMap((page) => replyKeys(page.replies)));
+  const pageKeys = replyKeys(replies);
+  const uniquePageKeys = new Set(pageKeys);
+  const crossPageDuplicateCount = pageKeys.filter((key) => priorKeys.has(key)).length;
+  const cumulativeKeys = new Set([...priorKeys, ...uniquePageKeys]);
+  const contentDigest = bilibiliVideoDiscussionReplyContentDigest(replies);
+  const previousDigest = existingPages.at(-1)?.contentDigest ?? null;
+  const page: BilibiliVideoDiscussionReplyPage = {
+    observedPageOrdinal: refreshing
+      ? existingPages.at(-1)!.observedPageOrdinal
+      : existingPages.length + 1,
+    replyPage: input.observation.replyPage,
+    replyPageCount: input.observation.replyPageCount,
+    replyHasMore: input.observation.replyHasMore,
+    paginationVisible: input.observation.paginationVisible,
+    replies,
+    rawReplyCount: replies.length,
+    uniqueReplyCount: uniquePageKeys.size,
+    crossPageDuplicateCount,
+    cumulativeUniqueReplyCount: cumulativeKeys.size,
+    contentChanged: refreshing
+      ? existingPages.at(-1)!.contentChanged || previousDigest !== contentDigest
+      : previousDigest === null || previousDigest !== contentDigest,
+    contentDigest
+  };
+  const pages = refreshing ? [...previousPages, page] : [...existingPages, page];
+  return {
+    threadOrdinal: existing?.threadOrdinal ?? input.threadOrdinal,
+    replies: page.replies,
+    paginationVisible: page.paginationVisible,
+    page: page.replyPage,
+    pageCount: page.replyPageCount,
+    hasMore: page.replyHasMore,
+    coverage: input.observation.coverage,
+    pages
+  };
 }
 
 function normaliseReplyCoverage(value: unknown, replies: unknown): BilibiliVideoDiscussionReplyCoverage {

@@ -9,7 +9,8 @@ import {
   bilibiliVideoDiscussionInput,
   canonicalBilibiliVideoDiscussionUrl,
   mergeBilibiliVideoDiscussionRootComments,
-  projectBilibiliVideoDiscussionDom
+  projectBilibiliVideoDiscussionDom,
+  recordBilibiliVideoDiscussionReplyPage
 } from '../src/bilibili-video-discussion-contract';
 import {
   createBilibiliVideoDiscussionActionLedger,
@@ -195,6 +196,77 @@ describe('Bilibili discussion DOM contract', () => {
         replyHasMore: true,
         replyCoverage: 'current_page'
       });
+  });
+
+  test('accumulates two observed reply pages with normalized digest and cross-page deduplication', () => {
+    const first = recordBilibiliVideoDiscussionReplyPage(undefined, {
+      threadOrdinal: 0,
+      mode: 'append',
+      observation: {
+        replies: [
+          { author: '甲', content: '同一条回复', publishedAt: '2026-07-23 12:00', likeCount: 1 },
+          { author: '乙', content: '第一页独有', publishedAt: null, likeCount: null }
+        ],
+        paginationVisible: true,
+        replyPage: null,
+        replyPageCount: null,
+        replyHasMore: true,
+        coverage: 'current_page'
+      }
+    });
+    const refreshed = recordBilibiliVideoDiscussionReplyPage(first, {
+      threadOrdinal: 0,
+      mode: 'refresh',
+      observation: {
+        ...first,
+        replies: first.replies,
+        paginationVisible: true,
+        replyPage: null,
+        replyPageCount: null,
+        replyHasMore: true,
+        coverage: 'current_page'
+      }
+    });
+    const second = recordBilibiliVideoDiscussionReplyPage(refreshed, {
+      threadOrdinal: 0,
+      mode: 'append',
+      observation: {
+        replies: [
+          // A like-count change must not turn the same normalized reply into
+          // a second cross-page item.
+          { author: '甲', content: '  同一条回复 ', publishedAt: '2026-07-23 12:00', likeCount: 99 },
+          { author: '丙', content: '第二页独有', publishedAt: null, likeCount: null }
+        ],
+        paginationVisible: true,
+        replyPage: null,
+        replyPageCount: null,
+        replyHasMore: false,
+        coverage: 'current_page'
+      }
+    });
+
+    expect(second.pages).toHaveLength(2);
+    expect(second.pages.map((page) => page.observedPageOrdinal)).toEqual([1, 2]);
+    expect(second.pages[0]!).toMatchObject({
+      rawReplyCount: 2,
+      uniqueReplyCount: 2,
+      crossPageDuplicateCount: 0,
+      cumulativeUniqueReplyCount: 2,
+      contentChanged: true
+    });
+    expect(second.pages[1]!).toMatchObject({
+      rawReplyCount: 2,
+      uniqueReplyCount: 2,
+      crossPageDuplicateCount: 1,
+      cumulativeUniqueReplyCount: 3,
+      contentChanged: true,
+      replyPage: null
+    });
+    expect(second.pages[0]!.contentDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(second.page).toBeNull();
+    expect(second.replies).toEqual(second.pages[1]!.replies);
+    expect(refreshed.pages).toHaveLength(1);
+    expect(refreshed.pages[0]!.contentChanged).toBe(true);
   });
 
   test('rejects a wrong BVID or an unbounded root text list', () => {

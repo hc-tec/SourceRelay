@@ -20,9 +20,11 @@ import {
   bilibiliVideoDiscussionInput,
   mergeBilibiliVideoDiscussionRootComments,
   projectBilibiliVideoDiscussionDom,
+  recordBilibiliVideoDiscussionReplyPage,
   BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS,
   type BilibiliVideoDiscussionAction,
   type BilibiliVideoDiscussionProjection,
+  type BilibiliVideoDiscussionReplyPageObservation,
   type BilibiliVideoDiscussionRunRecord,
   type BilibiliVideoDiscussionTerminalReason
 } from './bilibili-video-discussion-contract';
@@ -512,19 +514,25 @@ export class BilibiliVideoDiscussionHostRunner {
                 discussion = { ...resortedDiscussion, sort: 'latest' };
               } else if (requestedAction !== 'reveal_second_thread') {
                 const threadOrdinal = interaction.threadOrdinal;
-                // Expansion and page advance both replace the bounded
-                // current-page sample for this thread. The page/hasMore
-                // fields remain the explicit coverage boundary; no cumulative
-                // or full-thread claim is inferred.
-                const replyThread = {
-                  threadOrdinal,
+                const pageObservation: BilibiliVideoDiscussionReplyPageObservation = {
                   replies: interaction.after.dom.firstThreadReplies,
                   paginationVisible: interaction.after.dom.replyPaginationVisible,
-                  page: interaction.after.dom.replyPage,
-                  pageCount: interaction.after.dom.replyPageCount,
-                  hasMore: interaction.after.dom.replyHasMore,
+                  replyPage: interaction.after.dom.replyPage,
+                  replyPageCount: interaction.after.dom.replyPageCount,
+                  replyHasMore: interaction.after.dom.replyHasMore,
                   coverage: interaction.after.dom.replyCoverage
                 };
+                const mode = requestedAction === 'reveal_first_thread_pagination' ||
+                  requestedAction === 'reveal_second_thread_pagination'
+                  ? 'refresh' as const
+                  : 'append' as const;
+                // Expand/next actions append a bounded observed page. A
+                // pagination-reveal action only refreshes metadata for the
+                // already observed current page and must not duplicate it.
+                const replyThread = recordBilibiliVideoDiscussionReplyPage(
+                  discussion.replyThreads.find((candidate) => candidate.threadOrdinal === threadOrdinal),
+                  { threadOrdinal, observation: pageObservation, mode }
+                );
                 const replyThreads = [
                   ...discussion.replyThreads.filter((candidate) => candidate.threadOrdinal !== threadOrdinal),
                   replyThread
@@ -535,12 +543,12 @@ export class BilibiliVideoDiscussionHostRunner {
                   ...(threadOrdinal === 0 ? {
                     firstThreadExpandVisible: false,
                     firstThreadExpanded: true,
-                    firstThreadReplies: interaction.after.dom.firstThreadReplies,
-                    replyPaginationVisible: interaction.after.dom.replyPaginationVisible,
-                    replyPage: interaction.after.dom.replyPage,
-                    replyPageCount: interaction.after.dom.replyPageCount,
-                    replyHasMore: interaction.after.dom.replyHasMore,
-                    replyCoverage: interaction.after.dom.replyCoverage
+                    firstThreadReplies: replyThread.replies,
+                    replyPaginationVisible: replyThread.paginationVisible,
+                    replyPage: replyThread.page,
+                    replyPageCount: replyThread.pageCount,
+                    replyHasMore: replyThread.hasMore,
+                    replyCoverage: replyThread.coverage
                   } : {})
                 };
               }

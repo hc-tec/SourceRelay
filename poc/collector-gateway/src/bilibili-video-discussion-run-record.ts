@@ -7,6 +7,7 @@ import {
 import {
   BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS,
   BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS,
+  BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_PAGES,
   BILIBILI_VIDEO_DISCUSSION_STRATEGY_VERSION,
   type BilibiliVideoDiscussionAction,
   type BilibiliVideoDiscussionProjection,
@@ -86,6 +87,7 @@ export function createBilibiliVideoDiscussionRunRecord(input: {
       productionResponseRoutes: [],
       maxRootComments: BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS,
       maxReplyItems: BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS,
+      maxReplyPages: BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_PAGES,
       semanticActionDelivery: 'at_most_once',
       runDeadlineMs: 60_000,
       targetTabSelection: input.targetTabSelection,
