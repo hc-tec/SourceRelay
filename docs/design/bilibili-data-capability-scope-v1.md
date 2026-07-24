@@ -126,3 +126,5 @@ coverage / terminal_reason / status
 随后新增的 batch coverage 路由对真实双页 batch artifact `427bbd8e-37c2-4479-bbc7-bcd1b040ab05` 与 `7db363bb-dbfb-46bd-ac95-91217e6ec10c` 做了同 query digest 的跨任务比较：两次均为 40 条完整结果，但交集为 0、union 为 80、Jaccard/overlap 为 0、drift 为 1；coverage manifest 只保存 artifact ID、query digest 和比例摘要，未保存 BVID 列表。这个两样本结果明确证明采集时刻漂移风险，当前仍需更多样本和独立 review，不能 admission。
 
 coverage 之后又加入 `machine_precheck`：policy `0.1.0` 固定最少 3 个样本/3 个 pair、平均 drift ≤ 0.25、单 pair drift ≤ 0.5、平均 Jaccard ≥ 0.75。当前两样本 coverage 被明确判为 `blocked`；即使未来统计条件通过，结果也只能是 `candidate_for_independent_review`，不能自动转成 admission。
+
+随后使用全新隔离临时 Profile 完成 3 个真实完整双页 batch（每次 40 条、0 重复），并把第一次因 3 个 retained 页面占满 page pool 而失败的 batch 单独保留为 `page_pool_capacity_exhausted`，没有重放。三样本 coverage `4ac86631-9bbe-4e02-986c-39479d8d3499` 得到 `meanOverlap=0.9 / meanJaccard=0.8206913859 / meanDrift=0.1793086141 / maxPairDrift=0.2608695652`，通过 machine policy，状态为 `candidate_for_independent_review`；临时 Profile 与 43132 已清理，仍未 admission。

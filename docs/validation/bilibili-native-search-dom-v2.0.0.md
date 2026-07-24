@@ -222,6 +222,28 @@ coverage artifact 重启读取和 SHA-256 manifest 校验均通过，原始 BVID
 
 coverage 的机器预审接口使用固定 policy `0.1.0`，要求至少 3 个样本、至少 3 个 pair、平均 drift 不超过 0.25、单 pair drift 不超过 0.5、平均 Jaccard 不低于 0.75。对上述 coverage 的预审结果为 `decision=blocked`，原因包括样本不足、pair 不足、平均 drift 超阈值、单 pair drift 超阈值、平均 Jaccard 不足以及 `independent_review_required`。这个接口明确叫 `machine_precheck`，即使统计门禁通过也只返回 `candidate_for_independent_review`，不会自动产生 admission 或替代人工 review。
 
+## 2026-07-24 三样本真实 coverage 增量
+
+在不触碰原先被账号安全锁定的 Profile 前提下，使用全新隔离临时 Collection Profile `7daeb8af-de37-4695-9c0f-1a63a2be7e98` 完成了 3 个独立 batch 尝试。第 1、2 次各完成 2 页 / 40 条 / 0 重复；第 3 次第一次尝试在第 1 页后因 3 个 `retained_for_review` 页面占满 managed page pool 返回 `page_pool_capacity_exhausted`，batch `580fefd7-1984-46ec-87b4-1f870a3d551d` 标为 failed，不进入 coverage。随后显式关闭临时 Profile、清空已关闭页面、重新启动新 Browser Session，再执行一次新的第 3 次 batch，未刷新或重放失败动作。
+
+纳入 coverage 的 3 个真实完整 artifact 为：
+
+```yaml
+coverageId: 4ac86631-9bbe-4e02-986c-39479d8d3499
+sampleArtifactIds:
+  - 29b90d7f-2200-4054-b24d-1a717228d328
+  - 72af4ca2-a442-4271-b46b-202f6020dd26
+  - d978c42e-7789-4847-b840-123b8934b6a4
+sampleCount: 3
+pairCount: 3
+meanOverlapRate: 0.9
+meanJaccardRate: 0.8206913859
+meanDriftRate: 0.1793086141
+maximumPairDriftRate: 0.2608695652
+```
+
+三个 pair 的交集分别为 38、34、36，Jaccard 分别约为 0.905、0.739、0.818。该 coverage 通过 machine policy `0.1.0`，返回 `candidate_for_independent_review`；这只表示“统计条件达到人工复核入口”，不表示 admission。Profile 最后显式关闭，临时 Gateway 43132 已清理，失败 batch artifact 和 page-pool 容量证据均保留。
+
 ## 结论
 
 `bilibili.search.breadth.dom.v2 @ 0.2.0` 已在 UTF-8 中文查询上完成一次真实生产首屏闭环，但当前策略仍保持：
@@ -232,4 +254,4 @@ admissionEligible: false
 productionStatus: research-only
 ```
 
-下一门槛不再是“有没有 batch runner”或“能否识别空结果”，而是继续积累跨任务漂移/重复比例样本并完成独立 review；不能把本次 batch 的 40 条 unique 结果、两样本 drift=1、空结果终止或旧的 v1 admission 自动扩大为 v2 admission。
+下一门槛不再是“有没有 batch runner”或“能否识别空结果”，而是对三样本 machine candidate 做独立 review，并继续观察更多时间间隔和页面池边界样本；不能把三样本通过统计预审、单次 40 条结果、空结果终止或旧的 v1 admission 自动扩大为 v2 admission。
