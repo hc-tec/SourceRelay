@@ -128,7 +128,7 @@ export interface BilibiliVideoDiscussionReplyPage {
   crossPageDuplicateCount: number;
   /** Unique normalized replies accumulated through this observed page. */
   cumulativeUniqueReplyCount: number;
-  /** Whether this observation changed the current page content digest. */
+  /** Whether this page differs from the prior observed page (or is the initial capture). */
   contentChanged: boolean;
   contentDigest: string;
 }
