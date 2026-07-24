@@ -1,7 +1,7 @@
 import type { PageVisualEvidence } from './page-visual-evidence.js';
 
 /**
- * A deliberately narrow browser-input contract for the two public discussion
+ * A deliberately narrow browser-input contract for the public discussion
  * controls proved during reconnaissance. The Gateway chooses only the
  * semantic action; the Host discovers the live Shadow DOM target and owns the
  * pointer coordinates.
@@ -14,7 +14,8 @@ export const BILIBILI_VIDEO_DISCUSSION_MAX_REPLY_ITEMS = 20 as const;
 
 export const BILIBILI_VIDEO_DISCUSSION_INTERACTION_ACTIONS = [
   'select_latest_comments',
-  'expand_first_thread'
+  'expand_first_thread',
+  'expand_second_thread'
 ] as const;
 
 export type BilibiliVideoDiscussionInteractionAction =
@@ -72,6 +73,8 @@ export interface BilibiliVideoDiscussionInteractionDomState {
   targetBounds: BilibiliVideoDiscussionInteractionBounds | null;
   targetPointerHit: boolean;
   targetHovered: boolean;
+  /** Zero-based visible root-thread ordinal selected for an expand action. */
+  threadOrdinal: number;
   targetExpanded: boolean;
   rootCommentCount: number;
   replyPaginationVisible: boolean;
@@ -96,6 +99,8 @@ export interface BilibiliVideoDiscussionInteractionResult {
   pageAlias: string;
   actionId: string;
   action: BilibiliVideoDiscussionInteractionAction;
+  /** Zero-based visible root-thread ordinal selected for an expand action. */
+  threadOrdinal: number;
   bvid: string;
   clickAttempted: boolean;
   completedAt: string;

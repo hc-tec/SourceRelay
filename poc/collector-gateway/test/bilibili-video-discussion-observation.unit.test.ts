@@ -11,6 +11,10 @@ import {
   mergeBilibiliVideoDiscussionRootComments,
   projectBilibiliVideoDiscussionDom
 } from '../src/bilibili-video-discussion-contract';
+import {
+  createBilibiliVideoDiscussionActionLedger,
+  createBilibiliVideoDiscussionScrollAction
+} from '../src/bilibili-video-discussion-action-ledger';
 
 const bvid = 'BV1qZSLBYEpa';
 
@@ -36,6 +40,46 @@ function result(dom: Record<string, unknown>) {
 }
 
 describe('Bilibili discussion DOM contract', () => {
+  test('keeps scroll actions before requested interaction actions in the ledger', () => {
+    const ledger = createBilibiliVideoDiscussionActionLedger(
+      '11111111-1111-4111-8111-111111111111',
+      ['expand_first_thread', 'expand_second_thread']
+    );
+    ledger.appendScroll(createBilibiliVideoDiscussionScrollAction(
+      '11111111-1111-4111-8111-111111111111',
+      2
+    ));
+    ledger.appendScroll(createBilibiliVideoDiscussionScrollAction(
+      '11111111-1111-4111-8111-111111111111',
+      3
+    ));
+    ledger.appendRequestedInteractions();
+    ledger.appendRequestedInteractions();
+
+    expect(ledger.actions.map((action) => action.kind)).toEqual([
+      'navigation',
+      'scroll',
+      'scroll',
+      'scroll',
+      'expand_first_thread',
+      'expand_second_thread'
+    ]);
+    expect(ledger.actions.map((action) => action.actionId)).toEqual([
+      'navigate_video_discussion_11111111_1111_4111_8111_111111111111',
+      'scroll_video_discussion_11111111_1111_4111_8111_111111111111',
+      'scroll_video_discussion_11111111_1111_4111_8111_111111111111_2',
+      'scroll_video_discussion_11111111_1111_4111_8111_111111111111_3',
+      'expand_first_thread_11111111_1111_4111_8111_111111111111',
+      'expand_second_thread_11111111_1111_4111_8111_111111111111'
+    ]);
+    expect(ledger.actions.filter((action) => action.kind === 'scroll'))
+      .toHaveLength(3);
+    expect(() => ledger.appendScroll(createBilibiliVideoDiscussionScrollAction(
+      '11111111-1111-4111-8111-111111111111',
+      4
+    ))).toThrow('bilibili_video_discussion_action_phase_closed');
+  });
+
   test('canonicalises only a clean Bilibili video URL', () => {
     expect(canonicalBilibiliVideoDiscussionUrl(`https://www.bilibili.com/video/${bvid}/`))
       .toBe(`https://www.bilibili.com/video/${bvid}`);
@@ -45,10 +89,10 @@ describe('Bilibili discussion DOM contract', () => {
     expect(bilibiliVideoDiscussionBvid(`https://www.bilibili.com/video/${bvid}`)).toBe(bvid);
     expect(bilibiliVideoDiscussionInput({
       canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
-      actions: ['select_latest_comments', 'expand_first_thread']
+      actions: ['select_latest_comments', 'expand_first_thread', 'expand_second_thread']
     })).toEqual({
       canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,
-      actions: ['select_latest_comments', 'expand_first_thread']
+      actions: ['select_latest_comments', 'expand_first_thread', 'expand_second_thread']
     });
     expect(() => bilibiliVideoDiscussionInput({
       canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`,

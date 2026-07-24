@@ -5,6 +5,7 @@ export type InteractionPhase =
   | 'scroll_to_comments'
   | 'select_latest_comments'
   | 'expand_first_thread'
+  | 'expand_second_thread'
   | 'idle';
 
 export type NetworkOwnership = 'platform_api' | 'platform_cdn' | 'third_party_or_unknown';
@@ -61,7 +62,8 @@ export type InteractionActionName =
   | 'select_caption_language'
   | 'scroll_to_comments'
   | 'select_latest_comments'
-  | 'expand_first_thread';
+  | 'expand_first_thread'
+  | 'expand_second_thread';
 
 export type InteractionActionOutcome =
   | 'completed'

@@ -81,6 +81,7 @@ export interface BilibiliVideoDiscussionProjection {
   sort: 'hot' | 'latest' | 'unknown';
   contentState: 'ready' | 'empty';
   rootComments: string[];
+  replyThreads: BilibiliVideoDiscussionReplyThread[];
   firstThreadExpandVisible: boolean;
   firstThreadExpanded: boolean;
   firstThreadReplies: BilibiliVideoDiscussionReply[];
@@ -92,6 +93,17 @@ export interface BilibiliVideoDiscussionProjection {
   loginGateVisible: boolean;
   capturedAfterScroll: boolean;
   capturedAt: string;
+}
+
+/** A bounded reply page captured for one visible root-thread ordinal. */
+export interface BilibiliVideoDiscussionReplyThread {
+  threadOrdinal: number;
+  replies: BilibiliVideoDiscussionReply[];
+  paginationVisible: boolean;
+  page: number | null;
+  pageCount: number | null;
+  hasMore: boolean | null;
+  coverage: BilibiliVideoDiscussionReplyCoverage;
 }
 
 export interface BilibiliVideoDiscussionAction {
@@ -139,6 +151,7 @@ export interface BilibiliVideoDiscussionRunRecord {
   actions: BilibiliVideoDiscussionAction[];
   coverage: {
     capturedRootComments: number;
+    capturedReplyThreads: number;
     capturedFirstThreadReplies: number;
     sort: BilibiliVideoDiscussionProjection['sort'] | null;
     firstThreadExpandVisible: boolean;
@@ -208,8 +221,8 @@ export function bilibiliVideoDiscussionInput(value: unknown): BilibiliVideoDiscu
   const canonicalVideoUrl = canonicalBilibiliVideoDiscussionUrl(candidate.canonicalVideoUrl);
   if (!canonicalVideoUrl) throw new Error('bilibili_video_discussion_input_invalid');
   const actions = candidate.actions === undefined ? [] : candidate.actions;
-  if (!Array.isArray(actions) || actions.length > 2 ||
-    actions.some((action) => action !== 'select_latest_comments' && action !== 'expand_first_thread') ||
+  if (!Array.isArray(actions) || actions.length > 3 ||
+    actions.some((action) => action !== 'select_latest_comments' && action !== 'expand_first_thread' && action !== 'expand_second_thread') ||
     new Set(actions).size !== actions.length) {
     throw new Error('bilibili_video_discussion_input_invalid');
   }
@@ -256,6 +269,7 @@ export function projectBilibiliVideoDiscussionDom(
     sort,
     contentState: dom.commentContentState,
     rootComments,
+    replyThreads: [],
     firstThreadExpandVisible: dom.firstThreadExpandVisible,
     firstThreadExpanded: false,
     firstThreadReplies: normaliseReplies(dom.firstThreadReplies),

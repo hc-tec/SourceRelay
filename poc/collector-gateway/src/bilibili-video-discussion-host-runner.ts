@@ -30,6 +30,10 @@ import {
   bilibiliVideoDiscussionObservationWaitState,
   bilibiliVideoDiscussionStrategyObservation
 } from './bilibili-video-discussion-observation';
+import {
+  createBilibiliVideoDiscussionActionLedger,
+  createBilibiliVideoDiscussionScrollAction
+} from './bilibili-video-discussion-action-ledger';
 import { createBilibiliVideoDiscussionRunRecord } from './bilibili-video-discussion-run-record';
 import type { CollectionBrowserManager } from './browser-manager';
 import type { BrowserProfileRegistry } from './profiles';
@@ -77,42 +81,6 @@ function input(value: BilibiliVideoDiscussionHostRunInput): BilibiliVideoDiscuss
   return {
     profileId: value.profileId,
     ...bilibiliVideoDiscussionInput({ canonicalVideoUrl: value.canonicalVideoUrl, actions: value.actions })
-  };
-}
-
-function navigationAction(runId: string): BilibiliVideoDiscussionAction {
-  return {
-    actionId: `navigate_video_discussion_${runId.replace(/-/g, '_')}`,
-    kind: 'navigation',
-    attempted: false,
-    attemptCount: 0,
-    outcome: 'prerequisite_unmet',
-    errorCode: null
-  };
-}
-
-function scrollAction(runId: string, ordinal = 1): BilibiliVideoDiscussionAction {
-  return {
-    actionId: `scroll_video_discussion_${runId.replace(/-/g, '_')}${ordinal === 1 ? '' : `_${ordinal}`}`,
-    kind: 'scroll',
-    attempted: false,
-    attemptCount: 0,
-    outcome: 'prerequisite_unmet',
-    errorCode: null
-  };
-}
-
-function interactionAction(
-  runId: string,
-  action: BilibiliVideoDiscussionInteractionAction
-): BilibiliVideoDiscussionAction {
-  return {
-    actionId: `${action}_${runId.replace(/-/g, '_')}`,
-    kind: action,
-    attempted: false,
-    attemptCount: 0,
-    outcome: 'prerequisite_unmet',
-    errorCode: null
   };
 }
 
@@ -218,9 +186,8 @@ export class BilibiliVideoDiscussionHostRunner {
     bvid: string,
     requestedActions: BilibiliVideoDiscussionInteractionAction[]
   ): Promise<BilibiliVideoDiscussionHostRunResult> {
-    const navigation = navigationAction(permit.runId);
-    const firstScroll = scrollAction(permit.runId, 1);
-    const actions = [navigation, firstScroll, ...requestedActions.map((action) => interactionAction(permit.runId, action))];
+    const actionLedger = createBilibiliVideoDiscussionActionLedger(permit.runId, requestedActions);
+    const { navigation, firstScroll, requestedInteractionActions, actions } = actionLedger;
     const interactionResults: BilibiliVideoDiscussionInteractionResult[] = [];
     let deadline = 0;
     let acquired: AcquirePageResult | null = null;
@@ -375,8 +342,8 @@ export class BilibiliVideoDiscussionHostRunner {
         if (capturedAfterScroll && firstScroll.attempted && rootProgressed) {
           for (let ordinal = 2; ordinal <= ROOT_SCROLL_MAX_ACTIONS; ordinal += 1) {
             if (accumulatedRootComments.length >= BILIBILI_VIDEO_DISCUSSION_MAX_ROOT_COMMENTS) break;
-            const nextScroll = scrollAction(permit.runId, ordinal);
-            actions.push(nextScroll);
+            const nextScroll = createBilibiliVideoDiscussionScrollAction(permit.runId, ordinal);
+            actionLedger.appendScroll(nextScroll);
             try {
               await this.#performRootScroll({
                 profileId: permit.profileId,
@@ -458,9 +425,13 @@ export class BilibiliVideoDiscussionHostRunner {
             errorCode = null;
           }
         }
+        // Extra trusted scrolls are added above at the moment they are
+        // scheduled.  Append the requested interaction records only after
+        // that phase so even unattempted records retain the real phase order.
+        actionLedger.appendRequestedInteractions();
         if (discussion && !discussion.loginGateVisible && requestedActions.length > 0) {
           for (const requestedAction of requestedActions) {
-            const actionRecord = actions.find((candidate) => candidate.kind === requestedAction);
+            const actionRecord = requestedInteractionActions.find((candidate) => candidate.kind === requestedAction);
             if (!actionRecord) throw new Error('video_discussion_interaction_action_missing');
             let hostCallStarted = false;
             try {
@@ -537,16 +508,33 @@ export class BilibiliVideoDiscussionHostRunner {
                 if (!resortedDiscussion) throw new Error('video_discussion_dom_projection_failed');
                 discussion = { ...resortedDiscussion, sort: 'latest' };
               } else {
+                const threadOrdinal = interaction.threadOrdinal;
+                const replyThread = {
+                  threadOrdinal,
+                  replies: interaction.after.dom.firstThreadReplies,
+                  paginationVisible: interaction.after.dom.replyPaginationVisible,
+                  page: interaction.after.dom.replyPage,
+                  pageCount: interaction.after.dom.replyPageCount,
+                  hasMore: interaction.after.dom.replyHasMore,
+                  coverage: interaction.after.dom.replyCoverage
+                };
+                const replyThreads = [
+                  ...discussion.replyThreads.filter((candidate) => candidate.threadOrdinal !== threadOrdinal),
+                  replyThread
+                ].sort((left, right) => left.threadOrdinal - right.threadOrdinal);
                 discussion = {
                   ...discussion,
-                  firstThreadExpandVisible: false,
-                  firstThreadExpanded: true,
-                  firstThreadReplies: interaction.after.dom.firstThreadReplies,
-                  replyPaginationVisible: interaction.after.dom.replyPaginationVisible,
-                  replyPage: interaction.after.dom.replyPage,
-                  replyPageCount: interaction.after.dom.replyPageCount,
-                  replyHasMore: interaction.after.dom.replyHasMore,
-                  replyCoverage: interaction.after.dom.replyCoverage
+                  replyThreads,
+                  ...(threadOrdinal === 0 ? {
+                    firstThreadExpandVisible: false,
+                    firstThreadExpanded: true,
+                    firstThreadReplies: interaction.after.dom.firstThreadReplies,
+                    replyPaginationVisible: interaction.after.dom.replyPaginationVisible,
+                    replyPage: interaction.after.dom.replyPage,
+                    replyPageCount: interaction.after.dom.replyPageCount,
+                    replyHasMore: interaction.after.dom.replyHasMore,
+                    replyCoverage: interaction.after.dom.replyCoverage
+                  } : {})
                 };
               }
             } catch (error) {
@@ -574,7 +562,7 @@ export class BilibiliVideoDiscussionHostRunner {
             }
           }
           if (state === 'completed' &&
-            actions.filter((action) => action.kind === 'select_latest_comments' || action.kind === 'expand_first_thread')
+            actions.filter((action) => action.kind === 'select_latest_comments' || action.kind === 'expand_first_thread' || action.kind === 'expand_second_thread')
               .every((action) => action.outcome === 'completed')) {
             terminalReason = 'discussion_ready';
           }
@@ -626,6 +614,12 @@ export class BilibiliVideoDiscussionHostRunner {
         }
       }
     }
+
+    // If navigation/observation stopped before the normal interaction phase,
+    // still persist the requested records after all actions that actually ran.
+    // They remain prerequisite_unmet and cannot be mistaken for platform
+    // attempts, while the ledger stays ordered by execution phase.
+    actionLedger.appendRequestedInteractions();
 
     const run = createBilibiliVideoDiscussionRunRecord({
       runId: permit.runId,

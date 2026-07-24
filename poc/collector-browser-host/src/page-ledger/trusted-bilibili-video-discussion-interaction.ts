@@ -25,8 +25,13 @@ const PROBE_INTERVAL_MS = 120;
 const MINIMUM_TIMEOUT_MS = 1_000;
 const TARGET_ROUTES = {
   select_latest_comments: '/x/v2/reply/wbi/main',
-  expand_first_thread: '/x/v2/reply/reply'
+  expand_first_thread: '/x/v2/reply/reply',
+  expand_second_thread: '/x/v2/reply/reply'
 } as const;
+
+function threadOrdinalForAction(action: BilibiliVideoDiscussionInteractionAction): number {
+  return action === 'expand_second_thread' ? 1 : 0;
+}
 
 interface DiscussionProbe {
   dom: BilibiliVideoDiscussionInteractionDomState;
@@ -124,6 +129,7 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
         actionId: request.actionId,
         action: request.action,
         bvid: request.bvid,
+        threadOrdinal: threadOrdinalForAction(request.action),
         clickAttempted: true,
         completedAt: new Date().toISOString(),
         before: {
@@ -451,10 +457,12 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
     const host = document.querySelector<HTMLElement>('#commentapp');
     const commentRoot = host?.querySelector<HTMLElement>('bili-comments') ?? null;
     const commentText = clean(composedText(commentRoot ?? host ?? document.body), 20_000);
-    const firstThread = commentRoot
-      ? findComposed(commentRoot, (element) =>
+    const threadRenderers = commentRoot
+      ? findComposedAll(commentRoot, (element) =>
         element.tagName.toLowerCase() === 'bili-comment-thread-renderer' && rendered(element), 3_000)
-      : null;
+      : [];
+    const threadOrdinal = input.action === 'expand_second_thread' ? 1 : 0;
+    const selectedThread = threadRenderers[threadOrdinal] ?? null;
     let target: Element | null = null;
     let latestControl: Element | null = null;
     let hotControl: Element | null = null;
@@ -478,8 +486,8 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
       hotControl = targetFor(header ?? commentRoot ?? host ?? document.body, '最热');
       target = latestControl;
     } else {
-      const replyRenderer = firstThread
-        ? findComposed(firstThread, (element) =>
+      const replyRenderer = selectedThread
+        ? findComposed(selectedThread, (element) =>
           element.tagName.toLowerCase() === 'bili-comment-replies-renderer' && rendered(element), 800)
         : null;
       target = replyRenderer ? targetFor(replyRenderer, '点击查看') : null;
@@ -598,7 +606,8 @@ async function readProbe(page: Page, action: BilibiliVideoDiscussionInteractionA
           isComposedAncestor(hit, target) || isComposedAncestor(target, hit))),
         targetHovered: composedHovered(target),
         targetExpanded,
-        rootCommentCount: firstThread ? 1 : 0,
+        threadOrdinal,
+        rootCommentCount: threadRenderers.length,
         replyPaginationVisible,
         firstThreadReplies,
         replyPage,
@@ -626,6 +635,7 @@ function validateProbe(value: unknown): DiscussionProbe {
     ? { x: boundX, y: boundY, width: boundWidth, height: boundHeight }
     : null;
   const latestState = dom.latestState;
+  const threadOrdinal = dom.threadOrdinal;
   const rootCommentCount = dom.rootCommentCount;
   const firstThreadReplies = dom.firstThreadReplies;
   const replyPage = dom.replyPage;
@@ -652,7 +662,8 @@ function validateProbe(value: unknown): DiscussionProbe {
     (replyHasMore !== null && typeof replyHasMore !== 'boolean') ||
     (replyCoverage !== 'not_expanded' && replyCoverage !== 'current_page' &&
       replyCoverage !== 'empty' && replyCoverage !== 'unknown') || typeof rootCommentCount !== 'number' ||
-    !Number.isSafeInteger(rootCommentCount) || rootCommentCount < 0 || rootCommentCount > 20) {
+    !Number.isSafeInteger(rootCommentCount) || rootCommentCount < 0 || rootCommentCount > 20 ||
+    typeof threadOrdinal !== 'number' || !Number.isSafeInteger(threadOrdinal) || threadOrdinal < 0 || threadOrdinal > 1) {
     throw new Error('bilibili_video_discussion_interaction_probe_invalid');
   }
   return {
@@ -670,6 +681,7 @@ function validateProbe(value: unknown): DiscussionProbe {
       targetBounds,
       targetPointerHit: dom.targetPointerHit,
       targetHovered: dom.targetHovered,
+      threadOrdinal,
       targetExpanded: dom.targetExpanded,
       rootCommentCount,
       replyPaginationVisible: dom.replyPaginationVisible,

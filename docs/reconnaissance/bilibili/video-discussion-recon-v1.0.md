@@ -425,3 +425,37 @@ responseBodies: not_read
 对应 artifact：[manifest.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/23aca610-2915-442b-bd40-88939766c0a2/manifest.json)；[discussion.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/23aca610-2915-442b-bd40-88939766c0a2/discussion.json)。
 
 这证明了“根评论跨快照有界累积”已经具备真实生产闭环，但不等同于全量评论覆盖：当前仍没有稳定公开 root id、没有跨更多页的分页终止证明，也没有把多个 root 的楼中楼展开串入同一任务。下一步应在独立预算下完成根评论稳定身份/覆盖字段，再推进多个 root 的楼中楼采样；`admissionEligible` 继续保持 `false`。
+
+## S. 2026-07-24 第二个根评论楼中楼真实闭环与动作账本修复
+
+本轮在同一已登录的 B 站 Collection Profile 上验证了当前可见根评论窗口中的第二个楼中楼入口。请求只包含一个交互动作 `expand_second_thread`；没有把该结果扩大解释为多个根评论连续采样，也没有点击回复下一页。
+
+```yaml
+runId: 7b264b70-8b0f-47c3-a5d1-8c6c0a533854
+artifactId: 752c57ac-2efb-45b3-ae09-19e1280f431b
+target: BV1qZSLBYEpa
+strategy: bilibili.video.discussion.dom.v1 @ 0.1.0
+state: completed
+terminalReason: discussion_ready
+navigationCount: 1
+trustedScrollCount: 3
+expandSecondThreadClickCount: 1
+capturedRootComments: 21
+capturedReplyThreads: 1
+capturedThreadOrdinal: 1
+capturedReplies: 10
+replyPage: null
+replyPageCount: 3
+replyHasMore: true
+replyCoverage: current_page
+networkRoute: /x/v2/reply/reply
+networkStatus: 200
+targetPage: retained_after_run
+accountSafety: ready
+```
+
+动作前 DOM 重新读取了序号为 `1` 的可见根评论 renderer，实时边界框为 `x=236,y=341,w=52,h=22`；目标可见、位于 viewport、通过 composed hit-test，且已真实 hover。一次可信 mouse down/up 后，入口消失，回复分页出现，当前页投影为 10 条回复，页面公开显示总页数为 3。Network 同时记录到动作后新增的 `GET https://api.bilibili.com/x/v2/reply/reply`、status `200`；仅保存去 query 的 route 元数据，没有读取 query、请求体、响应正文或认证材料。对应 artifact 为 [manifest.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/752c57ac-2efb-45b3-ae09-19e1280f431b/manifest.json) 与 [discussion.json](../../../poc/collector-gateway/runtime/p2a-discussion-root-20260724/bilibili-video-discussion/752c57ac-2efb-45b3-ae09-19e1280f431b/discussion.json)；动作前后视觉证据保留在同一 runtime 的 `browser-host/visual-evidence` 目录。
+
+本轮还修复了一个会影响审计和多动作扩展的本地设计缺陷：此前动作数组在初始化时就放入交互动作，而额外滚动是在执行时追加，导致真实执行顺序为“导航 → 滚动 1/2/3 → 点击”，artifact 却可能写成“导航 → 滚动 1 → 点击 → 滚动 2/3”。现在由独立的有界动作账本组件按阶段追加：导航和首轮滚动先登记，后续可信滚动按实际发生顺序登记，所有请求交互在滚动阶段结束后一次性登记；重复 finalize 不会复制动作，滚动阶段关闭后也不能再追加滚动。单元门禁验证了动作 ID、顺序和 `at-most-once` 语义。
+
+当前事实边界仍然是：本轮只证明了序号为 `1` 的第二个可见根评论；尚未证明同一 run 连续展开序号 `0` 和 `1` 两个楼中楼，也尚未点击回复分页。旧字段 `firstThread*` 只代表 ordinal `0`，多线程结果必须读取 `discussion.replyThreads`；本次 `capturedFirstThreadReplies=0` 不表示本次没有回复，而是表示 ordinal `0` 没有在该 run 中展开。`admissionEligible` 继续保持 `false`。

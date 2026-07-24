@@ -61,6 +61,7 @@ export function createBilibiliVideoDiscussionRunRecord(input: {
     actions: input.actions,
     coverage: {
       capturedRootComments: input.discussion?.rootComments.length ?? 0,
+      capturedReplyThreads: input.discussion?.replyThreads.length ?? 0,
       capturedFirstThreadReplies: input.discussion?.firstThreadReplies.length ?? 0,
       sort: input.discussion?.sort ?? null,
       firstThreadExpandVisible: input.discussion?.firstThreadExpandVisible ?? false,
