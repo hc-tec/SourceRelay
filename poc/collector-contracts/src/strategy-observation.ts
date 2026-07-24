@@ -17,6 +17,8 @@ export const BILIBILI_DISCUSSION_STRATEGY_ID =
   'bilibili.video.discussion.dom.v1' as const;
 export const BILIBILI_DANMAKU_STRATEGY_ID =
   'bilibili.video.danmaku.dom.v1' as const;
+export const BILIBILI_COLLECTION_SERIES_STRATEGY_ID =
+  'bilibili.collection-series.overview.response-dom.v1' as const;
 
 export type CollectorStrategyId =
   | typeof BILIBILI_DYNAMIC_STRATEGY_ID
@@ -26,7 +28,8 @@ export type CollectorStrategyId =
   | typeof BILIBILI_NATIVE_SEARCH_STRATEGY_ID
   | typeof BILIBILI_TRANSCRIPT_STRATEGY_ID
   | typeof BILIBILI_DISCUSSION_STRATEGY_ID
-  | typeof BILIBILI_DANMAKU_STRATEGY_ID;
+  | typeof BILIBILI_DANMAKU_STRATEGY_ID
+  | typeof BILIBILI_COLLECTION_SERIES_STRATEGY_ID;
 
 export type BridgeJsonValue =
   | null
@@ -73,6 +76,11 @@ export interface BilibiliDiscussionStrategyTarget {
 export interface BilibiliDanmakuStrategyTarget {
   canonicalUrl: string;
   bvid: string;
+}
+
+export interface BilibiliCollectionSeriesStrategyTarget {
+  canonicalUrl: string;
+  stableAccountId: string;
 }
 
 /**
@@ -144,6 +152,11 @@ export type StrategyObserverBindingRequest =
     strategyId: typeof BILIBILI_DANMAKU_STRATEGY_ID;
     target: BilibiliDanmakuStrategyTarget;
     maximumResponseObservations: 0;
+  })
+  | (StrategyObserverBindingRequestBase & {
+    strategyId: typeof BILIBILI_COLLECTION_SERIES_STRATEGY_ID;
+    target: BilibiliCollectionSeriesStrategyTarget;
+    maximumResponseObservations: 1;
   });
 
 export interface StrategyObservationReadRequest {

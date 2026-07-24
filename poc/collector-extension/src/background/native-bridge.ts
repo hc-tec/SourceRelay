@@ -1,6 +1,7 @@
 import {
   BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID,
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
+  BILIBILI_COLLECTION_SERIES_STRATEGY_ID,
   BILIBILI_DANMAKU_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
   BILIBILI_DISCUSSION_STRATEGY_ID,
@@ -31,6 +32,10 @@ import {
   bindBilibiliAccountVideoInventoryObserver,
   readBilibiliAccountVideoInventoryObservation
 } from './strategies/bilibili-account-video-inventory-strategy';
+import {
+  bindBilibiliCollectionSeriesObserver,
+  readBilibiliCollectionSeriesObservation
+} from './strategies/bilibili-collection-series-strategy';
 import {
   bindBilibiliDynamicObserver,
   readBilibiliDynamicObservation
@@ -181,6 +186,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
       if (command.command.binding.strategyId === BILIBILI_TRANSCRIPT_STRATEGY_ID) {
         return await bindBilibiliTranscriptObserver(command.command);
       }
+      if (command.command.binding.strategyId === BILIBILI_COLLECTION_SERIES_STRATEGY_ID) {
+        return await bindBilibiliCollectionSeriesObserver(command.command);
+      }
       throw new Error('collector_strategy_id_rejected');
     case 'collector_read_strategy_observation':
       if (command.command.request.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID) {
@@ -206,6 +214,9 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
       }
       if (command.command.request.strategyId === BILIBILI_TRANSCRIPT_STRATEGY_ID) {
         return await readBilibiliTranscriptObservation(command.command);
+      }
+      if (command.command.request.strategyId === BILIBILI_COLLECTION_SERIES_STRATEGY_ID) {
+        return await readBilibiliCollectionSeriesObservation(command.command);
       }
       throw new Error('collector_strategy_id_rejected');
     case 'collector_read_strategy_binding_diagnostics':

@@ -12,6 +12,8 @@ import { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-v
 import { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account-video-inventory-host-runner';
 import { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
+import { BilibiliCollectionSeriesArtifactStore } from './bilibili-collection-series-artifacts';
+import { BilibiliCollectionSeriesHostRunner } from './bilibili-collection-series-host-runner';
 import { BilibiliDanmakuArtifactStore } from './bilibili-danmaku-artifacts';
 import { BilibiliDanmakuHostRunner } from './bilibili-danmaku-host-runner';
 import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
@@ -45,6 +47,7 @@ const accountVideoPageTwoArtifacts = await BilibiliAccountVideoPageTwoArtifactSt
 const accountVideoPaginationArtifacts = await BilibiliAccountVideoPaginationArtifactStore.create(config.stateDirectory);
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
+const collectionSeriesArtifacts = await BilibiliCollectionSeriesArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
 const nativeSearchBatchArtifacts = await BilibiliNativeSearchBatchArtifactStore.create(config.stateDirectory);
 const nativeSearchBatchCoverageArtifacts = await BilibiliNativeSearchBatchCoverageArtifactStore.create(config.stateDirectory);
@@ -58,6 +61,12 @@ const dynamicRunner = new BilibiliDynamicHostRunner({
   browserManager,
   profiles: profileRegistry,
   artifacts: dynamicArtifacts
+});
+const collectionSeriesRunner = new BilibiliCollectionSeriesHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: collectionSeriesArtifacts
 });
 const accountProfileRunner = new BilibiliAccountProfileHostRunner({
   accountSafety,
@@ -152,6 +161,8 @@ const server = createServer(async (request, response) => {
       accountVideoInventoryRunner,
       dynamicArtifacts,
       dynamicRunner,
+      collectionSeriesArtifacts,
+      collectionSeriesRunner,
       nativeSearchArtifacts,
       nativeSearchRunner,
       nativeSearchBatchArtifacts,

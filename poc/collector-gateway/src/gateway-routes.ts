@@ -14,6 +14,9 @@ import type { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-acco
 import type { BilibiliAccountVideoInventoryHostRunner } from './bilibili-account-video-inventory-host-runner';
 import type { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import type { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
+import type { BilibiliCollectionSeriesArtifactStore } from './bilibili-collection-series-artifacts';
+import type { BilibiliCollectionSeriesHostRunner } from './bilibili-collection-series-host-runner';
+import { bilibiliCollectionSeriesInput } from './bilibili-collection-series-contract';
 import type { BilibiliDanmakuArtifactStore } from './bilibili-danmaku-artifacts';
 import type { BilibiliDanmakuHostRunner } from './bilibili-danmaku-host-runner';
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
@@ -67,6 +70,8 @@ export interface GatewayRouteContext {
   accountVideoInventoryRunner: BilibiliAccountVideoInventoryHostRunner;
   dynamicArtifacts: BilibiliDynamicArtifactStore;
   dynamicRunner: BilibiliDynamicHostRunner;
+  collectionSeriesArtifacts: BilibiliCollectionSeriesArtifactStore;
+  collectionSeriesRunner: BilibiliCollectionSeriesHostRunner;
   nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
   nativeSearchRunner: BilibiliNativeSearchHostRunner;
   nativeSearchBatchArtifacts: BilibiliNativeSearchBatchArtifactStore;
@@ -203,6 +208,10 @@ export async function handleGatewayRoute(
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.dynamicArtifacts.list() });
     return true;
   }
+  if (request.method === 'GET' && url.pathname === '/v1/bilibili-collection-series-artifacts') {
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.collectionSeriesArtifacts.list() });
+    return true;
+  }
   if (request.method === 'GET' && url.pathname === '/v1/account-profile-artifacts') {
     sendJson(response, 200, { schemaVersion: 1, artifacts: context.accountProfileArtifacts.list() });
     return true;
@@ -291,6 +300,29 @@ export async function handleGatewayRoute(
         state: result.run.state,
         errorCode: result.run.errorCode,
         terminalReason: result.run.coverage.terminalReason,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
+  const collectionSeriesRun = url.pathname.match(
+    new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/collection-series/overview$`, 'i')
+  );
+  if (request.method === 'POST' && collectionSeriesRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const input = bilibiliCollectionSeriesInput(await readJsonBody(request));
+    const result = await context.collectionSeriesRunner.run({
+      profileId: collectionSeriesRun[1]!,
+      canonicalProfileUrl: input.canonicalProfileUrl
+    });
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        coverage: result.run.coverage,
         artifact: result.artifact
       }
     });
@@ -609,6 +641,15 @@ export async function handleGatewayRoute(
   if (request.method === 'GET' && dynamicArtifact) {
     const artifact = await context.dynamicArtifacts.get(dynamicArtifact[1]!);
     if (!artifact) throw new Error('bilibili_dynamic_artifact_not_found');
+    sendJson(response, 200, { schemaVersion: 1, artifact });
+    return true;
+  }
+  const collectionSeriesArtifact = url.pathname.match(
+    new RegExp(`^/v1/bilibili-collection-series-artifacts/(${PROFILE_ID})$`, 'i')
+  );
+  if (request.method === 'GET' && collectionSeriesArtifact) {
+    const artifact = await context.collectionSeriesArtifacts.get(collectionSeriesArtifact[1]!);
+    if (!artifact) throw new Error('bilibili_collection_series_artifact_not_found');
     sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }

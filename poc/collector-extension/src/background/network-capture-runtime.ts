@@ -18,7 +18,8 @@ const MAXIMUM_ARM_LIFETIME_MS = 60_000;
  */
 export type NetworkCaptureArmPurpose =
   | 'dynamic_strategy'
-  | 'bilibili_transcript_strategy';
+  | 'bilibili_transcript_strategy'
+  | 'collection_series_strategy';
 
 export interface NetworkCaptureArm {
   platform: SupportedPlatform;
@@ -63,22 +64,37 @@ function canonicalDynamicUrl(value: string): string | null {
   }
 }
 
+function canonicalCollectionSeriesUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    const match = url.protocol === 'https:' && url.hostname === 'space.bilibili.com'
+      ? url.pathname.match(/^\/(\d{1,20})\/lists\/?$/)
+      : null;
+    return match?.[1] ? `https://space.bilibili.com/${match[1]}/lists` : null;
+  } catch {
+    return null;
+  }
+}
+
 function canonicalNavigationUrl(purpose: NetworkCaptureArmPurpose, value: string): string | null {
-  return purpose === 'dynamic_strategy'
-    ? canonicalDynamicUrl(value)
-    : canonicalBilibiliVideoUrl(value, 'observed_document');
+  if (purpose === 'dynamic_strategy') return canonicalDynamicUrl(value);
+  if (purpose === 'collection_series_strategy') return canonicalCollectionSeriesUrl(value);
+  return canonicalBilibiliVideoUrl(value, 'observed_document');
 }
 
 function validContentScriptId(purpose: NetworkCaptureArmPurpose, value: unknown): value is string {
   return typeof value === 'string' && (
     purpose === 'dynamic_strategy'
       ? /^collector-dynamic-[a-z0-9-]{1,80}$/.test(value)
-      : /^collector-transcript-[a-z0-9-]{1,80}$/.test(value)
+      : purpose === 'collection_series_strategy'
+        ? /^collector-collection-series-[a-z0-9-]{1,80}$/.test(value)
+        : /^collector-transcript-[a-z0-9-]{1,80}$/.test(value)
   );
 }
 
 function isNetworkCaptureArmPurpose(value: unknown): value is NetworkCaptureArmPurpose {
-  return value === 'dynamic_strategy' || value === 'bilibili_transcript_strategy';
+  return value === 'dynamic_strategy' || value === 'bilibili_transcript_strategy' ||
+    value === 'collection_series_strategy';
 }
 
 export async function armNetworkCapture(input: {

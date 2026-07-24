@@ -423,6 +423,45 @@ function bilibiliAccountVideoInventoryDomStrategy(): StaticPlatformStrategy {
   };
 }
 
+function bilibiliCollectionSeriesOverviewStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'bilibili.collection-series.overview.response-dom.v1',
+    version: '1.0.0',
+    platform: 'bilibili',
+    evidenceObjectives: ['collection_series'],
+    acquisition: ['native_navigation', 'visible_dom', 'approved_response'],
+    maturity: 'build_ready',
+    surface: 'account_listing',
+    nativeEntry: { kind: 'profile_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['native_navigation', 'visible_dom', 'approved_response']
+    },
+    bounds: {
+      maxRecords: 50,
+      maxReadOnlyActions: 0,
+      firstRenderedPageOnly: true,
+      allowsDetailNavigation: false,
+      allowsCommentNavigation: false,
+      allowsReadOnlyInteraction: false
+    },
+    output: {
+      kind: 'collection_state',
+      partialByDefault: true
+    },
+    browser: {
+      optionalHostPermissions: ['https://space.bilibili.com/*', 'https://api.bilibili.com/*'],
+      domContentMatches: ['https://space.bilibili.com/*'],
+      responseBridgeMatches: ['/x/polymer/web-space/seasons_series_list']
+    },
+    approvedResponseRouteIds: [],
+    validation: {
+      mode: 'local_live_platform_only',
+      liveRecord: null
+    }
+  };
+}
+
 // This is a compiled, repository-local registry.  It is not a mechanism for
 // downloading plugins, evaluating remote code, or granting a strategy browser
 // privileges.  The Collector Core owns all privileged APIs.
@@ -430,6 +469,7 @@ export const STATIC_PLATFORM_STRATEGIES: readonly StaticPlatformStrategy[] = [
   nativeSearchDomStrategy('bilibili'),
   bilibiliAccountProfileDomStrategy(),
   bilibiliAccountVideoInventoryDomStrategy(),
+  bilibiliCollectionSeriesOverviewStrategy(),
   bilibiliVideoDetailDomStrategy(),
   bilibiliVideoTranscriptTrustedResponseStrategy(),
   bilibiliVideoDiscussionDomStrategy(),

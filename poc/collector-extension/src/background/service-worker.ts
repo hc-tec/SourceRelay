@@ -12,6 +12,7 @@ import { initialiseBilibiliAccountProfileDocumentBridge } from './strategies/bil
 import { initialiseBilibiliAccountVideoInventoryDocumentBridge } from './strategies/bilibili-account-video-inventory-strategy';
 import { initialiseBilibiliNativeSearchDocumentBridge } from './strategies/bilibili-native-search-strategy';
 import { initialiseBilibiliVideoDetailDocumentBridge } from './strategies/bilibili-video-detail-strategy';
+import { cleanupExpiredBilibiliCollectionSeriesObserverBindings } from './strategies/bilibili-collection-series-strategy';
 
 const runtimeBootstrap: CollectorRuntimeBootstrap = {
   schemaVersion: 1,
@@ -26,5 +27,6 @@ initialiseBilibiliAccountProfileDocumentBridge();
 initialiseBilibiliAccountVideoInventoryDocumentBridge();
 initialiseBilibiliNativeSearchDocumentBridge();
 initialiseBilibiliVideoDetailDocumentBridge();
+void cleanupExpiredBilibiliCollectionSeriesObserverBindings();
 void initialiseNativeBridge();
 void cleanupStrategyScriptRegistrations();

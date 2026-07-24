@@ -66,7 +66,8 @@ export const EVIDENCE_OBJECTIVES = [
   'discussion_sample',
   'account_context',
   'account_archive',
-  'trend_snapshot'
+  'trend_snapshot',
+  'collection_series'
 ] as const;
 
 export type EvidenceObjective = (typeof EVIDENCE_OBJECTIVES)[number];

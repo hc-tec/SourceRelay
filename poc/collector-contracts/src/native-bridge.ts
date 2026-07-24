@@ -4,6 +4,7 @@ import { canonicalBilibiliAccountProfileUrl } from './bilibili-account-profile.j
 import {
   BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID,
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
+  BILIBILI_COLLECTION_SERIES_STRATEGY_ID,
   BILIBILI_DANMAKU_STRATEGY_ID,
   BILIBILI_DISCUSSION_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
@@ -405,7 +406,8 @@ function isCollectorStrategyId(value: unknown): value is StrategyObserverBinding
     value === BILIBILI_NATIVE_SEARCH_STRATEGY_ID ||
     value === BILIBILI_TRANSCRIPT_STRATEGY_ID ||
     value === BILIBILI_DISCUSSION_STRATEGY_ID ||
-    value === BILIBILI_DANMAKU_STRATEGY_ID;
+    value === BILIBILI_DANMAKU_STRATEGY_ID ||
+    value === BILIBILI_COLLECTION_SERIES_STRATEGY_ID;
 }
 
 function validStrategyBindingTargetAndBudget(
@@ -436,6 +438,9 @@ function validStrategyBindingTargetAndBudget(
   if (candidate.strategyId === BILIBILI_DANMAKU_STRATEGY_ID) {
     return validVideoDetailTarget(candidate.target) && candidate.maximumResponseObservations === 0;
   }
+  if (candidate.strategyId === BILIBILI_COLLECTION_SERIES_STRATEGY_ID) {
+    return validCollectionSeriesTarget(candidate.target) && candidate.maximumResponseObservations === 1;
+  }
   return false;
 }
 
@@ -458,6 +463,13 @@ function validAccountVideoInventoryTarget(value: unknown): boolean {
   const candidate = value as Partial<{ canonicalUrl: string; stableAccountId: string }>;
   if (typeof candidate.stableAccountId !== 'string' || !/^\d{1,20}$/.test(candidate.stableAccountId)) return false;
   return candidate.canonicalUrl === `https://space.bilibili.com/${candidate.stableAccountId}/upload/video`;
+}
+
+function validCollectionSeriesTarget(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<{ canonicalUrl: string; stableAccountId: string }>;
+  if (typeof candidate.stableAccountId !== 'string' || !/^\d{1,20}$/.test(candidate.stableAccountId)) return false;
+  return candidate.canonicalUrl === `https://space.bilibili.com/${candidate.stableAccountId}/lists`;
 }
 
 function validAccountProfileTarget(value: unknown): boolean {
