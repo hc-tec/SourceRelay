@@ -1,4 +1,6 @@
 import {
+  canonicalBilibiliAccountProfileUrl,
+  canonicalBilibiliAccountVideoInventoryUrl,
   canonicalBilibiliNativeSearchUrl,
   canonicalBilibiliVideoWorkUrl,
   extensionWorkTargetUrl,
@@ -202,6 +204,14 @@ export function isExpectedExtensionWorkNavigation(expectedCanonicalUrl: string, 
   const search = canonicalBilibiliNativeSearchUrl(expectedCanonicalUrl, 'strict_input');
   if (search && search === expectedCanonicalUrl) {
     return canonicalBilibiliNativeSearchUrl(observedUrl, 'observed_document') === expectedCanonicalUrl;
+  }
+  const profile = canonicalBilibiliAccountProfileUrl(expectedCanonicalUrl, 'strict_input');
+  if (profile && profile === expectedCanonicalUrl) {
+    return canonicalBilibiliAccountProfileUrl(observedUrl, 'observed_document') === expectedCanonicalUrl;
+  }
+  const inventory = canonicalBilibiliAccountVideoInventoryUrl(expectedCanonicalUrl, 'strict_input');
+  if (inventory && inventory === expectedCanonicalUrl) {
+    return canonicalBilibiliAccountVideoInventoryUrl(observedUrl, 'observed_document') === expectedCanonicalUrl;
   }
   return false;
 }

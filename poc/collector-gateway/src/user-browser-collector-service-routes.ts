@@ -6,6 +6,8 @@ import type {
 } from './collector-service-audit';
 import type { CollectorServiceClientRegistry } from './collector-service-clients';
 import {
+  enqueueBilibiliAccountInventoryWork,
+  enqueueBilibiliAccountProfileWork,
   enqueueBilibiliNativeSearchWork,
   enqueueBilibiliVideoDetailWork,
   reconcileExpiredExtensionWork,
@@ -83,11 +85,23 @@ export async function handleUserBrowserCollectorServiceRoute(
           collection.browserBindingId,
           collection.input.canonicalVideoUrl
         )
-        : await enqueueBilibiliNativeSearchWork(
-          context,
-          collection.browserBindingId,
-          collection.input.query
-        );
+        : collection.capability === 'bilibili.native_search'
+          ? await enqueueBilibiliNativeSearchWork(
+            context,
+            collection.browserBindingId,
+            collection.input.query
+          )
+          : collection.capability === 'bilibili.account_profile'
+            ? await enqueueBilibiliAccountProfileWork(
+              context,
+              collection.browserBindingId,
+              collection.input.canonicalProfileUrl
+            )
+            : await enqueueBilibiliAccountInventoryWork(
+              context,
+              collection.browserBindingId,
+              collection.input.canonicalProfileUrl
+            );
       operationId = operation.operationId;
       await audit(context, access.principal, 'collect', collection.capability, operationId, 'queued', null);
       sendJson(response, 201, {
@@ -128,7 +142,12 @@ async function audit(
   context: UserBrowserCollectorServiceRouteContext,
   principal: UserBrowserServicePrincipal | null,
   action: CollectorServiceAuditAction,
-  capability: 'bilibili.video_detail' | 'bilibili.native_search' | null,
+  capability:
+    | 'bilibili.video_detail'
+    | 'bilibili.native_search'
+    | 'bilibili.account_profile'
+    | 'bilibili.account_inventory'
+    | null,
   operationId: string | null,
   outcome: CollectorServiceAuditOutcome,
   errorCode: string | null

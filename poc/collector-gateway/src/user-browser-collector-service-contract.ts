@@ -1,4 +1,5 @@
 import {
+  canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliVideoWorkUrl,
   normaliseBilibiliNativeSearchRoute
 } from '@intelligence/collector-contracts';
@@ -31,9 +32,27 @@ export interface UserBrowserNativeSearchCollectorServiceRequest extends UserBrow
   };
 }
 
+/** A caller may name one public account identity, never an arbitrary space URL. */
+export interface UserBrowserAccountProfileCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
+  capability: 'bilibili.account_profile';
+  input: {
+    canonicalProfileUrl: string;
+  };
+}
+
+/** Fixed first page of an account's public video inventory; pagination is separate. */
+export interface UserBrowserAccountInventoryCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
+  capability: 'bilibili.account_inventory';
+  input: {
+    canonicalProfileUrl: string;
+  };
+}
+
 export type UserBrowserCollectorServiceRequest =
   | UserBrowserVideoDetailCollectorServiceRequest
-  | UserBrowserNativeSearchCollectorServiceRequest;
+  | UserBrowserNativeSearchCollectorServiceRequest
+  | UserBrowserAccountProfileCollectorServiceRequest
+  | UserBrowserAccountInventoryCollectorServiceRequest;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -89,6 +108,21 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
       capability: 'bilibili.native_search',
       executionTarget: 'collector_work_tab',
       input: { query: route.query }
+    };
+  }
+  if (candidate.capability === 'bilibili.account_profile' || candidate.capability === 'bilibili.account_inventory') {
+    if (Object.keys(input).length !== 1 || typeof input.canonicalProfileUrl !== 'string') {
+      throw new Error('user_browser_collector_service_request_invalid');
+    }
+    const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(input.canonicalProfileUrl, 'strict_input');
+    if (!canonicalProfileUrl) throw new Error('user_browser_collector_service_request_invalid');
+    return {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      browserBindingId: candidate.browserBindingId,
+      platform: 'bilibili',
+      capability: candidate.capability,
+      executionTarget: 'collector_work_tab',
+      input: { canonicalProfileUrl }
     };
   }
   throw new Error('user_browser_collector_service_request_invalid');

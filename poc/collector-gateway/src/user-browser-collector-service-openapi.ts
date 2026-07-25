@@ -68,7 +68,13 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           parameters: [
             {
               name: 'capability', in: 'path', required: true,
-              schema: { type: 'string', enum: ['bilibili.video_detail', 'bilibili.native_search'] }
+              schema: {
+                type: 'string',
+                enum: [
+                  'bilibili.video_detail', 'bilibili.native_search',
+                  'bilibili.account_profile', 'bilibili.account_inventory'
+                ]
+              }
             },
             {
               name: 'artifactId', in: 'path', required: true,
@@ -139,7 +145,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             inputMode: { type: 'string' },
             dispatchState: {
               type: 'string',
-              enum: ['direct_ready', 'direct_migration_required', 'trusted_interaction_migration_required']
+              enum: [
+                'direct_ready', 'direct_canary_pending', 'direct_migration_required',
+                'trusted_interaction_migration_required'
+              ]
             },
             captureMode: { type: 'string' },
             legacyImplementationPresent: { type: 'boolean', const: true },
@@ -161,7 +170,9 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         UserBrowserCollectRequest: {
           oneOf: [
             { $ref: '#/components/schemas/UserBrowserVideoDetailCollectRequest' },
-            { $ref: '#/components/schemas/UserBrowserNativeSearchCollectRequest' }
+            { $ref: '#/components/schemas/UserBrowserNativeSearchCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserAccountProfileCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserAccountInventoryCollectRequest' }
           ]
         },
         UserBrowserVideoDetailCollectRequest: {
@@ -196,6 +207,38 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             }
           }
         },
+        UserBrowserAccountProfileCollectRequest: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            browserBindingId: { type: 'string', format: 'uuid' },
+            platform: { type: 'string', const: 'bilibili' },
+            capability: { type: 'string', const: 'bilibili.account_profile' },
+            executionTarget: { type: 'string', const: 'collector_work_tab' },
+            input: {
+              type: 'object', additionalProperties: false,
+              required: ['canonicalProfileUrl'],
+              properties: { canonicalProfileUrl: { type: 'string', format: 'uri' } }
+            }
+          }
+        },
+        UserBrowserAccountInventoryCollectRequest: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            browserBindingId: { type: 'string', format: 'uuid' },
+            platform: { type: 'string', const: 'bilibili' },
+            capability: { type: 'string', const: 'bilibili.account_inventory' },
+            executionTarget: { type: 'string', const: 'collector_work_tab' },
+            input: {
+              type: 'object', additionalProperties: false,
+              required: ['canonicalProfileUrl'],
+              properties: { canonicalProfileUrl: { type: 'string', format: 'uri' } }
+            }
+          }
+        },
         QueuedOperationResponse: {
           type: 'object', additionalProperties: false,
           required: ['schemaVersion', 'result'],
@@ -215,7 +258,13 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             operationId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
-            capability: { type: 'string', enum: ['bilibili.video_detail', 'bilibili.native_search'] },
+            capability: {
+              type: 'string',
+              enum: [
+                'bilibili.video_detail', 'bilibili.native_search',
+                'bilibili.account_profile', 'bilibili.account_inventory'
+              ]
+            },
             executionTarget: { type: 'string', const: 'collector_work_tab' },
             state: { type: 'string', enum: ['queued', 'claimed', 'completed', 'partial', 'stopped', 'failed'] },
             queuedAt: { type: 'string', format: 'date-time' },
@@ -231,7 +280,13 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           required: ['schemaVersion', 'capability', 'artifact'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
-            capability: { type: 'string', enum: ['bilibili.video_detail', 'bilibili.native_search'] },
+            capability: {
+              type: 'string',
+              enum: [
+                'bilibili.video_detail', 'bilibili.native_search',
+                'bilibili.account_profile', 'bilibili.account_inventory'
+              ]
+            },
             artifact: { type: 'object' }
           }
         }

@@ -1,4 +1,6 @@
 import type { ExtensionWorkItem, ExtensionWorkResult } from '@intelligence/collector-contracts';
+import { executeBilibiliAccountInventoryExtensionWork } from './extension-work-bilibili-account-inventory';
+import { executeBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
 import { executeBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
 import { executeBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
 import { claimNextExtensionWork, submitExtensionWorkResult } from './extension-work-client';
@@ -92,7 +94,7 @@ export async function pollForExtensionWork(): Promise<void> {
 
 async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
   const lifecycle = {
-    onWorkTabAcquired: async (acquisition) => {
+    onWorkTabAcquired: async (acquisition: WorkTabAcquisition) => {
       await updateActivePhase(item, 'work_tab_acquired', acquisition);
     },
     onNavigationIntent: async () => {
@@ -108,6 +110,12 @@ async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
   }
   if (item.capability === 'bilibili.native_search') {
     return await executeBilibiliNativeSearchExtensionWork(item, lifecycle);
+  }
+  if (item.capability === 'bilibili.account_profile') {
+    return await executeBilibiliAccountProfileExtensionWork(item, lifecycle);
+  }
+  if (item.capability === 'bilibili.account_inventory') {
+    return await executeBilibiliAccountInventoryExtensionWork(item, lifecycle);
   }
   throw new Error('extension_work_capability_rejected');
 }
@@ -150,29 +158,40 @@ async function deliverPendingResult(pending: PendingExtensionWorkResult): Promis
 function interruptedResult(active: ActiveExtensionWork): ExtensionWorkResult {
   const navigationAttempted = active.phase === 'navigation_intent_recorded';
   const base = {
-    schemaVersion: 1,
-    protocolVersion: 1,
+    schemaVersion: 1 as const,
+    protocolVersion: 1 as const,
     workId: active.item.workId,
     operationId: active.item.operationId,
     browserBindingId: active.item.browserBindingId,
-    platform: 'bilibili',
-    executionTarget: 'collector_work_tab',
-    state: 'stopped',
+    platform: 'bilibili' as const,
+    executionTarget: 'collector_work_tab' as const,
+    state: 'stopped' as const,
     errorCode: navigationAttempted
       ? 'extension_worker_interrupted_after_navigation_intent'
       : 'extension_worker_interrupted_before_navigation',
-    terminalReason: navigationAttempted ? 'navigation_outcome_unknown' : 'work_tab_closed',
+    terminalReason: navigationAttempted
+      ? 'navigation_outcome_unknown' as const
+      : 'work_tab_closed' as const,
     completedAt: new Date().toISOString(),
-    navigation: { attempted: navigationAttempted, attemptCount: navigationAttempted ? 1 : 0 },
+    navigation: {
+      attempted: navigationAttempted,
+      attemptCount: (navigationAttempted ? 1 : 0) as 0 | 1
+    },
     workTabAcquisition: active.workTabAcquisition,
     workTabDisposition: active.workTabAcquisition === 'not_acquired'
-      ? 'closed_or_missing'
-      : 'retained_not_reusable'
+      ? 'closed_or_missing' as const
+      : 'retained_not_reusable' as const
   };
   if (active.item.capability === 'bilibili.video_detail') {
     return { ...base, capability: 'bilibili.video_detail', observation: null };
   }
-  return { ...base, capability: 'bilibili.native_search', observation: null };
+  if (active.item.capability === 'bilibili.native_search') {
+    return { ...base, capability: 'bilibili.native_search', observation: null };
+  }
+  if (active.item.capability === 'bilibili.account_profile') {
+    return { ...base, capability: 'bilibili.account_profile', observation: null };
+  }
+  return { ...base, capability: 'bilibili.account_inventory', observation: null };
 }
 
 function terminalDeliveryError(errorCode: string): boolean {

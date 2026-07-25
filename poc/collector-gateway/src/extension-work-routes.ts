@@ -1,12 +1,17 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
+  canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliVideoWorkUrl,
   isExtensionWorkResult,
   type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
+import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
+import type { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import type { BrowserBindingSafetyRegistry } from './browser-binding-safety';
+import { recordBilibiliAccountInventoryExtensionWork } from './extension-work-bilibili-account-inventory';
+import { recordBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
 import { recordBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
 import { recordBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
 import type { ExtensionWorkArtifactReference, ExtensionWorkQueue } from './extension-work-queue';
@@ -35,6 +40,8 @@ export interface ExtensionWorkRouteContext {
   browserBindingSafety: BrowserBindingSafetyRegistry;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
   nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
+  accountProfileArtifacts: BilibiliAccountProfileArtifactStore;
+  accountVideoInventoryArtifacts: BilibiliAccountVideoInventoryArtifactStore;
 }
 
 /**
@@ -81,7 +88,11 @@ export async function handleExtensionWorkRoute(
       const input = consoleDispatchInput(await readJsonBody(request));
       const operation = input.capability === 'bilibili.video_detail'
         ? await enqueueBilibiliVideoDetailWork(context, dispatch[1]!, input.canonicalVideoUrl)
-        : await enqueueBilibiliNativeSearchWork(context, dispatch[1]!, input.query);
+        : input.capability === 'bilibili.native_search'
+          ? await enqueueBilibiliNativeSearchWork(context, dispatch[1]!, input.query)
+          : input.capability === 'bilibili.account_profile'
+            ? await enqueueBilibiliAccountProfileWork(context, dispatch[1]!, input.canonicalProfileUrl)
+            : await enqueueBilibiliAccountInventoryWork(context, dispatch[1]!, input.canonicalProfileUrl);
       sendJson(response, 201, { schemaVersion: 1, operation });
     } catch (error) {
       sendJson(response, workOperationStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
@@ -170,6 +181,42 @@ export async function enqueueBilibiliNativeSearchWork(
   });
 }
 
+/** Shared by the Console and the scoped upper-application service route. */
+export async function enqueueBilibiliAccountProfileWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  canonicalProfileUrl: string
+) {
+  await reconcileExpiredExtensionWork(context);
+  const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
+  if (binding.state !== 'online') throw new Error('browser_binding_offline');
+  const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
+  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
+  if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
+  return await context.workQueue.enqueueBilibiliAccountProfile({
+    browserBindingId: binding.browserBindingId,
+    canonicalProfileUrl
+  });
+}
+
+/** Shared by the Console and the scoped upper-application service route. */
+export async function enqueueBilibiliAccountInventoryWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  canonicalProfileUrl: string
+) {
+  await reconcileExpiredExtensionWork(context);
+  const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
+  if (binding.state !== 'online') throw new Error('browser_binding_offline');
+  const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
+  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
+  if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
+  return await context.workQueue.enqueueBilibiliAccountInventory({
+    browserBindingId: binding.browserBindingId,
+    canonicalProfileUrl
+  });
+}
+
 async function handleExtensionWorkNext(
   request: IncomingMessage,
   response: ServerResponse,
@@ -233,6 +280,18 @@ async function handleExtensionWorkResult(
         result,
         artifacts: context.nativeSearchArtifacts
       });
+    } else if (item.capability === 'bilibili.account_profile' && result.capability === 'bilibili.account_profile') {
+      artifact = await recordBilibiliAccountProfileExtensionWork({
+        item,
+        result,
+        artifacts: context.accountProfileArtifacts
+      });
+    } else if (item.capability === 'bilibili.account_inventory' && result.capability === 'bilibili.account_inventory') {
+      artifact = await recordBilibiliAccountInventoryExtensionWork({
+        item,
+        result,
+        artifacts: context.accountVideoInventoryArtifacts
+      });
     } else {
       throw new Error('extension_work_result_capability_mismatch');
     }
@@ -278,12 +337,15 @@ export async function reconcileExpiredExtensionWork(context: ExtensionWorkRouteC
 
 function consoleDispatchInput(value: unknown):
   | { capability: 'bilibili.video_detail'; canonicalVideoUrl: string }
-  | { capability: 'bilibili.native_search'; query: string } {
+  | { capability: 'bilibili.native_search'; query: string }
+  | { capability: 'bilibili.account_profile'; canonicalProfileUrl: string }
+  | { capability: 'bilibili.account_inventory'; canonicalProfileUrl: string } {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('extension_work_dispatch_input_invalid');
   const candidate = value as Record<string, unknown>;
   if (
     Object.keys(candidate).length !== 5 || candidate.schemaVersion !== 1 || candidate.platform !== 'bilibili' ||
-    (candidate.capability !== 'bilibili.video_detail' && candidate.capability !== 'bilibili.native_search') ||
+    (candidate.capability !== 'bilibili.video_detail' && candidate.capability !== 'bilibili.native_search' &&
+      candidate.capability !== 'bilibili.account_profile' && candidate.capability !== 'bilibili.account_inventory') ||
     candidate.executionTarget !== 'collector_work_tab' ||
     !candidate.input || typeof candidate.input !== 'object' || Array.isArray(candidate.input)
   ) throw new Error('extension_work_dispatch_input_invalid');
@@ -296,10 +358,20 @@ function consoleDispatchInput(value: unknown):
     if (!canonicalVideoUrl) throw new Error('extension_work_dispatch_input_invalid');
     return { capability: 'bilibili.video_detail', canonicalVideoUrl };
   }
-  if (Object.keys(input).length !== 1 || typeof input.query !== 'string') {
+  if (candidate.capability === 'bilibili.native_search') {
+    if (Object.keys(input).length !== 1 || typeof input.query !== 'string') {
+      throw new Error('extension_work_dispatch_input_invalid');
+    }
+    return { capability: 'bilibili.native_search', query: input.query };
+  }
+  if (Object.keys(input).length !== 1 || typeof input.canonicalProfileUrl !== 'string') {
     throw new Error('extension_work_dispatch_input_invalid');
   }
-  return { capability: 'bilibili.native_search', query: input.query };
+  const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(input.canonicalProfileUrl, 'strict_input');
+  if (!canonicalProfileUrl) throw new Error('extension_work_dispatch_input_invalid');
+  return candidate.capability === 'bilibili.account_profile'
+    ? { capability: 'bilibili.account_profile', canonicalProfileUrl }
+    : { capability: 'bilibili.account_inventory', canonicalProfileUrl };
 }
 
 function unlockInput(value: unknown): void {

@@ -19,6 +19,8 @@ refreshOperation.addEventListener('click', () => void refreshCurrentOperation())
 readArtifact.addEventListener('click', () => void readCurrentArtifact());
 element('video-form').addEventListener('submit', (event) => void submitVideo(event));
 element('search-form').addEventListener('submit', (event) => void submitSearch(event));
+element('profile-form').addEventListener('submit', (event) => void submitAccount(event, 'account_profile'));
+element('inventory-form').addEventListener('submit', (event) => void submitAccount(event, 'account_inventory'));
 
 void refreshConnection();
 
@@ -57,7 +59,8 @@ async function refreshCapabilityCatalog() {
     const payload = await api('/api/capabilities');
     const capabilities = payload.capabilities;
     const directReady = capabilities.filter((capability) => capability.dispatchState === 'direct_ready').length;
-    note.textContent = `已登记 ${capabilities.length} 项 B站能力；其中 ${directReady} 项已闭合 direct work protocol。其余项目保留真实迁移状态，不会走旧 Browser Host fallback。`;
+    const canaryPending = capabilities.filter((capability) => capability.dispatchState === 'direct_canary_pending').length;
+    note.textContent = `已登记 ${capabilities.length} 项 B站能力；${directReady} 项已有真实 direct canary，${canaryPending} 项已实现 direct work、等待本轮真实 canary。其余项目保留迁移状态，不会走旧 Browser Host fallback。`;
     list.replaceChildren(...capabilities.map(renderCapability));
   } catch (error) {
     note.textContent = `无法读取能力登记册：${error.code ?? 'testbench_request_failed'}`;
@@ -69,6 +72,8 @@ function renderCapability(capability) {
   const card = document.createElement('article');
   const category = capability.dispatchState === 'direct_ready'
     ? 'ready'
+    : capability.dispatchState === 'direct_canary_pending'
+      ? 'pending'
     : capability.dispatchState === 'trusted_interaction_migration_required'
       ? 'trusted'
       : 'pending';
@@ -88,6 +93,7 @@ function renderCapability(capability) {
 
 function capabilityStatusLabel(value) {
   if (value === 'direct_ready') return '可 direct dispatch';
+  if (value === 'direct_canary_pending') return 'direct 已实现，待真实 canary';
   if (value === 'trusted_interaction_migration_required') return '需可信交互迁移';
   return '待 direct 迁移';
 }
@@ -122,7 +128,10 @@ function renderBindings() {
     }
     select.disabled = false;
   }
-  for (const control of document.querySelectorAll('#video-form input, #search-form input, #video-form button, #search-form button')) {
+  for (const control of document.querySelectorAll(
+    '#video-form input, #search-form input, #profile-form input, #inventory-form input, ' +
+    '#video-form button, #search-form button, #profile-form button, #inventory-form button'
+  )) {
     control.disabled = !enabled;
   }
 }
@@ -165,6 +174,29 @@ async function submitSearch(event) {
       }
     });
     form.elements.query.value = '';
+    acceptOperation(payload.result);
+  } catch (error) {
+    showOperationError(error);
+  } finally {
+    button.disabled = state.bindings.length === 0;
+  }
+}
+
+async function submitAccount(event, kind) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  try {
+    const payload = await api('/api/operations', {
+      method: 'POST',
+      body: {
+        browserBindingId: form.elements.browserBindingId.value,
+        kind,
+        input: { accountId: form.elements.accountId.value }
+      }
+    });
+    form.elements.accountId.value = '';
     acceptOperation(payload.result);
   } catch (error) {
     showOperationError(error);

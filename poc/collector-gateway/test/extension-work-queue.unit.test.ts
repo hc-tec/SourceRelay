@@ -115,4 +115,43 @@ describe('extension work queue state machine', () => {
       await rm(stateDirectory, { recursive: true, force: true });
     }
   });
+
+  test('derives public profile and inventory targets from one canonical MID without accepting a free-form page', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-account-'));
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const profile = await queue.enqueueBilibiliAccountProfile({
+        browserBindingId: bindingId,
+        canonicalProfileUrl: 'https://space.bilibili.com/7481602'
+      }, base);
+      const claimedProfile = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
+      expect(claimedProfile).toMatchObject({
+        operationId: profile.operationId,
+        capability: 'bilibili.account_profile',
+        input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602', stableAccountId: '7481602' }
+      });
+
+      const restored = await ExtensionWorkQueue.create(identity(), stateDirectory, new Date(base.getTime() + 2));
+      const inventory = await restored.enqueueBilibiliAccountInventory({
+        browserBindingId: bindingId,
+        canonicalProfileUrl: 'https://space.bilibili.com/7481602'
+      }, new Date(base.getTime() + 3));
+      const claimedInventory = await restored.claimNext(bindingId, new Date(base.getTime() + 4));
+      expect(claimedInventory).toMatchObject({
+        operationId: inventory.operationId,
+        capability: 'bilibili.account_inventory',
+        input: {
+          canonicalProfileUrl: 'https://space.bilibili.com/7481602',
+          canonicalInventoryUrl: 'https://space.bilibili.com/7481602/upload/video',
+          stableAccountId: '7481602'
+        }
+      });
+      await expect(restored.enqueueBilibiliAccountInventory({
+        browserBindingId: bindingId,
+        canonicalProfileUrl: 'https://space.bilibili.com/7481602/upload/video'
+      }, new Date(base.getTime() + 5))).rejects.toThrow('bilibili_account_inventory_input_invalid');
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
 });

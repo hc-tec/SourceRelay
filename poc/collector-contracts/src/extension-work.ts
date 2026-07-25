@@ -3,6 +3,12 @@ import {
   canonicalBilibiliNativeSearchUrl,
   normaliseBilibiliNativeSearchRoute
 } from './bilibili-native-search.js';
+import {
+  bilibiliAccountProfileIdFromUrl,
+  bilibiliAccountVideoInventoryIdFromUrl,
+  canonicalBilibiliAccountProfileUrl,
+  canonicalBilibiliAccountVideoInventoryUrl
+} from './bilibili-account-profile.js';
 import { canonicalJson } from './ipc.js';
 
 /**
@@ -18,8 +24,13 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]{40,}$/;
 const SAFE_ERROR_CODE = /^[a-z0-9_]{1,100}$/;
 const BILIBILI_NATIVE_SEARCH_MAX_VISIBLE_CARDS = 20;
+const BILIBILI_ACCOUNT_VIDEO_INVENTORY_MAX_VISIBLE_CARDS = 40;
 
-export type ExtensionWorkCapability = 'bilibili.video_detail' | 'bilibili.native_search';
+export type ExtensionWorkCapability =
+  | 'bilibili.video_detail'
+  | 'bilibili.native_search'
+  | 'bilibili.account_profile'
+  | 'bilibili.account_inventory';
 export type ExtensionWorkExecutionTarget = 'collector_work_tab' | 'user_selected_tab';
 export type ExtensionWorkState = 'queued' | 'claimed' | 'completed' | 'partial' | 'stopped' | 'failed';
 
@@ -85,10 +96,63 @@ export interface BilibiliNativeSearchWorkItem extends ExtensionWorkEnvelope {
   budget: BilibiliNativeSearchWorkBudget;
 }
 
-export type ExtensionWorkItem = BilibiliVideoDetailWorkItem | BilibiliNativeSearchWorkItem;
+/**
+ * The caller names one public profile identity.  The signed work item keeps
+ * both its canonical URL and MID so neither the extension nor a later result
+ * can silently drift to another account page.
+ */
+export interface BilibiliAccountProfileWorkInput {
+  canonicalProfileUrl: string;
+  stableAccountId: string;
+}
+
+export interface BilibiliAccountProfileWorkBudget {
+  maximumPlatformNavigations: 1;
+  maximumSemanticActions: 0;
+  maximumResponseObservations: 0;
+  maximumPayloadBytes: 98_304;
+}
+
+export interface BilibiliAccountProfileWorkItem extends ExtensionWorkEnvelope {
+  capability: 'bilibili.account_profile';
+  input: BilibiliAccountProfileWorkInput;
+  budget: BilibiliAccountProfileWorkBudget;
+}
+
+/**
+ * Account inventory remains a separate one-page capability: the Gateway
+ * derives `/upload/video` from the account identity, so callers cannot select
+ * a page number, sort, filter, arbitrary URL or action plan.
+ */
+export interface BilibiliAccountInventoryWorkInput {
+  canonicalProfileUrl: string;
+  canonicalInventoryUrl: string;
+  stableAccountId: string;
+}
+
+export interface BilibiliAccountInventoryWorkBudget {
+  maximumPlatformNavigations: 1;
+  maximumSemanticActions: 0;
+  maximumResponseObservations: 0;
+  maximumPayloadBytes: 98_304;
+}
+
+export interface BilibiliAccountInventoryWorkItem extends ExtensionWorkEnvelope {
+  capability: 'bilibili.account_inventory';
+  input: BilibiliAccountInventoryWorkInput;
+  budget: BilibiliAccountInventoryWorkBudget;
+}
+
+export type ExtensionWorkItem =
+  | BilibiliVideoDetailWorkItem
+  | BilibiliNativeSearchWorkItem
+  | BilibiliAccountProfileWorkItem
+  | BilibiliAccountInventoryWorkItem;
 export type UnsignedExtensionWorkItem =
   | Omit<BilibiliVideoDetailWorkItem, 'gatewaySignature'>
-  | Omit<BilibiliNativeSearchWorkItem, 'gatewaySignature'>;
+  | Omit<BilibiliNativeSearchWorkItem, 'gatewaySignature'>
+  | Omit<BilibiliAccountProfileWorkItem, 'gatewaySignature'>
+  | Omit<BilibiliAccountInventoryWorkItem, 'gatewaySignature'>;
 
 export type SharedExtensionWorkTerminalReason =
   | 'verification_required'
@@ -112,9 +176,20 @@ export type BilibiliNativeSearchWorkTerminalReason =
   | 'search_results_partial'
   | SharedExtensionWorkTerminalReason;
 
+export type BilibiliAccountProfileWorkTerminalReason =
+  | 'profile_ready'
+  | SharedExtensionWorkTerminalReason;
+
+export type BilibiliAccountInventoryWorkTerminalReason =
+  | 'inventory_ready'
+  | 'inventory_partial'
+  | SharedExtensionWorkTerminalReason;
+
 export type ExtensionWorkTerminalReason =
   | BilibiliVideoDetailWorkTerminalReason
-  | BilibiliNativeSearchWorkTerminalReason;
+  | BilibiliNativeSearchWorkTerminalReason
+  | BilibiliAccountProfileWorkTerminalReason
+  | BilibiliAccountInventoryWorkTerminalReason;
 
 export interface BilibiliVideoDetailDomObservation {
   bvid: string;
@@ -152,6 +227,50 @@ export interface BilibiliNativeSearchDomObservation {
   semanticResultCardCount: number;
   /** Only public, human-visible canonical BV video cards are included. */
   cards: BilibiliNativeSearchDomCard[];
+  loginOverlayVisible: boolean;
+  risk: BilibiliWorkRisk;
+}
+
+export interface BilibiliAccountProfileDomBadgeImage {
+  url: string | null;
+  label: string | null;
+}
+
+/**
+ * The extension normalises the visible account-header projection before it
+ * crosses the signed work boundary.  It includes no viewer identity, hidden
+ * application state, request data or arbitrary page content.
+ */
+export interface BilibiliAccountProfileDomObservation {
+  stableAccountId: string | null;
+  displayName: string | null;
+  visibleDescription: string | null;
+  avatarUrl: string | null;
+  bannerUrl: string | null;
+  textBadges: string[];
+  imageBadges: BilibiliAccountProfileDomBadgeImage[];
+  statistics: Array<{ label: string | null; value: string | null; href: null }>;
+  navigation: Array<{ label: string | null; value: string | null; href: string | null }>;
+  announcementText: string | null;
+  chargeText: string | null;
+  highlights: Array<{ bvid: string | null; title: string | null }>;
+  profileHeaderVisible: boolean;
+  loginOverlayVisible: boolean;
+  risk: BilibiliWorkRisk;
+}
+
+export interface BilibiliAccountInventoryDomCard {
+  bvid: string | null;
+  title: string | null;
+  visibleText: string | null;
+  thumbnailUrl: string | null;
+}
+
+/** Public first-screen card projection from `/upload/video`; no scroll or pagination. */
+export interface BilibiliAccountInventoryDomObservation {
+  stableAccountId: string | null;
+  videoListVisible: boolean;
+  cards: BilibiliAccountInventoryDomCard[];
   loginOverlayVisible: boolean;
   risk: BilibiliWorkRisk;
 }
@@ -205,6 +324,44 @@ export interface BilibiliNativeSearchWorkResult {
   observation: BilibiliNativeSearchDomObservation | null;
 }
 
+export interface BilibiliAccountProfileWorkResult {
+  schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
+  protocolVersion: typeof EXTENSION_WORK_PROTOCOL_VERSION;
+  workId: string;
+  operationId: string;
+  browserBindingId: string;
+  platform: 'bilibili';
+  capability: 'bilibili.account_profile';
+  executionTarget: 'collector_work_tab';
+  state: Exclude<ExtensionWorkState, 'queued' | 'claimed'>;
+  errorCode: string | null;
+  terminalReason: BilibiliAccountProfileWorkTerminalReason;
+  completedAt: string;
+  navigation: ExtensionWorkNavigation;
+  workTabAcquisition: ExtensionWorkTabAcquisition;
+  workTabDisposition: ExtensionWorkTabDisposition;
+  observation: BilibiliAccountProfileDomObservation | null;
+}
+
+export interface BilibiliAccountInventoryWorkResult {
+  schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
+  protocolVersion: typeof EXTENSION_WORK_PROTOCOL_VERSION;
+  workId: string;
+  operationId: string;
+  browserBindingId: string;
+  platform: 'bilibili';
+  capability: 'bilibili.account_inventory';
+  executionTarget: 'collector_work_tab';
+  state: Exclude<ExtensionWorkState, 'queued' | 'claimed'>;
+  errorCode: string | null;
+  terminalReason: BilibiliAccountInventoryWorkTerminalReason;
+  completedAt: string;
+  navigation: ExtensionWorkNavigation;
+  workTabAcquisition: ExtensionWorkTabAcquisition;
+  workTabDisposition: ExtensionWorkTabDisposition;
+  observation: BilibiliAccountInventoryDomObservation | null;
+}
+
 export interface ExtensionWorkNavigation {
   attempted: boolean;
   attemptCount: 0 | 1;
@@ -218,7 +375,11 @@ export type ExtensionWorkTabDisposition =
 
 export type ExtensionWorkTabAcquisition = 'created' | 'reused' | 'not_acquired';
 
-export type ExtensionWorkResult = BilibiliVideoDetailWorkResult | BilibiliNativeSearchWorkResult;
+export type ExtensionWorkResult =
+  | BilibiliVideoDetailWorkResult
+  | BilibiliNativeSearchWorkResult
+  | BilibiliAccountProfileWorkResult
+  | BilibiliAccountInventoryWorkResult;
 
 export function canonicalBilibiliVideoWorkUrl(value: string): string | null {
   try {
@@ -239,9 +400,16 @@ export function canonicalBilibiliNativeSearchWorkUrl(value: string): string | nu
 
 /** Return only a target derived from a validated registered work capability. */
 export function extensionWorkTargetUrl(item: ExtensionWorkItem): string {
-  return item.capability === 'bilibili.video_detail'
-    ? item.input.canonicalVideoUrl
-    : item.input.canonicalSearchUrl;
+  switch (item.capability) {
+    case 'bilibili.video_detail':
+      return item.input.canonicalVideoUrl;
+    case 'bilibili.native_search':
+      return item.input.canonicalSearchUrl;
+    case 'bilibili.account_profile':
+      return item.input.canonicalProfileUrl;
+    case 'bilibili.account_inventory':
+      return item.input.canonicalInventoryUrl;
+  }
 }
 
 export function extensionWorkSigningPayload(item: ExtensionWorkItem | UnsignedExtensionWorkItem): string {
@@ -268,6 +436,12 @@ export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem 
   if (value.capability === 'bilibili.native_search') {
     return isBilibiliNativeSearchWorkInput(value.input) && isBilibiliNativeSearchWorkBudget(value.budget);
   }
+  if (value.capability === 'bilibili.account_profile') {
+    return isBilibiliAccountProfileWorkInput(value.input) && isBilibiliAccountProfileWorkBudget(value.budget);
+  }
+  if (value.capability === 'bilibili.account_inventory') {
+    return isBilibiliAccountInventoryWorkInput(value.input) && isBilibiliAccountInventoryWorkBudget(value.budget);
+  }
   return false;
 }
 
@@ -292,6 +466,14 @@ export function isExtensionWorkResult(value: unknown): value is ExtensionWorkRes
   if (value.capability === 'bilibili.native_search') {
     return isBilibiliNativeSearchTerminalReason(value.terminalReason) &&
       (value.observation === null || isBilibiliNativeSearchDomObservation(value.observation));
+  }
+  if (value.capability === 'bilibili.account_profile') {
+    return isBilibiliAccountProfileTerminalReason(value.terminalReason) &&
+      (value.observation === null || isBilibiliAccountProfileDomObservation(value.observation));
+  }
+  if (value.capability === 'bilibili.account_inventory') {
+    return isBilibiliAccountInventoryTerminalReason(value.terminalReason) &&
+      (value.observation === null || isBilibiliAccountInventoryDomObservation(value.observation));
   }
   return false;
 }
@@ -331,6 +513,24 @@ export function isExtensionWorkResultForItem(
         ? value.observation.resultListVisible && value.observation.semanticResultCardCount > 0
         : false;
   }
+  if (item.capability === 'bilibili.account_profile' && value.capability === 'bilibili.account_profile') {
+    if (value.observation && value.observation.stableAccountId !== item.input.stableAccountId) return false;
+    if (value.state !== 'completed') return true;
+    return value.errorCode === null && value.terminalReason === 'profile_ready' && value.observation !== null &&
+      value.observation.profileHeaderVisible && value.observation.displayName !== null &&
+      !value.observation.risk.verificationRequired && !value.observation.risk.rateLimited &&
+      !value.observation.risk.sourceUnavailable && value.navigation.attemptCount === 1 &&
+      value.workTabDisposition === 'idle_reusable';
+  }
+  if (item.capability === 'bilibili.account_inventory' && value.capability === 'bilibili.account_inventory') {
+    if (value.observation && value.observation.stableAccountId !== item.input.stableAccountId) return false;
+    if (value.state !== 'completed') return true;
+    return value.errorCode === null && value.terminalReason === 'inventory_ready' && value.observation !== null &&
+      value.observation.videoListVisible && value.observation.cards.some(isResolvedAccountInventoryCard) &&
+      !value.observation.risk.verificationRequired && !value.observation.risk.rateLimited &&
+      !value.observation.risk.sourceUnavailable && value.navigation.attemptCount === 1 &&
+      value.workTabDisposition === 'idle_reusable';
+  }
   return false;
 }
 
@@ -366,6 +566,33 @@ export function isBilibiliNativeSearchDomObservation(value: unknown): value is B
   return true;
 }
 
+export function isBilibiliAccountProfileDomObservation(value: unknown): value is BilibiliAccountProfileDomObservation {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'stableAccountId', 'displayName', 'visibleDescription', 'avatarUrl', 'bannerUrl', 'textBadges', 'imageBadges',
+    'statistics', 'navigation', 'announcementText', 'chargeText', 'highlights', 'profileHeaderVisible',
+    'loginOverlayVisible', 'risk'
+  ]) || !isNullableAccountId(value.stableAccountId) || !isNullableText(value.displayName, 200) ||
+    !isNullableText(value.visibleDescription, 5_000) || !isNullablePublicImageUrl(value.avatarUrl) ||
+    !isNullablePublicImageUrl(value.bannerUrl) || !isTextArray(value.textBadges, 20, 80) ||
+    !isArrayAtMost(value.imageBadges, 20, isBilibiliAccountProfileDomBadgeImage) ||
+    !isArrayAtMost(value.statistics, 12, isBilibiliAccountProfileStatistic) ||
+    !isArrayAtMost(value.navigation, 12, isBilibiliAccountProfileNavigation) ||
+    !isNullableText(value.announcementText, 20_000) || !isNullableText(value.chargeText, 2_000) ||
+    !isArrayAtMost(value.highlights, 12, isBilibiliAccountProfileHighlight) ||
+    typeof value.profileHeaderVisible !== 'boolean' || typeof value.loginOverlayVisible !== 'boolean' ||
+    !isBilibiliWorkRisk(value.risk)
+  ) return false;
+  return true;
+}
+
+export function isBilibiliAccountInventoryDomObservation(value: unknown): value is BilibiliAccountInventoryDomObservation {
+  return isRecord(value) && hasExactKeys(value, [
+    'stableAccountId', 'videoListVisible', 'cards', 'loginOverlayVisible', 'risk'
+  ]) && isNullableAccountId(value.stableAccountId) && typeof value.videoListVisible === 'boolean' &&
+    isArrayAtMost(value.cards, BILIBILI_ACCOUNT_VIDEO_INVENTORY_MAX_VISIBLE_CARDS, isBilibiliAccountInventoryDomCard) &&
+    typeof value.loginOverlayVisible === 'boolean' && isBilibiliWorkRisk(value.risk);
+}
+
 function isBilibiliVideoDetailWorkInput(value: unknown): value is BilibiliVideoDetailWorkInput {
   if (!isRecord(value) || Object.keys(value).length !== 2 || typeof value.canonicalVideoUrl !== 'string' || !isBvid(value.bvid)) {
     return false;
@@ -388,11 +615,41 @@ function isBilibiliNativeSearchWorkInput(value: unknown): value is BilibiliNativ
     canonicalBilibiliNativeSearchWorkUrl(value.canonicalSearchUrl) === value.canonicalSearchUrl;
 }
 
+function isBilibiliAccountProfileWorkInput(value: unknown): value is BilibiliAccountProfileWorkInput {
+  if (!isRecord(value) || !hasExactKeys(value, ['canonicalProfileUrl', 'stableAccountId']) ||
+    typeof value.canonicalProfileUrl !== 'string' || !isAccountId(value.stableAccountId)
+  ) return false;
+  return canonicalBilibiliAccountProfileUrl(value.canonicalProfileUrl, 'strict_input') === value.canonicalProfileUrl &&
+    bilibiliAccountProfileIdFromUrl(value.canonicalProfileUrl) === value.stableAccountId;
+}
+
+function isBilibiliAccountInventoryWorkInput(value: unknown): value is BilibiliAccountInventoryWorkInput {
+  if (!isRecord(value) || !hasExactKeys(value, ['canonicalProfileUrl', 'canonicalInventoryUrl', 'stableAccountId']) ||
+    typeof value.canonicalProfileUrl !== 'string' || typeof value.canonicalInventoryUrl !== 'string' ||
+    !isAccountId(value.stableAccountId)
+  ) return false;
+  const canonicalProfile = canonicalBilibiliAccountProfileUrl(value.canonicalProfileUrl, 'strict_input');
+  const canonicalInventory = canonicalBilibiliAccountVideoInventoryUrl(value.canonicalInventoryUrl, 'strict_input');
+  if (!canonicalProfile || !canonicalInventory) return false;
+  return canonicalProfile === value.canonicalProfileUrl && canonicalInventory === value.canonicalInventoryUrl &&
+    bilibiliAccountProfileIdFromUrl(canonicalProfile) === value.stableAccountId &&
+    bilibiliAccountVideoInventoryIdFromUrl(canonicalInventory) === value.stableAccountId &&
+    canonicalInventory === `${canonicalProfile}/upload/video`;
+}
+
 function isBilibiliVideoDetailWorkBudget(value: unknown): value is BilibiliVideoDetailWorkBudget {
   return isFixedDirectWorkBudget(value);
 }
 
 function isBilibiliNativeSearchWorkBudget(value: unknown): value is BilibiliNativeSearchWorkBudget {
+  return isFixedDirectWorkBudget(value);
+}
+
+function isBilibiliAccountProfileWorkBudget(value: unknown): value is BilibiliAccountProfileWorkBudget {
+  return isFixedDirectWorkBudget(value);
+}
+
+function isBilibiliAccountInventoryWorkBudget(value: unknown): value is BilibiliAccountInventoryWorkBudget {
   return isFixedDirectWorkBudget(value);
 }
 
@@ -408,6 +665,42 @@ function isBilibiliNativeSearchDomCard(value: unknown): value is BilibiliNativeS
     isNullableText(value.visibleText, 2_000) && isNullablePublicImageUrl(value.thumbnailUrl);
 }
 
+function isBilibiliAccountProfileDomBadgeImage(value: unknown): value is BilibiliAccountProfileDomBadgeImage {
+  return isRecord(value) && hasExactKeys(value, ['url', 'label']) &&
+    isNullablePublicImageUrl(value.url) && isNullableText(value.label, 80);
+}
+
+function isBilibiliAccountProfileStatistic(
+  value: unknown
+): value is BilibiliAccountProfileDomObservation['statistics'][number] {
+  return isRecord(value) && hasExactKeys(value, ['label', 'value', 'href']) && value.href === null &&
+    isNullableText(value.label, 40) && isNullableText(value.value, 100);
+}
+
+function isBilibiliAccountProfileNavigation(
+  value: unknown
+): value is BilibiliAccountProfileDomObservation['navigation'][number] {
+  return isRecord(value) && hasExactKeys(value, ['label', 'value', 'href']) &&
+    isNullableText(value.label, 40) && isNullableText(value.value, 100) && isNullablePublicDocumentUrl(value.href);
+}
+
+function isBilibiliAccountProfileHighlight(
+  value: unknown
+): value is BilibiliAccountProfileDomObservation['highlights'][number] {
+  return isRecord(value) && hasExactKeys(value, ['bvid', 'title']) &&
+    (value.bvid === null || isBvid(value.bvid)) && isNullableText(value.title, 500);
+}
+
+function isBilibiliAccountInventoryDomCard(value: unknown): value is BilibiliAccountInventoryDomCard {
+  return isRecord(value) && hasExactKeys(value, ['bvid', 'title', 'visibleText', 'thumbnailUrl']) &&
+    (value.bvid === null || isBvid(value.bvid)) && isNullableText(value.title, 500) &&
+    isNullableText(value.visibleText, 2_000) && isNullablePublicImageUrl(value.thumbnailUrl);
+}
+
+function isResolvedAccountInventoryCard(card: BilibiliAccountInventoryDomCard): boolean {
+  return card.bvid !== null && card.title !== null && card.visibleText !== null;
+}
+
 function isNullablePublicImageUrl(value: unknown): value is string | null {
   if (value === null) return true;
   if (typeof value !== 'string' || value.length === 0 || value.length > 2_000) return false;
@@ -417,6 +710,21 @@ function isNullablePublicImageUrl(value: unknown): value is string | null {
   } catch {
     return false;
   }
+}
+
+function isNullablePublicDocumentUrl(value: unknown): value is string | null {
+  if (value === null) return true;
+  if (typeof value !== 'string' || value.length === 0 || value.length > 2_000) return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+function isArrayAtMost<T>(value: unknown, maximumItems: number, predicate: (item: unknown) => item is T): value is T[] {
+  return Array.isArray(value) && value.length <= maximumItems && value.every(predicate);
 }
 
 function isBilibiliWorkRisk(value: unknown): value is BilibiliWorkRisk {
@@ -436,6 +744,14 @@ function isBilibiliVideoDetailTerminalReason(value: unknown): value is BilibiliV
 function isBilibiliNativeSearchTerminalReason(value: unknown): value is BilibiliNativeSearchWorkTerminalReason {
   return value === 'search_ready' || value === 'search_empty' || value === 'search_results_partial' ||
     isSharedTerminalReason(value);
+}
+
+function isBilibiliAccountProfileTerminalReason(value: unknown): value is BilibiliAccountProfileWorkTerminalReason {
+  return value === 'profile_ready' || isSharedTerminalReason(value);
+}
+
+function isBilibiliAccountInventoryTerminalReason(value: unknown): value is BilibiliAccountInventoryWorkTerminalReason {
+  return value === 'inventory_ready' || value === 'inventory_partial' || isSharedTerminalReason(value);
 }
 
 function isSharedTerminalReason(value: unknown): value is SharedExtensionWorkTerminalReason {
@@ -466,7 +782,11 @@ function isNullableCreator(value: unknown): value is BilibiliVideoDetailDomObser
 }
 
 function isNullableAccountId(value: unknown): value is string | null {
-  return value === null || (typeof value === 'string' && /^\d{1,20}$/.test(value) && value !== '0');
+  return value === null || isAccountId(value);
+}
+
+function isAccountId(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{1,20}$/.test(value) && value !== '0';
 }
 
 function isTextArray(value: unknown, maximumItems: number, maximumLength: number): value is string[] {

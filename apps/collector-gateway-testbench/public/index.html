@@ -83,6 +83,44 @@
             </label>
             <button type="submit" disabled>提交一次搜索测试</button>
           </form>
+
+          <form id="profile-form" class="workflow">
+            <div class="workflow-title">
+              <span class="step">C</span>
+              <div>
+                <h3>UP 主公开资料</h3>
+                <p>仅接收 UP 主 MID；服务端推导规范空间主页。</p>
+              </div>
+            </div>
+            <label>
+              在线 browser binding
+              <select class="binding-select" name="browserBindingId" required disabled></select>
+            </label>
+            <label>
+              UP 主 MID
+              <input name="accountId" inputmode="numeric" autocomplete="off" placeholder="例如 7481602" pattern="[1-9][0-9]{0,19}" required disabled>
+            </label>
+            <button type="submit" disabled>提交一次资料测试</button>
+          </form>
+
+          <form id="inventory-form" class="workflow">
+            <div class="workflow-title">
+              <span class="step">D</span>
+              <div>
+                <h3>UP 主视频首屏</h3>
+                <p>仅接收 UP 主 MID；固定投稿视频首屏，不翻页、不滚动。</p>
+              </div>
+            </div>
+            <label>
+              在线 browser binding
+              <select class="binding-select" name="browserBindingId" required disabled></select>
+            </label>
+            <label>
+              UP 主 MID
+              <input name="accountId" inputmode="numeric" autocomplete="off" placeholder="例如 7481602" pattern="[1-9][0-9]{0,19}" required disabled>
+            </label>
+            <button type="submit" disabled>提交一次视频首屏测试</button>
+          </form>
         </div>
       </section>
 
@@ -92,7 +130,7 @@
             <p class="eyebrow">03 · REGISTERED BILIBILI CAPABILITIES</p>
             <h2 id="capabilities-heading">能力登记册</h2>
           </div>
-          <p class="policy">来自 Gateway 的真实 `/v2/capabilities`。只有“可 direct dispatch”的项目会进入测试工作流。</p>
+          <p class="policy">来自 Gateway 的真实 `/v2/capabilities`。已实现 direct work 的项目会进入测试工作流；canary 状态必须由真实结果获得。</p>
         </div>
         <p id="capability-note" class="hint">正在读取能力登记册。</p>
         <div id="capability-list" class="capability-grid" aria-live="polite"></div>

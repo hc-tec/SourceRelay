@@ -2,7 +2,7 @@
 
 这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度。
 
-> **重要的生产边界（2026-07-25）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。直接模式 MVP 已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab → 一次公开 B站详情或固定首页搜索导航 → 固定 DOM 投影 → HMAC result → raw-first local artifact。当前可 direct dispatch 的能力是 `bilibili.video_detail` 与 `bilibili.native_search`；后者只接受关键词，固定综合/相关性/第 1 页并排除非 BV 视频混合结果。`GET /v2/capabilities` 还会列出 12 项已存在 B站实现的 direct-mode 迁移状态，避免把“仓库已有旧实现”误报成“日常浏览器已可安全 dispatch”。它不读取登录凭据、Cookie、Token、Profile 文件或 Network response body。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
+> **重要的生产边界（2026-07-26）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。直接模式已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab → 一次公开 B站详情或固定首页搜索导航 → 固定 DOM 投影 → HMAC result → raw-first local artifact。`bilibili.account_profile` 与 `bilibili.account_inventory` 已按相同受限协议实现，分别只接受规范 UP 主空间主页并派生主页或投稿视频首屏；它们在首次真实 user-browser canary 前明确显示为 `direct_canary_pending`，不能被宣传为已验证能力。`GET /v2/capabilities` 会列出 12 项 B站既有实现的 direct-mode 迁移状态，避免把“仓库已有旧实现”误报成“日常浏览器已可安全 dispatch”。它不读取登录凭据、Cookie、Token、Profile 文件或 Network response body。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
 
 ## 日常浏览器 Direct API（当前生产 MVP）
 
@@ -47,6 +47,23 @@
 ```
 
 搜索任务由 Gateway 推导规范目标，固定为综合/相关性/第 1 页。调用方不能传 URL、排序、页码、selector 或脚本；产物路径为 `/v1/collect/artifacts/bilibili.native_search/{artifactId}`，终态 work ledger 与 artifact 不保存原 query 或带 query URL，只保存 SHA-256 摘要。
+
+新增的 UP 主资料与视频首屏都只接收规范空间主页；Gateway 分别派生主页与 `/upload/video`，调用方不能传页码、筛选、任意路径或 URL：
+
+```json
+{
+  "schemaVersion": 2,
+  "browserBindingId": "…",
+  "platform": "bilibili",
+  "capability": "bilibili.account_profile",
+  "executionTarget": "collector_work_tab",
+  "input": {
+    "canonicalProfileUrl": "https://space.bilibili.com/7481602"
+  }
+}
+```
+
+将 capability 换为 `bilibili.account_inventory` 可请求同一 MID 的首屏公开视频卡片。两项仅在 `/v2/capabilities` 为 `direct_canary_pending` 时供 Testbench 做第一次真实只读验证；取得终态 operation 与 artifact 前不升为 `direct_ready`。
 
 - `GET /v2/openapi.json`：direct-mode OpenAPI 3.1 contract；
 - `browser-bindings:read`：发现安全摘要后的 binding；

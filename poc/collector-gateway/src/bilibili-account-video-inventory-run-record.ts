@@ -27,6 +27,7 @@ export function createBilibiliAccountVideoInventoryRunRecord(input: {
   terminalReason: BilibiliAccountVideoInventoryTerminalReason;
   targetTabSelection: BilibiliAccountVideoInventoryRunRecord['safeguards']['targetTabSelection'];
   targetPage: BilibiliAccountVideoInventoryRunRecord['safeguards']['targetPage'];
+  safeguards?: BilibiliAccountVideoInventoryRunRecord['safeguards'];
 }): BilibiliAccountVideoInventoryRunRecord {
   const page = input.page;
   return {
@@ -58,7 +59,7 @@ export function createBilibiliAccountVideoInventoryRunRecord(input: {
       loginOverlayVisible: page?.loginOverlayVisible ?? false,
       terminalReason: input.terminalReason
     },
-    safeguards: {
+    safeguards: input.safeguards ?? {
       environment: 'local_user_controlled_collection_profile',
       browser: 'visible_playwright_chromium',
       acquisition: 'trusted_navigation_plus_bounded_dom_projection',

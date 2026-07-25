@@ -1,7 +1,8 @@
 # 日常浏览器扩展模式：安装、配对与本地 API
 
 - 状态：可用的 direct-mode MVP
-- 当前可 direct dispatch 的能力：`bilibili.video_detail`、`bilibili.native_search`
+- 已有真实 direct canary：`bilibili.video_detail`、`bilibili.native_search`
+- 已实现、等待本轮真实 canary：`bilibili.account_profile`、`bilibili.account_inventory`
 - 已登记 B站能力：`GET /v2/capabilities` 会列出 12 项已有实现及其 direct-mode 迁移状态；登记不等于自动开放旧 Browser Host fallback。
 - API：`/v2/openapi.json`、`/v2/capabilities`、`/v2/collector-service/browser-bindings`、`/v2/collect`、`/v2/collect/operations/{operationId}`
 - 不属于本 runbook 的旧通道：`profileId`、Browser Host、Playwright persistent context、受管 Collection Profile、`POST /v1/collect`
@@ -17,7 +18,7 @@
 
 Collector 不创建、复制、读取、启动或关闭你的浏览器 Profile。浏览器自己的登录态仍只由浏览器维护；扩展不会导出 Cookie、密码、Token、Storage 或 Profile 文件。
 
-当前 MVP 收到 B站详情或站内搜索任务时，会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**。详情只导航一次到严格规范的视频 URL；搜索只导航一次到 Gateway 从关键词推导出的“综合 / 相关性 / 第 1 页”搜索页，既不点击搜索按钮，也不翻页、滚动、改排序或读取 Network response body。两者都只回传固定白名单 DOM 投影；搜索只保留可见规范 `bilibili.com/video/BV…` 视频卡片，直播、广告、课程和其他混合结果不会混入产物。成功后标签页留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”。用户关闭、移动、激活接管或导航该标签页时，当前 run 停止；不会自动重开、刷新、换 tab 或重放平台动作。
+每个 direct work 都会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**。已完成真实 canary 的详情只导航一次到严格规范的视频 URL；搜索只导航一次到 Gateway 从关键词推导出的“综合 / 相关性 / 第 1 页”搜索页，既不点击搜索按钮，也不翻页、滚动、改排序或读取 Network response body。新增的 UP 主公开资料与 UP 主视频首屏也都只接受规范空间主页：Gateway 分别推导空间主页和固定 `/upload/video` 首屏，前者只投影公开账号头信息，后者只投影首屏可见视频卡片，均不翻页、不滚动、不筛选。它们当前标为 `direct_canary_pending`，必须在扩展刷新后以真实终态和 artifact 完成首次闭环，才会升为 `direct_ready`。成功后标签页留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”。用户关闭、移动、激活接管或导航该标签页时，当前 run 停止；不会自动重开、刷新、换 tab 或重放平台动作。
 
 ## 2. 一次性准备稳定的扩展目录
 
@@ -174,6 +175,23 @@ npm run collector-user-browser-client -- artifact /v1/collect/artifacts/bilibili
 
 搜索任务完成后，使用返回的 `/v1/collect/artifacts/bilibili.native_search/<artifactId>` 读取 artifact。关键词和带关键词的 URL 只在短时签名 work item 中用于导航；终态 operation 和 artifact 只保存关键词/目标 URL 的 SHA-256 摘要，结果文件保存的是白名单化的公开视频卡片字段。
 
+要读取 UP 主资料或其公开视频首屏，调用方同样只传规范空间主页；不能传 `/upload/video`、页码、筛选或任意 URL。下面两种 capability 会由 Gateway 派生固定目标：
+
+```json
+{
+  "schemaVersion": 2,
+  "browserBindingId": "11111111-1111-4111-8111-111111111111",
+  "platform": "bilibili",
+  "capability": "bilibili.account_profile",
+  "executionTarget": "collector_work_tab",
+  "input": {
+    "canonicalProfileUrl": "https://space.bilibili.com/7481602"
+  }
+}
+```
+
+将 `capability` 替换为 `bilibili.account_inventory` 即可请求同一 UP 主的投稿视频首屏；终态 artifact 路径分别以 `bilibili.account_profile` 或 `bilibili.account_inventory` 作为 capability 段。首次真实验证前，两项会在 `/v2/capabilities` 显示为 `direct_canary_pending`，不是已验证承诺。
+
 也可先读取 machine-readable 约束：
 
 ```powershell
@@ -226,4 +244,4 @@ scoped local API token
   → raw-first local artifact（关键词只以 digest 持久化）
 ```
 
-它不等于“B站所有能力已经迁到日常浏览器模式”。旧 B站能力矩阵仍留在明确的 `test/isolated-account` Browser Host 通道，不能被生产 `/v2` API 当作 fallback 调用。下一批能力应按相同顺序：真实视觉、DOM、Network 三面侦察 → 固定 capability contract → work-tab 或用户显式选择 tab 的安全执行 → real canary。
+这不等于“B站所有能力已经迁到日常浏览器模式”。字幕、评论、弹幕、动态、合集、批量搜索与有界分页仍各自保持迁移状态；旧 B站能力矩阵也不能被生产 `/v2` API 当作 Browser Host fallback 调用。每个后续能力仍遵循：真实视觉、DOM、Network 三面侦察 → 固定 capability contract → work-tab 或用户显式选择 tab 的安全执行 → real canary。

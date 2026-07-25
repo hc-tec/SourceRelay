@@ -4,7 +4,9 @@ import { resolve } from 'node:path';
 import {
   EXTENSION_WORK_PROTOCOL_VERSION,
   EXTENSION_WORK_SCHEMA_VERSION,
+  bilibiliAccountProfileIdFromUrl,
   bilibiliNativeSearchUrl,
+  canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliVideoWorkUrl,
   extensionWorkSigningPayload,
   isExtensionWorkItem,
@@ -66,6 +68,16 @@ export interface EnqueueBilibiliVideoDetailWorkInput {
 export interface EnqueueBilibiliNativeSearchWorkInput {
   browserBindingId: string;
   query: string;
+}
+
+export interface EnqueueBilibiliAccountProfileWorkInput {
+  browserBindingId: string;
+  canonicalProfileUrl: string;
+}
+
+export interface EnqueueBilibiliAccountInventoryWorkInput {
+  browserBindingId: string;
+  canonicalProfileUrl: string;
 }
 
 /**
@@ -275,6 +287,70 @@ export class ExtensionWorkQueue {
     return summary(operation);
   }
 
+  async enqueueBilibiliAccountProfile(
+    input: EnqueueBilibiliAccountProfileWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId)) throw new Error('extension_work_binding_invalid');
+    const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(input.canonicalProfileUrl, 'strict_input');
+    const stableAccountId = canonicalProfileUrl ? bilibiliAccountProfileIdFromUrl(canonicalProfileUrl) : null;
+    if (!canonicalProfileUrl || !stableAccountId) throw new Error('bilibili_account_profile_input_invalid');
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(input.browserBindingId);
+
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_profile',
+      executionTarget: 'collector_work_tab',
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: { canonicalProfileUrl, stableAccountId },
+      budget: fixedDirectWorkBudget()
+    };
+    return await this.#enqueueSigned(unsigned, issuedAt);
+  }
+
+  async enqueueBilibiliAccountInventory(
+    input: EnqueueBilibiliAccountInventoryWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId)) throw new Error('extension_work_binding_invalid');
+    const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(input.canonicalProfileUrl, 'strict_input');
+    const stableAccountId = canonicalProfileUrl ? bilibiliAccountProfileIdFromUrl(canonicalProfileUrl) : null;
+    if (!canonicalProfileUrl || !stableAccountId) throw new Error('bilibili_account_inventory_input_invalid');
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(input.browserBindingId);
+
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_inventory',
+      executionTarget: 'collector_work_tab',
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: {
+        canonicalProfileUrl,
+        canonicalInventoryUrl: `${canonicalProfileUrl}/upload/video`,
+        stableAccountId
+      },
+      budget: fixedDirectWorkBudget()
+    };
+    return await this.#enqueueSigned(unsigned, issuedAt);
+  }
+
   /** Claiming is the irreversible delivery point.  There is no lease renewal. */
   async claimNext(browserBindingId: string, now = new Date()): Promise<ExtensionWorkItem | null> {
     if (!isUuid(browserBindingId)) throw new Error('extension_work_binding_invalid');
@@ -344,6 +420,38 @@ export class ExtensionWorkQueue {
     const expired = this.#expire(now);
     if (expired.length > 0) await this.#save();
     return expired.map(summary);
+  }
+
+  #assertBindingIdle(browserBindingId: string): void {
+    if (this.#operations.some((operation) =>
+      operation.item.browserBindingId === browserBindingId &&
+      (operation.state === 'queued' || operation.state === 'claimed')
+    )) throw new Error('extension_work_binding_busy');
+  }
+
+  async #enqueueSigned(
+    unsigned: UnsignedExtensionWorkItem,
+    issuedAt: string
+  ): Promise<ExtensionWorkOperationSummary> {
+    const item: ExtensionWorkItem = {
+      ...unsigned,
+      gatewaySignature: this.#identity.signPayload(extensionWorkSigningPayload(unsigned))
+    } as ExtensionWorkItem;
+    const operation: StoredOperation = {
+      schemaVersion: 1,
+      item,
+      state: 'queued',
+      queuedAt: issuedAt,
+      claimedAt: null,
+      completedAt: null,
+      errorCode: null,
+      terminalReason: null,
+      artifact: null
+    };
+    this.#operations.push(operation);
+    this.#trim();
+    await this.#save();
+    return summary(operation);
   }
 
   #expire(now: Date): StoredOperation[] {
@@ -467,7 +575,8 @@ function isTerminalState(value: ExtensionWorkState): boolean {
 
 function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason {
   return value === 'detail_ready' || value === 'search_ready' || value === 'search_empty' ||
-    value === 'search_results_partial' || value === 'verification_required' || value === 'rate_limited' ||
+    value === 'search_results_partial' || value === 'profile_ready' || value === 'inventory_ready' ||
+    value === 'inventory_partial' || value === 'verification_required' || value === 'rate_limited' ||
     value === 'source_unavailable' || value === 'dom_projection_failed' || value === 'document_context_changed' ||
     value === 'run_deadline_exceeded' || value === 'work_tab_closed' || value === 'work_tab_user_taken_over' ||
     value === 'navigation_outcome_unknown' || value === 'gateway_restarted_before_completion';
@@ -493,6 +602,20 @@ function redactTerminalWorkItem(item: StoredExtensionWorkItem): StoredExtensionW
       page: item.input.page
     },
     budget: { ...item.budget }
+  };
+}
+
+function fixedDirectWorkBudget(): {
+  maximumPlatformNavigations: 1;
+  maximumSemanticActions: 0;
+  maximumResponseObservations: 0;
+  maximumPayloadBytes: 98_304;
+} {
+  return {
+    maximumPlatformNavigations: 1,
+    maximumSemanticActions: 0,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 98_304
   };
 }
 

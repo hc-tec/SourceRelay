@@ -43,12 +43,12 @@ export interface BilibiliAccountProfileDomSnapshot {
  */
 export async function captureBilibiliAccountProfileDom(
   tabId: number,
-  documentId: string
+  documentId?: string
 ): Promise<BilibiliAccountProfileDomSnapshot> {
   let results: chrome.scripting.InjectionResult<BilibiliAccountProfileDomSnapshot>[];
   try {
     results = await chrome.scripting.executeScript({
-      target: { tabId, documentIds: [documentId] },
+      target: documentId ? { tabId, documentIds: [documentId] } : { tabId },
       world: 'ISOLATED',
       func: () => {
         const clean = (value: string | null | undefined, maximum: number): string | null => {

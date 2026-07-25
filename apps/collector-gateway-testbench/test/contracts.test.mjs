@@ -41,6 +41,33 @@ test('maps native search into the fixed first-page direct-mode Gateway contract'
   });
 });
 
+test('maps a MID-only account request into the two fixed direct-mode account capabilities', () => {
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'account_profile',
+    input: { accountId: '7481602' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.account_profile',
+    executionTarget: 'collector_work_tab',
+    input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+  });
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'account_inventory',
+    input: { accountId: '7481602' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.account_inventory',
+    executionTarget: 'collector_work_tab',
+    input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+  });
+});
+
 test('rejects arbitrary URL, extra request keys, invalid BVIDs, and control characters', () => {
   for (const value of [
     {
@@ -63,6 +90,16 @@ test('rejects arbitrary URL, extra request keys, invalid BVIDs, and control char
       kind: 'native_search',
       input: { query: 'DeepSeek' },
       selector: '.anything'
+    },
+    {
+      browserBindingId: bindingId,
+      kind: 'account_profile',
+      input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+    },
+    {
+      browserBindingId: bindingId,
+      kind: 'account_inventory',
+      input: { accountId: '0' }
     }
   ]) {
     assert.throws(() => parseTestbenchSubmission(value), TestbenchInputError);
@@ -84,6 +121,13 @@ test('only accepts an artifact path derived from the matching direct operation c
       retrievalPath: `/v1/collect/artifacts/bilibili.native_search/${artifactId}`
     }
   }), null);
+  assert.equal(artifactPathFromOperation({
+    operationId,
+    capability: 'bilibili.account_inventory',
+    artifact: {
+      retrievalPath: `/v1/collect/artifacts/bilibili.account_inventory/${artifactId}`
+    }
+  }), `/v1/collect/artifacts/bilibili.account_inventory/${artifactId}`);
 });
 
 test('keeps Gateway and testbench listener configuration on explicit loopback origins', () => {

@@ -31,21 +31,51 @@ describe('user-owned browser collector service', () => {
     })).toThrow('user_browser_collector_service_request_invalid');
   });
 
-  test('publishes two registered direct-mode capabilities without a profile or browser-control primitive', () => {
+  test('publishes four registered direct-mode capabilities without a Profile or browser-control primitive', () => {
     const document = userBrowserCollectorServiceOpenApiDocument('http://127.0.0.1:43127') as Record<string, any>;
     const variants = document.components.schemas.UserBrowserCollectRequest.oneOf;
     expect(variants).toEqual([
       { $ref: '#/components/schemas/UserBrowserVideoDetailCollectRequest' },
-      { $ref: '#/components/schemas/UserBrowserNativeSearchCollectRequest' }
+      { $ref: '#/components/schemas/UserBrowserNativeSearchCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserAccountProfileCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserAccountInventoryCollectRequest' }
     ]);
     expect(document.components.schemas.UserBrowserNativeSearchCollectRequest.properties).toMatchObject({
       capability: { const: 'bilibili.native_search' },
       input: { required: ['query'] }
     });
     expect(Object.keys(document.paths)).not.toContain('/v1/profiles');
-    expect(JSON.stringify(document.components.schemas)).not.toMatch(/profileId|arbitraryUrl|selector|script/i);
+    const schemaText = JSON.stringify(document.components.schemas);
+    expect(schemaText).not.toContain('"profileId"');
+    expect(schemaText).not.toContain('"arbitraryUrl"');
+    expect(schemaText).not.toContain('"selector"');
+    expect(schemaText).not.toContain('"script"');
     expect(document['x-collector-excluded-surfaces']).toEqual(expect.arrayContaining([
       'arbitrary_url', 'arbitrary_selector', 'arbitrary_script'
     ]));
+  });
+
+  test('admits one canonical public MID for profile and first-screen inventory, never a page URL or pagination control', () => {
+    for (const capability of ['bilibili.account_profile', 'bilibili.account_inventory'] as const) {
+      expect(userBrowserCollectorServiceRequestInput({
+        schemaVersion: 2,
+        browserBindingId,
+        platform: 'bilibili',
+        capability,
+        executionTarget: 'collector_work_tab',
+        input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+      })).toMatchObject({
+        capability,
+        input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+      });
+    }
+    expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_inventory',
+      executionTarget: 'collector_work_tab',
+      input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602/upload/video' }
+    })).toThrow('user_browser_collector_service_request_invalid');
   });
 });

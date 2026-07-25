@@ -112,9 +112,9 @@ export interface BilibiliAccountVideoInventoryRunRecord {
     terminalReason: BilibiliAccountVideoInventoryTerminalReason;
   };
   safeguards: {
-    environment: 'local_user_controlled_collection_profile';
-    browser: 'visible_playwright_chromium';
-    acquisition: 'trusted_navigation_plus_bounded_dom_projection';
+    environment: 'local_user_controlled_collection_profile' | 'user_owned_browser_extension';
+    browser: 'visible_playwright_chromium' | 'user_owned_chromium_tab';
+    acquisition: 'trusted_navigation_plus_bounded_dom_projection' | 'extension_owned_tab_navigation_plus_bounded_dom_projection';
     requestHeaders: 'not_read';
     requestBody: 'not_read';
     cookiesAndTokens: 'not_read';
@@ -129,8 +129,17 @@ export interface BilibiliAccountVideoInventoryRunRecord {
       | 'reused_matching_managed_tab'
       | 'reused_retained_managed_tab'
       | 'created_new_managed_tab'
+      | 'created_extension_work_tab'
+      | 'reused_extension_work_tab'
       | 'not_acquired';
-    targetPage: 'retained_after_run' | 'quarantined_on_uncertain_outcome' | 'not_acquired';
+    targetPage:
+      | 'retained_after_run'
+      | 'quarantined_on_uncertain_outcome'
+      | 'idle_reusable'
+      | 'retained_not_reusable'
+      | 'user_taken_over'
+      | 'closed_or_missing'
+      | 'not_acquired';
     admissionEligible: false;
   };
 }

@@ -149,7 +149,10 @@ function safeCapabilityPayload(payload) {
       if (!capability || typeof capability !== 'object' ||
         typeof capability.capability !== 'string' || typeof capability.title !== 'string' ||
         typeof capability.inputMode !== 'string' || typeof capability.captureMode !== 'string' ||
-        !['direct_ready', 'direct_migration_required', 'trusted_interaction_migration_required'].includes(capability.dispatchState) ||
+        ![
+          'direct_ready', 'direct_canary_pending', 'direct_migration_required',
+          'trusted_interaction_migration_required'
+        ].includes(capability.dispatchState) ||
         capability.platform !== 'bilibili' || capability.legacyImplementationPresent !== true ||
         capability.browserHostFallback !== 'forbidden') return [];
       return [{

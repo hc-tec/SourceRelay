@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
+import { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
 import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import { BrowserBindingSafetyRegistry } from './browser-binding-safety';
@@ -25,6 +27,8 @@ const collectorServiceClients = await CollectorServiceClientRegistry.create(conf
 const collectorServiceAudit = await CollectorServiceAuditLog.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
+const accountProfileArtifacts = await BilibiliAccountProfileArtifactStore.create(config.stateDirectory);
+const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
 const expectedHost = config.host + ':' + config.port;
 
 const server = createServer(async (request, response) => {
@@ -42,7 +46,9 @@ const server = createServer(async (request, response) => {
       collectorServiceClients,
       collectorServiceAudit,
       videoDetailArtifacts,
-      nativeSearchArtifacts
+      nativeSearchArtifacts,
+      accountProfileArtifacts,
+      accountVideoInventoryArtifacts
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 2, ok: false, error: 'route_not_found' });
   } catch (error) {

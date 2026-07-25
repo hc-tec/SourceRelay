@@ -22,6 +22,7 @@ export type UserBrowserBilibiliCapability =
 
 export type UserBrowserBilibiliCapabilityDispatchState =
   | 'direct_ready'
+  | 'direct_canary_pending'
   | 'direct_migration_required'
   | 'trusted_interaction_migration_required';
 export type UserBrowserBilibiliCapabilityInputMode =
@@ -57,8 +58,8 @@ export interface UserBrowserBilibiliCapabilityDescriptor {
 export const USER_BROWSER_BILIBILI_CAPABILITIES = [
   descriptor('bilibili.native_search', 'B站站内搜索', 'query', 'direct_ready', 'dom_only'),
   descriptor('bilibili.native_search_batch', 'B站站内搜索多页批量', 'query_and_fixed_pages', 'direct_migration_required', 'multi_page_navigation'),
-  descriptor('bilibili.account_profile', 'UP 主公开资料', 'canonical_profile_url', 'direct_migration_required', 'passive_dom_projection'),
-  descriptor('bilibili.account_inventory', 'UP 主视频首屏', 'canonical_profile_url', 'direct_migration_required', 'passive_dom_projection'),
+  descriptor('bilibili.account_profile', 'UP 主公开资料', 'canonical_profile_url', 'direct_canary_pending', 'passive_dom_projection'),
+  descriptor('bilibili.account_inventory', 'UP 主视频首屏', 'canonical_profile_url', 'direct_canary_pending', 'passive_dom_projection'),
   descriptor('bilibili.account_inventory.pagination', 'UP 主视频有界翻页', 'canonical_profile_url_and_fixed_page_budget', 'direct_migration_required', 'bounded_page_navigation'),
   descriptor('bilibili.video_detail', '视频公开详情', 'canonical_video_url', 'direct_ready', 'dom_only'),
   descriptor('bilibili.transcript', '视频字幕', 'canonical_video_url', 'trusted_interaction_migration_required', 'subtitle_menu_and_text_track'),
@@ -75,8 +76,18 @@ export function listUserBrowserBilibiliCapabilities(): UserBrowserBilibiliCapabi
 
 export function isDirectReadyUserBrowserBilibiliCapability(
   value: string
-): value is Extract<UserBrowserBilibiliCapability, 'bilibili.native_search' | 'bilibili.video_detail'> {
+): value is Extract<
+  UserBrowserBilibiliCapability,
+  'bilibili.native_search' | 'bilibili.video_detail'
+> {
   return value === 'bilibili.native_search' || value === 'bilibili.video_detail';
+}
+
+/** Implemented direct executor, but no real user-browser canary is claimed yet. */
+export function isDirectCanaryPendingUserBrowserBilibiliCapability(
+  value: string
+): value is Extract<UserBrowserBilibiliCapability, 'bilibili.account_profile' | 'bilibili.account_inventory'> {
+  return value === 'bilibili.account_profile' || value === 'bilibili.account_inventory';
 }
 
 function descriptor(

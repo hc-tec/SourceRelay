@@ -1,4 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
+import type { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import { collectorServiceClientCreateInput, type CollectorServiceClientRegistry } from './collector-service-clients';
@@ -13,7 +15,7 @@ import {
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const DIRECT_ARTIFACT = new RegExp(
-  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search))/(${UUID})$`,
+  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search|account_profile|account_inventory))/(${UUID})$`,
   'i'
 );
 
@@ -23,6 +25,8 @@ export interface UserBrowserGatewayAdminRouteContext {
   collectorServiceAudit: CollectorServiceAuditLog;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
   nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
+  accountProfileArtifacts: BilibiliAccountProfileArtifactStore;
+  accountVideoInventoryArtifacts: BilibiliAccountVideoInventoryArtifactStore;
 }
 
 /**
@@ -65,7 +69,11 @@ export async function handleUserBrowserGatewayAdminRoute(
   const artifact = url.pathname.match(DIRECT_ARTIFACT);
   if (request.method === 'GET' && artifact) {
     const access = await authoriseUserBrowserServiceRequest(request, context, 'artifacts:read');
-    const capability = artifact[1]! as 'bilibili.video_detail' | 'bilibili.native_search';
+    const capability = artifact[1]! as
+      | 'bilibili.video_detail'
+      | 'bilibili.native_search'
+      | 'bilibili.account_profile'
+      | 'bilibili.account_inventory';
     const artifactId = artifact[2]!;
     if (!access.granted) {
       await recordUserBrowserServiceAudit(context, null, 'artifact_read', {
@@ -81,7 +89,11 @@ export async function handleUserBrowserGatewayAdminRoute(
     }
     const view = capability === 'bilibili.video_detail'
       ? await context.videoDetailArtifacts.get(artifactId)
-      : await context.nativeSearchArtifacts.get(artifactId);
+      : capability === 'bilibili.native_search'
+        ? await context.nativeSearchArtifacts.get(artifactId)
+        : capability === 'bilibili.account_profile'
+          ? await context.accountProfileArtifacts.get(artifactId)
+          : await context.accountVideoInventoryArtifacts.get(artifactId);
     if (!view) {
       await recordUserBrowserServiceAudit(context, access.principal, 'artifact_read', {
         capability,

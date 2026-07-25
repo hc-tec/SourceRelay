@@ -58,6 +58,55 @@ const searchItem: ExtensionWorkItem = {
   gatewaySignature: 'b'.repeat(86)
 };
 
+const accountProfileItem: ExtensionWorkItem = {
+  schemaVersion: 1,
+  protocolVersion: 1,
+  workId: '66666666-6666-4666-8666-666666666666',
+  operationId: '77777777-7777-4777-8777-777777777777',
+  browserBindingId: '33333333-3333-4333-8333-333333333333',
+  platform: 'bilibili',
+  capability: 'bilibili.account_profile',
+  executionTarget: 'collector_work_tab',
+  issuedAt: '2026-07-25T00:00:00.000Z',
+  expiresAt: '2026-07-25T00:01:00.000Z',
+  input: {
+    canonicalProfileUrl: 'https://space.bilibili.com/7481602',
+    stableAccountId: '7481602'
+  },
+  budget: {
+    maximumPlatformNavigations: 1,
+    maximumSemanticActions: 0,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 98_304
+  },
+  gatewaySignature: 'c'.repeat(86)
+};
+
+const accountInventoryItem: ExtensionWorkItem = {
+  schemaVersion: 1,
+  protocolVersion: 1,
+  workId: '88888888-8888-4888-8888-888888888888',
+  operationId: '99999999-9999-4999-8999-999999999999',
+  browserBindingId: '33333333-3333-4333-8333-333333333333',
+  platform: 'bilibili',
+  capability: 'bilibili.account_inventory',
+  executionTarget: 'collector_work_tab',
+  issuedAt: '2026-07-25T00:00:00.000Z',
+  expiresAt: '2026-07-25T00:01:00.000Z',
+  input: {
+    canonicalProfileUrl: 'https://space.bilibili.com/7481602',
+    canonicalInventoryUrl: 'https://space.bilibili.com/7481602/upload/video',
+    stableAccountId: '7481602'
+  },
+  budget: {
+    maximumPlatformNavigations: 1,
+    maximumSemanticActions: 0,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 98_304
+  },
+  gatewaySignature: 'd'.repeat(86)
+};
+
 describe('direct extension work contract', () => {
   test('signs a fixed typed work item without allowing arbitrary carrier fields', () => {
     expect(isExtensionWorkItem(item)).toBe(true);
@@ -163,5 +212,89 @@ describe('direct extension work contract', () => {
       ...result,
       terminalReason: 'search_empty'
     }, searchItem)).toBe(false);
+  });
+
+  test('binds public profile and inventory work to one exact MID and one derived first page', () => {
+    expect(isExtensionWorkItem(accountProfileItem)).toBe(true);
+    expect(isExtensionWorkItem(accountInventoryItem)).toBe(true);
+    expect(isExtensionWorkItem({
+      ...accountInventoryItem,
+      input: { ...accountInventoryItem.input, canonicalInventoryUrl: 'https://space.bilibili.com/7481602/upload/video?p=2' }
+    })).toBe(false);
+    expect(isExtensionWorkItem({
+      ...accountProfileItem,
+      input: { ...accountProfileItem.input, stableAccountId: '1' }
+    })).toBe(false);
+
+    const profileResult: ExtensionWorkResult = {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: accountProfileItem.workId,
+      operationId: accountProfileItem.operationId,
+      browserBindingId: accountProfileItem.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_profile',
+      executionTarget: 'collector_work_tab',
+      state: 'completed',
+      errorCode: null,
+      terminalReason: 'profile_ready',
+      completedAt: '2026-07-25T00:00:20.000Z',
+      navigation: { attempted: true, attemptCount: 1 },
+      workTabAcquisition: 'created',
+      workTabDisposition: 'idle_reusable',
+      observation: {
+        stableAccountId: '7481602',
+        displayName: '公开 UP 主',
+        visibleDescription: null,
+        avatarUrl: null,
+        bannerUrl: null,
+        textBadges: [],
+        imageBadges: [],
+        statistics: [],
+        navigation: [],
+        announcementText: null,
+        chargeText: null,
+        highlights: [],
+        profileHeaderVisible: true,
+        loginOverlayVisible: false,
+        risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+      }
+    };
+    expect(isExtensionWorkResultForItem(profileResult, accountProfileItem)).toBe(true);
+
+    const inventoryResult: ExtensionWorkResult = {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: accountInventoryItem.workId,
+      operationId: accountInventoryItem.operationId,
+      browserBindingId: accountInventoryItem.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_inventory',
+      executionTarget: 'collector_work_tab',
+      state: 'completed',
+      errorCode: null,
+      terminalReason: 'inventory_ready',
+      completedAt: '2026-07-25T00:00:20.000Z',
+      navigation: { attempted: true, attemptCount: 1 },
+      workTabAcquisition: 'created',
+      workTabDisposition: 'idle_reusable',
+      observation: {
+        stableAccountId: '7481602',
+        videoListVisible: true,
+        cards: [{
+          bvid: 'BV1qZSLBYEpa',
+          title: '公开视频',
+          visibleText: '公开视频 创作者',
+          thumbnailUrl: null
+        }],
+        loginOverlayVisible: false,
+        risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+      }
+    };
+    expect(isExtensionWorkResultForItem(inventoryResult, accountInventoryItem)).toBe(true);
+    expect(isExtensionWorkResultForItem({
+      ...inventoryResult,
+      observation: { ...inventoryResult.observation!, stableAccountId: '1' }
+    }, accountInventoryItem)).toBe(false);
   });
 });

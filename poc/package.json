@@ -19,7 +19,7 @@
     "verify:local": "node scripts/verify-local-validation-suite.mjs",
     "build:collector-runtime": "npm run build:contracts && npm run build:extension && npm run build --workspace @intelligence/collector-browser-host && npm run build --workspace @intelligence/collector-gateway",
     "build:user-browser-runtime": "npm run build:contracts && npm run build:extension && npm run build:user-browser --workspace @intelligence/collector-gateway",
-    "prepare:user-browser-deployment": "npm run build:user-browser-runtime && npm run prepare:user-browser-extension --workspace @intelligence/collector-gateway",
+    "prepare:user-browser-deployment": "npm run build:user-browser-runtime && npm run prepare:user-browser-extension --workspace @intelligence/collector-gateway --",
     "start:user-browser": "npm run build:user-browser-runtime && npm run start:user-browser --workspace @intelligence/collector-gateway",
     "check:user-browser": "npm run check:user-browser --workspace @intelligence/collector-gateway --",
     "test:typecheck": "tsc --noEmit -p tsconfig.tests.json",

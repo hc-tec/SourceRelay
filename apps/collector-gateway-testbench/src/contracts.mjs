@@ -1,7 +1,8 @@
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TOKEN_PATTERN = /^cst_[A-Za-z0-9_-]{43}$/;
 const BVID_PATTERN = /^BV[0-9A-Za-z]{10}$/;
-const ARTIFACT_PATH_PATTERN = /^\/v1\/collect\/artifacts\/(bilibili\.(?:video_detail|native_search))\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+const ACCOUNT_ID_PATTERN = /^[1-9]\d{0,19}$/;
+const ARTIFACT_PATH_PATTERN = /^\/v1\/collect\/artifacts\/(bilibili\.(?:video_detail|native_search|account_profile|account_inventory))\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
 export const TESTBENCH_SCHEMA_VERSION = 1;
 export const DIRECT_SCHEMA_VERSION = 2;
@@ -17,8 +18,9 @@ export class TestbenchInputError extends Error {
 
 /**
  * The testbench is deliberately a narrower consumer than the Gateway. It
- * accepts a BVID rather than an arbitrary video URL, and it never exposes a
- * route for selectors, scripts, tab IDs, Browser Profiles, or network data.
+ * accepts fixed public identifiers (BVID, query or MID) rather than arbitrary
+ * URLs, and it never exposes a route for selectors, scripts, tab IDs, Browser
+ * Profiles, or network data.
  */
 export function parseTestbenchSubmission(value) {
   if (!isRecord(value) || !hasExactKeys(value, ['browserBindingId', 'kind', 'input'])) {
@@ -60,6 +62,21 @@ export function parseTestbenchSubmission(value) {
     };
   }
 
+  if (value.kind === 'account_profile' || value.kind === 'account_inventory') {
+    if (!hasExactKeys(value.input, ['accountId']) || typeof value.input.accountId !== 'string') {
+      throw new TestbenchInputError('testbench_request_invalid');
+    }
+    const accountId = normaliseAccountId(value.input.accountId);
+    return {
+      schemaVersion: DIRECT_SCHEMA_VERSION,
+      browserBindingId: value.browserBindingId,
+      platform: 'bilibili',
+      capability: value.kind === 'account_profile' ? 'bilibili.account_profile' : 'bilibili.account_inventory',
+      executionTarget: 'collector_work_tab',
+      input: { canonicalProfileUrl: `https://space.bilibili.com/${accountId}` }
+    };
+  }
+
   throw new TestbenchInputError('testbench_request_invalid');
 }
 
@@ -88,7 +105,7 @@ export function isUuid(value) {
 
 export function artifactPathFromOperation(operation) {
   if (!isRecord(operation) || !isUuid(operation.operationId) ||
-    (operation.capability !== 'bilibili.video_detail' && operation.capability !== 'bilibili.native_search') ||
+    !isDirectArtifactCapability(operation.capability) ||
     !isRecord(operation.artifact) || typeof operation.artifact.retrievalPath !== 'string') {
     return null;
   }
@@ -115,6 +132,17 @@ function normaliseSearchQuery(value) {
     throw new TestbenchInputError('testbench_search_query_invalid');
   }
   return query;
+}
+
+function normaliseAccountId(value) {
+  const accountId = value.trim();
+  if (!ACCOUNT_ID_PATTERN.test(accountId)) throw new TestbenchInputError('testbench_account_id_invalid');
+  return accountId;
+}
+
+function isDirectArtifactCapability(value) {
+  return value === 'bilibili.video_detail' || value === 'bilibili.native_search' ||
+    value === 'bilibili.account_profile' || value === 'bilibili.account_inventory';
 }
 
 function loopbackHttpOrigin(value, code) {
