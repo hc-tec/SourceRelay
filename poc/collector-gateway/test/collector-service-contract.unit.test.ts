@@ -76,7 +76,7 @@ describe('Collector service contract', () => {
       terminalReason: 'detail_captured',
       artifact: {
         artifactId: ARTIFACT_ID,
-        retrievalPath: `/v1/video-detail-artifacts/${ARTIFACT_ID}`,
+        retrievalPath: `/v1/collect/artifacts/bilibili.video_detail/${ARTIFACT_ID}`,
         summary: { artifactId: ARTIFACT_ID, titleCaptured: true }
       }
     });
@@ -106,7 +106,7 @@ describe('Collector service contract', () => {
       state: 'partial',
       errorCode: 'rate_limited',
       artifact: {
-        retrievalPath: `/v1/bilibili-native-search-batch-artifacts/${ARTIFACT_ID}`
+        retrievalPath: `/v1/collect/artifacts/bilibili.native_search_batch/${ARTIFACT_ID}`
       }
     });
   });

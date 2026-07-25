@@ -24,6 +24,7 @@ import type { BilibiliVideoDetailHostRunner } from './bilibili-video-detail-host
 import { bilibiliVideoDiscussionInput } from './bilibili-video-discussion-contract';
 import type { BilibiliVideoDiscussionHostRunner } from './bilibili-video-discussion-host-runner';
 import {
+  COLLECTOR_SERVICE_SCHEMA_VERSION,
   collectorServiceResult,
   type CollectorServiceRequest,
   type CollectorServiceResult
@@ -36,7 +37,7 @@ import type { BrowserProfileRegistry } from './profiles';
  * execution API to callers.
  */
 export interface CollectorServiceDependencies {
-  profileRegistry: Pick<BrowserProfileRegistry, 'get'>;
+  profileRegistry: Pick<BrowserProfileRegistry, 'get' | 'list'>;
   accountProfileRunner: Pick<BilibiliAccountProfileHostRunner, 'run'>;
   accountVideoInventoryRunner: Pick<BilibiliAccountVideoInventoryHostRunner, 'run'>;
   accountVideoPaginationRunner: Pick<BilibiliAccountVideoPaginationHostRunner, 'run'>;
@@ -49,6 +50,30 @@ export interface CollectorServiceDependencies {
   transcriptRunner: Pick<BilibiliTranscriptHostRunner, 'run'>;
   danmakuRunner: Pick<BilibiliDanmakuHostRunner, 'run'>;
   dynamicRunner: Pick<BilibiliDynamicHostRunner, 'run'>;
+}
+
+export interface CollectorServiceProfileDescriptor {
+  schemaVersion: typeof COLLECTOR_SERVICE_SCHEMA_VERSION;
+  profileId: string;
+  platform: 'bilibili';
+  accountLabel: string;
+}
+
+export function collectorServiceProfiles(
+  profileRegistry: Pick<BrowserProfileRegistry, 'list'>
+): CollectorServiceProfileDescriptor[] {
+  return profileRegistry.list()
+    .filter((profile) =>
+      profile.kind === 'collection' &&
+      profile.account.category === 'user_managed' &&
+      profile.platform === 'bilibili'
+    )
+    .map((profile) => ({
+      schemaVersion: COLLECTOR_SERVICE_SCHEMA_VERSION,
+      profileId: profile.profileId,
+      platform: 'bilibili',
+      accountLabel: profile.account.label
+    }));
 }
 
 export async function dispatchCollectorServiceRequest(

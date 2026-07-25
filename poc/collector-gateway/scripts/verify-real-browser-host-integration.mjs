@@ -40,6 +40,10 @@ const browserPids = [];
 let crossSiteProfileCreationRejected = false;
 let collectorServiceCapabilitiesPublished = false;
 let collectorServiceInvalidInputRejectedPreBrowser = false;
+let collectorServiceClientTokenAuthorized = false;
+let collectorServiceArtifactTokenGateVerified = false;
+let collectorServiceForeignOriginWithTokenRejected = false;
+let collectorServiceMissingTokenRejected = false;
 try {
   await mkdir(runtimeRoot, { recursive: true });
   gateway = await startGateway(environment, origin);
@@ -96,6 +100,38 @@ try {
   assert.match(betaProfileId, /^[0-9a-f-]{36}$/i);
   assert.notEqual(alphaProfileId, betaProfileId);
 
+  const issuedServiceClient = await request(origin, '/v1/collector-service/clients', {
+    method: 'POST',
+    body: { label: 'Gateway Host integration client' }
+  });
+  assert.match(issuedServiceClient.client?.clientId, /^[0-9a-f-]{36}$/i);
+  assert.match(issuedServiceClient.token, /^cst_[A-Za-z0-9_-]{43}$/);
+  assert.equal('token' in issuedServiceClient.client, false);
+  const clientAuthorization = `Bearer ${issuedServiceClient.token}`;
+
+  const missingTokenProfilesResponse = await fetch(`${origin}/v1/collector-service/profiles`);
+  const missingTokenProfilesBody = await missingTokenProfilesResponse.json();
+  assert.equal(missingTokenProfilesResponse.status, 401);
+  assert.equal(missingTokenProfilesBody.error, 'collector_service_client_authorization_rejected');
+  collectorServiceMissingTokenRejected = true;
+
+  const clientProfilesResponse = await fetch(`${origin}/v1/collector-service/profiles`, {
+    headers: { authorization: clientAuthorization }
+  });
+  const clientProfilesBody = await clientProfilesResponse.json();
+  assert.equal(clientProfilesResponse.status, 200);
+  assert.ok(clientProfilesBody.profiles?.some((profile) => profile.profileId === alphaProfileId));
+  collectorServiceClientTokenAuthorized = true;
+
+  const unavailableArtifactResponse = await fetch(
+    `${origin}/v1/collect/artifacts/bilibili.video_detail/11111111-1111-4111-8111-111111111111`,
+    { headers: { authorization: clientAuthorization } }
+  );
+  const unavailableArtifactBody = await unavailableArtifactResponse.json();
+  assert.equal(unavailableArtifactResponse.status, 404);
+  assert.equal(unavailableArtifactBody.error, 'collector_service_artifact_not_found');
+  collectorServiceArtifactTokenGateVerified = true;
+
   const invalidCollectorResponse = await fetch(`${origin}/v1/collect`, {
     method: 'POST',
     headers: {
@@ -118,6 +154,27 @@ try {
   assert.equal(invalidCollectorResponse.status, 400);
   assert.equal(invalidCollectorBody.error, 'bilibili_video_detail_input_invalid');
   collectorServiceInvalidInputRejectedPreBrowser = true;
+
+  const foreignOriginWithTokenResponse = await fetch(`${origin}/v1/collect`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: clientAuthorization,
+      origin: 'http://attacker.invalid',
+      'sec-fetch-site': 'cross-site'
+    },
+    body: JSON.stringify({
+      schemaVersion: 1,
+      profileId: alphaProfileId,
+      platform: 'bilibili',
+      capability: 'bilibili.video_detail',
+      input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+    })
+  });
+  const foreignOriginWithTokenBody = await foreignOriginWithTokenResponse.json();
+  assert.equal(foreignOriginWithTokenResponse.status, 403);
+  assert.equal(foreignOriginWithTokenBody.error, 'console_origin_rejected');
+  collectorServiceForeignOriginWithTokenRejected = true;
 
   const launchedAlpha = await request(origin, `/v1/profiles/${alphaProfileId}/browser/launch`, {
     method: 'POST',
@@ -189,6 +246,10 @@ try {
     crossSiteProfileCreationRejected,
     collectorServiceCapabilitiesPublished,
     collectorServiceInvalidInputRejectedPreBrowser,
+    collectorServiceClientTokenAuthorized,
+    collectorServiceArtifactTokenGateVerified,
+    collectorServiceForeignOriginWithTokenRejected,
+    collectorServiceMissingTokenRejected,
     profileClosedOnlyByExplicitRequest: true,
     hostExitedOnlyByExplicitRequest: true,
     testScopedProcessResidue: 0,

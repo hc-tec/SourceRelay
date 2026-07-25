@@ -60,13 +60,26 @@ input, select { width: 100%; min-width: 0; border: 1px solid var(--line); border
 .state-idle_reusable { color: var(--good); }
 .empty { padding: 2rem; text-align: center; color: var(--muted); }
 .notice p { margin-bottom: 0; color: var(--muted); line-height: 1.65; }
+.panel-copy { color: var(--muted); line-height: 1.65; }
+.client-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .75rem; padding: .9rem; margin: .75rem 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.issued-token { display: grid; gap: .65rem; margin: .75rem 0; padding: .9rem; border: 1px solid color-mix(in srgb, var(--warn), transparent 45%); border-radius: 12px; background: color-mix(in srgb, var(--warn), transparent 92%); }
+.issued-token p { margin: 0; color: var(--muted); line-height: 1.55; }
+.issued-token code { display: block; overflow-wrap: anywhere; padding: .65rem; border: 1px solid var(--line); border-radius: 8px; background: #0c1118; color: var(--text); }
+.issued-token button { justify-self: start; }
+.client-grid { display: grid; gap: .6rem; }
+.client-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.client-card h3, .client-card p { margin: 0; }
+.client-card h3 { font-size: 1rem; }
+.client-card p { margin-top: .35rem; color: var(--muted); font-size: .78rem; overflow-wrap: anywhere; }
 #toast { position: fixed; right: 1rem; bottom: 1rem; max-width: min(420px, calc(100% - 2rem)); border: 1px solid var(--line); border-radius: 10px; padding: .8rem 1rem; background: #161d27; box-shadow: 0 12px 40px #0008; opacity: 0; transform: translateY(8px); pointer-events: none; transition: .18s ease; }
 #toast.visible { opacity: 1; transform: translateY(0); }
 @media (max-width: 900px) {
   .topbar { align-items: flex-start; flex-direction: column; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .profile-form { grid-template-columns: 1fr; }
+  .client-form { grid-template-columns: 1fr; }
   .profile-header { align-items: flex-start; flex-direction: column; }
+  .client-card { align-items: flex-start; flex-direction: column; }
   .page-table { display: block; overflow-x: auto; }
 }
 `;

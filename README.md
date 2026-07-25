@@ -3,7 +3,7 @@
 这个仓库正在建设一个“需要时才启动”的本地个人情报系统。当前正式产品路线不是传统爬虫、私有 API 模拟器或提前囤积所有平台数据，而是：
 
 ```text
-Other Local Applications / Local Research Console
+Other Local Applications (revocable local API token) / Local Research Console
   -> Local Collector Service API (registered capabilities only)
   -> paired MV3 Collector Core
   -> dedicated visible Collection Window
@@ -150,8 +150,8 @@ Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git
 
 1. 已完成独立 Contracts、Browser Host、受管多页面池、PageLease、真实本地 Chromium 生命周期门禁和 B站采集 runner；
 2. 将已有 runner 统一经由版本化的 Local Collector Service API 提供给其他本地应用；
-3. 为独立本地客户端补充可撤销的配对 / token 授权，而不放宽 loopback、Profile 或平台安全边界；
-4. 按同一 API capability 模型逐个平台增加经过真实页面侦察验证的能力。
+3. 已为独立本地客户端补充 Console 签发、仅摘要持久化、可即时撤销的 Local API token；不放宽 loopback、Profile 或平台安全边界；
+4. 为 Local API token 增加显式 scope 与调用审计，再按同一 API capability 模型逐个平台增加经过真实页面侦察验证的能力。
 
 权威产品文档：
 

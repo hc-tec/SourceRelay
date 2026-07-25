@@ -48,21 +48,29 @@ import { bilibiliDanmakuInput } from './bilibili-danmaku-contract';
 import { bilibiliVideoDiscussionInput } from './bilibili-video-discussion-contract';
 import type { BilibiliTranscriptHostRunner } from './bilibili-transcript-host-runner';
 import type { CollectionBrowserManager } from './browser-manager';
-import { dispatchCollectorServiceRequest } from './collector-service';
+import { readCollectorServiceArtifact } from './collector-service-artifacts';
+import type { CollectorServiceClientRegistry } from './collector-service-clients';
+import { collectorServiceClientCreateInput } from './collector-service-clients';
+import {
+  collectorServiceProfiles,
+  dispatchCollectorServiceRequest
+} from './collector-service';
 import {
   collectorServiceCapabilities,
+  isCollectorServiceCapability,
   collectorServiceRequestInput
 } from './collector-service-contract';
 import type { LoadedGatewayIdentity } from './identity';
 import type { BrowserProfileRegistry } from './profiles';
 import { createBrowserProfileInput } from './profiles';
 import { consoleHtml, consoleScript, consoleStyles } from './console-assets';
-import { readJsonBody, requireSameOrigin, send, sendJson } from './gateway-http';
+import { readJsonBody, requireSameOrigin, safeErrorCode, send, sendJson } from './gateway-http';
 
 const PROFILE_ID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 
 export interface GatewayRouteContext {
   identity: LoadedGatewayIdentity;
+  collectorServiceClients: CollectorServiceClientRegistry;
   browserManager: CollectionBrowserManager;
   profileRegistry: BrowserProfileRegistry;
   accountSafety: AccountSafetyRegistry;
@@ -142,11 +150,57 @@ export async function handleGatewayRoute(
     });
     return true;
   }
-  if (request.method === 'POST' && url.pathname === '/v1/collect') {
+  if (request.method === 'GET' && url.pathname === '/v1/collector-service/clients') {
     if (!sameOrigin(request, response, context)) return true;
+    sendJson(response, 200, { schemaVersion: 1, clients: context.collectorServiceClients.list() });
+    return true;
+  }
+  if (request.method === 'POST' && url.pathname === '/v1/collector-service/clients') {
+    if (!sameOrigin(request, response, context)) return true;
+    const issued = await context.collectorServiceClients.issue(
+      collectorServiceClientCreateInput(await readJsonBody(request))
+    );
+    sendJson(response, 201, { schemaVersion: 1, client: issued.client, token: issued.token });
+    return true;
+  }
+  const collectorServiceClientRevoke = url.pathname.match(
+    new RegExp(`^/v1/collector-service/clients/(${PROFILE_ID})/revoke$`, 'i')
+  );
+  if (request.method === 'POST' && collectorServiceClientRevoke) {
+    if (!sameOrigin(request, response, context)) return true;
+    await readJsonBody(request);
+    const client = await context.collectorServiceClients.revoke(collectorServiceClientRevoke[1]!);
+    sendJson(response, 200, { schemaVersion: 1, client });
+    return true;
+  }
+  if (request.method === 'GET' && url.pathname === '/v1/collector-service/profiles') {
+    if (!(await collectorServiceAccess(request, response, context))) return true;
+    sendJson(response, 200, { schemaVersion: 1, profiles: collectorServiceProfiles(context.profileRegistry) });
+    return true;
+  }
+  if (request.method === 'POST' && url.pathname === '/v1/collect') {
+    if (!(await collectorServiceAccess(request, response, context))) return true;
     const collectorRequest = collectorServiceRequestInput(await readJsonBody(request));
     const result = await dispatchCollectorServiceRequest(collectorRequest, context);
     sendJson(response, 201, { schemaVersion: 1, result });
+    return true;
+  }
+  const collectorServiceArtifact = url.pathname.match(
+    new RegExp(`^/v1/collect/artifacts/([a-z0-9._-]{1,120})/(${PROFILE_ID})$`, 'i')
+  );
+  if (request.method === 'GET' && collectorServiceArtifact) {
+    if (!(await collectorServiceAccess(request, response, context))) return true;
+    const capability = collectorServiceArtifact[1]!;
+    if (!isCollectorServiceCapability(capability)) {
+      sendJson(response, 404, { schemaVersion: 1, ok: false, error: 'collector_service_capability_not_found' });
+      return true;
+    }
+    const artifact = await readCollectorServiceArtifact(capability, collectorServiceArtifact[2]!, context);
+    if (!artifact) {
+      sendJson(response, 404, { schemaVersion: 1, ok: false, error: 'collector_service_artifact_not_found' });
+      return true;
+    }
+    sendJson(response, 200, { schemaVersion: 1, capability, artifact });
     return true;
   }
   if (request.method === 'GET' && url.pathname === '/v1/browser-host/snapshot') {
@@ -839,4 +893,26 @@ function sameOrigin(
   context: GatewayRouteContext
 ): boolean {
   return requireSameOrigin(request, response, context.identity.publicIdentity.loopbackOrigin);
+}
+
+async function collectorServiceAccess(
+  request: IncomingMessage,
+  response: ServerResponse,
+  context: GatewayRouteContext
+): Promise<boolean> {
+  const expectedOrigin = context.identity.publicIdentity.loopbackOrigin;
+  if (request.headers.origin === expectedOrigin && request.headers['sec-fetch-site'] === 'same-origin') {
+    return true;
+  }
+  if (request.headers.origin !== undefined || request.headers['sec-fetch-site'] !== undefined) {
+    sendJson(response, 403, { schemaVersion: 1, ok: false, error: 'console_origin_rejected' });
+    return false;
+  }
+  try {
+    await context.collectorServiceClients.authorise(request.headers.authorization);
+    return true;
+  } catch (error) {
+    sendJson(response, 401, { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
+    return false;
+  }
 }

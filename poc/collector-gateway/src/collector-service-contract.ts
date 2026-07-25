@@ -86,7 +86,7 @@ export interface CollectorServiceArtifactReference {
   summary: Record<string, unknown>;
 }
 
-const PROFILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const COLLECTION_PROFILE: CollectorServiceProfileRequirement = {
   kind: 'collection',
@@ -129,6 +129,10 @@ export function isCollectorServiceCapability(value: unknown): value is Collector
     (COLLECTOR_SERVICE_CAPABILITIES as readonly string[]).includes(value);
 }
 
+export function isCollectorServiceArtifactId(value: unknown): value is string {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
 export function collectorServiceRequestInput(value: unknown): CollectorServiceRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('collector_service_request_invalid');
@@ -137,7 +141,7 @@ export function collectorServiceRequestInput(value: unknown): CollectorServiceRe
   const allowedKeys = new Set(['schemaVersion', 'profileId', 'platform', 'capability', 'input']);
   if (Object.keys(candidate).some((key) => !allowedKeys.has(key)) ||
     candidate.schemaVersion !== COLLECTOR_SERVICE_SCHEMA_VERSION ||
-    typeof candidate.profileId !== 'string' || !PROFILE_ID.test(candidate.profileId) ||
+    typeof candidate.profileId !== 'string' || !UUID_PATTERN.test(candidate.profileId) ||
     !isSupportedPlatform(candidate.platform) ||
     !isCollectorServiceCapability(candidate.capability) ||
     !candidate.input || typeof candidate.input !== 'object' || Array.isArray(candidate.input)) {
@@ -189,7 +193,7 @@ export function collectorServiceResult(
     throw new Error('collector_service_runner_result_invalid');
   }
   const artifact = candidate.artifact as Record<string, unknown>;
-  if (typeof artifact.artifactId !== 'string' || !PROFILE_ID.test(artifact.artifactId)) {
+  if (!isCollectorServiceArtifactId(artifact.artifactId)) {
     throw new Error('collector_service_runner_result_invalid');
   }
   const coverage = run.coverage as Record<string, unknown>;
@@ -217,18 +221,18 @@ export function collectorServiceResult(
 
 function artifactRetrievalPath(capability: CollectorServiceCapability, artifactId: string): string {
   const roots: Readonly<Record<CollectorServiceCapability, string>> = {
-    'bilibili.native_search': '/v1/bilibili-native-search-artifacts',
-    'bilibili.native_search_batch': '/v1/bilibili-native-search-batch-artifacts',
-    'bilibili.account_profile': '/v1/account-profile-artifacts',
-    'bilibili.account_inventory': '/v1/account-video-inventory-artifacts',
-    'bilibili.account_inventory.pagination': '/v1/account-video-pagination-artifacts',
-    'bilibili.video_detail': '/v1/video-detail-artifacts',
-    'bilibili.transcript': '/v1/bilibili-transcript-artifacts',
-    'bilibili.discussion': '/v1/bilibili-video-discussion-artifacts',
-    'bilibili.danmaku': '/v1/bilibili-danmaku-artifacts',
-    'bilibili.dynamic': '/v1/dynamic-artifacts',
-    'bilibili.collection_series.overview': '/v1/bilibili-collection-series-artifacts',
-    'bilibili.collection_series.detail': '/v1/bilibili-series-detail-artifacts'
+    'bilibili.native_search': '/v1/collect/artifacts/bilibili.native_search',
+    'bilibili.native_search_batch': '/v1/collect/artifacts/bilibili.native_search_batch',
+    'bilibili.account_profile': '/v1/collect/artifacts/bilibili.account_profile',
+    'bilibili.account_inventory': '/v1/collect/artifacts/bilibili.account_inventory',
+    'bilibili.account_inventory.pagination': '/v1/collect/artifacts/bilibili.account_inventory.pagination',
+    'bilibili.video_detail': '/v1/collect/artifacts/bilibili.video_detail',
+    'bilibili.transcript': '/v1/collect/artifacts/bilibili.transcript',
+    'bilibili.discussion': '/v1/collect/artifacts/bilibili.discussion',
+    'bilibili.danmaku': '/v1/collect/artifacts/bilibili.danmaku',
+    'bilibili.dynamic': '/v1/collect/artifacts/bilibili.dynamic',
+    'bilibili.collection_series.overview': '/v1/collect/artifacts/bilibili.collection_series.overview',
+    'bilibili.collection_series.detail': '/v1/collect/artifacts/bilibili.collection_series.detail'
   };
   return `${roots[capability]}/${artifactId}`;
 }

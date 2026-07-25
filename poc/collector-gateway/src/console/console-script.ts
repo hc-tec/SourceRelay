@@ -2,8 +2,13 @@ export const consoleScript = `
 const $ = (selector) => document.querySelector(selector);
 const profilesElement = $('#profiles');
 const emptyElement = $('#empty');
+const serviceClientsElement = $('#service-clients');
+const serviceClientsEmptyElement = $('#service-clients-empty');
+const issuedServiceTokenElement = $('#issued-service-token');
+const issuedServiceTokenValueElement = $('#issued-service-token-value');
 const toastElement = $('#toast');
 let refreshTimer = null;
+let issuedServiceToken = null;
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ({
@@ -71,8 +76,29 @@ function profileCard(summary) {
   '</article>';
 }
 
+function serviceClientCard(client) {
+  const revoked = client.revokedAt !== null;
+  return '<article class="client-card" data-client-id="' + escapeHtml(client.clientId) + '">' +
+    '<div><h3>' + escapeHtml(client.label) + '</h3>' +
+      '<p>Client ' + escapeHtml(client.clientId) + ' · fingerprint ' + escapeHtml(client.tokenFingerprint) + '</p>' +
+      '<p>最近使用 ' + escapeHtml(client.lastUsedAt ?? '从未') + '</p></div>' +
+    '<div class="profile-actions">' +
+      '<span class="badge ' + (revoked ? 'bad' : 'good') + '">' + (revoked ? '已撤销' : '有效') + '</span>' +
+      '<button class="danger" data-client-action="revoke"' + (revoked ? ' disabled' : '') + '>撤销</button>' +
+    '</div>' +
+  '</article>';
+}
+
+function renderServiceClients(clients) {
+  serviceClientsElement.innerHTML = clients.map(serviceClientCard).join('');
+  serviceClientsEmptyElement.hidden = clients.length !== 0;
+}
+
 async function refresh() {
-  const payload = await api('/v1/profiles');
+  const [payload, clientPayload] = await Promise.all([
+    api('/v1/profiles'),
+    api('/v1/collector-service/clients')
+  ]);
   const profiles = payload.profiles ?? [];
   const host = profiles.find((profile) => profile.host)?.host ?? null;
   const runtimes = profiles.map((profile) => profile.runtime).filter(Boolean);
@@ -84,6 +110,7 @@ async function refresh() {
   $('#managed-pages').textContent = runtimes.reduce((total, runtime) => total + runtime.managedPages, 0);
   profilesElement.innerHTML = profiles.map(profileCard).join('');
   emptyElement.hidden = profiles.length !== 0;
+  renderServiceClients(clientPayload.clients ?? []);
 }
 
 profilesElement.addEventListener('click', async (event) => {
@@ -122,6 +149,52 @@ $('#create-profile').addEventListener('submit', async (event) => {
     await refresh();
   } catch (error) {
     toast(error.message);
+  }
+});
+
+$('#create-service-client').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  try {
+    const payload = await api('/v1/collector-service/clients', {
+      method: 'POST',
+      body: JSON.stringify({ label: String(form.get('label') ?? '').trim() })
+    });
+    issuedServiceToken = payload.token;
+    issuedServiceTokenValueElement.textContent = issuedServiceToken;
+    issuedServiceTokenElement.hidden = false;
+    event.currentTarget.reset();
+    await refresh();
+    toast('本地 API token 已创建；请立即复制。');
+  } catch (error) {
+    toast(error.message);
+  }
+});
+
+serviceClientsElement.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-client-action]');
+  if (!button || button.dataset.clientAction !== 'revoke') return;
+  const card = button.closest('[data-client-id]');
+  const clientId = card?.dataset.clientId;
+  if (!clientId || !confirm('撤销后该本地应用将立即不能调用 Collector Service。继续？')) return;
+  button.disabled = true;
+  try {
+    await api('/v1/collector-service/clients/' + encodeURIComponent(clientId) + '/revoke', { method: 'POST', body: '{}' });
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('#copy-issued-service-token').addEventListener('click', async () => {
+  if (!issuedServiceToken) return;
+  try {
+    await navigator.clipboard.writeText(issuedServiceToken);
+    toast('token 已复制。');
+  } catch {
+    toast('复制失败；请手动复制显示的 token。');
   }
 });
 
