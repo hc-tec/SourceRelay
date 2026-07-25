@@ -1,7 +1,7 @@
 # Collector 实现状态
 
 - 分支：`feat/browser-extension-system`
-- 状态日期：2026-07-25
+- 状态日期：2026-07-26
 - 权威决策：[collector-grilling-decision-log.md](collector-grilling-decision-log.md)
 - 产品规格：[platform-strategy-product-spec.md](platform-strategy-product-spec.md)
 - 冲突审计：[collector-decision-audit.md](collector-decision-audit.md)
@@ -13,6 +13,8 @@
 ## 1. 当前结论
 
 > **2026-07-25 生产边界修正。** 正式产品部署为用户日常 Chrome/Edge 中的配对扩展，依托用户已存在的登录会话；Collector 不管理 Browser Profile，也不得启动或关闭用户浏览器。`bilibili.video_detail` 和固定首页 `bilibili.native_search` 已通过 `browserBindingId`、签名 work item、扩展自有 work tab、固定 DOM 投影和 `/v2/collect` 完成 direct-mode MVP；其余旧能力仍是 `profileId` + Browser Host + Playwright 持久 context 的受管测试/隔离账号路径，不能被 `/v2` fallback 调用。详见[用户自有浏览器扩展模式](user-owned-browser-extension-mode.md)。
+
+> **2026-07-26 部署入口已收束。** 正式 `npm run start:user-browser`（Gateway package 中的 `npm start` 同义）运行独立的 `user-browser-server.js`：它的依赖图没有 Browser Host、受管浏览器注册表、Profile runner 或 Playwright 控制层；默认状态根为 `%LOCALAPPDATA%\PersonalIntelligenceCollector\gateway`，且若该目录混入旧 `profiles/` / `browser-host/` 状态会拒绝启动。`npm run prepare:user-browser-deployment` 将 MV3 制品放入稳定的用户目录，用户只需一次性在自己的 Chrome/Edge 手动安装并配对。旧通道必须显式执行 `start:isolated-browser`，不能出现在正式 Console、API 或默认启动中。真实本地集成测试已用 production MV3、真实原生 loopback permission 和 direct Gateway 验证配对，并断言 direct state 不产生旧隔离运行目录。
 
 同日先完成安装/配对/绑定，再完成第二个真实检查点：实际 MV3 扩展在普通临时 Chromium 中接收 Gateway 签名、一次 claim 的 B站详情 work item，创建并保留自己的 work tab，最多导航一次并把 bounded 首屏 DOM 投影经 HMAC 回传为本地产物。随后第三个真实检查点发布固定首页 `bilibili.native_search`：调用方只提供关键词，Gateway 固定综合/相关性/第 1 页并签名目标，扩展一次导航后仅投影可见规范 BV 视频卡片，排除直播、广告、课程等混合对象；不点击、滚动、翻页、读取 response body 或调用站内签名接口。真实 live canary 使用 scoped local API token、真实 Gateway、真实原生 loopback permission、公开 B站详情页和搜索页，验证两次独立的单次导航、HMAC 回传、artifact retrieval 与工作标签保留；没有 fake Gateway、fake 页面、受管 Profile、任意 selector/script/CDP 或平台输入重试。搜索关键词/URL 在终态 operation 和 artifact 中只保留 SHA-256 摘要。`/v1/collect` 仍是旧 `profileId` 测试 API；直接生产 MVP 在 `/v2`，其余能力必须独立迁移。
 

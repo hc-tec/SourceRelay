@@ -94,8 +94,33 @@ while ((Get-Date) -lt $deadline) {
         # Last resort: trusted Windows mouse input at the live UIA button's
         # current centre. This is not a coordinate guessed from a screenshot;
         # the unique dialog and exact scope were validated immediately above.
-        $bounds = $allow.Current.BoundingRectangle
-        if ($bounds.Width -le 1 -or $bounds.Height -le 1) { throw 'extension_permission_allow_bounds_invalid' }
+        # A human may have approved the native dialog between UIA discovery
+        # and this fallback.  Treat that stale element as a completed native
+        # interaction and let the caller verify the real Chrome permission
+        # state, rather than failing and causing its test cleanup to close the
+        # temporary browser immediately after a valid manual approval.
+        try {
+          $bounds = $allow.Current.BoundingRectangle
+        } catch {
+          [pscustomobject]@{
+            ok = $true
+            extension = $ExpectedExtensionName
+            exactScopeConfirmed = $true
+            allowInvoked = $false
+            dialogClosedBeforeAutomation = $true
+          } | ConvertTo-Json -Compress
+          exit 0
+        }
+        if ($bounds.Width -le 1 -or $bounds.Height -le 1) {
+          [pscustomobject]@{
+            ok = $true
+            extension = $ExpectedExtensionName
+            exactScopeConfirmed = $true
+            allowInvoked = $false
+            dialogClosedBeforeAutomation = $true
+          } | ConvertTo-Json -Compress
+          exit 0
+        }
         $x = [int][Math]::Round($bounds.X + ($bounds.Width / 2))
         $y = [int][Math]::Round($bounds.Y + ($bounds.Height / 2))
         if (-not [CollectorNativePermissionInput]::SetCursorPos($x, $y)) { throw 'extension_permission_allow_pointer_move_failed' }

@@ -57,6 +57,34 @@
 
 工作 tab 只由扩展建立并在成功后保留为可复用；风险、未知导航、用户接管或关闭时不会自动重开或重放。当前 direct runner 对一次结果提交最多进行三次本地 loopback 重试，但绝不重试平台导航。具体命令、安装与恢复流程见 runbook。
 
+## 正式部署（默认命令）
+
+正式部署只有一条运行链路：
+
+```text
+用户日常 Chrome / Edge（已有登录状态）
+  -> 已安装的 Collector MV3 扩展
+  -> user-browser-server.js（127.0.0.1）
+  -> 上层本地应用的 scoped API token
+```
+
+从 `poc` 目录运行：
+
+```powershell
+# 首次：构建并复制到稳定的 unpacked 扩展目录
+npm run prepare:user-browser-deployment
+
+# 在用户自己的 Chrome/Edge 中手动“加载已解压的扩展”
+# 目录由上一命令打印；默认 %LOCALAPPDATA%\PersonalIntelligenceCollector\extension
+
+# 每次需要本地服务时：
+npm run start:user-browser
+```
+
+默认状态目录是 `%LOCALAPPDATA%\PersonalIntelligenceCollector\gateway`。正式入口不会启动、附着、关闭或枚举浏览器，不会创建或读取任何浏览器登录目录，也不会导出 Cookie、密码、Token 或网页 Storage。运行 `npm run check:user-browser -- --require-online` 可以只通过 loopback health 状态确认 Gateway 与已配对扩展在线；该检查会为扩展的 30 秒低频本地轮询等待最多 35 秒，但不触发平台导航。
+
+`npm start` 在 Gateway package 内同样指向 user-browser entry。只有 `npm run start:isolated-browser` 才是旧 Browser Host 的测试/隔离账号通道；它不是正式安装、配对或上层 API 的 fallback。
+
 ## Local Collector Service API（Legacy test / isolated-account lane）
 
 Gateway 同时提供给其他本地应用调用的稳定 API 外观。它只暴露已经登记的采集能力，不提供任意 URL、CSS selector、脚本执行、鼠标坐标或 Network 请求/响应正文接口。当前受管测试路径仍经由 Browser Profile / PageLease；正式日常浏览器路径将改为已配对 extension binding、受限 tab lease、账号安全锁、动作预算、DOM/Network 交叉证据与 raw-first 本地产物。
@@ -190,6 +218,10 @@ npm run collector-client -- artifact /v1/collect/artifacts/bilibili.video_detail
 
 真实页面交互开发必须先遵循仓库内 [`recon-live-web-interactions`](../../skills/recon-live-web-interactions/SKILL.md)：先在不调用待验证 Gateway runner、扩展交互脚本或旧 selector 的可见浏览器中，从视觉、DOM、可信浏览器输入和 Network 四个表面证明人类流程，再迁移到产品控制循环。项目所有者已对本仓库开发/验证授予常设实网权限，不再要求逐 run 聊天授权；产品本身的 EvidencePlan、预算、最终用户同意和风险锁仍保持不变。
 
+## 隔离测试通道（非正式部署）
+
+下面的命令、环境变量、Profile 与 Browser Host 内容仅用于测试/隔离账号验证；不要把它们用于用户日常 Chrome/Edge。
+
 安装和构建：
 
 ```powershell
@@ -204,7 +236,7 @@ npm run verify:build
 启动：
 
 ```powershell
-npm start
+npm run start:isolated-browser
 ```
 
 默认 Console 地址：

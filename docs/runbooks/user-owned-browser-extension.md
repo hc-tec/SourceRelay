@@ -18,40 +18,73 @@ Collector 不创建、复制、读取、启动或关闭你的浏览器 Profile�
 
 当前 MVP 收到 B站详情或站内搜索任务时，会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**。详情只导航一次到严格规范的视频 URL；搜索只导航一次到 Gateway 从关键词推导出的“综合 / 相关性 / 第 1 页”搜索页，既不点击搜索按钮，也不翻页、滚动、改排序或读取 Network response body。两者都只回传固定白名单 DOM 投影；搜索只保留可见规范 `bilibili.com/video/BV…` 视频卡片，直播、广告、课程和其他混合结果不会混入产物。成功后标签页留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”。用户关闭、移动、激活接管或导航该标签页时，当前 run 停止；不会自动重开、刷新、换 tab 或重放平台动作。
 
-## 2. 构建与启动 Gateway
+## 2. 一次性准备稳定的扩展目录
 
 在 PowerShell 中：
 
 ```powershell
 Set-Location D:\AIProject\inteligence\poc
-npm run build:collector-runtime
-
-Set-Location .\collector-gateway
-$env:COLLECTOR_GATEWAY_STATE_DIR = (Resolve-Path .\runtime\user-browser).Path
-npm run start
+npm run prepare:user-browser-deployment
 ```
 
-默认地址是 `http://127.0.0.1:43127`。首次启动会在上述状态目录生成 Gateway 身份密钥和本地状态；不要把该目录、token 或浏览器数据提交到 Git。
+这会构建 direct-only Gateway 与 MV3 扩展，并将可安装扩展复制到稳定目录：
 
-Gateway 启动后在浏览器打开：
+```text
+%LOCALAPPDATA%\PersonalIntelligenceCollector\extension
+```
+
+命令会打印实际绝对路径。**首次安装后不要移动这个目录**，否则浏览器可能将它当作新的 unpacked 扩展实例并要求重新配对。默认 Gateway 状态保存在：
+
+```text
+%LOCALAPPDATA%\PersonalIntelligenceCollector\gateway
+```
+
+它只保存 Gateway 身份、配对记录、绑定安全状态、已授权本地 API client 和本地产物；不包含浏览器登录材料或任何浏览器管理目录。
+
+若将来明确要用新制品替换稳定扩展目录，可执行：
+
+```powershell
+npm run prepare:user-browser-deployment -- --replace
+```
+
+然后由用户在扩展管理页点一次“重新加载”。该命令不会启动、关闭或控制浏览器。
+
+## 3. 在日常浏览器安装扩展
+
+当前是开发态 unpacked 安装。打开你平时使用、已经登录的 Chrome 或 Edge：
+
+1. 打开 `chrome://extensions` 或 Edge 的扩展管理页；
+2. 开启“开发者模式”；
+3. 选择“加载已解压的扩展”；
+4. 选择上一节命令打印的稳定目录（默认是 `%LOCALAPPDATA%\PersonalIntelligenceCollector\extension`）；
+5. 点击扩展图标，打开 Collector 控制页。
+
+这一步是浏览器必须显示给用户确认的本地安装操作；Collector 不会也不能静默把扩展塞进日常浏览器。不要使用测试 Chromium、Browser Host 或旧的隔离运行目录。
+
+## 4. 启动 direct-only Gateway 并检查状态
+
+在另一个 PowerShell 窗口中：
+
+```powershell
+Set-Location D:\AIProject\inteligence\poc
+npm run start:user-browser
+```
+
+默认地址是 `http://127.0.0.1:43127`。这个进程只监听 `127.0.0.1`；它不会打开浏览器、不会创建 Chromium，也不会创建、查找或接触任何浏览器 Profile。浏览器是否打开、哪个账号已经登录，都完全由用户自己的 Chrome/Edge 决定。
+
+启动后打开：
 
 ```text
 http://127.0.0.1:43127
 ```
 
-## 3. 在日常 Chrome / Edge 安装扩展
+也可在另一个终端检查运行模型（不接触浏览器）：
 
-当前是开发态 unpacked 安装。请把扩展制品保留在固定路径，避免扩展 ID 因重新安装或移动目录变化而需要重新配对。
+```powershell
+npm run check:user-browser
+```
 
-1. 打开 `chrome://extensions` 或 Edge 的扩展管理页；
-2. 开启“开发者模式”；
-3. 选择“加载已解压的扩展”；
-4. 选择目录：`D:\AIProject\inteligence\poc\collector-extension\dist`；
-5. 点击扩展图标，打开 Collector 控制页。
-
-不要把测试用 Chromium Profile、Browser Host 启动命令或旧的 `runtime/profiles/` 目录用于这条路径。
-
-## 4. 配对一次
+## 5. 配对一次
 
 1. 在 Gateway Console 的“日常浏览器连接”区域创建一次性配对会话；
 2. Console 会显示固定 Gateway 地址、64 位身份指纹、会话 ID 和八位配对码；
@@ -61,7 +94,7 @@ http://127.0.0.1:43127
 
 配对授权只保存在扩展自己的受限 storage；Console、上层 API、审计和产物都不会返回它。若扩展被重新安装、Gateway 状态目录被替换或绑定被撤销，请重新配对。
 
-## 5. 创建给上层应用的最小权限 token
+## 6. 创建给上层应用的最小权限 token
 
 在 Console 的“其他本地应用的服务访问”中创建一个 client。对 direct-mode MVP，通常只需要：
 
@@ -72,7 +105,7 @@ http://127.0.0.1:43127
 
 `profiles:read` 只属于旧的隔离 Browser Host 测试通道，不需要勾选。token 只显示一次；将它交给本机上层应用时优先放进进程环境变量，不要放到命令行、日志或 Git 中。
 
-## 6. 上层应用调用方式
+## 7. 上层应用调用方式
 
 先发现在线 binding：
 
@@ -132,7 +165,7 @@ npm run collector-user-browser-client -- openapi
 
 `POST /v2/collect` 会快速返回 `queued` 的 `operationId`；它不把任务伪装成同步完成。扩展在低频、受认证的 loopback 轮询中最多 claim 一次，Gateway 将工作项标为 `claimed`，扩展只允许一次平台导航，之后把固定 DOM 投影回传为本地产物。上层应用应读取 `/v2/collect/operations/{operationId}` 直到终态，再通过返回的 artifact path 读取结果。
 
-## 7. 停止、风险与恢复
+## 8. 停止、风险与恢复
 
 - 扩展、浏览器、Gateway 或工作标签页消失：当前任务停止，不自动重开浏览器或重放导航；
 - 断网：最多重试三次**本地 Gateway 结果提交**，不重试平台导航；
@@ -140,7 +173,15 @@ npm run collector-user-browser-client -- openapi
 - 当前 MVP 不使用 `chrome.debugger`、CDP、任意 script、任意 selector、任意鼠标坐标或 Cookie 接口；
 - 当前 MVP 不读取字幕、评论、弹幕、播放器响应或任何 Network response body；那些是独立 capability，需各自完成真实页面侦察后再接入。
 
-## 8. 已验证的事实与尚未承诺的范围
+停止 Gateway 时只在它所在的 PowerShell 中按 `Ctrl+C`。这只停止本地 loopback 服务；不会关闭、枚举、移动或刷新用户的任何浏览器窗口和标签页。浏览器下次仍按用户自己的方式启动并保留自己的登录状态。Gateway 再次启动且仍使用同一状态目录后，已配对扩展会继续通过原 binding 连接；可用下面命令确认：
+
+```powershell
+npm run check:user-browser -- --require-online
+```
+
+扩展以 30 秒的低频本地轮询恢复在线状态；带 `--require-online` 的检查会等待最多 35 秒，不会触发任何平台页面导航或其他浏览器操作。
+
+## 9. 已验证的事实与尚未承诺的范围
 
 已用临时真实 Chromium、生产 MV3 build、真实 Gateway、真实原生 loopback permission、真实 B站公开详情页和真实 B站搜索页完成过 direct-mode 闭环：
 

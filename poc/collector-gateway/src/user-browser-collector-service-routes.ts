@@ -4,10 +4,7 @@ import type {
   CollectorServiceAuditLog,
   CollectorServiceAuditOutcome
 } from './collector-service-audit';
-import type {
-  CollectorServiceClientRegistry,
-  CollectorServiceClientScope
-} from './collector-service-clients';
+import type { CollectorServiceClientRegistry } from './collector-service-clients';
 import {
   enqueueBilibiliNativeSearchWork,
   enqueueBilibiliVideoDetailWork,
@@ -20,6 +17,12 @@ import {
   userBrowserCollectorServiceRequestInput
 } from './user-browser-collector-service-contract';
 import { userBrowserCollectorServiceOpenApiDocument } from './user-browser-collector-service-openapi';
+import {
+  authoriseUserBrowserServiceRequest,
+  recordUserBrowserServiceAudit,
+  sendUserBrowserServiceAccessDenied,
+  type UserBrowserServicePrincipal
+} from './user-browser-collector-service-access';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 
@@ -27,14 +30,6 @@ export interface UserBrowserCollectorServiceRouteContext extends ExtensionWorkRo
   collectorServiceClients: CollectorServiceClientRegistry;
   collectorServiceAudit: CollectorServiceAuditLog;
 }
-
-type ServicePrincipal =
-  | { kind: 'console'; clientId: null }
-  | { kind: 'client'; clientId: string };
-
-type ServiceAccess =
-  | { granted: true; principal: ServicePrincipal }
-  | { granted: false; status: 401 | 403; errorCode: string };
 
 /**
  * The production local-service surface for user-owned browser bindings.  It
@@ -52,10 +47,10 @@ export async function handleUserBrowserCollectorServiceRoute(
     return true;
   }
   if (request.method === 'GET' && url.pathname === '/v2/collector-service/browser-bindings') {
-    const access = await serviceAccess(request, context, 'browser-bindings:read');
+    const access = await authoriseUserBrowserServiceRequest(request, context, 'browser-bindings:read');
     if (!access.granted) {
       await audit(context, null, 'browser_bindings_read', null, null, 'denied', access.errorCode);
-      sendDenied(response, access);
+      sendUserBrowserServiceAccessDenied(response, access);
       return true;
     }
     const bindings = context.pairingBroker.listBrowserBindings();
@@ -65,10 +60,10 @@ export async function handleUserBrowserCollectorServiceRoute(
   }
 
   if (request.method === 'POST' && url.pathname === '/v2/collect') {
-    const access = await serviceAccess(request, context, 'collect:execute');
+    const access = await authoriseUserBrowserServiceRequest(request, context, 'collect:execute');
     if (!access.granted) {
       await audit(context, null, 'collect', null, null, 'denied', access.errorCode);
-      sendDenied(response, access);
+      sendUserBrowserServiceAccessDenied(response, access);
       return true;
     }
     let operationId: string | null = null;
@@ -101,10 +96,10 @@ export async function handleUserBrowserCollectorServiceRoute(
 
   const operation = url.pathname.match(new RegExp(`^/v2/collect/operations/(${UUID})$`, 'i'));
   if (request.method === 'GET' && operation) {
-    const access = await serviceAccess(request, context, 'operations:read');
+    const access = await authoriseUserBrowserServiceRequest(request, context, 'operations:read');
     if (!access.granted) {
       await audit(context, null, 'operation_read', null, operation[1]!, 'denied', access.errorCode);
-      sendDenied(response, access);
+      sendUserBrowserServiceAccessDenied(response, access);
       return true;
     }
     await reconcileExpiredExtensionWork(context);
@@ -121,54 +116,17 @@ export async function handleUserBrowserCollectorServiceRoute(
   return false;
 }
 
-async function serviceAccess(
-  request: IncomingMessage,
-  context: UserBrowserCollectorServiceRouteContext,
-  requiredScope: CollectorServiceClientScope
-): Promise<ServiceAccess> {
-  const expectedOrigin = context.identity.publicIdentity.loopbackOrigin;
-  if (
-    request.headers['sec-fetch-site'] === 'same-origin' &&
-    (request.headers.origin === undefined || request.headers.origin === expectedOrigin)
-  ) return { granted: true, principal: { kind: 'console', clientId: null } };
-  if (request.headers.origin !== undefined || request.headers['sec-fetch-site'] !== undefined) {
-    return { granted: false, status: 403, errorCode: 'console_origin_rejected' };
-  }
-  try {
-    const client = await context.collectorServiceClients.authorise(request.headers.authorization, requiredScope);
-    return { granted: true, principal: { kind: 'client', clientId: client.clientId } };
-  } catch (error) {
-    const code = safeErrorCode(error);
-    return {
-      granted: false,
-      status: code === 'collector_service_client_scope_denied' ? 403 : 401,
-      errorCode: code
-    };
-  }
-}
-
-function sendDenied(response: ServerResponse, access: Extract<ServiceAccess, { granted: false }>): void {
-  sendJson(response, access.status, { schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION, ok: false, error: access.errorCode });
-}
-
 async function audit(
   context: UserBrowserCollectorServiceRouteContext,
-  principal: ServicePrincipal | null,
+  principal: UserBrowserServicePrincipal | null,
   action: CollectorServiceAuditAction,
   capability: 'bilibili.video_detail' | 'bilibili.native_search' | null,
   operationId: string | null,
   outcome: CollectorServiceAuditOutcome,
   errorCode: string | null
 ): Promise<void> {
-  await context.collectorServiceAudit.record({
-    actor: principal?.kind === 'client'
-      ? { kind: 'client', clientId: principal.clientId }
-      : principal?.kind === 'console'
-        ? { kind: 'console', clientId: null }
-        : { kind: 'unidentified', clientId: null },
-    action,
+  await recordUserBrowserServiceAudit(context, principal, action, {
     capability,
-    profileIdDigest: null,
     artifactId: null,
     operationId,
     operationKind: operationId ? 'run' : null,

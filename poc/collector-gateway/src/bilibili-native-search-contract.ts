@@ -103,7 +103,14 @@ export type BilibiliNativeSearchTerminalReason =
   | 'source_unavailable'
   | 'dom_projection_failed'
   | 'document_context_changed'
-  | 'run_deadline_exceeded';
+  | 'run_deadline_exceeded'
+  // Direct user-browser work has no Profile runner. Preserve its exact
+  // terminal semantics in the raw-first artifact rather than mapping an
+  // interrupted or user-taken-over extension tab to a misleading legacy code.
+  | 'work_tab_closed'
+  | 'work_tab_user_taken_over'
+  | 'navigation_outcome_unknown'
+  | 'gateway_restarted_before_completion';
 
 export interface BilibiliNativeSearchRunRecord {
   schemaVersion: 1;

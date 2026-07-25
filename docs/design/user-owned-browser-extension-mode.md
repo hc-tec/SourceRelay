@@ -106,16 +106,16 @@ Gateway 不保存 tab 标题、完整 URL、浏览器窗口句柄、Profile 路�
 
 ## 6. 安装、配对和日常启动
 
-本文定义的是正式产品流程；在代码完成迁移前，不能把当前受管 Browser Host 的启动命令伪装成下面的流程。
+本文定义并对应正式产品流程。生产入口已经独立编译为 `user-browser-server.js`；它没有 Browser Host、受管浏览器注册表、Profile runner 或 Playwright 控制依赖。旧隔离通道另有 `isolated-browser-server.js`，只能从显式测试命令启动。
 
 ### 6.1 一次性安装
 
-1. 用户在自己平时使用的 Chrome 或 Edge 安装已签名/稳定 ID 的 Collector 扩展；开发态可加载 unpacked 制品，但生产安装必须保证扩展 ID 稳定。
-2. 用户启动本机 Local Collector Gateway 服务。Gateway 仅监听 `127.0.0.1`。
+1. 用户运行 `npm run prepare:user-browser-deployment`，将生产 MV3 制品放入稳定的用户目录；再在自己平时使用的 Chrome 或 Edge 中一次性安装该目录。开发态可以加载 unpacked 制品，但安装目录必须保持不动，才能保持同一扩展实例与配对关系。
+2. 用户运行 `npm run start:user-browser` 启动本机 Local Collector Gateway 服务。Gateway 仅监听 `127.0.0.1`，也不启动、附着、关闭或枚举任何浏览器进程。
 3. 用户打开扩展控制页，授予精确的 loopback 与平台 optional host permission，并粘贴 Gateway Console 显示的身份指纹、一次性会话 ID 和八位配对码完成配对。
 4. 扩展生成或读取本地 `extensionInstanceId`，验证 Gateway 公钥指纹与签名后，保存配对授权于扩展自己的受限 storage；Gateway 创建 `browserBindingId`。
 
-此过程不创建 Collection Profile，不复制登录态，不要求用户重新扫码登录，也不要求用户将日常浏览器交给 Playwright。
+此过程不创建 Collection Profile，不复制登录态，不要求用户重新扫码登录，也不要求用户将日常浏览器交给 Playwright。默认状态目录与稳定扩展目录都在 `%LOCALAPPDATA%\PersonalIntelligenceCollector`；状态中只有 Gateway 身份、配对、绑定安全、本地 client 和本地产物。
 
 ### 6.2 每天使用
 
@@ -154,6 +154,7 @@ POST /v1/collect { profileId, platform, capability, input }
 GET  /v2/collector-service/browser-bindings
 POST /v2/collect
 GET  /v2/collect/operations/{operationId}
+GET  /v1/collect/artifacts/{capability}/{artifactId}
 ```
 
 ```json
@@ -229,10 +230,10 @@ Native Messaging 若保留，只能作为本地唤醒/传输实现细节，不�
 
 1. **合同与状态模型**：在 `collector-contracts` 增加 `ExtensionInstance`、`BrowserBinding`、`WorkTabLease` 和明确的 tab ownership state；删除生产路径中的 Profile 语义。
 2. **扩展生产控制面**：已完成 loopback pairing、绑定状态、`collector_work_tab` 建立/复用/接管/外部终止，以及 MV3 恢复时的保守停止；不启动任何浏览器进程。`user_selected_tab` 尚未发布。
-3. **Gateway 服务面**：已完成 browser-binding registry、认证 dispatch/result、binding/platform safety 和 `/v2` scoped local API。`/v1` Profile 服务仍隔离保留，待 capability 完整迁移后移出正式入口。
+3. **Gateway 服务面**：已完成 browser-binding registry、认证 dispatch/result、binding/platform safety、`/v2` scoped local API、capability-bound artifact retrieval，以及独立的 direct-only server entry。生产 Console 只显示扩展配对、绑定安全、本地 API client 和去敏审计；`/v1` Profile 服务只存在于 isolated entry，direct entry 对它明确返回 `user_browser_legacy_route_not_available`。
 4. **能力迁移**：已完成 B站 `video_detail` 和固定首页 `native_search` 的扩展主导 DOM direct path；后者通过只读导航和白名单卡片投影避免页面语义输入。评论、字幕、弹幕、翻页搜索、筛选、账号页等必须各自完成真实三面侦察，不能复用这两个 MVP 的“无需语义输入”结论。
 5. **真实本地验证**：用临时 Chrome/Edge 安装模拟真实扩展安装、Gateway 配对、工作标签复用和故障停止；它是测试环境，不是生产 Browser Host。平台验证仍以真实页面、低频、只读、已授权的 run 为准，不能用 fake 页面或 fake Gateway 证明能力。
-6. **删除生产旧路径**：删除服务 API 的 `profileId`、Browser Host 启动依赖和受管 Profile Console 面板；Browser Host 如果继续保留，移动到明确的 `test/isolated-account` 命令和文档，不与正式启动路径共用。
+6. **隔离生产旧路径**：已从生产入口移除服务 API 的 `profileId`、Browser Host 启动依赖和受管 Profile Console 面板；Browser Host 保留在明确的 `start:isolated-browser` 测试/隔离账号命令中，不与正式启动路径、状态根目录或 Console 共用。
 
 ## 11. 验收标准
 
@@ -263,4 +264,12 @@ Checkpoint C 随后完成 `bilibili.native_search`：Gateway 只接受规范化�
 
 该闭环已用临时真实 Gateway、生产 MV3 extension、真实 Chromium 原生 loopback permission、scoped local API token 和真实公开 B站详情页验证。页面级 HTTP redirect（规范 URL 到 trailing slash）被记作同一一次扩展导航；没有点击、刷新、字幕/评论操作、fake 页面、fake Gateway 或 Browser Host/Profile。`poc/collector-gateway/src/config.ts`、`browser-manager.ts`、`poc/collector-browser-host` 和其他 B站 runner 仍以 `profileId` / `browserSessionId` 为核心，留在明确测试通道，不能把它们误报为 direct-mode capability。
 
-除 `bilibili.video_detail` 之外，任何运行手册都必须明确称旧能力为“受管测试/隔离账号模式”。不得把当前 Browser Host 启动步骤写成日常 Chrome/Edge 安装步骤，也不得让 `/v2` API 退回旧 runner。
+2026-07-26 已完成部署边界收束：
+
+- 默认 `npm start` 与 `npm run start:user-browser` 都启动独立的 direct-only server；`npm run start:isolated-browser` 才会进入旧 Browser Host 测试通道；
+- direct server 使用独立的用户状态根，启动前拒绝包含 `profiles/`、`browser-host/` 或 `browser-profiles.json` 的旧状态根，避免读取或混入隔离账号运行材料；
+- direct server 的依赖图只包含 Gateway identity、配对、绑定安全、work queue、direct artifacts、本地 client/audit 和 MV3 loopback 路由；构建门禁会验证其产物不含 Browser Host runtime；
+- 部署准备脚本将 unpacked MV3 制品复制到稳定路径，但不会自动安装、重载、打开或关闭 Chrome/Edge；这些浏览器可见动作仍由用户一次性完成；
+- 真实本地集成验证已改为直接启动 `user-browser-server.js`、加载生产 MV3、完成原生 loopback 权限和配对，并断言 direct state 里没有旧隔离运行目录。
+
+除 `bilibili.video_detail` 和 `bilibili.native_search` 之外，任何运行手册都必须明确称旧能力为“受管测试/隔离账号模式”。不得把 Browser Host 启动步骤写成日常 Chrome/Edge 安装步骤，也不得让 `/v2` API 退回旧 runner。

@@ -51,6 +51,30 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           }],
           responses: { '200': jsonResponse({ $ref: '#/components/schemas/QueuedOperationResponse' }), '404': errorResponse() }
         }
+      },
+      '/v1/collect/artifacts/{capability}/{artifactId}': {
+        get: {
+          operationId: 'getUserBrowserCollectionArtifact',
+          summary: 'Read a capability-bound local artifact without receiving a filesystem path.',
+          security: [{ CollectorServiceToken: [] }],
+          'x-collector-required-scope': 'artifacts:read',
+          parameters: [
+            {
+              name: 'capability', in: 'path', required: true,
+              schema: { type: 'string', enum: ['bilibili.video_detail', 'bilibili.native_search'] }
+            },
+            {
+              name: 'artifactId', in: 'path', required: true,
+              schema: { type: 'string', format: 'uuid' }
+            }
+          ],
+          responses: {
+            '200': jsonResponse({ $ref: '#/components/schemas/ArtifactResponse' }),
+            '401': errorResponse(),
+            '403': errorResponse(),
+            '404': errorResponse()
+          }
+        }
       }
     },
     components: {
@@ -156,6 +180,15 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             errorCode: { type: ['string', 'null'] },
             terminalReason: { type: ['string', 'null'] },
             artifact: { type: ['object', 'null'] }
+          }
+        },
+        ArtifactResponse: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'capability', 'artifact'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            capability: { type: 'string', enum: ['bilibili.video_detail', 'bilibili.native_search'] },
+            artifact: { type: 'object' }
           }
         }
       }

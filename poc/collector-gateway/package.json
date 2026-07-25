@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:user-browser": "node scripts/build.mjs --user-browser-only",
     "typecheck": "tsc --noEmit",
     "verify:safety": "node scripts/verify-account-safety.mjs",
     "verify:task-resume": "node scripts/verify-task-account-safety-resume.mjs",
@@ -23,7 +24,11 @@
     "collector-user-browser-client": "node scripts/user-browser-collector-service-reference-client.mjs",
     "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
     "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:account-video-page-two-contract && npm run verify:account-video-inventory-contract && npm run verify:native-search-contract && npm run verify:dynamic-contract && npm run verify:video-detail-contract && npm run build && npm run verify:artifacts",
-    "start": "node dist/server.js"
+    "prepare:user-browser-extension": "node scripts/prepare-user-browser-extension.mjs",
+    "check:user-browser": "node scripts/check-user-browser.mjs",
+    "start:user-browser": "node dist/user-browser-server.js",
+    "start:isolated-browser": "node dist/isolated-browser-server.js",
+    "start": "npm run start:user-browser"
   },
   "dependencies": {
     "@intelligence/collector-browser-host": "0.1.0",

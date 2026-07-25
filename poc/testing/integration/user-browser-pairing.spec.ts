@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,18 +13,26 @@ const extensionPath = resolve(pocRoot, 'collector-extension', 'dist');
 const extensionSourceDirectory = resolve(pocRoot, 'collector-extension');
 const gatewayDirectory = resolve(pocRoot, 'collector-gateway');
 
-test('a real installed MV3 extension pairs with a real loopback Gateway without a managed browser profile', async () => {
+test('a real installed MV3 extension pairs with the direct Gateway without creating an isolated browser runtime', async () => {
   test.skip(process.platform !== 'win32', 'native extension-permission verification currently uses Windows UI Automation');
   test.setTimeout(120_000);
 
   const port = await availableLoopbackPort();
   const stateDirectory = await mkdtemp(resolve(tmpdir(), 'collector-user-browser-gateway-'));
-  const gateway = startGateway(port, stateDirectory);
+  let gateway = startGateway(port, stateDirectory);
   const gatewayOrigin = `http://127.0.0.1:${port}`;
   const platformRequests: string[] = [];
   let launched: Awaited<ReturnType<typeof launchProductionExtension>> | undefined;
   try {
     await waitForGateway(gatewayOrigin);
+    const status = await (await fetch(gatewayOrigin + '/v1/status')).json() as {
+      deploymentMode?: string;
+      browserProcessControl?: string;
+    };
+    expect(status).toMatchObject({
+      deploymentMode: 'user_owned_browser_extension',
+      browserProcessControl: 'not_available'
+    });
     launched = await launchProductionExtension(extensionPath, 'collector-user-browser-extension-', {
       forceHeaded: true,
       onContext(context: { on(event: 'request', listener: (request: { url(): string }) => void): void }) {
@@ -77,6 +85,31 @@ test('a real installed MV3 extension pairs with a real loopback Gateway without 
       `${gatewayOrigin}/v1/extension/pairing/claim`,
       `${gatewayOrigin}/v1/extension/browser-binding`
     ]));
+    const stateEntries = await readdir(stateDirectory);
+    expect(stateEntries).not.toContain('profiles');
+    expect(stateEntries).not.toContain('browser-host');
+    expect(stateEntries).not.toContain('browser-profiles.json');
+
+    // Gateway restart must retain the pairing state without starting, closing,
+    // or attaching the browser that owns the installed extension.
+    await stopGateway(gateway);
+    gateway = startGateway(port, stateDirectory);
+    await waitForGateway(gatewayOrigin);
+    const restartedStatus = await (await fetch(gatewayOrigin + '/v1/status')).json() as {
+      deploymentMode?: string;
+      browserBindingCount?: number;
+      browserProcessControl?: string;
+    };
+    expect(restartedStatus).toMatchObject({
+      deploymentMode: 'user_owned_browser_extension',
+      browserBindingCount: 1,
+      browserProcessControl: 'not_available'
+    });
+    expect(controlPage.isClosed()).toBe(false);
+    expect(consolePage.isClosed()).toBe(false);
+    const restartedStateEntries = await readdir(stateDirectory);
+    expect(restartedStateEntries).not.toContain('profiles');
+    expect(restartedStateEntries).not.toContain('browser-host');
 
     await controlPage.close();
     await consolePage.close();
@@ -100,7 +133,7 @@ async function availableLoopbackPort(): Promise<number> {
 }
 
 function startGateway(port: number, stateDirectory: string): ChildProcess {
-  return spawn(process.execPath, ['dist/server.js'], {
+  return spawn(process.execPath, ['dist/user-browser-server.js'], {
     cwd: gatewayDirectory,
     env: {
       ...process.env,

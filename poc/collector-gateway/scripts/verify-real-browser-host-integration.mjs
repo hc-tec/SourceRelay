@@ -17,7 +17,7 @@ if (!runtimeRoot.startsWith(`${runtimeParent}\\`) && !runtimeRoot.startsWith(`${
   throw new Error('gateway_host_gate_runtime_path_rejected');
 }
 
-const gatewayMain = resolve(gatewayRoot, 'dist', 'server.js');
+const gatewayMain = resolve(gatewayRoot, 'dist', 'isolated-browser-server.js');
 const referenceClientMain = resolve(gatewayRoot, 'scripts', 'collector-service-reference-client.mjs');
 const browserHostMain = resolve(workspaceRoot, 'collector-browser-host', 'dist', 'main.js');
 const extensionDirectory = resolve(workspaceRoot, 'collector-extension', 'dist');

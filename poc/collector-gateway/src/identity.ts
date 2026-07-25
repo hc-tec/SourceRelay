@@ -9,7 +9,18 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { GatewayIdentity } from '@intelligence/collector-contracts';
 import { canonicalJson, sha256Hex } from './canonical-json';
-import type { GatewayConfig } from './config';
+/**
+ * Both the isolated-browser test Gateway and the production user-browser
+ * Gateway need a stable loopback identity.  Keep this dependency deliberately
+ * narrow so the production entry point never has to import Browser Host
+ * configuration just to load its own key pair.
+ */
+export interface GatewayIdentityConfig {
+  host: '127.0.0.1';
+  port: number;
+  displayName: string;
+  stateDirectory: string;
+}
 
 interface PersistedGatewayIdentity {
   schemaVersion: 1;
@@ -64,7 +75,7 @@ async function persistedIdentity(stateDirectory: string): Promise<PersistedGatew
   return created;
 }
 
-export async function loadGatewayIdentity(config: GatewayConfig): Promise<LoadedGatewayIdentity> {
+export async function loadGatewayIdentity(config: GatewayIdentityConfig): Promise<LoadedGatewayIdentity> {
   const persisted = await persistedIdentity(config.stateDirectory);
   const privateKey: KeyObject = createPrivateKey(persisted.privateKeyPem);
   const identityFingerprint = sha256Hex(canonicalJson(persisted.publicKeyJwk));

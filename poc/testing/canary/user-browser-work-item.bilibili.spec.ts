@@ -239,7 +239,7 @@ async function availableLoopbackPort(): Promise<number> {
 }
 
 function startGateway(port: number, stateDirectory: string): ChildProcess {
-  return spawn(process.execPath, ['dist/server.js'], {
+  return spawn(process.execPath, ['dist/user-browser-server.js'], {
     cwd: gatewayDirectory,
     env: {
       ...process.env,
