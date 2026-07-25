@@ -19,6 +19,10 @@ export async function readGatewayOpenApi(config) {
   return await gatewayJson(config, '/v2/openapi.json');
 }
 
+export async function readGatewayCapabilities(config) {
+  return await gatewayJson(config, '/v2/capabilities');
+}
+
 export async function readBrowserBindings(config) {
   return await gatewayJson(config, '/v2/collector-service/browser-bindings', { requiresToken: true });
 }

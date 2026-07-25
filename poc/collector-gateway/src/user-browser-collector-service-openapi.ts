@@ -12,6 +12,13 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
     },
     servers: [{ url: origin }],
     paths: {
+      '/v2/capabilities': {
+        get: {
+          operationId: 'listUserBrowserCapabilities',
+          summary: 'List every implemented Bilibili capability and its direct-mode migration state.',
+          responses: { '200': jsonResponse({ $ref: '#/components/schemas/UserBrowserCapabilityCatalog' }) }
+        }
+      },
       '/v2/collector-service/browser-bindings': {
         get: {
           operationId: 'listUserBrowserBindings',
@@ -100,6 +107,43 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
             bindings: { type: 'array', items: { $ref: '#/components/schemas/BrowserBinding' } }
+          }
+        },
+        UserBrowserCapabilityCatalog: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'capabilities'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            capabilities: { type: 'array', items: { $ref: '#/components/schemas/UserBrowserCapability' } }
+          }
+        },
+        UserBrowserCapability: {
+          type: 'object', additionalProperties: false,
+          required: [
+            'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'dispatchState', 'captureMode',
+            'legacyImplementationPresent', 'browserHostFallback'
+          ],
+          properties: {
+            schemaVersion: { type: 'integer', const: 1 },
+            capability: {
+              type: 'string',
+              enum: [
+                'bilibili.native_search', 'bilibili.native_search_batch', 'bilibili.account_profile',
+                'bilibili.account_inventory', 'bilibili.account_inventory.pagination', 'bilibili.video_detail',
+                'bilibili.transcript', 'bilibili.discussion', 'bilibili.danmaku', 'bilibili.dynamic',
+                'bilibili.collection_series.overview', 'bilibili.collection_series.detail'
+              ]
+            },
+            platform: { type: 'string', const: 'bilibili' },
+            title: { type: 'string' },
+            inputMode: { type: 'string' },
+            dispatchState: {
+              type: 'string',
+              enum: ['direct_ready', 'direct_migration_required', 'trusted_interaction_migration_required']
+            },
+            captureMode: { type: 'string' },
+            legacyImplementationPresent: { type: 'boolean', const: true },
+            browserHostFallback: { type: 'string', const: 'forbidden' }
           }
         },
         BrowserBinding: {

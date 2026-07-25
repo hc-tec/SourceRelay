@@ -62,6 +62,17 @@ label { display: grid; gap: 7px; color: #bdc9d9; font-size: .84rem; font-weight:
 input, select { width: 100%; min-width: 0; border: 1px solid #3b4c65; border-radius: 8px; padding: 10px; background: #0c1421; color: #ecf2fb; font: inherit; }
 input:disabled, select:disabled { opacity: .55; }
 
+#capability-note { margin: 18px 0 12px; }
+.capability-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.capability { min-width: 0; padding: 13px; border: 1px solid #2d3d56; border-radius: 10px; background: #101a29; }
+.capability h3 { margin: 0 0 7px; font-size: .95rem; }
+.capability code { display: block; overflow-wrap: anywhere; color: #95b8ff; font: 11px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.capability p { margin: 7px 0 0; color: #9eafc3; font-size: .79rem; line-height: 1.45; }
+.capability .status { display: inline-block; margin-top: 9px; padding: 3px 7px; border-radius: 999px; font-size: .72rem; font-weight: 720; }
+.capability.ready .status { color: #8de5c4; background: rgba(82, 203, 161, .13); }
+.capability.pending .status { color: #e7cd84; background: rgba(214, 180, 91, .12); }
+.capability.trusted .status { color: #ffa9a9; background: rgba(226, 123, 123, .12); }
+
 #operation-note { margin: 18px 0 13px; }
 pre { max-height: 420px; margin: 0; overflow: auto; border: 1px solid #26364d; border-radius: 10px; padding: 15px; background: #09111c; color: #cbd9ec; font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 #artifact-output { margin-top: 14px; }
@@ -73,6 +84,6 @@ pre { max-height: 420px; margin: 0; overflow: auto; border: 1px solid #26364d; b
   main { width: min(100% - 24px, 1120px); padding-top: 30px; }
   .hero, .section-heading { flex-direction: column; }
   .policy { text-align: left; }
-  .facts, .workflows { grid-template-columns: 1fr; }
+  .facts, .workflows, .capability-grid { grid-template-columns: 1fr; }
   .badge { white-space: normal; }
 }

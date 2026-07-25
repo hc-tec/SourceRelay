@@ -13,6 +13,7 @@ import {
   GatewayClientError,
   enqueueOperation,
   readBrowserBindings,
+  readGatewayCapabilities,
   readGatewayOpenApi,
   readGatewayStatus,
   readOperation,
@@ -47,6 +48,11 @@ async function handleRequest(request, response, context) {
     if (request.method === 'GET' && serveStatic(url.pathname, response, context.files)) return;
     if (request.method === 'GET' && url.pathname === '/api/status') {
       await sendStatus(response, context.config, context.knownOperations.size);
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/api/capabilities') {
+      const payload = await readGatewayCapabilities(context.config);
+      sendJson(response, 200, { ok: true, ...safeCapabilityPayload(payload) });
       return;
     }
     if (request.method === 'GET' && url.pathname === '/api/bindings') {
@@ -135,6 +141,27 @@ function safeBindingPayload(payload) {
     })
     : [];
   return { schemaVersion: 1, bindings };
+}
+
+function safeCapabilityPayload(payload) {
+  const capabilities = Array.isArray(payload?.capabilities)
+    ? payload.capabilities.flatMap((capability) => {
+      if (!capability || typeof capability !== 'object' ||
+        typeof capability.capability !== 'string' || typeof capability.title !== 'string' ||
+        typeof capability.inputMode !== 'string' || typeof capability.captureMode !== 'string' ||
+        !['direct_ready', 'direct_migration_required', 'trusted_interaction_migration_required'].includes(capability.dispatchState) ||
+        capability.platform !== 'bilibili' || capability.legacyImplementationPresent !== true ||
+        capability.browserHostFallback !== 'forbidden') return [];
+      return [{
+        capability: capability.capability,
+        title: capability.title,
+        inputMode: capability.inputMode,
+        dispatchState: capability.dispatchState,
+        captureMode: capability.captureMode
+      }];
+    })
+    : [];
+  return { schemaVersion: 1, capabilities };
 }
 
 function safeOperationPayload(payload) {

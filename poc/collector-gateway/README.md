@@ -2,7 +2,7 @@
 
 这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度。
 
-> **重要的生产边界（2026-07-25）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。直接模式 MVP 已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab → 一次公开 B站详情或固定首页搜索导航 → 固定 DOM 投影 → HMAC result → raw-first local artifact。当前发布 `bilibili.video_detail` 与 `bilibili.native_search`；后者只接受关键词，固定综合/相关性/第 1 页并排除非 BV 视频混合结果。它不读取登录凭据、Cookie、Token、Profile 文件或 Network response body。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
+> **重要的生产边界（2026-07-25）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。直接模式 MVP 已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab → 一次公开 B站详情或固定首页搜索导航 → 固定 DOM 投影 → HMAC result → raw-first local artifact。当前可 direct dispatch 的能力是 `bilibili.video_detail` 与 `bilibili.native_search`；后者只接受关键词，固定综合/相关性/第 1 页并排除非 BV 视频混合结果。`GET /v2/capabilities` 还会列出 12 项已存在 B站实现的 direct-mode 迁移状态，避免把“仓库已有旧实现”误报成“日常浏览器已可安全 dispatch”。它不读取登录凭据、Cookie、Token、Profile 文件或 Network response body。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
 
 ## 日常浏览器 Direct API（当前生产 MVP）
 

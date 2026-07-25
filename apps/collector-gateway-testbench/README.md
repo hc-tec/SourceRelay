@@ -15,12 +15,15 @@ Collector Gateway Testbench :43128
 ## 当前用途
 
 - 读取 Gateway 与在线 `browserBindingId`；
+- 从 Gateway 读取全部 12 项 B站既有能力的 direct-mode 登记状态；
 - 投递一个 `bilibili.video_detail` 测试（输入仅为 BVID）；
 - 投递一个 `bilibili.native_search` 测试（输入仅为关键词）；
 - 读取同一测试台提交过的 operation，并从该 operation 推导固定 artifact retrieval path；
 - 显示真实 Gateway 返回的 operation 与 artifact。
 
 它不是通用爬虫控制台，也不是 Browser Profile 管理器：没有任意 URL、selector、脚本、CDP、鼠标坐标、网络响应体、Cookie、浏览器 Storage 或 Profile 接口。
+
+能力登记册会显示 `direct_ready`、`direct_migration_required` 与 `trusted_interaction_migration_required`。后两种状态说明仓库存在对应的旧实现或研究成果，但它们**没有**被偷渡成日常浏览器的 Browser Host fallback；只有完成签名 work item、扩展执行器、artifact 与真实 canary 闭环后才能提交。
 
 ## 启动
 

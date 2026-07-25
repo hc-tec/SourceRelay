@@ -27,6 +27,7 @@ async function refreshConnection() {
   try {
     const status = await api('/api/status');
     renderStatus(status);
+    await refreshCapabilityCatalog();
     if (!status.testbench.tokenConfigured) {
       state.bindings = [];
       renderBindings();
@@ -47,6 +48,48 @@ async function refreshConnection() {
     setBadge('bad', '本地连接不可用');
     showBindingNotice('bad', `无法读取本地 Gateway：${error.code ?? 'testbench_request_failed'}`);
   }
+}
+
+async function refreshCapabilityCatalog() {
+  const note = element('capability-note');
+  const list = element('capability-list');
+  try {
+    const payload = await api('/api/capabilities');
+    const capabilities = payload.capabilities;
+    const directReady = capabilities.filter((capability) => capability.dispatchState === 'direct_ready').length;
+    note.textContent = `已登记 ${capabilities.length} 项 B站能力；其中 ${directReady} 项已闭合 direct work protocol。其余项目保留真实迁移状态，不会走旧 Browser Host fallback。`;
+    list.replaceChildren(...capabilities.map(renderCapability));
+  } catch (error) {
+    note.textContent = `无法读取能力登记册：${error.code ?? 'testbench_request_failed'}`;
+    list.replaceChildren();
+  }
+}
+
+function renderCapability(capability) {
+  const card = document.createElement('article');
+  const category = capability.dispatchState === 'direct_ready'
+    ? 'ready'
+    : capability.dispatchState === 'trusted_interaction_migration_required'
+      ? 'trusted'
+      : 'pending';
+  card.className = `capability ${category}`;
+  const title = document.createElement('h3');
+  title.textContent = capability.title;
+  const identifier = document.createElement('code');
+  identifier.textContent = capability.capability;
+  const detail = document.createElement('p');
+  detail.textContent = `输入：${capability.inputMode} · 采集：${capability.captureMode}`;
+  const status = document.createElement('span');
+  status.className = 'status';
+  status.textContent = capabilityStatusLabel(capability.dispatchState);
+  card.append(title, identifier, detail, status);
+  return card;
+}
+
+function capabilityStatusLabel(value) {
+  if (value === 'direct_ready') return '可 direct dispatch';
+  if (value === 'trusted_interaction_migration_required') return '需可信交互迁移';
+  return '待 direct 迁移';
 }
 
 function renderStatus(payload) {

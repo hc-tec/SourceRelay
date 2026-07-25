@@ -1,8 +1,9 @@
 # 日常浏览器扩展模式：安装、配对与本地 API
 
 - 状态：可用的 direct-mode MVP
-- 当前直接能力：`bilibili.video_detail`、`bilibili.native_search`
-- API：`/v2/openapi.json`、`/v2/collector-service/browser-bindings`、`/v2/collect`、`/v2/collect/operations/{operationId}`
+- 当前可 direct dispatch 的能力：`bilibili.video_detail`、`bilibili.native_search`
+- 已登记 B站能力：`GET /v2/capabilities` 会列出 12 项已有实现及其 direct-mode 迁移状态；登记不等于自动开放旧 Browser Host fallback。
+- API：`/v2/openapi.json`、`/v2/capabilities`、`/v2/collector-service/browser-bindings`、`/v2/collect`、`/v2/collect/operations/{operationId}`
 - 不属于本 runbook 的旧通道：`profileId`、Browser Host、Playwright persistent context、受管 Collection Profile、`POST /v1/collect`
 
 ## 1. 这条路径到底做什么
