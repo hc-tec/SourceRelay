@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
@@ -65,6 +65,52 @@ describe('extension work queue state machine', () => {
         terminalReason: 'gateway_restarted_before_completion'
       });
       expect(await restored.claimNext(bindingId, new Date(base.getTime() + 2))).toBeNull();
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test('derives one fixed native-search route and redacts its phrase after the terminal state', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-search-'));
+    const query = '不应长期保存的搜索短语';
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const queued = await queue.enqueueBilibiliNativeSearch({ browserBindingId: bindingId, query }, base);
+      const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
+      expect(claimed).toMatchObject({
+        operationId: queued.operationId,
+        capability: 'bilibili.native_search',
+        input: {
+          query,
+          canonicalSearchUrl: expect.stringContaining('https://search.bilibili.com/all?keyword='),
+          resultType: 'comprehensive',
+          sort: 'relevance',
+          page: 1
+        }
+      });
+      if (!claimed || claimed.capability !== 'bilibili.native_search') throw new Error('test_claim_missing');
+      await queue.complete(bindingId, {
+        schemaVersion: 1,
+        protocolVersion: 1,
+        workId: claimed.workId,
+        operationId: claimed.operationId,
+        browserBindingId: claimed.browserBindingId,
+        platform: 'bilibili',
+        capability: 'bilibili.native_search',
+        executionTarget: 'collector_work_tab',
+        state: 'stopped',
+        errorCode: 'bilibili_source_unavailable',
+        terminalReason: 'source_unavailable',
+        completedAt: new Date(base.getTime() + 2).toISOString(),
+        navigation: { attempted: true, attemptCount: 1 },
+        workTabAcquisition: 'created',
+        workTabDisposition: 'retained_not_reusable',
+        observation: null
+      }, null);
+      const persisted = await readFile(join(stateDirectory, 'extension-work-operations.json'), 'utf8');
+      expect(persisted).not.toContain(query);
+      expect(persisted).not.toContain('canonicalSearchUrl');
+      expect(persisted).toContain('queryDigest');
     } finally {
       await rm(stateDirectory, { recursive: true, force: true });
     }

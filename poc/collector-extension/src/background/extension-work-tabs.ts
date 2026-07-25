@@ -1,4 +1,10 @@
-import { canonicalBilibiliVideoWorkUrl } from '@intelligence/collector-contracts';
+import {
+  canonicalBilibiliNativeSearchUrl,
+  canonicalBilibiliVideoWorkUrl,
+  extensionWorkTargetUrl,
+  isExtensionWorkItem,
+  type ExtensionWorkItem
+} from '@intelligence/collector-contracts';
 
 export type WorkTabAcquisition = 'created' | 'reused';
 export type WorkTabDisposition = 'idle_reusable' | 'retained_not_reusable' | 'user_taken_over' | 'closed_or_missing';
@@ -40,6 +46,8 @@ export function initialiseExtensionWorkTabs(): void {
     // A source navigation can redirect the exact canonical URL during the
     // short extension-initiated navigation window.  Outside that window a
     // URL change is an external takeover; do not repurpose that page.
+    if (record.state === 'leased' && record.expectedCanonicalUrl !== null &&
+      isExpectedExtensionWorkNavigation(record.expectedCanonicalUrl, changeInfo.url)) return;
     if (record.state === 'leased' && record.expectedNavigationUntil !== null &&
       Date.now() <= record.expectedNavigationUntil) return;
     if (record.expectedNavigationUntil === null && changeInfo.url === 'about:blank' &&
@@ -81,10 +89,12 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
 /** One capability-approved platform navigation, issued exactly once per lease. */
 export async function navigateExtensionWorkTabOnce(
   workTab: ExtensionWorkTabLease,
-  canonicalVideoUrl: string
+  item: ExtensionWorkItem
 ): Promise<void> {
-  const canonical = canonicalBilibiliVideoWorkUrl(canonicalVideoUrl);
-  if (!canonical || canonical !== canonicalVideoUrl) throw new Error('extension_work_target_invalid');
+  // The target comes from a previously validated, signed registered work item.
+  // This module deliberately accepts no free-form URL argument.
+  if (!isExtensionWorkItem(item)) throw new Error('extension_work_target_invalid');
+  const canonical = extensionWorkTargetUrl(item);
   const record = requireLease(workTab);
   record.expectedCanonicalUrl = canonical;
   record.expectedNavigationUntil = Date.now() + 15_000;
@@ -176,4 +186,22 @@ function currentDisposition(workTab: ExtensionWorkTabLease): WorkTabDisposition 
   const record = managedTabs.get(workTab.tabId);
   if (record?.state === 'leased' && record.leaseId === workTab.leaseId) return 'idle_reusable';
   return leaseLosses.get(workTab.leaseId) ?? 'closed_or_missing';
+}
+
+/**
+ * Chromium can emit a later URL update while a slow source page settles. A
+ * work tab remains leased only if that update still canonicalises to the
+ * signed target; an arbitrary URL, user activation, move, or close remains a
+ * hard takeover signal.
+ */
+export function isExpectedExtensionWorkNavigation(expectedCanonicalUrl: string, observedUrl: string): boolean {
+  const video = canonicalBilibiliVideoWorkUrl(expectedCanonicalUrl);
+  if (video && video === expectedCanonicalUrl) {
+    return canonicalBilibiliVideoWorkUrl(observedUrl) === expectedCanonicalUrl;
+  }
+  const search = canonicalBilibiliNativeSearchUrl(expectedCanonicalUrl, 'strict_input');
+  if (search && search === expectedCanonicalUrl) {
+    return canonicalBilibiliNativeSearchUrl(observedUrl, 'observed_document') === expectedCanonicalUrl;
+  }
+  return false;
 }

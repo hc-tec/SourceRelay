@@ -4,10 +4,12 @@ import {
   isExtensionWorkResult,
   type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
+import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import type { BrowserBindingSafetyRegistry } from './browser-binding-safety';
+import { recordBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
 import { recordBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
-import type { ExtensionWorkQueue } from './extension-work-queue';
+import type { ExtensionWorkArtifactReference, ExtensionWorkQueue } from './extension-work-queue';
 import { readJsonBody, readJsonBodyWithRaw, requireSameOrigin, safeErrorCode, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
 import type { PairingBroker } from './pairing';
@@ -32,6 +34,7 @@ export interface ExtensionWorkRouteContext {
   workQueue: ExtensionWorkQueue;
   browserBindingSafety: BrowserBindingSafetyRegistry;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
+  nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
 }
 
 /**
@@ -76,7 +79,9 @@ export async function handleExtensionWorkRoute(
     if (!requireSameOrigin(request, response, context.identity.publicIdentity.loopbackOrigin)) return true;
     try {
       const input = consoleDispatchInput(await readJsonBody(request));
-      const operation = await enqueueBilibiliVideoDetailWork(context, dispatch[1]!, input.canonicalVideoUrl);
+      const operation = input.capability === 'bilibili.video_detail'
+        ? await enqueueBilibiliVideoDetailWork(context, dispatch[1]!, input.canonicalVideoUrl)
+        : await enqueueBilibiliNativeSearchWork(context, dispatch[1]!, input.query);
       sendJson(response, 201, { schemaVersion: 1, operation });
     } catch (error) {
       sendJson(response, workOperationStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
@@ -147,6 +152,24 @@ export async function enqueueBilibiliVideoDetailWork(
   });
 }
 
+/** Shared by the Console and the scoped upper-application service route. */
+export async function enqueueBilibiliNativeSearchWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  query: string
+) {
+  await reconcileExpiredExtensionWork(context);
+  const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
+  if (binding.state !== 'online') throw new Error('browser_binding_offline');
+  const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
+  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
+  if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
+  return await context.workQueue.enqueueBilibiliNativeSearch({
+    browserBindingId: binding.browserBindingId,
+    query
+  });
+}
+
 async function handleExtensionWorkNext(
   request: IncomingMessage,
   response: ServerResponse,
@@ -197,11 +220,22 @@ async function handleExtensionWorkResult(
     if (!isExtensionWorkResult(body.value)) throw new Error('extension_work_result_invalid');
     const result = body.value as ExtensionWorkResult;
     const item = context.workQueue.claimedItem(authorised.browserBindingId, result.workId);
-    const artifact = await recordBilibiliVideoDetailExtensionWork({
-      item,
-      result,
-      artifacts: context.videoDetailArtifacts
-    });
+    let artifact: ExtensionWorkArtifactReference;
+    if (item.capability === 'bilibili.video_detail' && result.capability === 'bilibili.video_detail') {
+      artifact = await recordBilibiliVideoDetailExtensionWork({
+        item,
+        result,
+        artifacts: context.videoDetailArtifacts
+      });
+    } else if (item.capability === 'bilibili.native_search' && result.capability === 'bilibili.native_search') {
+      artifact = await recordBilibiliNativeSearchExtensionWork({
+        item,
+        result,
+        artifacts: context.nativeSearchArtifacts
+      });
+    } else {
+      throw new Error('extension_work_result_capability_mismatch');
+    }
     const operation = await context.workQueue.complete(authorised.browserBindingId, result, artifact);
     await context.browserBindingSafety.finish(
       authorised.browserBindingId,
@@ -242,21 +276,30 @@ export async function reconcileExpiredExtensionWork(context: ExtensionWorkRouteC
   }
 }
 
-function consoleDispatchInput(value: unknown): { canonicalVideoUrl: string } {
+function consoleDispatchInput(value: unknown):
+  | { capability: 'bilibili.video_detail'; canonicalVideoUrl: string }
+  | { capability: 'bilibili.native_search'; query: string } {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('extension_work_dispatch_input_invalid');
   const candidate = value as Record<string, unknown>;
   if (
     Object.keys(candidate).length !== 5 || candidate.schemaVersion !== 1 || candidate.platform !== 'bilibili' ||
-    candidate.capability !== 'bilibili.video_detail' || candidate.executionTarget !== 'collector_work_tab' ||
+    (candidate.capability !== 'bilibili.video_detail' && candidate.capability !== 'bilibili.native_search') ||
+    candidate.executionTarget !== 'collector_work_tab' ||
     !candidate.input || typeof candidate.input !== 'object' || Array.isArray(candidate.input)
   ) throw new Error('extension_work_dispatch_input_invalid');
   const input = candidate.input as Record<string, unknown>;
-  if (Object.keys(input).length !== 1 || typeof input.canonicalVideoUrl !== 'string') {
+  if (candidate.capability === 'bilibili.video_detail') {
+    if (Object.keys(input).length !== 1 || typeof input.canonicalVideoUrl !== 'string') {
+      throw new Error('extension_work_dispatch_input_invalid');
+    }
+    const canonicalVideoUrl = canonicalBilibiliVideoWorkUrl(input.canonicalVideoUrl);
+    if (!canonicalVideoUrl) throw new Error('extension_work_dispatch_input_invalid');
+    return { capability: 'bilibili.video_detail', canonicalVideoUrl };
+  }
+  if (Object.keys(input).length !== 1 || typeof input.query !== 'string') {
     throw new Error('extension_work_dispatch_input_invalid');
   }
-  const canonicalVideoUrl = canonicalBilibiliVideoWorkUrl(input.canonicalVideoUrl);
-  if (!canonicalVideoUrl) throw new Error('extension_work_dispatch_input_invalid');
-  return { canonicalVideoUrl };
+  return { capability: 'bilibili.native_search', query: input.query };
 }
 
 function unlockInput(value: unknown): void {

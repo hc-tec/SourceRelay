@@ -65,12 +65,15 @@ export function isBilibiliNativeSearchBlockingLoginElement(input: {
  */
 export async function captureBilibiliNativeSearchDom(
   tabId: number,
-  documentId: string
+  documentId?: string
 ): Promise<BilibiliNativeSearchDomSnapshot> {
   let results: chrome.scripting.InjectionResult<BilibiliNativeSearchDomSnapshot>[];
   try {
     results = await chrome.scripting.executeScript({
-      target: { tabId, documentIds: [documentId] },
+      // A direct work tab is a single, extension-owned top-level document and
+      // has no observer binding/document ID. Existing observer paths still
+      // pass their exact document ID to avoid crossing a document boundary.
+      target: documentId ? { tabId, documentIds: [documentId] } : { tabId },
       world: 'ISOLATED',
       func: () => {
         const clean = (value: string | null | undefined, maximum: number): string | null => {

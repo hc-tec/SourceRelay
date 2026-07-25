@@ -91,6 +91,12 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           }
         },
         UserBrowserCollectRequest: {
+          oneOf: [
+            { $ref: '#/components/schemas/UserBrowserVideoDetailCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserNativeSearchCollectRequest' }
+          ]
+        },
+        UserBrowserVideoDetailCollectRequest: {
           type: 'object', additionalProperties: false,
           required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
@@ -103,6 +109,22 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
               type: 'object', additionalProperties: false,
               required: ['canonicalVideoUrl'],
               properties: { canonicalVideoUrl: { type: 'string', format: 'uri' } }
+            }
+          }
+        },
+        UserBrowserNativeSearchCollectRequest: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            browserBindingId: { type: 'string', format: 'uuid' },
+            platform: { type: 'string', const: 'bilibili' },
+            capability: { type: 'string', const: 'bilibili.native_search' },
+            executionTarget: { type: 'string', const: 'collector_work_tab' },
+            input: {
+              type: 'object', additionalProperties: false,
+              required: ['query'],
+              properties: { query: { type: 'string', minLength: 1, maxLength: 160 } }
             }
           }
         },
@@ -125,7 +147,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             operationId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
-            capability: { type: 'string', const: 'bilibili.video_detail' },
+            capability: { type: 'string', enum: ['bilibili.video_detail', 'bilibili.native_search'] },
             executionTarget: { type: 'string', const: 'collector_work_tab' },
             state: { type: 'string', enum: ['queued', 'claimed', 'completed', 'partial', 'stopped', 'failed'] },
             queuedAt: { type: 'string', format: 'date-time' },

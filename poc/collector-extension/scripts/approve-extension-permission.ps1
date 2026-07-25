@@ -8,11 +8,24 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class CollectorNativePermissionInput {
+  [DllImport("user32.dll", SetLastError = true)]
+  public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll", SetLastError = true)]
+  public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
+}
+'@
 
 $allowChinese = ([string][char]0x5141) + ([string][char]0x8BB8)
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $root = [System.Windows.Automation.AutomationElement]::RootElement
-$buttonCondition = New-Object System.Windows.Automation.OrCondition(
+# The dialog contains a text child with the same label as its actionable
+# button.  Restrict the match to a UIA Button so `InvokePattern` is requested
+# from the actual control rather than a label that cannot be invoked.
+$allowNameCondition = New-Object System.Windows.Automation.OrCondition(
   (New-Object System.Windows.Automation.PropertyCondition(
     [System.Windows.Automation.AutomationElement]::NameProperty,
     $allowChinese
@@ -20,6 +33,13 @@ $buttonCondition = New-Object System.Windows.Automation.OrCondition(
   (New-Object System.Windows.Automation.PropertyCondition(
     [System.Windows.Automation.AutomationElement]::NameProperty,
     'Allow'
+  ))
+)
+$buttonCondition = New-Object System.Windows.Automation.AndCondition(
+  $allowNameCondition,
+  (New-Object System.Windows.Automation.PropertyCondition(
+    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+    [System.Windows.Automation.ControlType]::Button
   ))
 )
 
@@ -56,8 +76,35 @@ while ((Get-Date) -lt $deadline) {
   }
   if ($matches.Count -gt 1) { throw 'extension_permission_dialog_not_unique' }
   if ($matches.Count -eq 1) {
-    $invoke = $matches[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-    $invoke.Invoke()
+    $allow = $matches[0]
+    $invoked = $false
+    try {
+      $invoke = $allow.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+      $invoke.Invoke()
+      $invoked = $true
+    } catch {
+      # Chrome occasionally exposes this native permission control through
+      # MSAA rather than UIA InvokePattern. It remains the exact, scope-checked
+      # button above; only the activation pattern differs.
+      try {
+        $legacy = $allow.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern)
+        $legacy.DoDefaultAction()
+        $invoked = $true
+      } catch {
+        # Last resort: trusted Windows mouse input at the live UIA button's
+        # current centre. This is not a coordinate guessed from a screenshot;
+        # the unique dialog and exact scope were validated immediately above.
+        $bounds = $allow.Current.BoundingRectangle
+        if ($bounds.Width -le 1 -or $bounds.Height -le 1) { throw 'extension_permission_allow_bounds_invalid' }
+        $x = [int][Math]::Round($bounds.X + ($bounds.Width / 2))
+        $y = [int][Math]::Round($bounds.Y + ($bounds.Height / 2))
+        if (-not [CollectorNativePermissionInput]::SetCursorPos($x, $y)) { throw 'extension_permission_allow_pointer_move_failed' }
+        [CollectorNativePermissionInput]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
+        [CollectorNativePermissionInput]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+        $invoked = $true
+      }
+    }
+    if (-not $invoked) { throw 'extension_permission_allow_not_invokable' }
     [pscustomobject]@{
       ok = $true
       extension = $ExpectedExtensionName
@@ -70,4 +117,3 @@ while ((Get-Date) -lt $deadline) {
 }
 
 throw 'extension_permission_dialog_scope_not_confirmed'
-

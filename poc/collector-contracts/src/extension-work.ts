@@ -1,7 +1,12 @@
+import {
+  bilibiliNativeSearchUrl,
+  canonicalBilibiliNativeSearchUrl,
+  normaliseBilibiliNativeSearchRoute
+} from './bilibili-native-search.js';
 import { canonicalJson } from './ipc.js';
 
 /**
- * The production Gateway-to-extension protocol is intentionally narrow.  A
+ * The production Gateway-to-extension protocol is intentionally narrow. A
  * work item names one registered capability and its validated input; it is
  * never a carrier for an arbitrary URL, selector, script, CDP command, or
  * input coordinate.
@@ -12,10 +17,25 @@ export const EXTENSION_WORK_PROTOCOL_VERSION = 1 as const;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]{40,}$/;
 const SAFE_ERROR_CODE = /^[a-z0-9_]{1,100}$/;
+const BILIBILI_NATIVE_SEARCH_MAX_VISIBLE_CARDS = 20;
 
-export type ExtensionWorkCapability = 'bilibili.video_detail';
+export type ExtensionWorkCapability = 'bilibili.video_detail' | 'bilibili.native_search';
 export type ExtensionWorkExecutionTarget = 'collector_work_tab' | 'user_selected_tab';
 export type ExtensionWorkState = 'queued' | 'claimed' | 'completed' | 'partial' | 'stopped' | 'failed';
+
+interface ExtensionWorkEnvelope {
+  schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
+  protocolVersion: typeof EXTENSION_WORK_PROTOCOL_VERSION;
+  workId: string;
+  operationId: string;
+  browserBindingId: string;
+  platform: 'bilibili';
+  executionTarget: 'collector_work_tab';
+  issuedAt: string;
+  expiresAt: string;
+  /** P-256 / SHA-256 signature over `extensionWorkSigningPayload(item)`. */
+  gatewaySignature: string;
+}
 
 export interface BilibiliVideoDetailWorkInput {
   canonicalVideoUrl: string;
@@ -23,8 +43,8 @@ export interface BilibiliVideoDetailWorkInput {
 }
 
 /**
- * These are ceilings, not caller-configurable knobs.  The first direct-mode
- * capability has exactly one navigation and zero semantic page input.
+ * These are ceilings, not caller-configurable knobs. The first direct-mode
+ * detail capability has exactly one navigation and zero semantic page input.
  */
 export interface BilibiliVideoDetailWorkBudget {
   maximumPlatformNavigations: 1;
@@ -33,28 +53,44 @@ export interface BilibiliVideoDetailWorkBudget {
   maximumPayloadBytes: 98_304;
 }
 
-export interface BilibiliVideoDetailWorkItem {
-  schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
-  protocolVersion: typeof EXTENSION_WORK_PROTOCOL_VERSION;
-  workId: string;
-  operationId: string;
-  browserBindingId: string;
-  platform: 'bilibili';
+export interface BilibiliVideoDetailWorkItem extends ExtensionWorkEnvelope {
   capability: 'bilibili.video_detail';
-  executionTarget: 'collector_work_tab';
-  issuedAt: string;
-  expiresAt: string;
   input: BilibiliVideoDetailWorkInput;
   budget: BilibiliVideoDetailWorkBudget;
-  /** P-256 / SHA-256 signature over `extensionWorkSigningPayload(item)`. */
-  gatewaySignature: string;
 }
 
-export type ExtensionWorkItem = BilibiliVideoDetailWorkItem;
-export type UnsignedExtensionWorkItem = Omit<ExtensionWorkItem, 'gatewaySignature'>;
+/**
+ * Search is deliberately the fixed public "综合" first page. The caller can
+ * provide a query, but cannot select a URL, result type, sort order, page,
+ * selector, or interaction plan.
+ */
+export interface BilibiliNativeSearchWorkInput {
+  query: string;
+  canonicalSearchUrl: string;
+  resultType: 'comprehensive';
+  sort: 'relevance';
+  page: 1;
+}
 
-export type ExtensionWorkTerminalReason =
-  | 'detail_ready'
+export interface BilibiliNativeSearchWorkBudget {
+  maximumPlatformNavigations: 1;
+  maximumSemanticActions: 0;
+  maximumResponseObservations: 0;
+  maximumPayloadBytes: 98_304;
+}
+
+export interface BilibiliNativeSearchWorkItem extends ExtensionWorkEnvelope {
+  capability: 'bilibili.native_search';
+  input: BilibiliNativeSearchWorkInput;
+  budget: BilibiliNativeSearchWorkBudget;
+}
+
+export type ExtensionWorkItem = BilibiliVideoDetailWorkItem | BilibiliNativeSearchWorkItem;
+export type UnsignedExtensionWorkItem =
+  | Omit<BilibiliVideoDetailWorkItem, 'gatewaySignature'>
+  | Omit<BilibiliNativeSearchWorkItem, 'gatewaySignature'>;
+
+export type SharedExtensionWorkTerminalReason =
   | 'verification_required'
   | 'rate_limited'
   | 'source_unavailable'
@@ -65,6 +101,20 @@ export type ExtensionWorkTerminalReason =
   | 'work_tab_user_taken_over'
   | 'navigation_outcome_unknown'
   | 'gateway_restarted_before_completion';
+
+export type BilibiliVideoDetailWorkTerminalReason =
+  | 'detail_ready'
+  | SharedExtensionWorkTerminalReason;
+
+export type BilibiliNativeSearchWorkTerminalReason =
+  | 'search_ready'
+  | 'search_empty'
+  | 'search_results_partial'
+  | SharedExtensionWorkTerminalReason;
+
+export type ExtensionWorkTerminalReason =
+  | BilibiliVideoDetailWorkTerminalReason
+  | BilibiliNativeSearchWorkTerminalReason;
 
 export interface BilibiliVideoDetailDomObservation {
   bvid: string;
@@ -81,16 +131,40 @@ export interface BilibiliVideoDetailDomObservation {
   playerVisible: boolean;
   chargeExclusiveTrialVisible: boolean;
   loginOverlayVisible: boolean;
-  risk: {
-    verificationRequired: boolean;
-    rateLimited: boolean;
-    sourceUnavailable: boolean;
-  };
+  risk: BilibiliWorkRisk;
+}
+
+export interface BilibiliNativeSearchDomCard {
+  bvid: string | null;
+  title: string | null;
+  visibleText: string | null;
+  thumbnailUrl: string | null;
+}
+
+export interface BilibiliNativeSearchDomObservation {
+  searchInputVisible: boolean;
+  resultListVisible: boolean;
+  emptyStateVisible: boolean;
+  resultType: 'comprehensive';
+  sort: 'relevance';
+  page: 1;
+  /** Semantic, visible card count before the fixed BV-card allow-list. */
+  semanticResultCardCount: number;
+  /** Only public, human-visible canonical BV video cards are included. */
+  cards: BilibiliNativeSearchDomCard[];
+  loginOverlayVisible: boolean;
+  risk: BilibiliWorkRisk;
+}
+
+export interface BilibiliWorkRisk {
+  verificationRequired: boolean;
+  rateLimited: boolean;
+  sourceUnavailable: boolean;
 }
 
 /**
  * The result has no tab ID, URL, browser Profile, request headers, response
- * body, Cookie, token, or page script.  A Gateway validates the result again
+ * body, Cookie, token, or page script. A Gateway validates the result again
  * against the claimed work item before it can become a local artifact.
  */
 export interface BilibiliVideoDetailWorkResult {
@@ -104,18 +178,47 @@ export interface BilibiliVideoDetailWorkResult {
   executionTarget: 'collector_work_tab';
   state: Exclude<ExtensionWorkState, 'queued' | 'claimed'>;
   errorCode: string | null;
-  terminalReason: ExtensionWorkTerminalReason;
+  terminalReason: BilibiliVideoDetailWorkTerminalReason;
   completedAt: string;
-  navigation: {
-    attempted: boolean;
-    attemptCount: 0 | 1;
-  };
-  workTabAcquisition: 'created' | 'reused' | 'not_acquired';
-  workTabDisposition: 'idle_reusable' | 'retained_not_reusable' | 'user_taken_over' | 'closed_or_missing';
+  navigation: ExtensionWorkNavigation;
+  workTabAcquisition: ExtensionWorkTabAcquisition;
+  workTabDisposition: ExtensionWorkTabDisposition;
   observation: BilibiliVideoDetailDomObservation | null;
 }
 
-export type ExtensionWorkResult = BilibiliVideoDetailWorkResult;
+export interface BilibiliNativeSearchWorkResult {
+  schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
+  protocolVersion: typeof EXTENSION_WORK_PROTOCOL_VERSION;
+  workId: string;
+  operationId: string;
+  browserBindingId: string;
+  platform: 'bilibili';
+  capability: 'bilibili.native_search';
+  executionTarget: 'collector_work_tab';
+  state: Exclude<ExtensionWorkState, 'queued' | 'claimed'>;
+  errorCode: string | null;
+  terminalReason: BilibiliNativeSearchWorkTerminalReason;
+  completedAt: string;
+  navigation: ExtensionWorkNavigation;
+  workTabAcquisition: ExtensionWorkTabAcquisition;
+  workTabDisposition: ExtensionWorkTabDisposition;
+  observation: BilibiliNativeSearchDomObservation | null;
+}
+
+export interface ExtensionWorkNavigation {
+  attempted: boolean;
+  attemptCount: 0 | 1;
+}
+
+export type ExtensionWorkTabDisposition =
+  | 'idle_reusable'
+  | 'retained_not_reusable'
+  | 'user_taken_over'
+  | 'closed_or_missing';
+
+export type ExtensionWorkTabAcquisition = 'created' | 'reused' | 'not_acquired';
+
+export type ExtensionWorkResult = BilibiliVideoDetailWorkResult | BilibiliNativeSearchWorkResult;
 
 export function canonicalBilibiliVideoWorkUrl(value: string): string | null {
   try {
@@ -130,69 +233,105 @@ export function canonicalBilibiliVideoWorkUrl(value: string): string | null {
   }
 }
 
+export function canonicalBilibiliNativeSearchWorkUrl(value: string): string | null {
+  return canonicalBilibiliNativeSearchUrl(value, 'strict_input');
+}
+
+/** Return only a target derived from a validated registered work capability. */
+export function extensionWorkTargetUrl(item: ExtensionWorkItem): string {
+  return item.capability === 'bilibili.video_detail'
+    ? item.input.canonicalVideoUrl
+    : item.input.canonicalSearchUrl;
+}
+
 export function extensionWorkSigningPayload(item: ExtensionWorkItem | UnsignedExtensionWorkItem): string {
   const { gatewaySignature: _gatewaySignature, ...unsigned } = item as ExtensionWorkItem;
   return canonicalJson(unsigned);
 }
 
 export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem {
-  if (!isRecord(value)) return false;
-  if (
-    !hasExactKeys(value, [
-      'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
-      'executionTarget', 'issuedAt', 'expiresAt', 'input', 'budget', 'gatewaySignature'
-    ]) ||
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
+    'executionTarget', 'issuedAt', 'expiresAt', 'input', 'budget', 'gatewaySignature'
+  ]) ||
     value.schemaVersion !== EXTENSION_WORK_SCHEMA_VERSION ||
     value.protocolVersion !== EXTENSION_WORK_PROTOCOL_VERSION ||
     !isUuid(value.workId) || !isUuid(value.operationId) || !isUuid(value.browserBindingId) ||
-    value.platform !== 'bilibili' || value.capability !== 'bilibili.video_detail' ||
-    value.executionTarget !== 'collector_work_tab' || !isTimestamp(value.issuedAt) || !isTimestamp(value.expiresAt) ||
-    Date.parse(value.expiresAt) <= Date.parse(value.issuedAt) || !BASE64URL_PATTERN.test(stringValue(value.gatewaySignature)) ||
-    !isBilibiliVideoDetailWorkInput(value.input) || !isBilibiliVideoDetailWorkBudget(value.budget)
+    value.platform !== 'bilibili' || value.executionTarget !== 'collector_work_tab' ||
+    !isTimestamp(value.issuedAt) || !isTimestamp(value.expiresAt) ||
+    Date.parse(value.expiresAt) <= Date.parse(value.issuedAt) ||
+    !BASE64URL_PATTERN.test(stringValue(value.gatewaySignature))
   ) return false;
-  return true;
+  if (value.capability === 'bilibili.video_detail') {
+    return isBilibiliVideoDetailWorkInput(value.input) && isBilibiliVideoDetailWorkBudget(value.budget);
+  }
+  if (value.capability === 'bilibili.native_search') {
+    return isBilibiliNativeSearchWorkInput(value.input) && isBilibiliNativeSearchWorkBudget(value.budget);
+  }
+  return false;
 }
 
 export function isExtensionWorkResult(value: unknown): value is ExtensionWorkResult {
-  if (!isRecord(value)) return false;
-  if (
-    !hasExactKeys(value, [
-      'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
-      'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation',
-      'workTabAcquisition', 'workTabDisposition', 'observation'
-    ]) ||
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
+    'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation',
+    'workTabAcquisition', 'workTabDisposition', 'observation'
+  ]) ||
     value.schemaVersion !== EXTENSION_WORK_SCHEMA_VERSION ||
     value.protocolVersion !== EXTENSION_WORK_PROTOCOL_VERSION ||
     !isUuid(value.workId) || !isUuid(value.operationId) || !isUuid(value.browserBindingId) ||
-    value.platform !== 'bilibili' || value.capability !== 'bilibili.video_detail' ||
-    value.executionTarget !== 'collector_work_tab' ||
+    value.platform !== 'bilibili' || value.executionTarget !== 'collector_work_tab' ||
     !isTerminalWorkState(value.state) || !isSafeNullableErrorCode(value.errorCode) ||
-    !isTerminalReason(value.terminalReason) || !isTimestamp(value.completedAt) ||
-    !isNavigation(value.navigation) || !isWorkTabAcquisition(value.workTabAcquisition) ||
-    !isWorkTabDisposition(value.workTabDisposition) ||
-    !(value.observation === null || isBilibiliVideoDetailDomObservation(value.observation))
+    !isTimestamp(value.completedAt) || !isNavigation(value.navigation) ||
+    !isWorkTabAcquisition(value.workTabAcquisition) || !isWorkTabDisposition(value.workTabDisposition)
   ) return false;
-  return true;
+  if (value.capability === 'bilibili.video_detail') {
+    return isBilibiliVideoDetailTerminalReason(value.terminalReason) &&
+      (value.observation === null || isBilibiliVideoDetailDomObservation(value.observation));
+  }
+  if (value.capability === 'bilibili.native_search') {
+    return isBilibiliNativeSearchTerminalReason(value.terminalReason) &&
+      (value.observation === null || isBilibiliNativeSearchDomObservation(value.observation));
+  }
+  return false;
 }
 
 export function isExtensionWorkResultForItem(
   value: unknown,
   item: ExtensionWorkItem
 ): value is ExtensionWorkResult {
-  if (!isExtensionWorkResult(value)) return false;
-  if (
+  if (!isExtensionWorkResult(value) || value.capability !== item.capability ||
     value.workId !== item.workId || value.operationId !== item.operationId ||
-    value.browserBindingId !== item.browserBindingId || value.capability !== item.capability ||
-    Date.parse(value.completedAt) < Date.parse(item.issuedAt)
+    value.browserBindingId !== item.browserBindingId || Date.parse(value.completedAt) < Date.parse(item.issuedAt) ||
+    value.navigation.attemptCount !== (value.navigation.attempted ? 1 : 0)
   ) return false;
-  if (value.navigation.attemptCount !== (value.navigation.attempted ? 1 : 0)) return false;
-  if (value.observation && value.observation.bvid !== item.input.bvid) return false;
-  if (value.state === 'completed') {
-    return value.errorCode === null && value.terminalReason === 'detail_ready' && value.observation !== null &&
-      value.observation.title !== null && value.observation.titleVisible && value.observation.playerVisible &&
-      value.navigation.attemptCount === 1 && value.workTabDisposition === 'idle_reusable';
+  if (item.capability === 'bilibili.video_detail' && value.capability === 'bilibili.video_detail') {
+    if (value.observation && value.observation.bvid !== item.input.bvid) return false;
+    if (value.state === 'completed') {
+      return value.errorCode === null && value.terminalReason === 'detail_ready' && value.observation !== null &&
+        value.observation.title !== null && value.observation.titleVisible && value.observation.playerVisible &&
+        value.navigation.attemptCount === 1 && value.workTabDisposition === 'idle_reusable';
+    }
+    return true;
   }
-  return true;
+  if (item.capability === 'bilibili.native_search' && value.capability === 'bilibili.native_search') {
+    if (value.observation && (
+      value.observation.resultType !== item.input.resultType || value.observation.sort !== item.input.sort ||
+      value.observation.page !== item.input.page
+    )) return false;
+    if (value.state !== 'completed') return true;
+    if (value.errorCode !== null || value.observation === null || value.navigation.attemptCount !== 1 ||
+      value.workTabDisposition !== 'idle_reusable' || value.observation.risk.verificationRequired ||
+      value.observation.risk.rateLimited || value.observation.risk.sourceUnavailable ||
+      !value.observation.searchInputVisible
+    ) return false;
+    return value.terminalReason === 'search_empty'
+      ? value.observation.emptyStateVisible
+      : value.terminalReason === 'search_ready'
+        ? value.observation.resultListVisible && value.observation.semanticResultCardCount > 0
+        : false;
+  }
+  return false;
 }
 
 export function isBilibiliVideoDetailDomObservation(value: unknown): value is BilibiliVideoDetailDomObservation {
@@ -205,9 +344,24 @@ export function isBilibiliVideoDetailDomObservation(value: unknown): value is Bi
     !isTextArray(value.tagTexts, 20, 100) || !isNullableCreator(value.creator) ||
     typeof value.titleVisible !== 'boolean' || typeof value.playerVisible !== 'boolean' ||
     typeof value.chargeExclusiveTrialVisible !== 'boolean' || typeof value.loginOverlayVisible !== 'boolean' ||
-    !isRecord(value.risk) || !hasExactKeys(value.risk, ['verificationRequired', 'rateLimited', 'sourceUnavailable']) ||
-    typeof value.risk.verificationRequired !== 'boolean' ||
-    typeof value.risk.rateLimited !== 'boolean' || typeof value.risk.sourceUnavailable !== 'boolean'
+    !isBilibiliWorkRisk(value.risk)
+  ) return false;
+  return true;
+}
+
+export function isBilibiliNativeSearchDomObservation(value: unknown): value is BilibiliNativeSearchDomObservation {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'searchInputVisible', 'resultListVisible', 'emptyStateVisible', 'resultType', 'sort', 'page',
+    'semanticResultCardCount', 'cards', 'loginOverlayVisible', 'risk'
+  ]) || typeof value.searchInputVisible !== 'boolean' || typeof value.resultListVisible !== 'boolean' ||
+    typeof value.emptyStateVisible !== 'boolean' || value.resultType !== 'comprehensive' ||
+    value.sort !== 'relevance' || value.page !== 1 ||
+    typeof value.semanticResultCardCount !== 'number' || !Number.isSafeInteger(value.semanticResultCardCount) ||
+    value.semanticResultCardCount < 0 ||
+    value.semanticResultCardCount > 60 || !Array.isArray(value.cards) ||
+    value.cards.length > BILIBILI_NATIVE_SEARCH_MAX_VISIBLE_CARDS ||
+    !value.cards.every(isBilibiliNativeSearchDomCard) || typeof value.loginOverlayVisible !== 'boolean' ||
+    !isBilibiliWorkRisk(value.risk)
   ) return false;
   return true;
 }
@@ -219,34 +373,90 @@ function isBilibiliVideoDetailWorkInput(value: unknown): value is BilibiliVideoD
   return canonicalBilibiliVideoWorkUrl(value.canonicalVideoUrl) === `https://www.bilibili.com/video/${value.bvid}`;
 }
 
+function isBilibiliNativeSearchWorkInput(value: unknown): value is BilibiliNativeSearchWorkInput {
+  if (!isRecord(value) || !hasExactKeys(value, ['query', 'canonicalSearchUrl', 'resultType', 'sort', 'page']) ||
+    typeof value.query !== 'string' || typeof value.canonicalSearchUrl !== 'string' ||
+    value.resultType !== 'comprehensive' || value.sort !== 'relevance' || value.page !== 1
+  ) return false;
+  const route = normaliseBilibiliNativeSearchRoute({
+    query: value.query,
+    resultType: value.resultType,
+    sort: value.sort,
+    page: value.page
+  });
+  return route !== null && value.canonicalSearchUrl === bilibiliNativeSearchUrl(route) &&
+    canonicalBilibiliNativeSearchWorkUrl(value.canonicalSearchUrl) === value.canonicalSearchUrl;
+}
+
 function isBilibiliVideoDetailWorkBudget(value: unknown): value is BilibiliVideoDetailWorkBudget {
+  return isFixedDirectWorkBudget(value);
+}
+
+function isBilibiliNativeSearchWorkBudget(value: unknown): value is BilibiliNativeSearchWorkBudget {
+  return isFixedDirectWorkBudget(value);
+}
+
+function isFixedDirectWorkBudget(value: unknown): boolean {
   return isRecord(value) && Object.keys(value).length === 4 &&
     value.maximumPlatformNavigations === 1 && value.maximumSemanticActions === 0 &&
     value.maximumResponseObservations === 0 && value.maximumPayloadBytes === 98_304;
+}
+
+function isBilibiliNativeSearchDomCard(value: unknown): value is BilibiliNativeSearchDomCard {
+  return isRecord(value) && hasExactKeys(value, ['bvid', 'title', 'visibleText', 'thumbnailUrl']) &&
+    (value.bvid === null || isBvid(value.bvid)) && isNullableText(value.title, 500) &&
+    isNullableText(value.visibleText, 2_000) && isNullablePublicImageUrl(value.thumbnailUrl);
+}
+
+function isNullablePublicImageUrl(value: unknown): value is string | null {
+  if (value === null) return true;
+  if (typeof value !== 'string' || value.length === 0 || value.length > 2_000) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+function isBilibiliWorkRisk(value: unknown): value is BilibiliWorkRisk {
+  return isRecord(value) && hasExactKeys(value, ['verificationRequired', 'rateLimited', 'sourceUnavailable']) &&
+    typeof value.verificationRequired === 'boolean' && typeof value.rateLimited === 'boolean' &&
+    typeof value.sourceUnavailable === 'boolean';
 }
 
 function isTerminalWorkState(value: unknown): value is BilibiliVideoDetailWorkResult['state'] {
   return value === 'completed' || value === 'partial' || value === 'stopped' || value === 'failed';
 }
 
-function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason {
-  return value === 'detail_ready' || value === 'verification_required' || value === 'rate_limited' ||
-    value === 'source_unavailable' || value === 'dom_projection_failed' || value === 'document_context_changed' ||
-    value === 'run_deadline_exceeded' || value === 'work_tab_closed' || value === 'work_tab_user_taken_over' ||
-    value === 'navigation_outcome_unknown' || value === 'gateway_restarted_before_completion';
+function isBilibiliVideoDetailTerminalReason(value: unknown): value is BilibiliVideoDetailWorkTerminalReason {
+  return value === 'detail_ready' || isSharedTerminalReason(value);
 }
 
-function isNavigation(value: unknown): value is BilibiliVideoDetailWorkResult['navigation'] {
+function isBilibiliNativeSearchTerminalReason(value: unknown): value is BilibiliNativeSearchWorkTerminalReason {
+  return value === 'search_ready' || value === 'search_empty' || value === 'search_results_partial' ||
+    isSharedTerminalReason(value);
+}
+
+function isSharedTerminalReason(value: unknown): value is SharedExtensionWorkTerminalReason {
+  return value === 'verification_required' || value === 'rate_limited' || value === 'source_unavailable' ||
+    value === 'dom_projection_failed' || value === 'document_context_changed' ||
+    value === 'run_deadline_exceeded' || value === 'work_tab_closed' ||
+    value === 'work_tab_user_taken_over' || value === 'navigation_outcome_unknown' ||
+    value === 'gateway_restarted_before_completion';
+}
+
+function isNavigation(value: unknown): value is ExtensionWorkNavigation {
   return isRecord(value) && Object.keys(value).length === 2 && typeof value.attempted === 'boolean' &&
     (value.attemptCount === 0 || value.attemptCount === 1);
 }
 
-function isWorkTabDisposition(value: unknown): value is BilibiliVideoDetailWorkResult['workTabDisposition'] {
+function isWorkTabDisposition(value: unknown): value is ExtensionWorkTabDisposition {
   return value === 'idle_reusable' || value === 'retained_not_reusable' ||
     value === 'user_taken_over' || value === 'closed_or_missing';
 }
 
-function isWorkTabAcquisition(value: unknown): value is BilibiliVideoDetailWorkResult['workTabAcquisition'] {
+function isWorkTabAcquisition(value: unknown): value is ExtensionWorkTabAcquisition {
   return value === 'created' || value === 'reused' || value === 'not_acquired';
 }
 

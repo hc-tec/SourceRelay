@@ -1,4 +1,5 @@
 import type { ExtensionWorkItem, ExtensionWorkResult } from '@intelligence/collector-contracts';
+import { executeBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
 import { executeBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
 import { claimNextExtensionWork, submitExtensionWorkResult } from './extension-work-client';
 import {
@@ -90,10 +91,7 @@ export async function pollForExtensionWork(): Promise<void> {
 }
 
 async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
-  if (item.capability !== 'bilibili.video_detail') {
-    throw new Error('extension_work_capability_rejected');
-  }
-  return await executeBilibiliVideoDetailExtensionWork(item, {
+  const lifecycle = {
     onWorkTabAcquired: async (acquisition) => {
       await updateActivePhase(item, 'work_tab_acquired', acquisition);
     },
@@ -104,7 +102,14 @@ async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
         : 'not_acquired';
       await updateActivePhase(item, 'navigation_intent_recorded', acquisition);
     }
-  });
+  };
+  if (item.capability === 'bilibili.video_detail') {
+    return await executeBilibiliVideoDetailExtensionWork(item, lifecycle);
+  }
+  if (item.capability === 'bilibili.native_search') {
+    return await executeBilibiliNativeSearchExtensionWork(item, lifecycle);
+  }
+  throw new Error('extension_work_capability_rejected');
 }
 
 async function updateActivePhase(
@@ -144,14 +149,13 @@ async function deliverPendingResult(pending: PendingExtensionWorkResult): Promis
 
 function interruptedResult(active: ActiveExtensionWork): ExtensionWorkResult {
   const navigationAttempted = active.phase === 'navigation_intent_recorded';
-  return {
+  const base = {
     schemaVersion: 1,
     protocolVersion: 1,
     workId: active.item.workId,
     operationId: active.item.operationId,
     browserBindingId: active.item.browserBindingId,
     platform: 'bilibili',
-    capability: 'bilibili.video_detail',
     executionTarget: 'collector_work_tab',
     state: 'stopped',
     errorCode: navigationAttempted
@@ -163,9 +167,12 @@ function interruptedResult(active: ActiveExtensionWork): ExtensionWorkResult {
     workTabAcquisition: active.workTabAcquisition,
     workTabDisposition: active.workTabAcquisition === 'not_acquired'
       ? 'closed_or_missing'
-      : 'retained_not_reusable',
-    observation: null
+      : 'retained_not_reusable'
   };
+  if (active.item.capability === 'bilibili.video_detail') {
+    return { ...base, capability: 'bilibili.video_detail', observation: null };
+  }
+  return { ...base, capability: 'bilibili.native_search', observation: null };
 }
 
 function terminalDeliveryError(errorCode: string): boolean {

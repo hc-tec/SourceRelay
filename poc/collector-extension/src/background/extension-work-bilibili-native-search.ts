@@ -1,13 +1,13 @@
-import type {
-  BilibiliVideoDetailDomObservation,
-  ExtensionWorkItem,
-  ExtensionWorkResult
+import {
+  canonicalBilibiliNativeSearchUrl,
+  type BilibiliNativeSearchDomObservation,
+  type ExtensionWorkItem,
+  type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
-import { captureBilibiliVideoDetailDom } from './strategies/bilibili-video-detail-dom-projection';
+import { captureBilibiliNativeSearchDom } from './strategies/bilibili-native-search-dom-projection';
 import {
   acquireExtensionWorkTab,
   abandonExtensionWorkTab,
-  currentExtensionWorkTabDisposition,
   navigateExtensionWorkTabOnce,
   readExtensionWorkTab,
   releaseExtensionWorkTab,
@@ -21,22 +21,22 @@ const DOM_OBSERVATION_WINDOW_MS = 12_000;
 const OBSERVATION_INTERVAL_MS = 350;
 
 /**
- * The first direct-mode capability needs no semantic page input: it opens one
- * signed canonical Bilibili video URL once and projects a bounded first-screen
- * DOM observation.  It never refreshes, clicks, scrolls, or retries that
- * platform navigation.
+ * Direct native-search MVP: one signed navigation to the fixed public
+ * comprehensive first page, followed by a bounded DOM-only projection. It
+ * never clicks search, changes sort/type, scrolls, paginates, or reads a
+ * network response body.
  */
-export async function executeBilibiliVideoDetailExtensionWork(
-  item: Extract<ExtensionWorkItem, { capability: 'bilibili.video_detail' }>,
+export async function executeBilibiliNativeSearchExtensionWork(
+  item: Extract<ExtensionWorkItem, { capability: 'bilibili.native_search' }>,
   lifecycle: {
     onWorkTabAcquired?(acquisition: WorkTabAcquisition): Promise<void>;
     onNavigationIntent?(): Promise<void>;
   } = {}
-): Promise<Extract<ExtensionWorkResult, { capability: 'bilibili.video_detail' }>> {
+): Promise<Extract<ExtensionWorkResult, { capability: 'bilibili.native_search' }>> {
   let workTab: ExtensionWorkTabLease | null = null;
   let acquisition: WorkTabAcquisition | 'not_acquired' = 'not_acquired';
   let navigationAttempted = false;
-  let observation: BilibiliVideoDetailDomObservation | null = null;
+  let observation: BilibiliNativeSearchDomObservation | null = null;
   if (Date.parse(item.expiresAt) <= Date.now()) {
     return result(item, {
       state: 'stopped',
@@ -55,10 +55,9 @@ export async function executeBilibiliVideoDetailExtensionWork(
     navigationAttempted = true;
     await lifecycle.onNavigationIntent?.();
     await navigateExtensionWorkTabOnce(workTab, item);
-    const observed = await observeVideoDetail(workTab, item.input.bvid, item.expiresAt);
+    const observed = await observeNativeSearch(workTab, item.input.canonicalSearchUrl, item.expiresAt);
     observation = observed.observation;
-    const disposition = observed.kind === 'ready' || observed.kind === 'incomplete' ||
-      observed.terminalReason === 'source_unavailable'
+    const disposition = observed.kind === 'ready' || observed.kind === 'empty'
       ? releaseExtensionWorkTab(workTab)
       : abandonExtensionWorkTab(workTab);
     workTab = null;
@@ -66,7 +65,18 @@ export async function executeBilibiliVideoDetailExtensionWork(
       return result(item, {
         state: 'completed',
         errorCode: null,
-        terminalReason: 'detail_ready',
+        terminalReason: 'search_ready',
+        navigationAttempted,
+        acquisition,
+        disposition,
+        observation
+      });
+    }
+    if (observed.kind === 'empty') {
+      return result(item, {
+        state: 'completed',
+        errorCode: null,
+        terminalReason: 'search_empty',
         navigationAttempted,
         acquisition,
         disposition,
@@ -103,29 +113,40 @@ export async function executeBilibiliVideoDetailExtensionWork(
   }
 }
 
-async function observeVideoDetail(
+async function observeNativeSearch(
   workTab: ExtensionWorkTabLease,
-  expectedBvid: string,
+  expectedCanonicalSearchUrl: string,
   expiresAt: string
 ): Promise<
-  | { kind: 'ready'; observation: BilibiliVideoDetailDomObservation }
-  | { kind: 'stopped'; observation: BilibiliVideoDetailDomObservation | null; errorCode: string; terminalReason: 'verification_required' | 'rate_limited' | 'source_unavailable' }
-  | { kind: 'incomplete'; observation: BilibiliVideoDetailDomObservation | null; errorCode: string; terminalReason: 'dom_projection_failed' | 'run_deadline_exceeded' }
+  | { kind: 'ready'; observation: BilibiliNativeSearchDomObservation }
+  | { kind: 'empty'; observation: BilibiliNativeSearchDomObservation }
+  | {
+    kind: 'stopped';
+    observation: BilibiliNativeSearchDomObservation | null;
+    errorCode: string;
+    terminalReason: 'verification_required' | 'rate_limited' | 'source_unavailable';
+  }
+  | {
+    kind: 'incomplete';
+    observation: BilibiliNativeSearchDomObservation | null;
+    errorCode: string;
+    terminalReason: 'search_results_partial' | 'dom_projection_failed' | 'document_context_changed' | 'run_deadline_exceeded';
+  }
 > {
   const deadline = Math.min(Date.parse(expiresAt), Date.now() + DOM_OBSERVATION_WINDOW_MS + PAGE_SETTLE_MS);
   let pageReadyAt: number | null = null;
-  let lastObservation: BilibiliVideoDetailDomObservation | null = null;
+  let lastObservation: BilibiliNativeSearchDomObservation | null = null;
   while (Date.now() < deadline) {
     const tab = await readExtensionWorkTab(workTab);
     if (tab.status !== 'complete') {
       await delay(OBSERVATION_INTERVAL_MS);
       continue;
     }
-    if (!tab.url || !tab.url.startsWith('https://www.bilibili.com/video/')) {
+    if (!tab.url || canonicalBilibiliNativeSearchUrl(tab.url, 'observed_document') !== expectedCanonicalSearchUrl) {
       return {
         kind: 'stopped',
         observation: null,
-        errorCode: 'bilibili_video_detail_target_not_reached',
+        errorCode: 'bilibili_native_search_target_not_reached',
         terminalReason: 'source_unavailable'
       };
     }
@@ -134,25 +155,46 @@ async function observeVideoDetail(
       await delay(OBSERVATION_INTERVAL_MS);
       continue;
     }
-    const dom = await captureBilibiliVideoDetailDom(workTab.tabId);
-    const observation = toObservation(dom, expectedBvid);
+    let dom: Awaited<ReturnType<typeof captureBilibiliNativeSearchDom>>;
+    try {
+      dom = await captureBilibiliNativeSearchDom(workTab.tabId);
+    } catch (error) {
+      const code = safeErrorCode(error);
+      return {
+        kind: 'incomplete',
+        observation: lastObservation,
+        errorCode: code === 'native_search_strategy_document_context_changed'
+          ? 'bilibili_native_search_document_context_changed'
+          : 'bilibili_native_search_dom_projection_failed',
+        terminalReason: code === 'native_search_strategy_document_context_changed'
+          ? 'document_context_changed'
+          : 'dom_projection_failed'
+      };
+    }
+    const observation = toObservation(dom);
     if (observation) lastObservation = observation;
     if (dom.risk.verificationRequired) {
       return {
-        kind: 'stopped', observation, errorCode: 'bilibili_verification_required', terminalReason: 'verification_required'
+        kind: 'stopped', observation,
+        errorCode: 'bilibili_verification_required', terminalReason: 'verification_required'
       };
     }
     if (dom.risk.rateLimited) {
       return {
-        kind: 'stopped', observation, errorCode: 'bilibili_rate_limited', terminalReason: 'rate_limited'
+        kind: 'stopped', observation,
+        errorCode: 'bilibili_rate_limited', terminalReason: 'rate_limited'
       };
     }
     if (dom.risk.sourceUnavailable) {
       return {
-        kind: 'stopped', observation, errorCode: 'bilibili_source_unavailable', terminalReason: 'source_unavailable'
+        kind: 'stopped', observation,
+        errorCode: 'bilibili_source_unavailable', terminalReason: 'source_unavailable'
       };
     }
-    if (observation && observation.titleVisible && observation.playerVisible && observation.title) {
+    if (observation?.searchInputVisible && observation.emptyStateVisible) {
+      return { kind: 'empty', observation };
+    }
+    if (observation?.searchInputVisible && observation.resultListVisible && observation.semanticResultCardCount > 0) {
       return { kind: 'ready', observation };
     }
     await delay(OBSERVATION_INTERVAL_MS);
@@ -160,44 +202,41 @@ async function observeVideoDetail(
   return {
     kind: 'incomplete',
     observation: lastObservation,
-    errorCode: 'bilibili_video_detail_dom_not_ready',
-    terminalReason: Date.now() >= Date.parse(expiresAt) ? 'run_deadline_exceeded' : 'dom_projection_failed'
+    errorCode: 'bilibili_native_search_dom_not_ready',
+    terminalReason: Date.now() >= Date.parse(expiresAt) ? 'run_deadline_exceeded' : 'search_results_partial'
   };
 }
 
 function toObservation(
-  dom: Awaited<ReturnType<typeof captureBilibiliVideoDetailDom>>,
-  expectedBvid: string
-): BilibiliVideoDetailDomObservation | null {
-  if (dom.bvid !== expectedBvid) return null;
+  dom: Awaited<ReturnType<typeof captureBilibiliNativeSearchDom>>
+): BilibiliNativeSearchDomObservation | null {
+  if (dom.resultType !== 'comprehensive' || dom.sort !== 'relevance') return null;
   return {
-    bvid: dom.bvid,
-    title: dom.title,
-    metadataVisibleText: dom.metadataVisibleText,
-    description: dom.description,
-    creator: dom.creator ? { ...dom.creator } : null,
-    tagTexts: [...dom.tagTexts],
-    episodeSummaryText: dom.episodeSummaryText,
-    titleVisible: dom.titleVisible,
-    playerVisible: dom.playerVisible,
-    chargeExclusiveTrialVisible: dom.chargeExclusiveTrialVisible,
+    searchInputVisible: dom.searchInputVisible,
+    resultListVisible: dom.resultListVisible,
+    emptyStateVisible: dom.emptyStateVisible,
+    resultType: 'comprehensive',
+    sort: 'relevance',
+    page: 1,
+    semanticResultCardCount: dom.semanticResultCardCount,
+    cards: dom.cards.map((card) => ({ ...card })),
     loginOverlayVisible: dom.loginOverlayVisible,
     risk: { ...dom.risk }
   };
 }
 
 function result(
-  item: Extract<ExtensionWorkItem, { capability: 'bilibili.video_detail' }>,
+  item: Extract<ExtensionWorkItem, { capability: 'bilibili.native_search' }>,
   input: {
     state: 'completed' | 'partial' | 'stopped' | 'failed';
     errorCode: string | null;
-    terminalReason: Extract<ExtensionWorkResult, { capability: 'bilibili.video_detail' }>['terminalReason'];
+    terminalReason: Extract<ExtensionWorkResult, { capability: 'bilibili.native_search' }>['terminalReason'];
     navigationAttempted: boolean;
     acquisition: WorkTabAcquisition | 'not_acquired';
     disposition: WorkTabDisposition;
-    observation: BilibiliVideoDetailDomObservation | null;
+    observation: BilibiliNativeSearchDomObservation | null;
   }
-): Extract<ExtensionWorkResult, { capability: 'bilibili.video_detail' }> {
+): Extract<ExtensionWorkResult, { capability: 'bilibili.native_search' }> {
   return {
     schemaVersion: 1,
     protocolVersion: 1,
@@ -205,7 +244,7 @@ function result(
     operationId: item.operationId,
     browserBindingId: item.browserBindingId,
     platform: 'bilibili',
-    capability: 'bilibili.video_detail',
+    capability: 'bilibili.native_search',
     executionTarget: 'collector_work_tab',
     state: input.state,
     errorCode: input.errorCode,
@@ -224,7 +263,7 @@ function result(
 function terminalReasonForError(
   errorCode: string,
   navigationAttempted: boolean
-): Extract<ExtensionWorkResult, { capability: 'bilibili.video_detail' }>['terminalReason'] {
+): Extract<ExtensionWorkResult, { capability: 'bilibili.native_search' }>['terminalReason'] {
   if (errorCode === 'work_tab_closed') return 'work_tab_closed';
   if (errorCode === 'work_tab_user_taken_over') return 'work_tab_user_taken_over';
   return navigationAttempted ? 'navigation_outcome_unknown' : 'work_tab_closed';

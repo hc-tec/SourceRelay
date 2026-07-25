@@ -31,6 +31,33 @@ const item: ExtensionWorkItem = {
   gatewaySignature: 'a'.repeat(86)
 };
 
+const searchItem: ExtensionWorkItem = {
+  schemaVersion: 1,
+  protocolVersion: 1,
+  workId: '44444444-4444-4444-8444-444444444444',
+  operationId: '55555555-5555-4555-8555-555555555555',
+  browserBindingId: '33333333-3333-4333-8333-333333333333',
+  platform: 'bilibili',
+  capability: 'bilibili.native_search',
+  executionTarget: 'collector_work_tab',
+  issuedAt: '2026-07-25T00:00:00.000Z',
+  expiresAt: '2026-07-25T00:01:00.000Z',
+  input: {
+    query: 'DeepSeek',
+    canonicalSearchUrl: 'https://search.bilibili.com/all?keyword=DeepSeek',
+    resultType: 'comprehensive',
+    sort: 'relevance',
+    page: 1
+  },
+  budget: {
+    maximumPlatformNavigations: 1,
+    maximumSemanticActions: 0,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 98_304
+  },
+  gatewaySignature: 'b'.repeat(86)
+};
+
 describe('direct extension work contract', () => {
   test('signs a fixed typed work item without allowing arbitrary carrier fields', () => {
     expect(isExtensionWorkItem(item)).toBe(true);
@@ -83,5 +110,58 @@ describe('direct extension work contract', () => {
       ...result,
       observation: { ...result.observation!, bvid: 'BV1xx411c7mD' }
     }, item)).toBe(false);
+  });
+
+  test('keeps native search to its fixed comprehensive first-page DOM capability', () => {
+    expect(isExtensionWorkItem(searchItem)).toBe(true);
+    expect(isExtensionWorkItem({
+      ...searchItem,
+      input: { ...searchItem.input, page: 2 }
+    })).toBe(false);
+    expect(isExtensionWorkItem({
+      ...searchItem,
+      input: { ...searchItem.input, sort: 'newest' }
+    })).toBe(false);
+    expect(isExtensionWorkItem({ ...searchItem, selector: '.search-page' })).toBe(false);
+
+    const result: ExtensionWorkResult = {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: searchItem.workId,
+      operationId: searchItem.operationId,
+      browserBindingId: searchItem.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search',
+      executionTarget: 'collector_work_tab',
+      state: 'completed',
+      errorCode: null,
+      terminalReason: 'search_ready',
+      completedAt: '2026-07-25T00:00:20.000Z',
+      navigation: { attempted: true, attemptCount: 1 },
+      workTabAcquisition: 'created',
+      workTabDisposition: 'idle_reusable',
+      observation: {
+        searchInputVisible: true,
+        resultListVisible: true,
+        emptyStateVisible: false,
+        resultType: 'comprehensive',
+        sort: 'relevance',
+        page: 1,
+        semanticResultCardCount: 1,
+        cards: [{
+          bvid: 'BV1qZSLBYEpa',
+          title: '公开视频',
+          visibleText: '公开视频 创作者',
+          thumbnailUrl: null
+        }],
+        loginOverlayVisible: false,
+        risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+      }
+    };
+    expect(isExtensionWorkResultForItem(result, searchItem)).toBe(true);
+    expect(isExtensionWorkResultForItem({
+      ...result,
+      terminalReason: 'search_empty'
+    }, searchItem)).toBe(false);
   });
 });

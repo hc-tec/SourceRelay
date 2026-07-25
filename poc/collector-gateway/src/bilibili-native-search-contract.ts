@@ -142,17 +142,17 @@ export interface BilibiliNativeSearchRunRecord {
     terminalReason: BilibiliNativeSearchTerminalReason;
   };
   safeguards: {
-    environment: 'local_user_controlled_collection_profile';
-    browser: 'visible_playwright_chromium';
-    acquisition: 'trusted_navigation_plus_bounded_dom_projection';
+    environment: 'local_user_controlled_collection_profile' | 'user_owned_browser_extension';
+    browser: 'visible_playwright_chromium' | 'user_owned_chromium_tab';
+    acquisition: 'trusted_navigation_plus_bounded_dom_projection' | 'extension_owned_tab_navigation_plus_bounded_dom_projection';
     query: 'sha256_only_in_persisted_artifacts';
     requestHeaders: 'not_read';
     requestBody: 'not_read';
     cookiesAndTokens: 'not_read';
     networkQueryAndFragmentValues: 'not_read';
     responseBodies: 'not_read';
-    sortAndFilter: 'reviewed_type_and_sort_via_native_url_filters_excluded';
-    pagination: 'single_reviewed_page_via_native_navigation';
+    sortAndFilter: 'reviewed_type_and_sort_via_native_url_filters_excluded' | 'fixed_comprehensive_first_page_no_input';
+    pagination: 'single_reviewed_page_via_native_navigation' | 'fixed_first_page_no_input';
     detailNavigation: 'excluded_separate_capability';
     mixedResultTypes: 'excluded_non_video_objects';
     semanticActionDelivery: 'at_most_once';
@@ -161,8 +161,17 @@ export interface BilibiliNativeSearchRunRecord {
       | 'reused_matching_managed_tab'
       | 'reused_retained_managed_tab'
       | 'created_new_managed_tab'
+      | 'created_extension_work_tab'
+      | 'reused_extension_work_tab'
       | 'not_acquired';
-    targetPage: 'retained_after_run' | 'quarantined_on_uncertain_outcome' | 'not_acquired';
+    targetPage:
+      | 'retained_after_run'
+      | 'quarantined_on_uncertain_outcome'
+      | 'idle_reusable'
+      | 'retained_not_reusable'
+      | 'user_taken_over'
+      | 'closed_or_missing'
+      | 'not_acquired';
     admissionEligible: false;
   };
 }

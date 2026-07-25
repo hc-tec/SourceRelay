@@ -13,14 +13,17 @@ const extensionPath = resolve(pocRoot, 'collector-extension', 'dist');
 const extensionSourceDirectory = resolve(pocRoot, 'collector-extension');
 const gatewayDirectory = resolve(pocRoot, 'collector-gateway');
 const canonicalVideoUrl = 'https://www.bilibili.com/video/BV1qZSLBYEpa';
+const nativeSearchQuery = 'DeepSeek';
+const canonicalNativeSearchUrl = `https://search.bilibili.com/all?keyword=${nativeSearchQuery}`;
 
 /**
  * This is evidence, not a fixture-backed E2E: it installs the production MV3
  * build into a fresh real Chromium profile, pairs it to a real temporary
- * Gateway, and performs one low-frequency read-only public Bilibili detail
- * run.  It never uses a managed Browser Host or the user's daily browser.
+ * Gateway, and performs fixed low-frequency read-only public Bilibili detail
+ * and native-search runs. It never uses a managed Browser Host or the user's
+ * daily browser.
  */
-test('direct extension work item reads one real Bilibili video detail page', async () => {
+test('direct extension work items read one real Bilibili detail and fixed native-search page', async () => {
   test.skip(process.env.COLLECTOR_LIVE_CANARY !== '1', 'requires explicit live-platform canary opt-in');
   test.skip(process.platform !== 'win32', 'native extension-permission verification currently uses Windows UI Automation');
   test.setTimeout(180_000);
@@ -39,7 +42,9 @@ test('direct extension work item reads one real Bilibili video detail page', asy
         context.on('request', (request) => {
           if (!request.isNavigationRequest()) return;
           const url = new URL(request.url());
-          if (url.hostname === 'www.bilibili.com') platformNavigations.push(`${url.origin}${url.pathname}`);
+          if (url.hostname === 'www.bilibili.com' || url.hostname === 'search.bilibili.com') {
+            platformNavigations.push(`${url.origin}${url.pathname}${url.search}`);
+          }
         });
       }
     });
@@ -131,16 +136,86 @@ test('direct extension work item reads one real Bilibili video detail page', asy
     // Bilibili currently redirects the no-slash canonical input to its
     // trailing-slash representation.  That is one browser navigation with
     // one HTTP redirect, not a second Collector-issued platform action.
-    const navigationTargets = [...new Set(platformNavigations.map((value) => {
+    const detailNavigationTargets = [...new Set(platformNavigations.map((value) => {
       const target = new URL(value);
       return `${target.origin}${target.pathname.replace(/\/$/, '')}`;
     }))];
-    expect(navigationTargets).toEqual([canonicalVideoUrl]);
+    expect(detailNavigationTargets).toEqual([canonicalVideoUrl]);
     expect(platformNavigations.length).toBeGreaterThanOrEqual(1);
     expect(platformNavigations.length).toBeLessThanOrEqual(2);
     const retainedWorkTab = launched.context.pages().find((page) => page.url().startsWith(canonicalVideoUrl));
     expect(retainedWorkTab).toBeTruthy();
     expect(retainedWorkTab?.isClosed()).toBe(false);
+
+    const navigationCountBeforeSearch = platformNavigations.length;
+    const searchDispatchResponse = await fetch(`${gatewayOrigin}/v2/collect`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${clientToken!}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        schemaVersion: 2,
+        browserBindingId: bindingId,
+        platform: 'bilibili',
+        capability: 'bilibili.native_search',
+        executionTarget: 'collector_work_tab',
+        input: { query: nativeSearchQuery }
+      })
+    });
+    const searchDispatch = await searchDispatchResponse.json() as { result?: { operationId?: string } };
+    expect(searchDispatchResponse.status).toBe(201);
+    const searchOperationId = searchDispatch.result?.operationId;
+    expect(searchOperationId).toMatch(/^[0-9a-f-]{36}$/i);
+
+    await expect.poll(async () => {
+      const response = await fetch(`${gatewayOrigin}/v2/collect/operations/${searchOperationId}`, {
+        headers: { authorization: `Bearer ${clientToken!}` }
+      });
+      const payload = await response.json() as {
+        result?: { state?: string; errorCode?: string | null; terminalReason?: string | null };
+      };
+      return payload.result?.state === 'completed'
+        ? 'completed'
+        : `${payload.result?.state ?? 'missing'}:${payload.result?.errorCode ?? 'none'}:${payload.result?.terminalReason ?? 'none'}`;
+    }, { timeout: 120_000, intervals: [1_000, 2_000, 5_000] }).toBe('completed');
+
+    const searchFinalResponse = await fetch(`${gatewayOrigin}/v2/collect/operations/${searchOperationId}`, {
+      headers: { authorization: `Bearer ${clientToken!}` }
+    });
+    const searchFinalOperation = await searchFinalResponse.json() as {
+      result?: { artifact?: { artifactId?: string; retrievalPath?: string }; state?: string };
+    };
+    expect(searchFinalOperation.result?.artifact?.artifactId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(searchFinalOperation.result?.artifact?.retrievalPath).toMatch(/^\/v1\/collect\/artifacts\/bilibili\.native_search\//);
+    const searchArtifactResponse = await fetch(`${gatewayOrigin}${searchFinalOperation.result?.artifact?.retrievalPath}`, {
+      headers: { authorization: `Bearer ${clientToken!}` }
+    });
+    expect(searchArtifactResponse.status).toBe(200);
+    const searchArtifact = await searchArtifactResponse.json() as {
+      artifact?: { manifest?: { search?: unknown; queryDigest?: unknown; safeguards?: unknown } };
+    };
+    expect(searchArtifact.artifact?.manifest?.search).toEqual({
+      resultType: 'comprehensive', sort: 'relevance', page: 1
+    });
+    expect(searchArtifact.artifact?.manifest?.queryDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(searchArtifact.artifact?.manifest?.safeguards).toMatchObject({
+      environment: 'user_owned_browser_extension',
+      acquisition: 'extension_owned_tab_navigation_plus_bounded_dom_projection',
+      sortAndFilter: 'fixed_comprehensive_first_page_no_input',
+      pagination: 'fixed_first_page_no_input',
+      responseBodies: 'not_read'
+    });
+    const searchNavigationTargets = [...new Set(platformNavigations.slice(navigationCountBeforeSearch).map((value) => {
+      const target = new URL(value);
+      return `${target.origin}${target.pathname}`;
+    }))];
+    expect(searchNavigationTargets).toEqual(['https://search.bilibili.com/all']);
+    expect(platformNavigations.slice(navigationCountBeforeSearch).length).toBeGreaterThanOrEqual(1);
+    expect(platformNavigations.slice(navigationCountBeforeSearch).length).toBeLessThanOrEqual(2);
+    const retainedSearchTab = launched.context.pages().find((page) => page.url().startsWith(canonicalNativeSearchUrl));
+    expect(retainedSearchTab).toBeTruthy();
+    expect(retainedSearchTab?.isClosed()).toBe(false);
 
     await controlPage.close();
     await consolePage.close();

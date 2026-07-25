@@ -1178,6 +1178,26 @@ direct mode 通过 `GET /v2/collector-service/browser-bindings`、`POST /v2/coll
 
 扩展每 30 秒进行一次固定、已配对 loopback work read；无 pair、无 work、Gateway 离线或 binding locked 时不做平台动作。平台 work 一旦 claim，不会因 worker 重启、Gateway 重启、过期、弱网或结果未知而再次投递。只有已产生的 HMAC result 可以最多重试三次本地 loopback 提交；到达上限时保持明确停止状态，等待用户恢复，而不是继续轮询或再次导航。
 
+## 批次 176–178：第二条 direct capability 与真实浏览器验证闭环
+
+### 176. `bilibili.native_search` 只发布固定综合首页，不把站内搜索控制权下放给调用方
+
+direct-mode 搜索 work item 只接受规范化 `query`；Gateway 固定推导 `search.bilibili.com/all` 的综合、相关性、第 1 页目标，并设置一次导航、零语义动作、零 response observation 的不可变预算。调用方不能传 URL、页码、排序、筛选、selector、脚本、坐标、XHR route 或 body。
+
+扩展只读取当前可见搜索结果中的规范 `www.bilibili.com/video/BV…` 卡片及白名单文本/缩略图字段；直播、广告、课程、外站和其他混合对象不作为未解析视频保存。搜索不点击按钮、不滚动、不翻页、不改排序、不使用平台签名接口，也不读取 Network response body。关键词和带 query URL 仅存在于短时签名 work item；终态 operation、artifact manifest 与 audit 使用 SHA-256 摘要。
+
+### 177. 扩展自有 work tab 允许慢页面的语义等价 URL 更新，但不放宽用户接管边界
+
+慢速 B站页面可能在一次已签名导航后继续发送 URL 更新。work tab 在 lease 期间只允许这些更新仍可严格规范化为原签名 video 或 search 目标；视频 trailing slash、搜索页的已证明 `o` / `vt` 观察参数可以归入同一语义页面。其他 URL 仍立即视为未知导航/接管。
+
+用户激活、移动、关闭工作 tab，或扩展 worker 重启，仍按原有终止语义处理；不因“语义等价”获得重新 claim、刷新、重开或平台动作重放权限。这一规则只防止 Chromium 的慢页面更新误伤扩展自己的后台 tab，不允许接管用户普通 tab。
+
+### 178. 真正的扩展全流程验证必须能自动完成原生 loopback 权限，但只点击精确确认过 scope 的控件
+
+Windows 原生权限 harness 先遍历当前 UIA 窗口，确认唯一 dialog 同时包含 Collector 扩展名和预期的两个 scope，再定位名称为“允许 / Allow”的实际 Button 控件。优先使用 UIA `InvokePattern`，其次使用 Legacy IAccessible 默认动作；两者不可用时才使用该唯一、实时 UIA bounding box 中心的 Windows 可信鼠标输入。
+
+它不能按屏幕固定坐标、窗口标题猜测或点击任意“允许”按钮，也不能批准平台权限、验证码、付费或其他浏览器 dialog。该修复使生产 MV3 的临时 Chromium 安装/配对真实回归保持无人值守，同时不把测试自动化伪装成平台交互绕过。
+
 ## 最终一致性审计结论
 
 2026-07-20 对第 1–170 题、产品规格、账号安全设计和当前分支实现进行了交叉审计。没有无法由“用户显式自定义 > 较晚决定 > 较早决定 > 旧规格 > 当前 POC”解决的阻塞冲突。权威覆盖关系为：
@@ -1193,6 +1213,7 @@ direct mode 通过 `GET /v2/collector-service/browser-bindings`、`POST /v2/coll
 165 固化 Page Pool 与 Account Safety 的职责边界
 171 覆盖 101–170 中所有将受管 Browser Host / Collection Profile 作为正式生产所有权模型的规定；它们仅在 test/isolated-account lane 中继续适用
 172–175 固化首个 direct capability、work tab 终态、`/v2` local API 与有界本地投递规则
+176–178 固化固定首页 native search、慢页面语义 URL 更新边界与真实原生权限自动验证
 ```
 
 正式生产的权威规格为[用户自有浏览器扩展模式](user-owned-browser-extension-mode.md)。[Browser Host 与受管页面池 MVP](managed-page-pool-browser-host-mvp.md) 仅描述 test/isolated-account lane；只有真实平台验证或扩展/日常浏览器共存暴露现有规则无法决定的新选择时，才追加下一批问题。

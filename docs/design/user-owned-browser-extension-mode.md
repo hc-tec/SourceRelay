@@ -1,10 +1,10 @@
 # 用户自有浏览器扩展模式
 
-- 状态：Accepted；Checkpoint B（签名工作项、扩展自有 work tab、`bilibili.video_detail` direct MVP）已真实 live canary 验证；其余能力/API 的一次性生产迁移待实现
+- 状态：Accepted；Checkpoint B（签名工作项、扩展自有 work tab、`bilibili.video_detail`）与 Checkpoint C（固定首页 `bilibili.native_search`）均已真实 live canary 验证；其余能力/API 的一次性生产迁移待实现
 - 决策日期：2026-07-25
 - 决策记录：[Grill 决策账本第 171 题](collector-grilling-decision-log.md)
 - 替代的生产路径：[`managed-page-pool-browser-host-mvp.md`](managed-page-pool-browser-host-mvp.md) 中的受管 Browser Host / Collection Profile 路径
-- 当前实现状态：扩展可通过一次性配对码与 loopback Gateway 建立 `browserBindingId`，并可从 `/v2/collect` 接收签名的 `bilibili.video_detail` work item，在扩展自己创建的工作标签页中完成一次受限导航和固定 DOM 投影。`POST /v1/collect` 仍调用旧 `profileId` / Browser Host runner，属于明确隔离的测试通道，**不能作为 `/v2` 的 fallback**。
+- 当前实现状态：扩展可通过一次性配对码与 loopback Gateway 建立 `browserBindingId`，并可从 `/v2/collect` 接收签名的 `bilibili.video_detail` 或 `bilibili.native_search` work item，在扩展自己创建的工作标签页中完成一次受限导航和固定 DOM 投影。搜索固定为“综合 / 相关性 / 第 1 页”，只输出可见规范 BV 视频卡片。`POST /v1/collect` 仍调用旧 `profileId` / Browser Host runner，属于明确隔离的测试通道，**不能作为 `/v2` 的 fallback**。
 
 ## 1. 一句话结论
 
@@ -169,7 +169,7 @@ GET  /v2/collect/operations/{operationId}
 }
 ```
 
-`/v2` 当前只承诺这一条 direct capability，返回异步 `operationId`，由 `operations:read` 查询终态；它没有 `profileId` 兼容适配、双写或 fallback。所有已发布 capability 完成 direct migration 后，正式 API 才统一收敛为：
+`/v2` 当前承诺两条 direct capability：严格规范 BV URL 的 `bilibili.video_detail`，以及只接受关键词的固定首页 `bilibili.native_search`。它返回异步 `operationId`，由 `operations:read` 查询终态；它没有 `profileId` 兼容适配、双写或 fallback。所有已发布 capability 完成 direct migration 后，正式 API 才统一收敛为：
 
 ```text
 GET  /v1/collector-service/browser-bindings
@@ -188,7 +188,7 @@ POST /v1/collect {
 - `browserBindingId` 只能引用已配对、在线、授权了目标平台、且未被账号安全锁定的扩展实例；
 - 当前 `/v2` 只发布 `collector_work_tab`；它只复用扩展自己创建、当前 worker session 仍可证明所有权的 tab；
 - `user_selected_tab` 仍是后续能力，届时只能消费用户刚刚从扩展 UI 显式建立的短期选择，缺失时返回 `user_selected_tab_required`，不能回退到任意浏览器 tab；
-- `input` 依旧只能是 capability 注册的强类型输入。例如 B站详情可以接受规范 BV URL，搜索可以接受查询与已批准页数预算；不能把 URL、selector、脚本或鼠标坐标的权力下放给调用方；
+- `input` 依旧只能是 capability 注册的强类型输入。例如 B站详情可以接受规范 BV URL；当前 direct 搜索只接受 `query`，并固定综合/相关性/第 1 页，不能把 URL、页码、排序、selector、脚本或鼠标坐标的权力下放给调用方；
 - `browserBindingId` 是服务选择目标扩展的标识，不是账号标识；若用户在浏览器中切换登录账号，平台策略必须在动作前用允许的公开可见身份证据重新核验，无法核验则阻断；
 - 不提供 `profileId` 的兼容适配、双写或 fallback。受管 Profile API 留在显式 test/isolated lane，不与生产 API 混用。
 
@@ -230,7 +230,7 @@ Native Messaging 若保留，只能作为本地唤醒/传输实现细节，不�
 1. **合同与状态模型**：在 `collector-contracts` 增加 `ExtensionInstance`、`BrowserBinding`、`WorkTabLease` 和明确的 tab ownership state；删除生产路径中的 Profile 语义。
 2. **扩展生产控制面**：已完成 loopback pairing、绑定状态、`collector_work_tab` 建立/复用/接管/外部终止，以及 MV3 恢复时的保守停止；不启动任何浏览器进程。`user_selected_tab` 尚未发布。
 3. **Gateway 服务面**：已完成 browser-binding registry、认证 dispatch/result、binding/platform safety 和 `/v2` scoped local API。`/v1` Profile 服务仍隔离保留，待 capability 完整迁移后移出正式入口。
-4. **能力迁移**：已完成 B站 `video_detail` 的扩展主导固定 DOM direct path；评论、字幕、弹幕、搜索、账号页等必须各自完成真实三面侦察，不能复用这个 MVP 的“无需语义输入”结论。
+4. **能力迁移**：已完成 B站 `video_detail` 和固定首页 `native_search` 的扩展主导 DOM direct path；后者通过只读导航和白名单卡片投影避免页面语义输入。评论、字幕、弹幕、翻页搜索、筛选、账号页等必须各自完成真实三面侦察，不能复用这两个 MVP 的“无需语义输入”结论。
 5. **真实本地验证**：用临时 Chrome/Edge 安装模拟真实扩展安装、Gateway 配对、工作标签复用和故障停止；它是测试环境，不是生产 Browser Host。平台验证仍以真实页面、低频、只读、已授权的 run 为准，不能用 fake 页面或 fake Gateway 证明能力。
 6. **删除生产旧路径**：删除服务 API 的 `profileId`、Browser Host 启动依赖和受管 Profile Console 面板；Browser Host 如果继续保留，移动到明确的 `test/isolated-account` 命令和文档，不与正式启动路径共用。
 
@@ -258,6 +258,8 @@ Native Messaging 若保留，只能作为本地唤醒/传输实现细节，不�
 - 已用真实 Gateway 进程、真实生产扩展、真实 Chromium 原生权限对话和真实 loopback CORS/HMAC 请求完成自动本地 E2E；没有打开任何平台页，所有 HTTP 请求都限定在临时 `127.0.0.1` Gateway。
 
 同日完成 Checkpoint B：Gateway 对 `bilibili.video_detail` 创建 60 秒、P-256 签名、一次 claim 的 typed work item；扩展对已配对 Gateway 做 HMAC/nonce poll，验证 work signature，在只由扩展创建的可见 work tab 中最多导航一次，固定投影首屏 DOM，并回传经 HMAC 认证的 bounded result。成功 tab 进入 `idle_reusable`；风险、未知、关闭、移动或接管会停止并移出复用池。工作项、binding safety 和 artifact 均不包含 Profile 路径、Cookie、Token、浏览器进程或 tab ID。
+
+Checkpoint C 随后完成 `bilibili.native_search`：Gateway 只接受规范化关键词，自己派生短时签名的 `https://search.bilibili.com/all?keyword=…` 目标；结果类型固定为综合、排序固定为相关性、页码固定为 1。扩展不点击搜索、不滚动、不翻页、不调用签名站内接口，也不读取 response body；它只读取搜索页可见的规范 `www.bilibili.com/video/BV…` 卡片，排除直播、广告、课程及其他混合对象。终态 work ledger 和 artifact 不持久化原关键词或带关键词 URL，只保留 SHA-256 摘要。真实 live canary 已验证详情与搜索各一次导航、HMAC 回传、artifact retrieval 和 work-tab 留存；搜索页较慢的语义等价 URL 更新不会被误报为用户接管，但未知 URL、激活、移动和关闭仍会立即停止任务。
 
 该闭环已用临时真实 Gateway、生产 MV3 extension、真实 Chromium 原生 loopback permission、scoped local API token 和真实公开 B站详情页验证。页面级 HTTP redirect（规范 URL 到 trailing slash）被记作同一一次扩展导航；没有点击、刷新、字幕/评论操作、fake 页面、fake Gateway 或 Browser Host/Profile。`poc/collector-gateway/src/config.ts`、`browser-manager.ts`、`poc/collector-browser-host` 和其他 B站 runner 仍以 `profileId` / `browserSessionId` 为核心，留在明确测试通道，不能把它们误报为 direct-mode capability。
 

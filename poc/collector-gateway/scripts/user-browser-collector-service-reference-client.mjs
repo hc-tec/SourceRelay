@@ -24,7 +24,7 @@ try {
       print(await request(`/v2/collect/operations/${argument}`, { token: requiredToken() }));
       break;
     case 'artifact':
-      if (!/^\/v1\/collect\/artifacts\/bilibili\.video_detail\/[0-9a-f-]{36}$/i.test(argument ?? '')) {
+      if (!/^\/v1\/collect\/artifacts\/bilibili\.(video_detail|native_search)\/[0-9a-f-]{36}$/i.test(argument ?? '')) {
         throw new Error('reference_client_artifact_path_invalid');
       }
       print(await request(argument, { token: requiredToken() }));
@@ -53,11 +53,17 @@ async function validatedQueueRequest(path) {
   if (
     keys.length !== 6 || candidate.schemaVersion !== 2 ||
     typeof candidate.browserBindingId !== 'string' || !/^[0-9a-f-]{36}$/i.test(candidate.browserBindingId) ||
-    candidate.platform !== 'bilibili' || candidate.capability !== 'bilibili.video_detail' ||
+    candidate.platform !== 'bilibili' ||
+    !['bilibili.video_detail', 'bilibili.native_search'].includes(candidate.capability) ||
     candidate.executionTarget !== 'collector_work_tab' || !candidate.input ||
-    typeof candidate.input !== 'object' || Array.isArray(candidate.input) ||
-    Object.keys(candidate.input).length !== 1 || typeof candidate.input.canonicalVideoUrl !== 'string'
+    typeof candidate.input !== 'object' || Array.isArray(candidate.input) || Object.keys(candidate.input).length !== 1
   ) throw new Error('reference_client_request_json_invalid');
+  if (candidate.capability === 'bilibili.video_detail' && typeof candidate.input.canonicalVideoUrl !== 'string') {
+    throw new Error('reference_client_request_json_invalid');
+  }
+  if (candidate.capability === 'bilibili.native_search' && typeof candidate.input.query !== 'string') {
+    throw new Error('reference_client_request_json_invalid');
+  }
   return JSON.stringify(candidate);
 }
 

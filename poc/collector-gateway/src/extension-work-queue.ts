@@ -1,13 +1,15 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
   EXTENSION_WORK_PROTOCOL_VERSION,
   EXTENSION_WORK_SCHEMA_VERSION,
+  bilibiliNativeSearchUrl,
   canonicalBilibiliVideoWorkUrl,
   extensionWorkSigningPayload,
   isExtensionWorkItem,
   isExtensionWorkResultForItem,
+  normaliseBilibiliNativeSearchRoute,
   type ExtensionWorkCapability,
   type ExtensionWorkItem,
   type ExtensionWorkResult,
@@ -46,7 +48,7 @@ export interface ExtensionWorkOperationSummary {
 
 interface StoredOperation {
   schemaVersion: 1;
-  item: ExtensionWorkItem;
+  item: StoredExtensionWorkItem;
   state: ExtensionWorkState;
   queuedAt: string;
   claimedAt: string | null;
@@ -59,6 +61,44 @@ interface StoredOperation {
 export interface EnqueueBilibiliVideoDetailWorkInput {
   browserBindingId: string;
   canonicalVideoUrl: string;
+}
+
+export interface EnqueueBilibiliNativeSearchWorkInput {
+  browserBindingId: string;
+  query: string;
+}
+
+/**
+ * Queued and claimed operations retain their signed envelope because it is
+ * needed for one-time delivery. After they become terminal, native-search
+ * input is redacted to a digest so historic local operation state cannot be
+ * used to recover a user's search phrase.
+ */
+type StoredExtensionWorkItem = ExtensionWorkItem | RedactedBilibiliNativeSearchWorkItem;
+
+interface RedactedBilibiliNativeSearchWorkItem {
+  schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
+  protocolVersion: typeof EXTENSION_WORK_PROTOCOL_VERSION;
+  workId: string;
+  operationId: string;
+  browserBindingId: string;
+  platform: 'bilibili';
+  capability: 'bilibili.native_search';
+  executionTarget: 'collector_work_tab';
+  issuedAt: string;
+  expiresAt: string;
+  input: {
+    queryDigest: string;
+    resultType: 'comprehensive';
+    sort: 'relevance';
+    page: 1;
+  };
+  budget: {
+    maximumPlatformNavigations: 1;
+    maximumSemanticActions: 0;
+    maximumResponseObservations: 0;
+    maximumPayloadBytes: 98_304;
+  };
 }
 
 /**
@@ -101,6 +141,7 @@ export class ExtensionWorkQueue {
         operation.errorCode = 'gateway_restarted_before_completion';
         operation.terminalReason = 'gateway_restarted_before_completion';
         operation.artifact = null;
+        operation.item = redactTerminalWorkItem(operation.item);
         changed = true;
       }
     }
@@ -166,6 +207,74 @@ export class ExtensionWorkQueue {
     return summary(operation);
   }
 
+  async enqueueBilibiliNativeSearch(
+    input: EnqueueBilibiliNativeSearchWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId)) throw new Error('extension_work_binding_invalid');
+    const route = normaliseBilibiliNativeSearchRoute({
+      query: input.query,
+      resultType: 'comprehensive',
+      sort: 'relevance',
+      page: 1
+    });
+    if (!route || route.resultType !== 'comprehensive' || route.sort !== 'relevance' || route.page !== 1) {
+      throw new Error('bilibili_native_search_input_invalid');
+    }
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    if (this.#operations.some((operation) =>
+      operation.item.browserBindingId === input.browserBindingId &&
+      (operation.state === 'queued' || operation.state === 'claimed')
+    )) throw new Error('extension_work_binding_busy');
+
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search',
+      executionTarget: 'collector_work_tab',
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: {
+        query: route.query,
+        canonicalSearchUrl: bilibiliNativeSearchUrl(route),
+        resultType: 'comprehensive',
+        sort: 'relevance',
+        page: 1
+      },
+      budget: {
+        maximumPlatformNavigations: 1,
+        maximumSemanticActions: 0,
+        maximumResponseObservations: 0,
+        maximumPayloadBytes: 98_304
+      }
+    };
+    const item: ExtensionWorkItem = {
+      ...unsigned,
+      gatewaySignature: this.#identity.signPayload(extensionWorkSigningPayload(unsigned))
+    };
+    const operation: StoredOperation = {
+      schemaVersion: 1,
+      item,
+      state: 'queued',
+      queuedAt: issuedAt,
+      claimedAt: null,
+      completedAt: null,
+      errorCode: null,
+      terminalReason: null,
+      artifact: null
+    };
+    this.#operations.push(operation);
+    this.#trim();
+    await this.#save();
+    return summary(operation);
+  }
+
   /** Claiming is the irreversible delivery point.  There is no lease renewal. */
   async claimNext(browserBindingId: string, now = new Date()): Promise<ExtensionWorkItem | null> {
     if (!isUuid(browserBindingId)) throw new Error('extension_work_binding_invalid');
@@ -177,6 +286,7 @@ export class ExtensionWorkQueue {
       if (expired.length > 0) await this.#save();
       return null;
     }
+    if (!isExtensionWorkItem(operation.item)) throw new Error('extension_work_state_invalid');
     operation.state = 'claimed';
     operation.claimedAt = now.toISOString();
     await this.#save();
@@ -192,7 +302,7 @@ export class ExtensionWorkQueue {
     if (!operation || operation.item.browserBindingId !== browserBindingId) {
       throw new Error('extension_work_not_claimed');
     }
-    if (!isExtensionWorkResultForItem(result, operation.item)) {
+    if (!isExtensionWorkItem(operation.item) || !isExtensionWorkResultForItem(result, operation.item)) {
       throw new Error('extension_work_result_invalid');
     }
     if (operation.state !== 'claimed') {
@@ -205,6 +315,7 @@ export class ExtensionWorkQueue {
     operation.errorCode = result.errorCode;
     operation.terminalReason = result.terminalReason;
     operation.artifact = artifact ? cloneArtifact(artifact) : null;
+    operation.item = redactTerminalWorkItem(operation.item);
     this.#trim();
     await this.#save();
     return summary(operation);
@@ -213,7 +324,9 @@ export class ExtensionWorkQueue {
   claimedItem(browserBindingId: string, workId: string): ExtensionWorkItem {
     if (!isUuid(browserBindingId) || !isUuid(workId)) throw new Error('extension_work_not_claimed');
     const operation = this.#operations.find((candidate) => candidate.item.workId === workId);
-    if (!operation || operation.item.browserBindingId !== browserBindingId || operation.state !== 'claimed') {
+    if (!operation || operation.item.browserBindingId !== browserBindingId || operation.state !== 'claimed' ||
+      !isExtensionWorkItem(operation.item)
+    ) {
       throw new Error('extension_work_not_claimed');
     }
     return structuredClone(operation.item);
@@ -242,6 +355,7 @@ export class ExtensionWorkQueue {
       operation.errorCode = 'extension_work_expired';
       operation.terminalReason = 'run_deadline_exceeded';
       operation.artifact = null;
+      operation.item = redactTerminalWorkItem(operation.item);
       expired.push(operation);
     }
     return expired;
@@ -289,7 +403,7 @@ function summary(operation: StoredOperation): ExtensionWorkOperationSummary {
 }
 
 function isStoredOperation(value: unknown): value is StoredOperation {
-  if (!isRecord(value) || value.schemaVersion !== 1 || !isExtensionWorkItem(value.item) ||
+  if (!isRecord(value) || value.schemaVersion !== 1 || !isStoredExtensionWorkItem(value.item) ||
     !isWorkState(value.state) || !isTimestamp(value.queuedAt) ||
     !(value.claimedAt === null || isTimestamp(value.claimedAt)) ||
     !(value.completedAt === null || isTimestamp(value.completedAt)) ||
@@ -298,8 +412,30 @@ function isStoredOperation(value: unknown): value is StoredOperation {
     !(value.artifact === null || isArtifact(value.artifact))
   ) return false;
   return isActiveState(value.state)
-    ? value.completedAt === null && value.terminalReason === null && value.artifact === null
+    ? isExtensionWorkItem(value.item) && value.completedAt === null && value.terminalReason === null && value.artifact === null
     : value.completedAt !== null && value.terminalReason !== null;
+}
+
+function isStoredExtensionWorkItem(value: unknown): value is StoredExtensionWorkItem {
+  return isExtensionWorkItem(value) || isRedactedBilibiliNativeSearchWorkItem(value);
+}
+
+function isRedactedBilibiliNativeSearchWorkItem(value: unknown): value is RedactedBilibiliNativeSearchWorkItem {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
+    'executionTarget', 'issuedAt', 'expiresAt', 'input', 'budget'
+  ]) || value.schemaVersion !== EXTENSION_WORK_SCHEMA_VERSION ||
+    value.protocolVersion !== EXTENSION_WORK_PROTOCOL_VERSION || !isUuid(value.workId) ||
+    !isUuid(value.operationId) || !isUuid(value.browserBindingId) || value.platform !== 'bilibili' ||
+    value.capability !== 'bilibili.native_search' || value.executionTarget !== 'collector_work_tab' ||
+    !isTimestamp(value.issuedAt) || !isTimestamp(value.expiresAt) ||
+    Date.parse(value.expiresAt) <= Date.parse(value.issuedAt) || !isRecord(value.input) ||
+    !hasExactKeys(value.input, ['queryDigest', 'resultType', 'sort', 'page']) ||
+    !/^[a-f0-9]{64}$/.test(stringValue(value.input.queryDigest)) ||
+    value.input.resultType !== 'comprehensive' || value.input.sort !== 'relevance' || value.input.page !== 1 ||
+    !isFixedDirectWorkBudget(value.budget)
+  ) return false;
+  return true;
 }
 
 function isArtifact(value: unknown): value is ExtensionWorkArtifactReference {
@@ -330,10 +466,45 @@ function isTerminalState(value: ExtensionWorkState): boolean {
 }
 
 function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason {
-  return value === 'detail_ready' || value === 'verification_required' || value === 'rate_limited' ||
+  return value === 'detail_ready' || value === 'search_ready' || value === 'search_empty' ||
+    value === 'search_results_partial' || value === 'verification_required' || value === 'rate_limited' ||
     value === 'source_unavailable' || value === 'dom_projection_failed' || value === 'document_context_changed' ||
     value === 'run_deadline_exceeded' || value === 'work_tab_closed' || value === 'work_tab_user_taken_over' ||
     value === 'navigation_outcome_unknown' || value === 'gateway_restarted_before_completion';
+}
+
+function redactTerminalWorkItem(item: StoredExtensionWorkItem): StoredExtensionWorkItem {
+  if (item.capability !== 'bilibili.native_search' || !isExtensionWorkItem(item)) return item;
+  return {
+    schemaVersion: item.schemaVersion,
+    protocolVersion: item.protocolVersion,
+    workId: item.workId,
+    operationId: item.operationId,
+    browserBindingId: item.browserBindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.native_search',
+    executionTarget: 'collector_work_tab',
+    issuedAt: item.issuedAt,
+    expiresAt: item.expiresAt,
+    input: {
+      queryDigest: sha256(item.input.query),
+      resultType: item.input.resultType,
+      sort: item.input.sort,
+      page: item.input.page
+    },
+    budget: { ...item.budget }
+  };
+}
+
+function isFixedDirectWorkBudget(value: unknown): boolean {
+  return isRecord(value) && hasExactKeys(value, [
+    'maximumPlatformNavigations', 'maximumSemanticActions', 'maximumResponseObservations', 'maximumPayloadBytes'
+  ]) && value.maximumPlatformNavigations === 1 && value.maximumSemanticActions === 0 &&
+    value.maximumResponseObservations === 0 && value.maximumPayloadBytes === 98_304;
+}
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
 }
 
 function isUuid(value: unknown): value is string {
@@ -346,4 +517,13 @@ function isTimestamp(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && actual.every((key) => keys.includes(key));
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : '';
 }

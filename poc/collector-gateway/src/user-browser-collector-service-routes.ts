@@ -9,6 +9,7 @@ import type {
   CollectorServiceClientScope
 } from './collector-service-clients';
 import {
+  enqueueBilibiliNativeSearchWork,
   enqueueBilibiliVideoDetailWork,
   reconcileExpiredExtensionWork,
   type ExtensionWorkRouteContext
@@ -73,11 +74,17 @@ export async function handleUserBrowserCollectorServiceRoute(
     let operationId: string | null = null;
     try {
       const collection = userBrowserCollectorServiceRequestInput(await readJsonBody(request));
-      const operation = await enqueueBilibiliVideoDetailWork(
-        context,
-        collection.browserBindingId,
-        collection.input.canonicalVideoUrl
-      );
+      const operation = collection.capability === 'bilibili.video_detail'
+        ? await enqueueBilibiliVideoDetailWork(
+          context,
+          collection.browserBindingId,
+          collection.input.canonicalVideoUrl
+        )
+        : await enqueueBilibiliNativeSearchWork(
+          context,
+          collection.browserBindingId,
+          collection.input.query
+        );
       operationId = operation.operationId;
       await audit(context, access.principal, 'collect', collection.capability, operationId, 'queued', null);
       sendJson(response, 201, {
@@ -86,7 +93,7 @@ export async function handleUserBrowserCollectorServiceRoute(
       });
     } catch (error) {
       const code = safeErrorCode(error);
-      await audit(context, access.principal, 'collect', 'bilibili.video_detail', operationId, 'failed', code);
+      await audit(context, access.principal, 'collect', null, operationId, 'failed', code);
       sendJson(response, operationStatus(code), { schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION, ok: false, error: code });
     }
     return true;
@@ -148,7 +155,7 @@ async function audit(
   context: UserBrowserCollectorServiceRouteContext,
   principal: ServicePrincipal | null,
   action: CollectorServiceAuditAction,
-  capability: 'bilibili.video_detail' | null,
+  capability: 'bilibili.video_detail' | 'bilibili.native_search' | null,
   operationId: string | null,
   outcome: CollectorServiceAuditOutcome,
   errorCode: string | null

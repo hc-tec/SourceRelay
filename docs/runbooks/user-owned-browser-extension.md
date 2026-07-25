@@ -1,7 +1,7 @@
 # 日常浏览器扩展模式：安装、配对与本地 API
 
 - 状态：可用的 direct-mode MVP
-- 当前直接能力：`bilibili.video_detail`
+- 当前直接能力：`bilibili.video_detail`、`bilibili.native_search`
 - API：`/v2/openapi.json`、`/v2/collector-service/browser-bindings`、`/v2/collect`、`/v2/collect/operations/{operationId}`
 - 不属于本 runbook 的旧通道：`profileId`、Browser Host、Playwright persistent context、受管 Collection Profile、`POST /v1/collect`
 
@@ -16,7 +16,7 @@
 
 Collector 不创建、复制、读取、启动或关闭你的浏览器 Profile。浏览器自己的登录态仍只由浏览器维护；扩展不会导出 Cookie、密码、Token、Storage 或 Profile 文件。
 
-当前 MVP 收到一个 B站详情任务时，会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**，只导航一次到已验证的规范视频 URL，并读取固定的首屏 DOM 投影。成功后标签页留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”。用户关闭、移动、激活接管或导航该标签页时，当前 run 停止；不会自动重开、刷新、换 tab 或重放平台动作。
+当前 MVP 收到 B站详情或站内搜索任务时，会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**。详情只导航一次到严格规范的视频 URL；搜索只导航一次到 Gateway 从关键词推导出的“综合 / 相关性 / 第 1 页”搜索页，既不点击搜索按钮，也不翻页、滚动、改排序或读取 Network response body。两者都只回传固定白名单 DOM 投影；搜索只保留可见规范 `bilibili.com/video/BV…` 视频卡片，直播、广告、课程和其他混合结果不会混入产物。成功后标签页留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”。用户关闭、移动、激活接管或导航该标签页时，当前 run 停止；不会自动重开、刷新、换 tab 或重放平台动作。
 
 ## 2. 构建与启动 Gateway
 
@@ -107,6 +107,23 @@ npm run collector-user-browser-client -- operation <operationId>
 npm run collector-user-browser-client -- artifact /v1/collect/artifacts/bilibili.video_detail/<artifactId>
 ```
 
+要执行固定 B站站内搜索，保存另一份 UTF-8 JSON。上层应用只能传 `query`；结果类型、排序、页码和目标 URL 均不接受调用方指定：
+
+```json
+{
+  "schemaVersion": 2,
+  "browserBindingId": "11111111-1111-4111-8111-111111111111",
+  "platform": "bilibili",
+  "capability": "bilibili.native_search",
+  "executionTarget": "collector_work_tab",
+  "input": {
+    "query": "DeepSeek"
+  }
+}
+```
+
+搜索任务完成后，使用返回的 `/v1/collect/artifacts/bilibili.native_search/<artifactId>` 读取 artifact。关键词和带关键词的 URL 只在短时签名 work item 中用于导航；终态 operation 和 artifact 只保存关键词/目标 URL 的 SHA-256 摘要，结果文件保存的是白名单化的公开视频卡片字段。
+
 也可先读取 machine-readable 约束：
 
 ```powershell
@@ -125,7 +142,7 @@ npm run collector-user-browser-client -- openapi
 
 ## 8. 已验证的事实与尚未承诺的范围
 
-已用临时真实 Chromium、生产 MV3 build、真实 Gateway、真实原生 loopback permission、真实 B站公开详情页完成过一次闭环：
+已用临时真实 Chromium、生产 MV3 build、真实 Gateway、真实原生 loopback permission、真实 B站公开详情页和真实 B站搜索页完成过 direct-mode 闭环：
 
 ```text
 scoped local API token
@@ -136,6 +153,19 @@ scoped local API token
   → fixed DOM projection
   → signed HMAC result
   → raw-first local artifact
+```
+
+同一真实 canary 随后又完成：
+
+```text
+scoped local API token
+  → /v2/collect(bilibili.native_search)
+  → signed fixed-search work item
+  → extension-owned retained/reused work tab
+  → one B站综合搜索首页导航
+  → fixed visible-BV-card DOM projection
+  → signed HMAC result
+  → raw-first local artifact（关键词只以 digest 持久化）
 ```
 
 它不等于“B站所有能力已经迁到日常浏览器模式”。旧 B站能力矩阵仍留在明确的 `test/isolated-account` Browser Host 通道，不能被生产 `/v2` API 当作 fallback 调用。下一批能力应按相同顺序：真实视觉、DOM、Network 三面侦察 → 固定 capability contract → work-tab 或用户显式选择 tab 的安全执行 → real canary。
