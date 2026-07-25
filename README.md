@@ -34,7 +34,7 @@ skills/recon-live-web-interactions/  真实网页人类视角交互侦察 Skill
 - 配对后的 HMAC 请求认证、nonce 防重放、Gateway 签名 work item、EvidencePlan preflight 和 Console 计划展示；
 - Gateway 管理的持久 Collection / Validation Profile、可见 Playwright Chromium 启动器、生产扩展自动加载、运行状态与逻辑账号绑定；
 - 版本化 Local Collector Service API：外部应用只能调用已登记 capability，不能传任意 URL、selector、脚本、坐标或 Network route；
-- 可撤销 Local API token、显式最小权限 scope（Profile / collect / artifact）与去敏、持久化调用审计；
+- 可撤销 Local API token、显式最小权限 scope（Profile / collect / artifact）、去敏持久化调用审计，以及不持有浏览器控制权的独立本地 Reference Client；
 - Research Task 按平台绑定同平台 Collection Profile；Validation Profile、任意磁盘路径和匿名 Profile 不能混入正式采集任务；
 - 独立的短时 Validation Run、真实 Chrome 权限、终态恢复、字段白名单、人工 review 与显式源码 admission；
 - B站匿名 `breadth_search + visible_dom` 的精确策略 `v1.1.0` 已完成真实验证；其他 `build_ready` 能力仍不能批准。

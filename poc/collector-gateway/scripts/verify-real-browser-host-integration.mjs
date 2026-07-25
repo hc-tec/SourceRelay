@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { access, mkdir, readFile, rm } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +18,7 @@ if (!runtimeRoot.startsWith(`${runtimeParent}\\`) && !runtimeRoot.startsWith(`${
 }
 
 const gatewayMain = resolve(gatewayRoot, 'dist', 'server.js');
+const referenceClientMain = resolve(gatewayRoot, 'scripts', 'collector-service-reference-client.mjs');
 const browserHostMain = resolve(workspaceRoot, 'collector-browser-host', 'dist', 'main.js');
 const extensionDirectory = resolve(workspaceRoot, 'collector-extension', 'dist');
 const runtimeBuild = JSON.parse(await readFile(resolve(extensionDirectory, 'runtime-build.json'), 'utf8'));
@@ -48,6 +49,7 @@ let collectorServiceScopesEnforced = false;
 let collectorServiceRevokedTokenRejected = false;
 let collectorServiceAuditRedacted = false;
 let collectorServiceAuditConsoleOnly = false;
+let collectorServiceReferenceClientVerified = false;
 try {
   await mkdir(runtimeRoot, { recursive: true });
   gateway = await startGateway(environment, origin);
@@ -130,6 +132,51 @@ try {
     body: { label: 'Gateway Host artifacts-only client', scopes: ['artifacts:read'] }
   });
   const artifactsOnlyAuthorization = `Bearer ${artifactsOnlyClient.token}`;
+
+  const referenceCapabilities = await runReferenceClient({ origin, arguments: ['capabilities'] });
+  assert.equal(referenceCapabilities.exitCode, 0);
+  assert.equal(JSON.parse(referenceCapabilities.stdout).capabilities?.length, 12);
+
+  const referenceProfiles = await runReferenceClient({
+    origin,
+    token: profilesOnlyClient.token,
+    arguments: ['profiles']
+  });
+  assert.equal(referenceProfiles.exitCode, 0);
+  assert.ok(JSON.parse(referenceProfiles.stdout).profiles?.some((profile) => profile.profileId === alphaProfileId));
+
+  const referenceRequestPath = resolve(runtimeRoot, 'reference-client-collect-request.json');
+  await writeFile(referenceRequestPath, JSON.stringify({
+    schemaVersion: 1,
+    profileId: alphaProfileId,
+    platform: 'bilibili',
+    capability: 'bilibili.video_detail',
+    input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+  }), 'utf8');
+  const referenceScopeDenied = await runReferenceClient({
+    origin,
+    token: profilesOnlyClient.token,
+    arguments: ['collect', referenceRequestPath]
+  });
+  assert.equal(referenceScopeDenied.exitCode, 1);
+  assert.deepEqual(JSON.parse(referenceScopeDenied.stderr), {
+    ok: false,
+    status: 403,
+    error: 'collector_service_client_scope_denied'
+  });
+
+  const referenceArtifactNotFound = await runReferenceClient({
+    origin,
+    token: artifactsOnlyClient.token,
+    arguments: ['artifact', '/v1/collect/artifacts/bilibili.video_detail/11111111-1111-4111-8111-111111111111']
+  });
+  assert.equal(referenceArtifactNotFound.exitCode, 1);
+  assert.deepEqual(JSON.parse(referenceArtifactNotFound.stderr), {
+    ok: false,
+    status: 404,
+    error: 'collector_service_artifact_not_found'
+  });
+  collectorServiceReferenceClientVerified = true;
 
   const missingTokenProfilesResponse = await fetch(`${origin}/v1/collector-service/profiles`);
   const missingTokenProfilesBody = await missingTokenProfilesResponse.json();
@@ -350,6 +397,7 @@ try {
     collectorServiceRevokedTokenRejected,
     collectorServiceAuditRedacted,
     collectorServiceAuditConsoleOnly,
+    collectorServiceReferenceClientVerified,
     profileClosedOnlyByExplicitRequest: true,
     hostExitedOnlyByExplicitRequest: true,
     testScopedProcessResidue: 0,
@@ -449,6 +497,36 @@ async function request(origin, path, options = {}) {
   const value = await response.json();
   if (!response.ok) throw new Error(value.error ?? `gateway_host_gate_http_${response.status}`);
   return value;
+}
+
+async function runReferenceClient(input) {
+  await access(referenceClientMain);
+  return await new Promise((resolveResult, rejectResult) => {
+    const child = spawn(process.execPath, [referenceClientMain, ...input.arguments], {
+      cwd: gatewayRoot,
+      env: {
+        ...process.env,
+        COLLECTOR_SERVICE_ORIGIN: input.origin,
+        ...(input.token === undefined ? {} : { COLLECTOR_SERVICE_TOKEN: input.token })
+      },
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.once('error', rejectResult);
+    child.once('exit', (exitCode, signal) => {
+      if (signal !== null) {
+        rejectResult(new Error(`gateway_host_gate_reference_client_signaled:${signal}`));
+        return;
+      }
+      resolveResult({ exitCode, stdout, stderr });
+    });
+  });
 }
 
 function processIsAlive(processId) {

@@ -36,6 +36,7 @@ test('Gateway and Browser Host lifecycle runs through actual production processe
     collectorServiceRevokedTokenRejected: true,
     collectorServiceAuditRedacted: true,
     collectorServiceAuditConsoleOnly: true,
+    collectorServiceReferenceClientVerified: true,
     profileClosedOnlyByExplicitRequest: true,
     hostExitedOnlyByExplicitRequest: true,
     testScopedProcessResidue: 0,

@@ -63,6 +63,25 @@ Console 自己仍使用精确同源检查。任何带外站 `Origin` 或非 `sam
 
 每次服务目录读取、采集调用和产物读取都会写入有上限（最近 1,000 条）、原子保存的本地审计。审计仅保留时间、Console/本地 client 主体、动作、capability、结果、错误码、artifact / operation ID，以及不可逆的 Profile 摘要；它严格不保存 input、查询词、URL、query/hash、标题/正文、产物正文、token、token 摘要、Authorization、Cookie、Profile 路径或浏览器身份材料。审计读取本身不产生递归审计记录。
 
+### 独立本地进程参考 client
+
+`scripts/collector-service-reference-client.mjs` 是一个可直接运行的原生进程参考消费者，用来说明其他桌面应用、CLI 或后续分析服务应如何只通过 HTTP 使用 Collector Service。它不会启动 Gateway、创建或撤销 token、读取审计、访问浏览器 Profile、传任意 URL 或控制浏览器。
+
+在 PowerShell 中，token 放在进程环境变量，不要放在命令行参数中：
+
+```powershell
+Set-Location D:\AIProject\inteligence\poc\collector-gateway
+$env:COLLECTOR_SERVICE_ORIGIN = 'http://127.0.0.1:43127'
+$env:COLLECTOR_SERVICE_TOKEN = 'cst_...'
+
+npm run collector-client -- capabilities
+npm run collector-client -- profiles
+npm run collector-client -- collect .\request.json
+npm run collector-client -- artifact /v1/collect/artifacts/bilibili.video_detail/<artifact-id>
+```
+
+`capabilities` 不需要 token；其余命令分别要求对应的 `profiles:read`、`collect:execute` 或 `artifacts:read` scope。`collect` 只读取 UTF-8 JSON 文件，并且每次命令最多发出一次 HTTP 调用、不做平台动作重试，单次本地请求有 50 秒 deadline。成功结果写到 stdout；失败只以 `{ ok, status, error }` 写到 stderr，不回显 token 或请求正文。`audit` 不存在于这个 client 的命令集合，因为审计只属于 Gateway Console 的同源控制面。
+
 当前检查点实现：
 
 - 首次启动生成 ECDSA P-256 Gateway 身份，并在本地 `runtime/` 持久保存；
