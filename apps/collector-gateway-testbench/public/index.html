@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Collector Gateway Testbench</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <main>
+      <header class="hero">
+        <div>
+          <p class="eyebrow">LOOPBACK-ONLY · DIRECT MODE</p>
+          <h1>Collector Gateway Testbench</h1>
+          <p class="lede">用一个真实上层应用验证：已配对扩展能接收受限任务、回传 operation，并提供可回读的本地产物。</p>
+        </div>
+        <div id="connection-badge" class="badge pending">正在检查连接</div>
+      </header>
+
+      <section class="card" aria-labelledby="connection-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">01 · CONNECTION</p>
+            <h2 id="connection-heading">本地连接</h2>
+          </div>
+          <button id="refresh-connection" type="button">刷新本地状态</button>
+        </div>
+        <dl class="facts">
+          <div><dt>Gateway</dt><dd id="gateway-origin">—</dd></div>
+          <div><dt>部署模式</dt><dd id="deployment-mode">—</dd></div>
+          <div><dt>在线 binding</dt><dd id="online-bindings">—</dd></div>
+          <div><dt>Local API token</dt><dd id="token-state">—</dd></div>
+          <div><dt>浏览器进程控制</dt><dd id="browser-control">—</dd></div>
+        </dl>
+        <p id="connection-note" class="hint">本页面不保存、不显示、也不会把 Local API token 发送给浏览器。</p>
+      </section>
+
+      <section class="card" aria-labelledby="workflows-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">02 · ONE-SHOT READ-ONLY WORK</p>
+            <h2 id="workflows-heading">测试工作流</h2>
+          </div>
+          <p class="policy">每次提交最多一次平台导航；不会自动重试、点击、滚动或控制你的现有标签页。</p>
+        </div>
+
+        <div id="binding-warning" class="notice">先配置 Local API token 并刷新 binding。</div>
+        <div class="workflows">
+          <form id="video-form" class="workflow">
+            <div class="workflow-title">
+              <span class="step">A</span>
+              <div>
+                <h3>B站视频详情</h3>
+                <p>仅接收 BVID；服务端推导规范视频地址。</p>
+              </div>
+            </div>
+            <label>
+              在线 browser binding
+              <select class="binding-select" name="browserBindingId" required disabled></select>
+            </label>
+            <label>
+              BVID
+              <input name="bvid" inputmode="text" autocomplete="off" placeholder="例如 BV1qZSLBYEpa" pattern="BV[0-9A-Za-z]{10}" required disabled>
+            </label>
+            <button type="submit" disabled>提交一次详情测试</button>
+          </form>
+
+          <form id="search-form" class="workflow">
+            <div class="workflow-title">
+              <span class="step">B</span>
+              <div>
+                <h3>B站站内搜索</h3>
+                <p>仅接收关键词；固定综合、相关性与第 1 页。</p>
+              </div>
+            </div>
+            <label>
+              在线 browser binding
+              <select class="binding-select" name="browserBindingId" required disabled></select>
+            </label>
+            <label>
+              查询词
+              <input name="query" autocomplete="off" maxlength="80" placeholder="例如 DeepSeek" required disabled>
+            </label>
+            <button type="submit" disabled>提交一次搜索测试</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="operation-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">03 · OPERATION &amp; ARTIFACT</p>
+            <h2 id="operation-heading">结果回读</h2>
+          </div>
+          <div class="actions">
+            <button id="refresh-operation" type="button" disabled>刷新 operation</button>
+            <button id="read-artifact" type="button" disabled>读取 artifact</button>
+          </div>
+        </div>
+        <p id="operation-note" class="hint">尚未提交任务。operation 轮询是本地 Gateway 读取，不会触发第二次平台操作。</p>
+        <pre id="operation-output" aria-live="polite">等待 operation</pre>
+        <pre id="artifact-output" aria-live="polite" hidden></pre>
+      </section>
+
+      <section class="boundary" aria-labelledby="boundary-heading">
+        <h2 id="boundary-heading">这个测试台刻意不做什么</h2>
+        <ul>
+          <li>不读取、导出或显示 Cookie、密码、Token、Storage、浏览器 Profile 或历史记录。</li>
+          <li>不接受任意 URL、CSS selector、脚本、鼠标坐标、CDP 或 Network response body。</li>
+          <li>不自动重放失败任务；遇到验证码、风控、登录失效或页面异常，由 Gateway 返回明确终态。</li>
+        </ul>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

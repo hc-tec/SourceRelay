@@ -1,0 +1,104 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  artifactPathFromOperation,
+  parseTestbenchSubmission,
+  readTestbenchConfig,
+  TestbenchInputError
+} from '../src/contracts.mjs';
+
+const bindingId = '11111111-1111-4111-8111-111111111111';
+const operationId = '22222222-2222-4222-8222-222222222222';
+const artifactId = '33333333-3333-4333-8333-333333333333';
+
+test('maps a BVID-only detail test into the fixed direct-mode Gateway contract', () => {
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'video_detail',
+    input: { bvid: 'BV1qZSLBYEpa' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.video_detail',
+    executionTarget: 'collector_work_tab',
+    input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+  });
+});
+
+test('maps native search into the fixed first-page direct-mode Gateway contract', () => {
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'native_search',
+    input: { query: '  DeepSeek   R1  ' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.native_search',
+    executionTarget: 'collector_work_tab',
+    input: { query: 'DeepSeek R1' }
+  });
+});
+
+test('rejects arbitrary URL, extra request keys, invalid BVIDs, and control characters', () => {
+  for (const value of [
+    {
+      browserBindingId: bindingId,
+      kind: 'video_detail',
+      input: { canonicalVideoUrl: 'https://example.com/video/BV1qZSLBYEpa' }
+    },
+    {
+      browserBindingId: bindingId,
+      kind: 'video_detail',
+      input: { bvid: 'BV_invalid' }
+    },
+    {
+      browserBindingId: bindingId,
+      kind: 'native_search',
+      input: { query: 'safe\u0000query' }
+    },
+    {
+      browserBindingId: bindingId,
+      kind: 'native_search',
+      input: { query: 'DeepSeek' },
+      selector: '.anything'
+    }
+  ]) {
+    assert.throws(() => parseTestbenchSubmission(value), TestbenchInputError);
+  }
+});
+
+test('only accepts an artifact path derived from the matching direct operation capability', () => {
+  assert.equal(artifactPathFromOperation({
+    operationId,
+    capability: 'bilibili.native_search',
+    artifact: {
+      retrievalPath: `/v1/collect/artifacts/bilibili.native_search/${artifactId}`
+    }
+  }), `/v1/collect/artifacts/bilibili.native_search/${artifactId}`);
+  assert.equal(artifactPathFromOperation({
+    operationId,
+    capability: 'bilibili.video_detail',
+    artifact: {
+      retrievalPath: `/v1/collect/artifacts/bilibili.native_search/${artifactId}`
+    }
+  }), null);
+});
+
+test('keeps Gateway and testbench listener configuration on explicit loopback origins', () => {
+  assert.deepEqual(readTestbenchConfig({
+    COLLECTOR_SERVICE_ORIGIN: 'http://127.0.0.1:43127',
+    COLLECTOR_TESTBENCH_PORT: '43128',
+    COLLECTOR_SERVICE_TOKEN: 'cst_1234567890123456789012345678901234567890123'
+  }), {
+    gatewayOrigin: 'http://127.0.0.1:43127',
+    token: 'cst_1234567890123456789012345678901234567890123',
+    appHost: '127.0.0.1',
+    appPort: 43128,
+    appOrigin: 'http://127.0.0.1:43128',
+    requestTimeoutMs: 20_000
+  });
+  assert.throws(() => readTestbenchConfig({ COLLECTOR_SERVICE_ORIGIN: 'https://example.com:443' }), TestbenchInputError);
+  assert.throws(() => readTestbenchConfig({ COLLECTOR_TESTBENCH_PORT: '80' }), TestbenchInputError);
+});

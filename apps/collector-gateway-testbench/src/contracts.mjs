@@ -1,0 +1,149 @@
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const TOKEN_PATTERN = /^cst_[A-Za-z0-9_-]{43}$/;
+const BVID_PATTERN = /^BV[0-9A-Za-z]{10}$/;
+const ARTIFACT_PATH_PATTERN = /^\/v1\/collect\/artifacts\/(bilibili\.(?:video_detail|native_search))\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+
+export const TESTBENCH_SCHEMA_VERSION = 1;
+export const DIRECT_SCHEMA_VERSION = 2;
+export const DEFAULT_GATEWAY_ORIGIN = 'http://127.0.0.1:43127';
+export const DEFAULT_TESTBENCH_PORT = 43128;
+
+export class TestbenchInputError extends Error {
+  constructor(code) {
+    super(code);
+    this.name = 'TestbenchInputError';
+  }
+}
+
+/**
+ * The testbench is deliberately a narrower consumer than the Gateway. It
+ * accepts a BVID rather than an arbitrary video URL, and it never exposes a
+ * route for selectors, scripts, tab IDs, Browser Profiles, or network data.
+ */
+export function parseTestbenchSubmission(value) {
+  if (!isRecord(value) || !hasExactKeys(value, ['browserBindingId', 'kind', 'input'])) {
+    throw new TestbenchInputError('testbench_request_invalid');
+  }
+  if (!isUuid(value.browserBindingId) || !isRecord(value.input)) {
+    throw new TestbenchInputError('testbench_request_invalid');
+  }
+
+  if (value.kind === 'video_detail') {
+    if (!hasExactKeys(value.input, ['bvid']) || typeof value.input.bvid !== 'string') {
+      throw new TestbenchInputError('testbench_request_invalid');
+    }
+    const bvid = normaliseBvid(value.input.bvid);
+    return {
+      schemaVersion: DIRECT_SCHEMA_VERSION,
+      browserBindingId: value.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.video_detail',
+      executionTarget: 'collector_work_tab',
+      input: {
+        canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}`
+      }
+    };
+  }
+
+  if (value.kind === 'native_search') {
+    if (!hasExactKeys(value.input, ['query']) || typeof value.input.query !== 'string') {
+      throw new TestbenchInputError('testbench_request_invalid');
+    }
+    const query = normaliseSearchQuery(value.input.query);
+    return {
+      schemaVersion: DIRECT_SCHEMA_VERSION,
+      browserBindingId: value.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search',
+      executionTarget: 'collector_work_tab',
+      input: { query }
+    };
+  }
+
+  throw new TestbenchInputError('testbench_request_invalid');
+}
+
+export function readTestbenchConfig(environment) {
+  const gatewayOrigin = loopbackHttpOrigin(
+    environment.COLLECTOR_SERVICE_ORIGIN ?? DEFAULT_GATEWAY_ORIGIN,
+    'testbench_gateway_origin_invalid'
+  );
+  const port = readPort(environment.COLLECTOR_TESTBENCH_PORT, DEFAULT_TESTBENCH_PORT);
+  const token = typeof environment.COLLECTOR_SERVICE_TOKEN === 'string' && TOKEN_PATTERN.test(environment.COLLECTOR_SERVICE_TOKEN)
+    ? environment.COLLECTOR_SERVICE_TOKEN
+    : null;
+  return Object.freeze({
+    gatewayOrigin,
+    token,
+    appHost: '127.0.0.1',
+    appPort: port,
+    appOrigin: `http://127.0.0.1:${port}`,
+    requestTimeoutMs: 20_000
+  });
+}
+
+export function isUuid(value) {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
+export function artifactPathFromOperation(operation) {
+  if (!isRecord(operation) || !isUuid(operation.operationId) ||
+    (operation.capability !== 'bilibili.video_detail' && operation.capability !== 'bilibili.native_search') ||
+    !isRecord(operation.artifact) || typeof operation.artifact.retrievalPath !== 'string') {
+    return null;
+  }
+  const match = operation.artifact.retrievalPath.match(ARTIFACT_PATH_PATTERN);
+  if (!match || match[1] !== operation.capability || !isUuid(match[2])) return null;
+  return operation.artifact.retrievalPath;
+}
+
+export function safeErrorCode(value, fallback = 'testbench_request_failed') {
+  return typeof value === 'string' && /^[a-z0-9_.-]{1,120}$/i.test(value)
+    ? value
+    : fallback;
+}
+
+function normaliseBvid(value) {
+  const bvid = value.trim();
+  if (!BVID_PATTERN.test(bvid)) throw new TestbenchInputError('testbench_bvid_invalid');
+  return bvid;
+}
+
+function normaliseSearchQuery(value) {
+  const query = value.trim().replace(/\s+/g, ' ');
+  if (!query || query.length > 80 || /[\u0000-\u001f\u007f]/.test(query)) {
+    throw new TestbenchInputError('testbench_search_query_invalid');
+  }
+  return query;
+}
+
+function loopbackHttpOrigin(value, code) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new TestbenchInputError(code);
+  }
+  if (parsed.protocol !== 'http:' || parsed.hostname !== '127.0.0.1' || !parsed.port ||
+    parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) {
+    throw new TestbenchInputError(code);
+  }
+  return parsed.origin;
+}
+
+function readPort(value, fallback) {
+  if (value === undefined || value === '') return fallback;
+  if (!/^\d{1,5}$/.test(value)) throw new TestbenchInputError('testbench_port_invalid');
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new TestbenchInputError('testbench_port_invalid');
+  return port;
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasExactKeys(value, keys) {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && actual.every((key) => keys.includes(key));
+}
