@@ -178,7 +178,8 @@ function projectPage(
     capturedAt
   );
   if (!page) {
-    const matched = page?.domCrossCheck.matchedVideoIds ?? 0;
+    const projectedIds = new Set(candidate.items.map((item) => item.bvid));
+    const matched = payload.dom.videoIds.filter((bvid) => projectedIds.has(bvid)).length;
     throw new Error(`bilibili_series_detail_dom_response_mismatch_${candidate.items.length}_${payload.dom.videoIds.length}_${matched}`);
   }
   return { page, evidence };

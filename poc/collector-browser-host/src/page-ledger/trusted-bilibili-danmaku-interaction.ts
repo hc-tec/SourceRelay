@@ -197,10 +197,10 @@ async function readProbe(page: Page, timeoutMs: number): Promise<BilibiliDanmaku
       .filter((value) => Number.isSafeInteger(value) && value >= 0);
     const style = list?.getAttribute('style') ?? '';
     const match = style.match(/transform:\s*translate\([^,]+,\s*(-?[\d.]+)px/i);
-    const offset = match ? Number.parseFloat(match[1]) : null;
+    const offset = match ? Number.parseFloat(match[1] ?? '') : null;
     // Scope risk detection to the player. Page-wide recommendation and ad
     // text is not evidence that the target player is unavailable.
-    const bodyText = clean(document.querySelector('.bpx-player-container')?.innerText).slice(0, 40_000);
+    const bodyText = clean(document.querySelector<HTMLElement>('.bpx-player-container')?.innerText).slice(0, 40_000);
     const bvid = location.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/)?.[1] ?? null;
     return {
       bvid,

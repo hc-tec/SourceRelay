@@ -120,7 +120,7 @@ export class BilibiliTranscriptArtifactStore {
       terminalReason: run.coverage.terminalReason,
       runFileSha256
     };
-    const manifestWithoutHash = {
+    const manifestWithoutHash: Omit<BilibiliTranscriptArtifactManifest, 'manifestSha256'> = {
       ...base,
       collectorVersion: run.collectorVersion,
       strategyCandidate: run.strategyCandidate,

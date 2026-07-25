@@ -426,7 +426,12 @@ export class BilibiliTranscriptHostRunner {
     actionId: string;
     deadline: number;
   }): Promise<BilibiliTranscriptChineseSelectionResult> {
-    const context = await this.#leasedPageContext(input, false);
+    const context = await this.#leasedPageContext({
+      profileId: input.permit.profileId,
+      pageAlias: input.acquired.page.pageAlias,
+      pageLeaseId: input.acquired.lease.pageLeaseId,
+      runId: input.permit.runId
+    }, false);
     await this.#accountSafety.recordActionAttempt(input.permit.profileId, 'bilibili', input.permit.runId, input.actionId);
     return await this.#browserManager.selectBilibiliTranscriptChinese({
       schemaVersion: BILIBILI_TRANSCRIPT_CHINESE_SELECTION_SCHEMA_VERSION,

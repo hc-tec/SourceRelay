@@ -118,7 +118,7 @@ export class PageLedger {
       request.platform,
       request.pageRole,
       targetUrlDigest,
-      request.targetUrl
+      request.targetUrl ?? undefined
     );
     if (selected.record && selected.selection) {
       const result = leaseSelectedPage(

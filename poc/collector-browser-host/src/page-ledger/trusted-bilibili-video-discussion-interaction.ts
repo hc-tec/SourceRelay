@@ -23,13 +23,16 @@ const ACTION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const BVID_PATTERN = /^BV[0-9A-Za-z]{10}$/;
 const PROBE_INTERVAL_MS = 120;
 const MINIMUM_TIMEOUT_MS = 1_000;
-const TARGET_ROUTES = {
+const TARGET_ROUTES: Partial<Record<
+  BilibiliVideoDiscussionInteractionAction,
+  BilibiliVideoDiscussionInteractionNetworkObservation['path']
+>> = {
   select_latest_comments: '/x/v2/reply/wbi/main',
   expand_first_thread: '/x/v2/reply/reply',
   expand_second_thread: '/x/v2/reply/reply',
   next_first_thread_page: '/x/v2/reply/reply',
   next_second_thread_page: '/x/v2/reply/reply'
-} as const;
+};
 
 function threadOrdinalForAction(action: BilibiliVideoDiscussionInteractionAction): number {
   return action === 'expand_second_thread' || action === 'reveal_second_thread' ||
@@ -944,7 +947,7 @@ function routeObservation(
     if (request.method() !== 'GET') return null;
     const url = new URL(response.url());
     const expectedPath = TARGET_ROUTES[action];
-    if (url.origin !== 'https://api.bilibili.com' || url.pathname !== expectedPath) return null;
+    if (!expectedPath || url.origin !== 'https://api.bilibili.com' || url.pathname !== expectedPath) return null;
     return { method: 'GET', origin: 'https://api.bilibili.com', path: expectedPath, status: response.status(), receivedAt: new Date().toISOString() };
   } catch {
     return null;

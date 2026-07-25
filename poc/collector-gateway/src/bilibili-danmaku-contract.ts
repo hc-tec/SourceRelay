@@ -99,5 +99,7 @@ export interface BilibiliDanmakuRunRecord {
 export function bvidFromCanonicalBilibiliDanmakuUrl(url: string): string {
   const match = /^https:\/\/www\.bilibili\.com\/video\/(BV[0-9A-Za-z]{10})$/.exec(url);
   if (!match) throw new Error('bilibili_danmaku_url_invalid');
-  return match[1];
+  const bvid = match[1];
+  if (!bvid) throw new Error('bilibili_danmaku_url_invalid');
+  return bvid;
 }

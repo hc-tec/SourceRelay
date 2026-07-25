@@ -60,11 +60,11 @@ export async function captureBilibiliDanmakuDom(
       // Risk words are scoped to the player, not the whole page. Bilibili's
       // recommendation/advertisement DOM can contain unrelated "服务不可用"
       // text and must not stop a public player read.
-      const bodyText = clean(document.querySelector('.bpx-player-container')?.innerText, 40_000);
+      const bodyText = clean(document.querySelector<HTMLElement>('.bpx-player-container')?.innerText, 40_000);
       const bvid = location.protocol === 'https:' && location.hostname === 'www.bilibili.com'
         ? location.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/)?.[1] ?? null
         : null;
-      const danmakuEnabled = document.querySelector<HTMLElement>('[aria-label="弹幕显示隐藏"] input[type="checkbox"]');
+      const danmakuEnabled = document.querySelector<HTMLInputElement>('[aria-label="弹幕显示隐藏"] input[type="checkbox"]');
       const overlayItems = [...(overlay?.querySelectorAll<HTMLElement>('.bili-danmaku-x-dm') ?? [])]
         .map((element) => ({
           text: clean(element.textContent),

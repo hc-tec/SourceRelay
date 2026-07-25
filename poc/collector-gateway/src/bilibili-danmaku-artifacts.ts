@@ -117,7 +117,7 @@ export class BilibiliDanmakuArtifactStore {
       strategyCandidate: run.strategyCandidate,
       coverage: run.coverage,
       safeguards: run.safeguards,
-      runFile: RUN_FILE as const
+      runFile: RUN_FILE as typeof RUN_FILE
     };
     const manifest: BilibiliDanmakuArtifactManifest = {
       ...unsignedManifest,

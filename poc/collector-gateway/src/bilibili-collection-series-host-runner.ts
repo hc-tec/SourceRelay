@@ -145,7 +145,7 @@ export class BilibiliCollectionSeriesHostRunner {
     const stableAccountId = stableAccountIdFromProfileUrl(canonicalProfileUrl);
     const targetUrl = collectionSeriesOverviewUrl(canonicalProfileUrl);
     const action = {
-      actionId: `open_collection_series_overview_${permit.runId.replace(/-/g, '_')}`,
+      actionId: 'open_collection_series_overview' as const,
       intent: 'Open the canonical public account collection and series overview exactly once.',
       attempted: false,
       attemptCount: 0 as 0 | 1,

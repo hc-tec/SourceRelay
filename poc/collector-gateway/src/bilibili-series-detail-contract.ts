@@ -188,7 +188,7 @@ export interface BilibiliSeriesDetailRunRecord {
     semanticActionDelivery: 'at_most_once';
     runDeadlineMs: 60_000;
     targetTabSelection: 'reused_matching_managed_tab' | 'created_new_managed_tab';
-    targetPage: 'retained_after_run';
+    targetPage: 'not_acquired' | 'retained_after_run' | 'quarantined_on_uncertain_outcome';
     admissionEligible: false;
   };
 }
