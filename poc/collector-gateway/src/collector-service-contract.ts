@@ -2,6 +2,11 @@ import {
   isSupportedPlatform,
   type SupportedPlatform
 } from '../../collector-extension/src/shared/collection-contracts';
+import {
+  COLLECTOR_SERVICE_INPUT_SCHEMA_REVISION,
+  collectorServiceInputSchema,
+  type CollectorServiceInputJsonSchema
+} from './collector-service-input-schemas';
 
 export const COLLECTOR_SERVICE_SCHEMA_VERSION = 1 as const;
 
@@ -55,6 +60,8 @@ export interface CollectorServiceCapabilityDescriptor {
   execution: 'synchronous_runner_mvp';
   requiresProfile: CollectorServiceProfileRequirement;
   input: CollectorServiceInputSchema;
+  inputSchemaRevision: typeof COLLECTOR_SERVICE_INPUT_SCHEMA_REVISION;
+  inputSchema: CollectorServiceInputJsonSchema;
   output: 'operation_summary_and_artifact_reference';
 }
 
@@ -117,6 +124,8 @@ const DESCRIPTORS: readonly CollectorServiceCapabilityDescriptor[] =
     execution: 'synchronous_runner_mvp',
     requiresProfile: COLLECTION_PROFILE,
     input: INPUT_SCHEMAS[capability],
+    inputSchemaRevision: COLLECTOR_SERVICE_INPUT_SCHEMA_REVISION,
+    inputSchema: collectorServiceInputSchema(capability),
     output: 'operation_summary_and_artifact_reference'
   }));
 

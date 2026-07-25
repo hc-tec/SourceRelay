@@ -40,6 +40,7 @@ let hostPid = null;
 const browserPids = [];
 let crossSiteProfileCreationRejected = false;
 let collectorServiceCapabilitiesPublished = false;
+let collectorServiceOpenApiPublished = false;
 let collectorServiceInvalidInputRejectedPreBrowser = false;
 let collectorServiceClientTokenAuthorized = false;
 let collectorServiceArtifactTokenGateVerified = false;
@@ -62,6 +63,16 @@ try {
     capability.requiresProfile?.accountCategory === 'user_managed'
   ));
   collectorServiceCapabilitiesPublished = true;
+
+  const openApi = await request(origin, '/v1/openapi.json');
+  assert.equal(openApi.openapi, '3.1.0');
+  assert.equal(openApi.info?.version, '1.0.0-experimental');
+  assert.deepEqual(openApi.servers, [{ url: origin }]);
+  assert.ok(openApi.paths?.['/v1/collect']);
+  assert.equal(openApi.paths?.['/v1/collector-service/audit'], undefined);
+  assert.equal(openApi.paths?.['/v1/browser-host/exit'], undefined);
+  assert.ok(openApi.components?.schemas?.bilibili_video_detail_input);
+  collectorServiceOpenApiPublished = true;
 
   const crossSiteResponse = await fetch(`${origin}/v1/profiles`, {
     method: 'POST',
@@ -132,6 +143,10 @@ try {
     body: { label: 'Gateway Host artifacts-only client', scopes: ['artifacts:read'] }
   });
   const artifactsOnlyAuthorization = `Bearer ${artifactsOnlyClient.token}`;
+
+  const referenceOpenApi = await runReferenceClient({ origin, arguments: ['openapi'] });
+  assert.equal(referenceOpenApi.exitCode, 0);
+  assert.equal(JSON.parse(referenceOpenApi.stdout).openapi, '3.1.0');
 
   const referenceCapabilities = await runReferenceClient({ origin, arguments: ['capabilities'] });
   assert.equal(referenceCapabilities.exitCode, 0);
@@ -388,6 +403,7 @@ try {
     extensionNativeBridgeConnected: true,
     crossSiteProfileCreationRejected,
     collectorServiceCapabilitiesPublished,
+    collectorServiceOpenApiPublished,
     collectorServiceInvalidInputRejectedPreBrowser,
     collectorServiceClientTokenAuthorized,
     collectorServiceArtifactTokenGateVerified,

@@ -44,6 +44,9 @@ if (command === '--help' || command === 'help' || command === undefined) {
 
 async function execute(origin, commandName, args) {
   switch (commandName) {
+    case 'openapi':
+      requireExactArguments(args, 0);
+      return await request(origin, '/v1/openapi.json');
     case 'capabilities':
       requireExactArguments(args, 0);
       return await request(origin, '/v1/capabilities');
@@ -171,6 +174,7 @@ function printHelp() {
     `  COLLECTOR_SERVICE_ORIGIN=http://127.0.0.1:<port>\n` +
     `  COLLECTOR_SERVICE_TOKEN=cst_...  (required except capabilities)\n\n` +
     `Commands:\n` +
+    `  openapi\n` +
     `  capabilities\n` +
     `  profiles\n` +
     `  collect <request.json>\n` +

@@ -16,12 +16,15 @@ Local application
 
 最小接口：
 
-- `GET /v1/capabilities`：返回当前注册能力、平台、输入 schema 名称、实验状态和 Profile 前置条件；
+- `GET /v1/openapi.json`：返回版本化 OpenAPI 3.1 外部 consumer 契约；只描述下列可调用服务路由，不包含 Console、审计或浏览器控制面；
+- `GET /v1/capabilities`：返回当前注册能力、平台、输入 schema 名称与 JSON Schema、实验状态和 Profile 前置条件；
 - `GET /v1/collector-service/profiles`：返回可被当前服务使用的受管 Collection Profile 的安全目录；
 - `POST /v1/collect`：执行一个已注册 capability。请求 envelope 固定为 `schemaVersion`、`profileId`、`platform`、`capability` 和 capability-specific `input`；`input` 不能再携带 `profileId`；
 - `GET /v1/collect/artifacts/<capability>/<artifactId>`：读取上述结果 `artifact.retrievalPath` 指向的字段白名单化本地产物；
 - `GET /v1/collector-service/audit`：只供 Gateway Console 精确同源读取去敏调用历史，独立本地 client 不可读取；
 - 返回 `operationId` 和 `operationKind`（`run` 或 `batch`），而不是把批任务伪装成单次 run。
+
+当前 OpenAPI `info.version` 是 `1.0.0-experimental`，请求/响应 envelope 的 `schemaVersion` 是 `1`。外部应用应按 OpenAPI 和 capability catalog 的当前版本生成调用，不应把 `experimental` capability 当作永久不变的业务承诺；任何不兼容的外部 surface 变更必须同时更新这两个版本化契约。
 
 例如（`profileId` 必须是已登记、`collection + user_managed + bilibili` 的受管 Profile）：
 
@@ -75,12 +78,13 @@ $env:COLLECTOR_SERVICE_ORIGIN = 'http://127.0.0.1:43127'
 $env:COLLECTOR_SERVICE_TOKEN = 'cst_...'
 
 npm run collector-client -- capabilities
+npm run collector-client -- openapi
 npm run collector-client -- profiles
 npm run collector-client -- collect .\request.json
 npm run collector-client -- artifact /v1/collect/artifacts/bilibili.video_detail/<artifact-id>
 ```
 
-`capabilities` 不需要 token；其余命令分别要求对应的 `profiles:read`、`collect:execute` 或 `artifacts:read` scope。`collect` 只读取 UTF-8 JSON 文件，并且每次命令最多发出一次 HTTP 调用、不做平台动作重试，单次本地请求有 50 秒 deadline。成功结果写到 stdout；失败只以 `{ ok, status, error }` 写到 stderr，不回显 token 或请求正文。`audit` 不存在于这个 client 的命令集合，因为审计只属于 Gateway Console 的同源控制面。
+`openapi` 与 `capabilities` 不需要 token。OpenAPI 3.1 文档包含每个当前 capability 的 input JSON Schema、scope、错误语义和明确排除的控制面；应用应先读取它或 capability catalog，再构造请求。其余命令分别要求对应的 `profiles:read`、`collect:execute` 或 `artifacts:read` scope。`collect` 只读取 UTF-8 JSON 文件，并且每次命令最多发出一次 HTTP 调用、不做平台动作重试，单次本地请求有 50 秒 deadline。成功结果写到 stdout；失败只以 `{ ok, status, error }` 写到 stderr，不回显 token 或请求正文。`audit` 不存在于这个 client 的命令集合，因为审计只属于 Gateway Console 的同源控制面。
 
 当前检查点实现：
 

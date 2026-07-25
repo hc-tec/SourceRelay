@@ -20,12 +20,19 @@ describe('Collector service contract', () => {
       status: 'experimental',
       requiresProfile: { kind: 'collection', accountCategory: 'user_managed' },
       input: 'bilibili_video_detail_input',
+      inputSchemaRevision: 1,
+      inputSchema: {
+        additionalProperties: false,
+        required: ['canonicalVideoUrl']
+      },
       output: 'operation_summary_and_artifact_reference'
     });
     expect(first.map((candidate) => candidate.capability)).not.toContain('bilibili.account_inventory.page_two');
 
     (first[0]!.requiresProfile as { kind: string }).kind = 'validation';
+    (first[0]!.inputSchema as { required: string[] }).required.push('unexpected');
     expect(collectorServiceCapabilities()[0]!.requiresProfile.kind).toBe('collection');
+    expect(collectorServiceCapabilities()[0]!.inputSchema).not.toMatchObject({ required: ['unexpected'] });
   });
 
   test('accepts the envelope only when its registered platform and capability agree', () => {

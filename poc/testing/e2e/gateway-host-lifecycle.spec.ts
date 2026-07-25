@@ -27,6 +27,7 @@ test('Gateway and Browser Host lifecycle runs through actual production processe
     extensionNativeBridgeConnected: true,
     crossSiteProfileCreationRejected: true,
     collectorServiceCapabilitiesPublished: true,
+    collectorServiceOpenApiPublished: true,
     collectorServiceInvalidInputRejectedPreBrowser: true,
     collectorServiceClientTokenAuthorized: true,
     collectorServiceArtifactTokenGateVerified: true,

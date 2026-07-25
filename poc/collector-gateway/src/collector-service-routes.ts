@@ -27,6 +27,7 @@ import {
   type CollectorServiceRequest,
   type CollectorServiceResult
 } from './collector-service-contract';
+import { collectorServiceOpenApiDocument } from './collector-service-openapi';
 import type { LoadedGatewayIdentity } from './identity';
 import { readJsonBody, requireSameOrigin, safeErrorCode, sendJson } from './gateway-http';
 
@@ -49,6 +50,10 @@ export async function handleCollectorServiceRoute(
   url: URL,
   context: CollectorServiceRouteContext
 ): Promise<boolean> {
+  if (request.method === 'GET' && url.pathname === '/v1/openapi.json') {
+    sendJson(response, 200, collectorServiceOpenApiDocument(context.identity.publicIdentity.loopbackOrigin));
+    return true;
+  }
   if (request.method === 'GET' && url.pathname === '/v1/capabilities') {
     sendJson(response, 200, {
       schemaVersion: 1,
