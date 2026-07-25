@@ -26,6 +26,8 @@ test('Gateway and Browser Host lifecycle runs through actual production processe
     profilesRemainIsolatedThroughGatewayApi: true,
     extensionNativeBridgeConnected: true,
     crossSiteProfileCreationRejected: true,
+    collectorServiceCapabilitiesPublished: true,
+    collectorServiceInvalidInputRejectedPreBrowser: true,
     profileClosedOnlyByExplicitRequest: true,
     hostExitedOnlyByExplicitRequest: true,
     testScopedProcessResidue: 0,

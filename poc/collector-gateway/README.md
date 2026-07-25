@@ -2,6 +2,42 @@
 
 这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度；平台登录状态始终留在 Collection Browser Profile。
 
+## Local Collector Service API（MVP）
+
+Gateway 同时提供给其他本地应用调用的稳定 API 外观。它只暴露已经登记的采集能力，不提供任意 URL、CSS selector、脚本执行、鼠标坐标或 Network 请求/响应正文接口。因此外部调用仍必经受管 Browser Profile、PageLease、账号安全锁、动作预算、DOM/Network 交叉证据与 raw-first 本地产物。
+
+```text
+Local application
+  -> POST /v1/collect (registered capability + fixed input)
+  -> existing Gateway runner
+  -> Browser Host / MV3 / managed Collection Profile
+  -> local artifact; result carries its controlled retrieval path
+```
+
+最小接口：
+
+- `GET /v1/capabilities`：返回当前注册能力、平台、输入 schema 名称、实验状态和 Profile 前置条件；
+- `POST /v1/collect`：执行一个已注册 capability。请求 envelope 固定为 `schemaVersion`、`profileId`、`platform`、`capability` 和 capability-specific `input`；`input` 不能再携带 `profileId`；
+- 返回 `operationId` 和 `operationKind`（`run` 或 `batch`），而不是把批任务伪装成单次 run；返回的 `artifact.retrievalPath` 可读取已保存的、字段白名单化的本地 artifact。
+
+例如（`profileId` 必须是已登记、`collection + user_managed + bilibili` 的受管 Profile）：
+
+```json
+{
+  "schemaVersion": 1,
+  "profileId": "11111111-1111-4111-8111-111111111111",
+  "platform": "bilibili",
+  "capability": "bilibili.video_detail",
+  "input": {
+    "canonicalVideoUrl": "https://www.bilibili.com/video/BV1qZSLBYEpa"
+  }
+}
+```
+
+当前注册的能力都是已有 B站 runner 的安全 API 外观：原生搜索（单页/有界 batch）、账号资料、账号视频页（首屏/有界分页）、视频详情、字幕、评论、弹幕、动态、合集/系列概览和系列详情。`page_two` 与“从旧 artifact 继续 materialize detail”仍是内部组合流程，暂不作为稳定服务能力发布。
+
+当前 Gateway 保持 loopback-only，且所有 `POST` 延续 Console 的同源请求检查；这是防止网页跨站触发的保护，不是可供任意本机程序依赖的客户端认证。独立桌面应用或 CLI 在正式接入前应使用下一阶段的可撤销本地 client pairing/token；不要通过开放到 `0.0.0.0`、取消 loopback 限制或绕过同源检查来“方便调用”。
+
 当前检查点实现：
 
 - 首次启动生成 ECDSA P-256 Gateway 身份，并在本地 `runtime/` 持久保存；

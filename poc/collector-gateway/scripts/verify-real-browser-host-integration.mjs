@@ -38,9 +38,21 @@ let gateway = null;
 let hostPid = null;
 const browserPids = [];
 let crossSiteProfileCreationRejected = false;
+let collectorServiceCapabilitiesPublished = false;
+let collectorServiceInvalidInputRejectedPreBrowser = false;
 try {
   await mkdir(runtimeRoot, { recursive: true });
   gateway = await startGateway(environment, origin);
+  const capabilityCatalog = await request(origin, '/v1/capabilities');
+  assert.equal(capabilityCatalog.schemaVersion, 1);
+  assert.equal(capabilityCatalog.capabilities?.length, 12);
+  assert.ok(capabilityCatalog.capabilities?.every((capability) =>
+    capability.platform === 'bilibili' &&
+    capability.requiresProfile?.kind === 'collection' &&
+    capability.requiresProfile?.accountCategory === 'user_managed'
+  ));
+  collectorServiceCapabilitiesPublished = true;
+
   const crossSiteResponse = await fetch(`${origin}/v1/profiles`, {
     method: 'POST',
     headers: {
@@ -83,6 +95,29 @@ try {
   assert.match(alphaProfileId, /^[0-9a-f-]{36}$/i);
   assert.match(betaProfileId, /^[0-9a-f-]{36}$/i);
   assert.notEqual(alphaProfileId, betaProfileId);
+
+  const invalidCollectorResponse = await fetch(`${origin}/v1/collect`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      origin,
+      'sec-fetch-site': 'same-origin'
+    },
+    body: JSON.stringify({
+      schemaVersion: 1,
+      profileId: alphaProfileId,
+      platform: 'bilibili',
+      capability: 'bilibili.video_detail',
+      input: {
+        canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa',
+        unexpected: 'must be rejected before a browser action'
+      }
+    })
+  });
+  const invalidCollectorBody = await invalidCollectorResponse.json();
+  assert.equal(invalidCollectorResponse.status, 400);
+  assert.equal(invalidCollectorBody.error, 'bilibili_video_detail_input_invalid');
+  collectorServiceInvalidInputRejectedPreBrowser = true;
 
   const launchedAlpha = await request(origin, `/v1/profiles/${alphaProfileId}/browser/launch`, {
     method: 'POST',
@@ -152,6 +187,8 @@ try {
     profilesRemainIsolatedThroughGatewayApi: true,
     extensionNativeBridgeConnected: true,
     crossSiteProfileCreationRejected,
+    collectorServiceCapabilitiesPublished,
+    collectorServiceInvalidInputRejectedPreBrowser,
     profileClosedOnlyByExplicitRequest: true,
     hostExitedOnlyByExplicitRequest: true,
     testScopedProcessResidue: 0,

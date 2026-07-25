@@ -48,6 +48,11 @@ import { bilibiliDanmakuInput } from './bilibili-danmaku-contract';
 import { bilibiliVideoDiscussionInput } from './bilibili-video-discussion-contract';
 import type { BilibiliTranscriptHostRunner } from './bilibili-transcript-host-runner';
 import type { CollectionBrowserManager } from './browser-manager';
+import { dispatchCollectorServiceRequest } from './collector-service';
+import {
+  collectorServiceCapabilities,
+  collectorServiceRequestInput
+} from './collector-service-contract';
 import type { LoadedGatewayIdentity } from './identity';
 import type { BrowserProfileRegistry } from './profiles';
 import { createBrowserProfileInput } from './profiles';
@@ -128,6 +133,20 @@ export async function handleGatewayRoute(
         profileCount: snapshot.profiles.filter((profile) => profile.running).length
       } : { state: 'stopped' }
     });
+    return true;
+  }
+  if (request.method === 'GET' && url.pathname === '/v1/capabilities') {
+    sendJson(response, 200, {
+      schemaVersion: 1,
+      capabilities: collectorServiceCapabilities()
+    });
+    return true;
+  }
+  if (request.method === 'POST' && url.pathname === '/v1/collect') {
+    if (!sameOrigin(request, response, context)) return true;
+    const collectorRequest = collectorServiceRequestInput(await readJsonBody(request));
+    const result = await dispatchCollectorServiceRequest(collectorRequest, context);
+    sendJson(response, 201, { schemaVersion: 1, result });
     return true;
   }
   if (request.method === 'GET' && url.pathname === '/v1/browser-host/snapshot') {

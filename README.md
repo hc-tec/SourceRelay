@@ -3,14 +3,13 @@
 这个仓库正在建设一个“需要时才启动”的本地个人情报系统。当前正式产品路线不是传统爬虫、私有 API 模拟器或提前囤积所有平台数据，而是：
 
 ```text
-Local Research Console / Collector Gateway
+Other Local Applications / Local Research Console
+  -> Local Collector Service API (registered capabilities only)
   -> paired MV3 Collector Core
   -> dedicated visible Collection Window
   -> persistent Collection Browser Profile
   -> static, versioned, live-validated platform strategies
-  -> encrypted local Evidence Vault
-  -> sealed EvidencePackage
-  -> DeepResearch / swarm analysis
+  -> raw-first local artifact
 ```
 
 浏览器 Profile 自然持有用户正常登录状态。系统不设计 Cookie 导入、导出、注入或跨进程分发，不索要密码、Token、二维码、验证码、Profile 路径或代理凭据，也不授权绕过登录、付费限制、限流和平台安全措施。
@@ -19,7 +18,7 @@ Local Research Console / Collector Gateway
 
 ```text
 poc/collector-extension/  单一最小权限 MV3 Collector Core
-poc/collector-gateway/    只监听 127.0.0.1 的本地 Console / 控制面
+poc/collector-gateway/    只监听 127.0.0.1 的本地 Collector Service / Console / 控制面
 docs/design/              1–100 题决策账本、产品规格、审计和实现状态
 skills/recon-live-web-interactions/  真实网页人类视角交互侦察 Skill
 ```
@@ -72,7 +71,7 @@ poc/intelligence-gateway/
 
 它们曾用于验证公开页面、搜索、正文和平台限制，但其共享 Profile、传统连接器、私有接口候选或 crawler-style 执行方式不能直接接入当前浏览器扩展路线。旧能力声明和样本只表示当时的研究结果，不构成当前平台能力发布证明。
 
-`poc/deepresearch-gateway/` 也是历史适配 POC。DeerFlow、天工式系统或其他蜂群框架未来只能通过稳定 EvidencePackage / Coverage / Citation / CollectionGapRequest 边界接入；框架自带搜索器默认禁用，`.env` 搜索凭据只归本地 Gateway / Search Adapter，分析 Agent 不拥有浏览器和平台策略。
+`poc/deepresearch-gateway/` 也是历史适配 POC，不是当前产品主线。未来任何分析系统都只能作为本地 Collector Service 的外部消费者；它们不拥有浏览器、Profile、Cookie、平台策略或直接的平台网络路径。
 
 ## 真实平台侦察方法
 
@@ -149,11 +148,10 @@ Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git
 
 ## 下一阶段
 
-1. 已完成独立 Contracts、单实例 Browser Host、受管多页面池、PageLease 和真实本地 Chromium 生命周期门禁；
-2. 将 Gateway、扩展与现有 runner 一次性切换到 Browser Host + Native Messaging 执行面，删除旧单 tab / URL 所有权路径；
-3. 用 B站 dynamic 完成一次低频真实 canary，并证明 Gateway 重启不关闭浏览器；
-4. 再迁移和发布 B站 `detail -> bounded discussion`，随后推进小红书账号归档；
-5. 建设加密 Vault、EvidencePackage 与 DeepResearch / 蜂群分析接入。
+1. 已完成独立 Contracts、Browser Host、受管多页面池、PageLease、真实本地 Chromium 生命周期门禁和 B站采集 runner；
+2. 将已有 runner 统一经由版本化的 Local Collector Service API 提供给其他本地应用；
+3. 为独立本地客户端补充可撤销的配对 / token 授权，而不放宽 loopback、Profile 或平台安全边界；
+4. 按同一 API capability 模型逐个平台增加经过真实页面侦察验证的能力。
 
 权威产品文档：
 
