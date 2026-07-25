@@ -74,6 +74,13 @@ input, select { width: 100%; min-width: 0; border: 1px solid var(--line); border
 .issued-token p { margin: 0; color: var(--muted); line-height: 1.55; }
 .issued-token code { display: block; overflow-wrap: anywhere; padding: .65rem; border: 1px solid var(--line); border-radius: 8px; background: #0c1118; color: var(--text); }
 .issued-token button { justify-self: start; }
+.pairing-ticket { display: grid; gap: .65rem; margin: .75rem 0; padding: .9rem; border: 1px solid color-mix(in srgb, var(--accent), transparent 45%); border-radius: 12px; background: color-mix(in srgb, var(--accent), transparent 94%); }
+.pairing-ticket p { margin: 0; color: var(--muted); line-height: 1.55; }
+.pairing-ticket dl { display: grid; gap: .5rem; margin: 0; }
+.pairing-ticket dl div { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .65rem; align-items: start; }
+.pairing-ticket dt { color: var(--muted); font-size: .78rem; }
+.pairing-ticket dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: .82rem; }
+.pairing-ticket code { display: block; overflow-wrap: anywhere; padding: .5rem .65rem; border: 1px solid var(--line); border-radius: 8px; background: #0c1118; color: var(--text); }
 .client-grid { display: grid; gap: .6rem; }
 .client-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
 .client-card h3, .client-card p { margin: 0; }

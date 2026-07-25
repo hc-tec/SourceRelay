@@ -19,18 +19,36 @@
       <section>
         <div class="section-heading">
           <div>
-            <h2>Browser Host Bridge</h2>
-            <p>扩展只接受当前 Collection Profile 的 Native Messaging 命令。</p>
+            <h2>日常浏览器连接</h2>
+            <p>在你平时使用、已经登录的 Chrome/Edge 中，将此扩展与本机 Gateway 配对。不会创建或管理浏览器 Profile。</p>
           </div>
         </div>
-        <div id="bridge-state" class="empty-state">读取连接状态中…</div>
+        <div id="gateway-state" class="empty-state">读取 Gateway 状态中…</div>
+        <form id="pair-gateway" class="pairing-form">
+          <label>Gateway 地址
+            <input name="loopbackOrigin" inputmode="url" required value="http://127.0.0.1:43127" autocomplete="off">
+          </label>
+          <label>Gateway 身份指纹
+            <input name="identityFingerprint" required pattern="[a-f0-9]{64}" maxlength="64" autocomplete="off" placeholder="从 Gateway Console 复制 64 位指纹">
+          </label>
+          <label>配对会话 ID
+            <input name="pairingSessionId" required placeholder="在 Gateway Console 中创建">
+          </label>
+          <label>八位配对码
+            <input name="pairingCode" required inputmode="numeric" pattern="[0-9]{8}" maxlength="8" autocomplete="one-time-code">
+          </label>
+          <div class="pairing-row">
+            <button type="submit">授权并配对此浏览器</button>
+            <button id="forget-gateway" type="button" class="secondary" hidden>忘记本地配对</button>
+          </div>
+        </form>
       </section>
 
       <section>
         <div class="section-heading">
           <div>
             <h2>已编译 Strategy</h2>
-            <p>只开放五项有界 B 站能力；不提供任意脚本、任意 selector 或 loopback Gateway 连接。</p>
+            <p>只开放已登记能力；不提供任意脚本、任意 selector、任意 tab 控制或任意 Network 正文接口。</p>
           </div>
         </div>
         <div class="strategy-card">

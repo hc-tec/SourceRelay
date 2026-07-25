@@ -8,10 +8,12 @@ import {
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type {
+  BrowserBindingState,
+  BrowserBindingSummary,
   GatewayPairingChallenge,
   GatewayPairingClaimResponse
-} from '../../collector-extension/src/shared/control-plane';
-import { canonicalJson, sha256Hex } from '../../collector-extension/src/shared/cryptography';
+} from '@intelligence/collector-contracts';
+import { canonicalJson, sha256Hex } from './canonical-json';
 import type { LoadedGatewayIdentity } from './identity';
 
 const PAIRING_SESSION_TTL_MS = 5 * 60 * 1000;
@@ -19,6 +21,7 @@ const MAX_PAIRING_ATTEMPTS = 5;
 const MAX_ACTIVE_PAIRING_SESSIONS = 8;
 const REQUEST_CLOCK_SKEW_MS = 30_000;
 const REQUEST_NONCE_TTL_MS = 2 * 60 * 1000;
+const BROWSER_BINDING_ONLINE_WINDOW_MS = 90_000;
 
 interface PairingSession {
   pairingSessionId: string;
@@ -29,6 +32,15 @@ interface PairingSession {
 }
 
 interface PersistedExtensionPairing {
+  schemaVersion: 2;
+  browserBindingId: string;
+  extensionId: string;
+  extensionInstanceId: string;
+  pairingAuthorization: string;
+  pairedAt: string;
+}
+
+interface LegacyPersistedExtensionPairing {
   schemaVersion: 1;
   extensionId: string;
   extensionInstanceId: string;
@@ -56,6 +68,7 @@ export interface PairingClaimInput {
 }
 
 export interface AuthorisedExtension {
+  browserBindingId: string;
   extensionId: string;
   extensionInstanceId: string;
 }
@@ -78,6 +91,7 @@ export class PairingBroker {
   readonly #pairingsPath: string;
   readonly #identity: LoadedGatewayIdentity;
   readonly #seenRequestNonces = new Map<string, number>();
+  readonly #lastSeenByBindingId = new Map<string, number>();
   #pairings: PersistedExtensionPairing[] = [];
 
   private constructor(identity: LoadedGatewayIdentity, stateDirectory: string) {
@@ -90,7 +104,23 @@ export class PairingBroker {
     await mkdir(stateDirectory, { recursive: true });
     try {
       const parsed = JSON.parse(await readFile(broker.#pairingsPath, 'utf8')) as unknown;
-      if (Array.isArray(parsed)) broker.#pairings = parsed.filter(isPersistedPairing);
+      if (Array.isArray(parsed)) {
+        let migrated = false;
+        broker.#pairings = parsed.flatMap((candidate) => {
+          if (isPersistedPairing(candidate)) return [candidate];
+          if (!isLegacyPersistedPairing(candidate)) return [];
+          migrated = true;
+          return [{
+            schemaVersion: 2,
+            browserBindingId: randomUUID(),
+            extensionId: candidate.extensionId,
+            extensionInstanceId: candidate.extensionInstanceId,
+            pairingAuthorization: candidate.pairingAuthorization,
+            pairedAt: candidate.pairedAt
+          }];
+        });
+        if (migrated) await broker.#savePairings();
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
@@ -99,6 +129,30 @@ export class PairingBroker {
 
   get pairedExtensionCount(): number {
     return this.#pairings.length;
+  }
+
+  listBrowserBindings(now = Date.now()): BrowserBindingSummary[] {
+    this.#prunePresence(now);
+    return this.#pairings
+      .map((pairing) => this.#summary(pairing, now))
+      .sort((left, right) => left.pairedAt.localeCompare(right.pairedAt));
+  }
+
+  getBrowserBinding(browserBindingId: string, now = Date.now()): BrowserBindingSummary {
+    this.#prunePresence(now);
+    const pairing = this.#pairings.find((candidate) => candidate.browserBindingId === browserBindingId);
+    if (!pairing) throw new Error('browser_binding_not_found');
+    return this.#summary(pairing, now);
+  }
+
+  async revokeBrowserBinding(browserBindingId: string): Promise<BrowserBindingSummary> {
+    const pairing = this.#pairings.find((candidate) => candidate.browserBindingId === browserBindingId);
+    if (!pairing) throw new Error('browser_binding_not_found');
+    const summary = this.#summary(pairing, Date.now());
+    this.#pairings = this.#pairings.filter((candidate) => candidate.browserBindingId !== browserBindingId);
+    this.#lastSeenByBindingId.delete(browserBindingId);
+    await this.#savePairings();
+    return summary;
   }
 
   createSession(now = Date.now()): PairingSessionForConsole {
@@ -151,8 +205,8 @@ export class PairingBroker {
       pairingSessionId: session.pairingSessionId,
       gateway: this.#identity.publicIdentity,
       extensionChallenge: input.extensionChallenge,
-      pairingCodeChallenge: await sha256Hex(`${session.pairingSessionId}:${session.pairingCode}`),
-      pairingAuthorizationFingerprint: await sha256Hex(pairingAuthorization),
+      pairingCodeChallenge: sha256Hex(`${session.pairingSessionId}:${session.pairingCode}`),
+      pairingAuthorizationFingerprint: sha256Hex(pairingAuthorization),
       issuedAt: new Date(now).toISOString(),
       expiresAt: new Date(session.expiresAt).toISOString()
     };
@@ -160,8 +214,12 @@ export class PairingBroker {
       ...unsignedChallenge,
       gatewaySignature: this.#identity.signPayload(canonicalJson(unsignedChallenge))
     };
+    const existing = this.#pairings.find(
+      (candidate) => candidate.extensionInstanceId === input.extensionInstanceId
+    );
     const pairing: PersistedExtensionPairing = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+      browserBindingId: existing?.browserBindingId ?? randomUUID(),
       extensionId: input.extensionId,
       extensionInstanceId: input.extensionInstanceId,
       pairingAuthorization,
@@ -173,7 +231,12 @@ export class PairingBroker {
     ];
     await this.#savePairings();
     this.#sessions.delete(session.pairingSessionId);
-    return { schemaVersion: 1, challenge, pairingAuthorization };
+    return {
+      schemaVersion: 1,
+      browserBindingId: pairing.browserBindingId,
+      challenge,
+      pairingAuthorization
+    };
   }
 
   async authoriseRequest(input: PairingAuthorisationInput, now = Date.now()): Promise<AuthorisedExtension> {
@@ -191,7 +254,7 @@ export class PairingBroker {
     this.#pruneRequestNonces(now);
     const nonceKey = `${pairing.extensionInstanceId}:${input.nonce}`;
     if (this.#seenRequestNonces.has(nonceKey)) throw new Error('pairing_nonce_replayed');
-    if (!input.bodySha256 || input.bodySha256 !== await sha256Hex(input.body)) {
+    if (!input.bodySha256 || input.bodySha256 !== sha256Hex(input.body)) {
       throw new Error('pairing_body_digest_invalid');
     }
     if (!input.authorization || !/^[A-Za-z0-9_-]{40,}$/.test(input.authorization)) {
@@ -215,7 +278,9 @@ export class PairingBroker {
       throw new Error('pairing_authorization_rejected');
     }
     this.#seenRequestNonces.set(nonceKey, now + REQUEST_NONCE_TTL_MS);
+    this.#lastSeenByBindingId.set(pairing.browserBindingId, now);
     return {
+      browserBindingId: pairing.browserBindingId,
       extensionId: pairing.extensionId,
       extensionInstanceId: pairing.extensionInstanceId
     };
@@ -233,6 +298,27 @@ export class PairingBroker {
     }
   }
 
+  #prunePresence(now: number): void {
+    for (const [bindingId, seenAt] of this.#lastSeenByBindingId) {
+      if (seenAt + BROWSER_BINDING_ONLINE_WINDOW_MS <= now) this.#lastSeenByBindingId.delete(bindingId);
+    }
+  }
+
+  #summary(pairing: PersistedExtensionPairing, now: number): BrowserBindingSummary {
+    const seenAt = this.#lastSeenByBindingId.get(pairing.browserBindingId) ?? null;
+    const state: BrowserBindingState = seenAt !== null && seenAt + BROWSER_BINDING_ONLINE_WINDOW_MS > now
+      ? 'online'
+      : 'paired';
+    return {
+      schemaVersion: 1,
+      browserBindingId: pairing.browserBindingId,
+      extensionId: pairing.extensionId,
+      state,
+      pairedAt: pairing.pairedAt,
+      lastSeenAt: seenAt === null ? null : new Date(seenAt).toISOString()
+    };
+  }
+
   async #savePairings(): Promise<void> {
     const temporaryPath = `${this.#pairingsPath}.${process.pid}.tmp`;
     await writeFile(temporaryPath, `${JSON.stringify(this.#pairings, null, 2)}\n`, {
@@ -246,6 +332,24 @@ export class PairingBroker {
 function isPersistedPairing(value: unknown): value is PersistedExtensionPairing {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<PersistedExtensionPairing>;
+  return (
+    candidate.schemaVersion === 2 &&
+    typeof candidate.browserBindingId === 'string' &&
+    /^[0-9a-f-]{36}$/i.test(candidate.browserBindingId) &&
+    typeof candidate.extensionId === 'string' &&
+    /^[a-p]{32}$/.test(candidate.extensionId) &&
+    typeof candidate.extensionInstanceId === 'string' &&
+    /^[0-9a-f-]{36}$/i.test(candidate.extensionInstanceId) &&
+    typeof candidate.pairingAuthorization === 'string' &&
+    /^[A-Za-z0-9_-]{40,}$/.test(candidate.pairingAuthorization) &&
+    typeof candidate.pairedAt === 'string' &&
+    Number.isFinite(Date.parse(candidate.pairedAt))
+  );
+}
+
+function isLegacyPersistedPairing(value: unknown): value is LegacyPersistedExtensionPairing {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<LegacyPersistedExtensionPairing>;
   return (
     candidate.schemaVersion === 1 &&
     typeof candidate.extensionId === 'string' &&

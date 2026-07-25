@@ -45,7 +45,14 @@ export function requireSameOrigin(
   response: ServerResponse,
   expectedOrigin: string
 ): boolean {
-  if (request.headers.origin === expectedOrigin && request.headers['sec-fetch-site'] === 'same-origin') return true;
+  // Browsers commonly omit Origin on same-origin GET/fetch requests. The
+  // browser-controlled Sec-Fetch-Site signal still identifies the Console;
+  // if Origin is present it must remain exact. Cross-origin browser requests
+  // keep a non-same-origin Sec-Fetch-Site and are rejected.
+  if (
+    request.headers['sec-fetch-site'] === 'same-origin' &&
+    (request.headers.origin === undefined || request.headers.origin === expectedOrigin)
+  ) return true;
   sendJson(response, 403, { ok: false, error: 'console_origin_rejected' });
   return false;
 }

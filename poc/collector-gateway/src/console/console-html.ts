@@ -3,15 +3,15 @@ export const consoleHtml = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Collector Browser Host</title>
+  <title>Local Collector Gateway</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="topbar">
     <div>
       <p class="eyebrow">PERSONAL INTELLIGENCE</p>
-      <h1>Collector Browser Host</h1>
-      <p class="subtitle">持久 Profile、多页面租约与扩展连接的本地控制面</p>
+      <h1>Local Collector Gateway</h1>
+      <p class="subtitle">用户日常浏览器扩展、受限本地 API 与原始证据的本地控制面</p>
     </div>
     <div class="host-actions">
       <span id="host-state" class="badge neutral">读取中</span>
@@ -31,10 +31,33 @@ export const consoleHtml = `<!doctype html>
     <section class="panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">COLLECTION PROFILES</p>
-          <h2>账号与浏览器会话</h2>
+          <p class="eyebrow">USER-OWNED BROWSER</p>
+          <h2>日常浏览器扩展</h2>
+        </div>
+        <button id="create-browser-binding-pairing" type="button">创建一次性配对码</button>
+      </div>
+      <p class="panel-copy">在用户平时使用、已登录的 Chrome/Edge 中安装扩展后，在扩展控制页填入这里生成的会话 ID 与八位配对码。Gateway 不创建、启动、关闭或读取浏览器 Profile、Cookie、密码或 Token。</p>
+      <div id="browser-binding-pairing" class="pairing-ticket" hidden>
+        <p>此配对码五分钟后失效，成功后立即作废。不要复制到聊天记录、命令行历史或其他应用。</p>
+        <dl>
+          <div><dt>Gateway</dt><dd id="browser-binding-pairing-origin"></dd></div>
+          <div><dt>身份指纹</dt><dd><code id="browser-binding-pairing-fingerprint"></code></dd></div>
+          <div><dt>会话 ID</dt><dd><code id="browser-binding-pairing-session"></code></dd></div>
+          <div><dt>配对码</dt><dd><code id="browser-binding-pairing-code"></code></dd></div>
+        </dl>
+      </div>
+      <div id="browser-bindings" class="client-grid" aria-live="polite"></div>
+      <p id="browser-bindings-empty" class="empty" hidden>尚未配对任何日常浏览器扩展。</p>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">TEST / ISOLATED-ACCOUNT LANE</p>
+          <h2>受管测试 Profile</h2>
         </div>
       </div>
+      <p class="panel-copy">此面板仍是旧的隔离 Browser Host 测试通道，不是正式用户日常浏览器安装路径。</p>
       <form id="create-profile" class="profile-form">
         <label>平台
           <select name="platform">

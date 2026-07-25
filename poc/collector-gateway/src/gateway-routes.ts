@@ -47,6 +47,10 @@ import { bilibiliTranscriptInput } from './bilibili-transcript-contract';
 import { bilibiliDanmakuInput } from './bilibili-danmaku-contract';
 import { bilibiliVideoDiscussionInput } from './bilibili-video-discussion-contract';
 import type { BilibiliTranscriptHostRunner } from './bilibili-transcript-host-runner';
+import {
+  handleBrowserBindingRoute,
+  type BrowserBindingRouteContext
+} from './browser-binding-routes';
 import type { CollectionBrowserManager } from './browser-manager';
 import {
   handleCollectorServiceRoute,
@@ -59,7 +63,7 @@ import { readJsonBody, requireSameOrigin, send, sendJson } from './gateway-http'
 
 const PROFILE_ID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 
-export interface GatewayRouteContext extends CollectorServiceRouteContext {
+export interface GatewayRouteContext extends CollectorServiceRouteContext, BrowserBindingRouteContext {
   browserManager: CollectionBrowserManager;
   profileRegistry: BrowserProfileRegistry;
   accountSafety: AccountSafetyRegistry;
@@ -128,10 +132,12 @@ export async function handleGatewayRoute(
         hostProcessId: snapshot.hostProcessId,
         snapshotRevision: snapshot.snapshotRevision,
         profileCount: snapshot.profiles.filter((profile) => profile.running).length
-      } : { state: 'stopped' }
+      } : { state: 'stopped' },
+      browserBindingCount: context.pairingBroker.pairedExtensionCount
     });
     return true;
   }
+  if (await handleBrowserBindingRoute(request, response, url, context)) return true;
   if (await handleCollectorServiceRoute(request, response, url, context)) return true;
   if (request.method === 'GET' && url.pathname === '/v1/browser-host/snapshot') {
     const snapshot = await context.browserManager.snapshotIfRunning();

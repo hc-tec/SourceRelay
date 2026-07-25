@@ -1,10 +1,10 @@
 # 用户自有浏览器扩展模式
 
-- 状态：Accepted，待实现迁移
+- 状态：Accepted；Checkpoint A（扩展配对与 browser binding）已真实本地验证，采集调度/API 迁移待实现
 - 决策日期：2026-07-25
 - 决策记录：[Grill 决策账本第 171 题](collector-grilling-decision-log.md)
 - 替代的生产路径：[`managed-page-pool-browser-host-mvp.md`](managed-page-pool-browser-host-mvp.md) 中的受管 Browser Host / Collection Profile 路径
-- 当前实现状态：仓库代码仍以 `profileId`、Browser Host 和 Playwright 持久 context 为中心；**它尚未实现本文定义的生产模式**。
+- 当前实现状态：扩展已可在普通 Chromium 浏览器中通过一次性配对码与 loopback Gateway 建立 `browserBindingId`；但 `POST /v1/collect` 仍调用旧 `profileId` / Browser Host runner，**日常浏览器采集尚未完成迁移**。
 
 ## 1. 一句话结论
 
@@ -112,7 +112,7 @@ Gateway 不保存 tab 标题、完整 URL、浏览器窗口句柄、Profile 路�
 
 1. 用户在自己平时使用的 Chrome 或 Edge 安装已签名/稳定 ID 的 Collector 扩展；开发态可加载 unpacked 制品，但生产安装必须保证扩展 ID 稳定。
 2. 用户启动本机 Local Collector Gateway 服务。Gateway 仅监听 `127.0.0.1`。
-3. 用户打开扩展控制页，授予精确的 loopback 与平台 optional host permission，并用 Gateway Console 显示的一次性配对码完成配对。
+3. 用户打开扩展控制页，授予精确的 loopback 与平台 optional host permission，并粘贴 Gateway Console 显示的身份指纹、一次性会话 ID 和八位配对码完成配对。
 4. 扩展生成或读取本地 `extensionInstanceId`，验证 Gateway 公钥指纹与签名后，保存配对授权于扩展自己的受限 storage；Gateway 创建 `browserBindingId`。
 
 此过程不创建 Collection Profile，不复制登录态，不要求用户重新扫码登录，也不要求用户将日常浏览器交给 Playwright。
@@ -229,6 +229,13 @@ Native Messaging 若保留，只能作为本地唤醒/传输实现细节，不�
 
 ## 12. 对当前代码的影响
 
-当前 `poc/collector-gateway/src/config.ts`、`browser-manager.ts`、`poc/collector-browser-host` 和扩展 Native Bridge 仍把 `profileId` / `browserSessionId` 作为核心键，并由 Playwright `chromium.launchPersistentContext()` 启动 Gateway 所拥有的目录。这是本文要替换的旧生产实现，而不是可直接给用户安装使用的日常浏览器方案。
+2026-07-25 已完成第一个可运行检查点：
+
+- Gateway Console 显示 Gateway 固定身份指纹，并创建五分钟、一次性的配对会话和八位配对码；它还可列出或撤销去敏 `browserBindingId`；
+- 生产 MV3 扩展在控制页中请求唯一的 optional `http://127.0.0.1/*` 权限，验证 Gateway P-256 签名、配对码摘要与 HMAC 授权后，在扩展 storage 保存配对记录；
+- Gateway 持久化的配对记录使用 `browserBindingId + extensionId + extensionInstanceId`，没有 Profile ID、磁盘路径、Cookie、Token、密码或账号身份；状态读取需要 timestamp、nonce、body digest 和 HMAC；
+- 已用真实 Gateway 进程、真实生产扩展、真实 Chromium 原生权限对话和真实 loopback CORS/HMAC 请求完成自动本地 E2E；没有打开任何平台页，所有 HTTP 请求都限定在临时 `127.0.0.1` Gateway。
+
+当前 `poc/collector-gateway/src/config.ts`、`browser-manager.ts`、`poc/collector-browser-host` 和现有 B站 runner 仍把 `profileId` / `browserSessionId` 作为核心键，并由 Playwright `chromium.launchPersistentContext()` 启动 Gateway 所拥有的目录。这是本文接下来要替换的旧采集实现；当前新 binding 只证明日常浏览器的安装/配对边界，不应被误报为日常浏览器采集能力已经完成。
 
 在迁移完成前，任何运行手册都必须明确称它为“受管测试/隔离账号模式”。不得声称它已接入用户日常 Chrome/Edge，也不得让用户按当前 Browser Host 启动步骤去获得所谓“正常浏览器模式”。

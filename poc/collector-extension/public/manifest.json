@@ -24,6 +24,7 @@
     "https://www.bilibili.com/*"
   ],
   "optional_host_permissions": [
+    "http://127.0.0.1/*",
     "https://www.zhihu.com/*",
     "https://zhuanlan.zhihu.com/*",
     "https://s.weibo.com/*",

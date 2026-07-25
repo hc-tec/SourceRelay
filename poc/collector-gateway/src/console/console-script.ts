@@ -2,6 +2,9 @@ export const consoleScript = `
 const $ = (selector) => document.querySelector(selector);
 const profilesElement = $('#profiles');
 const emptyElement = $('#empty');
+const browserBindingsElement = $('#browser-bindings');
+const browserBindingsEmptyElement = $('#browser-bindings-empty');
+const browserBindingPairingElement = $('#browser-binding-pairing');
 const serviceClientsElement = $('#service-clients');
 const serviceClientsEmptyElement = $('#service-clients-empty');
 const serviceAuditElement = $('#service-audit');
@@ -78,6 +81,24 @@ function profileCard(summary) {
   '</article>';
 }
 
+function browserBindingCard(binding) {
+  const online = binding.state === 'online';
+  return '<article class="client-card" data-browser-binding-id="' + escapeHtml(binding.browserBindingId) + '">' +
+    '<div><h3>浏览器绑定 ' + escapeHtml(binding.browserBindingId) + '</h3>' +
+      '<p>扩展 ' + escapeHtml(binding.extensionId) + '</p>' +
+      '<p>配对于 ' + escapeHtml(binding.pairedAt) + ' · 最近连接 ' + escapeHtml(binding.lastSeenAt ?? '尚未验证') + '</p></div>' +
+    '<div class="profile-actions">' +
+      '<span class="badge ' + (online ? 'good' : 'neutral') + '">' + (online ? '在线' : '已配对') + '</span>' +
+      '<button class="danger" data-browser-binding-action="revoke">撤销</button>' +
+    '</div>' +
+  '</article>';
+}
+
+function renderBrowserBindings(bindings) {
+  browserBindingsElement.innerHTML = bindings.map(browserBindingCard).join('');
+  browserBindingsEmptyElement.hidden = bindings.length !== 0;
+}
+
 function serviceClientCard(client) {
   const revoked = client.revokedAt !== null;
   const scopes = Array.isArray(client.scopes) && client.scopes.length
@@ -129,8 +150,9 @@ function renderServiceAudit(events) {
 }
 
 async function refresh() {
-  const [payload, clientPayload, auditPayload] = await Promise.all([
+  const [payload, bindingPayload, clientPayload, auditPayload] = await Promise.all([
     api('/v1/profiles'),
+    api('/v1/browser-bindings'),
     api('/v1/collector-service/clients'),
     api('/v1/collector-service/audit')
   ]);
@@ -145,6 +167,7 @@ async function refresh() {
   $('#managed-pages').textContent = runtimes.reduce((total, runtime) => total + runtime.managedPages, 0);
   profilesElement.innerHTML = profiles.map(profileCard).join('');
   emptyElement.hidden = profiles.length !== 0;
+  renderBrowserBindings(bindingPayload.bindings ?? []);
   renderServiceClients(clientPayload.clients ?? []);
   renderServiceAudit(auditPayload.events ?? []);
 }
@@ -160,6 +183,42 @@ profilesElement.addEventListener('click', async (event) => {
   button.disabled = true;
   try {
     await api('/v1/profiles/' + encodeURIComponent(profileId) + '/browser/' + action, { method: 'POST', body: '{}' });
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('#create-browser-binding-pairing').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const payload = await api('/v1/browser-bindings/pairing-sessions', { method: 'POST', body: '{}' });
+    const pairing = payload.pairing;
+    $('#browser-binding-pairing-origin').textContent = location.origin;
+    $('#browser-binding-pairing-fingerprint').textContent = pairing.identityFingerprint;
+    $('#browser-binding-pairing-session').textContent = pairing.pairingSessionId;
+    $('#browser-binding-pairing-code').textContent = pairing.pairingCode;
+    browserBindingPairingElement.hidden = false;
+    toast('一次性配对码已生成；请只在当前浏览器扩展控制页使用。');
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+browserBindingsElement.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-browser-binding-action]');
+  if (!button || button.dataset.browserBindingAction !== 'revoke') return;
+  const card = button.closest('[data-browser-binding-id]');
+  const bindingId = card?.dataset.browserBindingId;
+  if (!bindingId || !confirm('撤销后该浏览器扩展不能再连接 Gateway。继续？')) return;
+  button.disabled = true;
+  try {
+    await api('/v1/browser-bindings/' + encodeURIComponent(bindingId) + '/revoke', { method: 'POST', body: '{}' });
     await refresh();
   } catch (error) {
     toast(error.message);

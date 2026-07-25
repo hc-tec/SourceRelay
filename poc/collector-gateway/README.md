@@ -2,7 +2,7 @@
 
 这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度。
 
-> **重要的生产边界（2026-07-25）。** 正式产品应部署为用户日常 Chrome/Edge 中的已配对扩展，使用用户浏览器本来就存在的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。当前代码和本 README 下方的 `profileId`、Browser Host、Collection Profile 启动说明仍是**受管测试/隔离账号路径**，尚未实现正式日常浏览器模式，不能作为用户安装指南。目标架构、安装/配对流程和 API 迁移规则见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
+> **重要的生产边界（2026-07-25）。** 正式产品应部署为用户日常 Chrome/Edge 中的已配对扩展，使用用户浏览器本来就存在的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。当前已经实现并以真实本地 E2E 验证了“Gateway Console 显示固定身份指纹、创建一次性会话/配对码 → 已安装 MV3 扩展申请精确 loopback 权限 → 指纹/签名/HMAC browser binding”的安装连接基础；它不读取登录凭据、不打开平台页面。**但本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 仍是受管测试/隔离账号路径。** 日常浏览器采集调度和上层 API 尚未迁移，不能把当前启动说明当作完整的生产安装指南。目标架构、当前状态和 API 迁移规则见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
 
 ## Local Collector Service API（MVP）
 

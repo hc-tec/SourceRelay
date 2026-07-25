@@ -241,7 +241,10 @@ async function collectorServiceAccess(
   requiredScope: CollectorServiceClientScope
 ): Promise<CollectorServiceAccess> {
   const expectedOrigin = context.identity.publicIdentity.loopbackOrigin;
-  if (request.headers.origin === expectedOrigin && request.headers['sec-fetch-site'] === 'same-origin') {
+  if (
+    request.headers['sec-fetch-site'] === 'same-origin' &&
+    (request.headers.origin === undefined || request.headers.origin === expectedOrigin)
+  ) {
     return { granted: true, principal: { kind: 'console', clientId: null } };
   }
   if (request.headers.origin !== undefined || request.headers['sec-fetch-site'] !== undefined) {

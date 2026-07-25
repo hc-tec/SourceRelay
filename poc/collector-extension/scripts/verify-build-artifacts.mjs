@@ -20,6 +20,7 @@ const approved = {
     'https://www.bilibili.com/*'
   ],
   optionalHostPermissions: [
+    'http://127.0.0.1/*',
     'https://www.zhihu.com/*',
     'https://zhuanlan.zhihu.com/*',
     'https://s.weibo.com/*',
@@ -65,10 +66,11 @@ for (const pattern of allHostPatterns) {
   assert.equal(pattern === '<all_urls>', false, 'build artifact must not use <all_urls>');
   assert.equal(/^\*:/.test(pattern), false, `wildcard schemes are forbidden: ${pattern}`);
   assert.equal(/^https?:\/\/\*(?:\.|\/)/.test(pattern), false, `wildcard hosts are forbidden: ${pattern}`);
+  const isApprovedLoopbackPermission = pattern === 'http://127.0.0.1/*';
   assert.equal(
-    /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\//i.test(pattern),
+    /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\//i.test(pattern) && !isApprovedLoopbackPermission,
     false,
-    'the Extension must not connect to a loopback Gateway'
+    'only the exact optional 127.0.0.1 Gateway permission is allowed'
   );
 }
 
@@ -205,7 +207,21 @@ assert.doesNotMatch(
 );
 assert.match(mainWorldObserverSource, /maximumBodyBytes/, 'MAIN-world observer must enforce route-specific byte ceilings');
 assert.match(mainWorldObserverSource, /__personalIntelligenceNetworkCaptureRouteIds/, 'MAIN-world observer must remain route-bound');
-assert.match(controlSource, /collector\.native-bridge-status\.v1/, 'control page must expose bridge state only');
+assert.match(
+  controlSource,
+  /collector\.user-browser\.gateway-pairing\.v1/,
+  'control page must expose only the explicitly paired user-browser Gateway record'
+);
+assert.match(
+  controlSource,
+  /\/v1\/extension\/pairing\/claim/,
+  'control page must use the fixed Gateway pairing endpoint'
+);
+assert.doesNotMatch(
+  controlSource,
+  /chrome\.debugger|chrome\.cookies|document\.cookie|localStorage|sessionStorage/i,
+  'control page must not gain debugger, cookie, or arbitrary web storage access'
+);
 
 const digest = createHash('sha256').update(await readFile(manifestPath)).digest('hex');
 console.log(JSON.stringify({
@@ -216,6 +232,6 @@ console.log(JSON.stringify({
   permissions: manifest.permissions,
   hostPermissions: manifest.host_permissions ?? [],
   optionalHostPermissions: manifest.optional_host_permissions,
-  retiredLoopbackRuntimeExcluded: true,
+  backgroundLoopbackRuntimeExcluded: true,
   staticPlatformScriptsExcluded: true
 }, null, 2));

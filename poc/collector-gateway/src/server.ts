@@ -37,10 +37,12 @@ import { loadGatewayConfig } from './config';
 import { handleGatewayRoute } from './gateway-routes';
 import { safeErrorCode, sendJson } from './gateway-http';
 import { loadGatewayIdentity } from './identity';
+import { PairingBroker } from './pairing';
 import { BrowserProfileRegistry } from './profiles';
 
 const config = loadGatewayConfig();
 const identity = await loadGatewayIdentity(config);
+const pairingBroker = await PairingBroker.create(identity, config.stateDirectory);
 const collectorServiceClients = await CollectorServiceClientRegistry.create(config.stateDirectory);
 const collectorServiceAudit = await CollectorServiceAuditLog.create(config.stateDirectory);
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
@@ -159,6 +161,7 @@ const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', identity.publicIdentity.loopbackOrigin);
     const handled = await handleGatewayRoute(request, response, url, {
       identity,
+      pairingBroker,
       collectorServiceClients,
       collectorServiceAudit,
       browserManager,

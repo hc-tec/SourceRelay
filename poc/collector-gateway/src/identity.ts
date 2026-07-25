@@ -7,8 +7,8 @@ import {
 } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { GatewayIdentity } from '../../collector-extension/src/shared/control-plane';
-import { canonicalJson, sha256Hex } from '../../collector-extension/src/shared/cryptography';
+import type { GatewayIdentity } from '@intelligence/collector-contracts';
+import { canonicalJson, sha256Hex } from './canonical-json';
 import type { GatewayConfig } from './config';
 
 interface PersistedGatewayIdentity {
@@ -67,7 +67,7 @@ async function persistedIdentity(stateDirectory: string): Promise<PersistedGatew
 export async function loadGatewayIdentity(config: GatewayConfig): Promise<LoadedGatewayIdentity> {
   const persisted = await persistedIdentity(config.stateDirectory);
   const privateKey: KeyObject = createPrivateKey(persisted.privateKeyPem);
-  const identityFingerprint = await sha256Hex(canonicalJson(persisted.publicKeyJwk));
+  const identityFingerprint = sha256Hex(canonicalJson(persisted.publicKeyJwk));
   const publicIdentity: GatewayIdentity = {
     schemaVersion: 1,
     protocolVersion: 1,

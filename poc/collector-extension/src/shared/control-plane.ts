@@ -10,6 +10,13 @@ import type {
   SupportedPlatform,
   TaskTargetType
 } from './collection-contracts';
+import type {
+  GatewayIdentity,
+  GatewayPairingChallenge,
+  GatewayPairingClaimResponse,
+  GatewayPairingRecord,
+  GatewayPairingSummary
+} from '@intelligence/collector-contracts';
 import {
   strategiesFor,
   strategyProvenance,
@@ -32,48 +39,13 @@ export interface CollectorRuntimeBootstrap {
   controlSurfaceRevision: typeof COLLECTOR_CONTROL_SURFACE_REVISION;
 }
 
-export interface GatewayIdentity {
-  schemaVersion: 1;
-  protocolVersion: typeof COLLECTOR_CONTROL_PROTOCOL_VERSION;
-  gatewayInstanceId: string;
-  displayName: string;
-  loopbackOrigin: string;
-  signingPublicKeyJwk: JsonWebKey;
-  identityFingerprint: string;
-}
-
-export interface GatewayPairingChallenge {
-  schemaVersion: 1;
-  protocolVersion: typeof COLLECTOR_CONTROL_PROTOCOL_VERSION;
-  pairingSessionId: string;
-  gateway: GatewayIdentity;
-  extensionChallenge: string;
-  pairingCodeChallenge: string;
-  pairingAuthorizationFingerprint: string;
-  issuedAt: string;
-  expiresAt: string;
-  gatewaySignature: string;
-}
-
-export interface GatewayPairingRecord {
-  schemaVersion: 1;
-  gatewayInstanceId: string;
-  displayName: string;
-  loopbackOrigin: string;
-  signingPublicKeyJwk: JsonWebKey;
-  identityFingerprint: string;
-  extensionInstanceId: string;
-  pairingAuthorization: string;
-  pairedAt: string;
-}
-
-export type GatewayPairingSummary = Omit<GatewayPairingRecord, 'pairingAuthorization' | 'signingPublicKeyJwk'>;
-
-export interface GatewayPairingClaimResponse {
-  schemaVersion: 1;
-  challenge: GatewayPairingChallenge;
-  pairingAuthorization: string;
-}
+export type {
+  GatewayIdentity,
+  GatewayPairingChallenge,
+  GatewayPairingClaimResponse,
+  GatewayPairingRecord,
+  GatewayPairingSummary
+};
 
 export interface EvidencePlanStage {
   stageId: string;
