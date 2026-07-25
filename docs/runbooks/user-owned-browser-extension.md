@@ -72,6 +72,22 @@ npm run start:user-browser
 
 默认地址是 `http://127.0.0.1:43127`。这个进程只监听 `127.0.0.1`；它不会打开浏览器、不会创建 Chromium，也不会创建、查找或接触任何浏览器 Profile。浏览器是否打开、哪个账号已经登录，都完全由用户自己的 Chrome/Edge 决定。
 
+如果启动明确报出 `collector_gateway_port_in_use`，说明有其他本地进程已占用 43127。优先停止那个已确认的旧 Collector 进程；如果该端口确实属于其他需要保留的程序，请在**首次配对前**选择一个固定端口，例如：
+
+```powershell
+$env:COLLECTOR_GATEWAY_PORT = '43128'
+npm run start:user-browser
+```
+
+随后在扩展控制页填写 `http://127.0.0.1:43128` 并重新配对；上层应用与健康检查也使用同一地址：
+
+```powershell
+$env:COLLECTOR_SERVICE_ORIGIN = 'http://127.0.0.1:43128'
+npm run check:user-browser
+```
+
+Gateway 地址是配对记录的一部分，已经配对后不要随意改端口；若必须改，请显式重新配对，而不是让系统自动挑一个随机端口。
+
 启动后打开：
 
 ```text

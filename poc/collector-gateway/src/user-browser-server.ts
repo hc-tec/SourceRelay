@@ -61,6 +61,22 @@ server.headersTimeout = 5_000;
 server.keepAliveTimeout = 5_000;
 server.maxRequestsPerSocket = 50;
 
+server.once('error', (error) => {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === 'EADDRINUSE') {
+    process.stderr.write(
+      'collector_gateway_port_in_use: 127.0.0.1:' + config.port +
+      ' is already in use. Stop the conflicting local process or choose a stable ' +
+      'COLLECTOR_GATEWAY_PORT before pairing the extension.\n'
+    );
+  } else {
+    process.stderr.write(
+      'collector_gateway_listen_failed:' + (code ?? safeErrorCode(error)) + '\n'
+    );
+  }
+  process.exitCode = 1;
+});
+
 server.listen(config.port, config.host, () => {
   process.stdout.write('User-owned Browser Collector ready at ' + identity.publicIdentity.loopbackOrigin + '\n');
   process.stdout.write('Gateway identity ' + identity.publicIdentity.identityFingerprint + '\n');

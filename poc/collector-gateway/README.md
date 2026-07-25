@@ -83,6 +83,8 @@ npm run start:user-browser
 
 默认状态目录是 `%LOCALAPPDATA%\PersonalIntelligenceCollector\gateway`。正式入口不会启动、附着、关闭或枚举浏览器，不会创建或读取任何浏览器登录目录，也不会导出 Cookie、密码、Token 或网页 Storage。运行 `npm run check:user-browser -- --require-online` 可以只通过 loopback health 状态确认 Gateway 与已配对扩展在线；该检查会为扩展的 30 秒低频本地轮询等待最多 35 秒，但不触发平台导航。
 
+默认端口是 `43127`。如果它被其他进程占用，启动会明确输出 `collector_gateway_port_in_use`，不会再抛出无上下文的 Node 堆栈。应优先停止已确认的旧 Collector；如需保留占用者，请在首次配对前设置固定的 `COLLECTOR_GATEWAY_PORT`，并让扩展和 `COLLECTOR_SERVICE_ORIGIN` 使用同一新地址。端口变化需要重新配对。
+
 `npm start` 在 Gateway package 内同样指向 user-browser entry。只有 `npm run start:isolated-browser` 才是旧 Browser Host 的测试/隔离账号通道；它不是正式安装、配对或上层 API 的 fallback。
 
 ## Local Collector Service API（Legacy test / isolated-account lane）
