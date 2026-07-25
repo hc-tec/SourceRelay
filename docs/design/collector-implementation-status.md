@@ -1,15 +1,18 @@
 # Collector 实现状态
 
 - 分支：`feat/browser-extension-system`
-- 状态日期：2026-07-24
+- 状态日期：2026-07-25
 - 权威决策：[collector-grilling-decision-log.md](collector-grilling-decision-log.md)
 - 产品规格：[platform-strategy-product-spec.md](platform-strategy-product-spec.md)
 - 冲突审计：[collector-decision-audit.md](collector-decision-audit.md)
 - 页面池架构：[managed-page-pool-browser-host-mvp.md](managed-page-pool-browser-host-mvp.md)
+- 正式浏览器所有权：[user-owned-browser-extension-mode.md](user-owned-browser-extension-mode.md)
 - 数据源勘察门禁：[source-reconnaissance-workflow.md](source-reconnaissance-workflow.md)
 - 账号安全熔断门禁：[account-safety-circuit-breaker.md](account-safety-circuit-breaker.md)
 
 ## 1. 当前结论
+
+> **2026-07-25 生产边界修正。** 正式产品必须部署为用户日常 Chrome/Edge 中的配对扩展，依托用户已存在的登录会话；Collector 不管理 Browser Profile，也不得启动或关闭用户浏览器。当前实现仍是 `profileId` + Browser Host + Playwright 持久 context 的受管测试/隔离账号路径，不能描述为已实现日常浏览器生产模式。后续服务 API 必须从 `profileId` 一次性迁移到 `browserBindingId`，受管 Browser Host 仅保留在 test/isolated-account lane。详见[用户自有浏览器扩展模式](user-owned-browser-extension-mode.md)。
 
 Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面。B站匿名首屏关键词搜索是目前唯一获得真实平台 admission、并完成正式 Research Task 调度与本地 Evidence batch 闭环的能力；其他平台和深度能力仍未发布。
 

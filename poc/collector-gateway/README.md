@@ -1,10 +1,12 @@
 # Collector Gateway
 
-这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度；平台登录状态始终留在 Collection Browser Profile。
+这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度。
+
+> **重要的生产边界（2026-07-25）。** 正式产品应部署为用户日常 Chrome/Edge 中的已配对扩展，使用用户浏览器本来就存在的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。当前代码和本 README 下方的 `profileId`、Browser Host、Collection Profile 启动说明仍是**受管测试/隔离账号路径**，尚未实现正式日常浏览器模式，不能作为用户安装指南。目标架构、安装/配对流程和 API 迁移规则见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
 
 ## Local Collector Service API（MVP）
 
-Gateway 同时提供给其他本地应用调用的稳定 API 外观。它只暴露已经登记的采集能力，不提供任意 URL、CSS selector、脚本执行、鼠标坐标或 Network 请求/响应正文接口。因此外部调用仍必经受管 Browser Profile、PageLease、账号安全锁、动作预算、DOM/Network 交叉证据与 raw-first 本地产物。
+Gateway 同时提供给其他本地应用调用的稳定 API 外观。它只暴露已经登记的采集能力，不提供任意 URL、CSS selector、脚本执行、鼠标坐标或 Network 请求/响应正文接口。当前受管测试路径仍经由 Browser Profile / PageLease；正式日常浏览器路径将改为已配对 extension binding、受限 tab lease、账号安全锁、动作预算、DOM/Network 交叉证据与 raw-first 本地产物。
 
 ```text
 Local application

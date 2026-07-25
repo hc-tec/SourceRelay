@@ -1150,6 +1150,16 @@ Contracts/Browser Host core 通过真实本地 Chromium 门禁后可以独立提
 
 Control 页仅保留连接状态、当前页状态、暂停、接管和紧急停止，不复制 Console。MVP 不做远程 Web 控制、云账号、团队协作、复杂分析看板、Evidence Explorer 重写或拖拽 tab 管理；目标是让用户看见状态、理解停机原因并执行安全操作。
 
+## 批次 171：生产浏览器所有权模型修正
+
+### 171. 正式产品部署在用户日常浏览器的扩展中，Collector 不管理任何 Browser Profile
+
+用户日常使用的 Chrome/Edge 本身已经维持平台登录。正式 Collector 只安装 MV3 扩展并与本机 loopback Gateway 配对；不创建、启动、关闭、复制、迁移、定位或读取浏览器 Profile，也不导出 Cookie、Token、密码或 Storage。Chrome/Edge 的 Profile 仍是浏览器自身的内部事实，但不是 Collector 的产品资源。
+
+生产 API 以 `browserBindingId` 指向已配对 extension instance，以短期 `tabLease` 指向用户明确选择的页面或扩展自己创建的可见工作标签页；不再接受 `profileId`、浏览器路径、任意 tab ID、窗口 ID、URL、selector、脚本或坐标。默认自动任务只使用扩展有明确因果记录的工作标签页，绝不接管、复用或关闭用户普通标签页；用户主动交给扩展的当前页只能被短期、受限地使用，用户导航、关闭或接管立即终止 run。
+
+现有 Browser Host、Playwright 持久 context、Collection Profile 和 Native Messaging Host 控制链只保留为测试/隔离账号通道，不能再作为正式安装或上层服务的默认路径。日常浏览器模式的连续登录和可见交互不是绕过 CAPTCHA、风控、限流、付费限制、反自动化或平台规则的手段；account-safety、at-most-once、预算和风险停止规则继续完整适用。
+
 ## 最终一致性审计结论
 
 2026-07-20 对第 1–170 题、产品规格、账号安全设计和当前分支实现进行了交叉审计。没有无法由“用户显式自定义 > 较晚决定 > 较早决定 > 旧规格 > 当前 POC”解决的阻塞冲突。权威覆盖关系为：
@@ -1163,6 +1173,7 @@ Control 页仅保留连接状态、当前页状态、暂停、接管和紧急停
 141–149 覆盖早期扩展单体执行图和 Gateway 直接 Page ownership
 137 覆盖 130 曾允许薄适配器的候选方向
 165 固化 Page Pool 与 Account Safety 的职责边界
+171 覆盖 101–170 中所有将受管 Browser Host / Collection Profile 作为正式生产所有权模型的规定；它们仅在 test/isolated-account lane 中继续适用
 ```
 
-实现不再需要继续产品 Grill。当前权威实现规格为 [Browser Host 与受管页面池 MVP](managed-page-pool-browser-host-mvp.md)；只有真实平台验证暴露现有规则无法决定的新选择时，才追加下一批问题。
+正式生产的权威规格为[用户自有浏览器扩展模式](user-owned-browser-extension-mode.md)。[Browser Host 与受管页面池 MVP](managed-page-pool-browser-host-mvp.md) 仅描述 test/isolated-account lane；只有真实平台验证或扩展/日常浏览器共存暴露现有规则无法决定的新选择时，才追加下一批问题。

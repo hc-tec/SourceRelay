@@ -1,5 +1,7 @@
 # Browser Host 与受管页面池 MVP 架构
 
+> 2026-07-25 状态修正：本文不再定义正式生产浏览器所有权。它只适用于 `test/isolated-account` lane 的隔离 Chromium、Browser Host 和受管 Profile。正式产品运行在用户日常浏览器中已安装、已配对的扩展，权威规格见[用户自有浏览器扩展模式](user-owned-browser-extension-mode.md)。当前代码仍主要实现本文旧路径，迁移尚未完成。
+
 - 状态：Accepted / Checkpoint 2 verified / Checkpoint 3 pending
 - 日期：2026-07-20
 - 决策源：[Grill 决策账本 101–170](collector-grilling-decision-log.md)
