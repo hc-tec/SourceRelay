@@ -14,6 +14,8 @@ import { BilibiliDynamicArtifactStore } from './bilibili-dynamic-artifacts';
 import { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
 import { BilibiliCollectionSeriesArtifactStore } from './bilibili-collection-series-artifacts';
 import { BilibiliCollectionSeriesHostRunner } from './bilibili-collection-series-host-runner';
+import { BilibiliSeriesDetailArtifactStore } from './bilibili-series-detail-artifacts';
+import { BilibiliSeriesDetailHostRunner } from './bilibili-series-detail-host-runner';
 import { BilibiliDanmakuArtifactStore } from './bilibili-danmaku-artifacts';
 import { BilibiliDanmakuHostRunner } from './bilibili-danmaku-host-runner';
 import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
@@ -48,6 +50,7 @@ const accountVideoPaginationArtifacts = await BilibiliAccountVideoPaginationArti
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
 const dynamicArtifacts = await BilibiliDynamicArtifactStore.create(config.stateDirectory);
 const collectionSeriesArtifacts = await BilibiliCollectionSeriesArtifactStore.create(config.stateDirectory);
+const seriesDetailArtifacts = await BilibiliSeriesDetailArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
 const nativeSearchBatchArtifacts = await BilibiliNativeSearchBatchArtifactStore.create(config.stateDirectory);
 const nativeSearchBatchCoverageArtifacts = await BilibiliNativeSearchBatchCoverageArtifactStore.create(config.stateDirectory);
@@ -67,6 +70,12 @@ const collectionSeriesRunner = new BilibiliCollectionSeriesHostRunner({
   browserManager,
   profiles: profileRegistry,
   artifacts: collectionSeriesArtifacts
+});
+const seriesDetailRunner = new BilibiliSeriesDetailHostRunner({
+  accountSafety,
+  browserManager,
+  profiles: profileRegistry,
+  artifacts: seriesDetailArtifacts
 });
 const accountProfileRunner = new BilibiliAccountProfileHostRunner({
   accountSafety,
@@ -163,6 +172,8 @@ const server = createServer(async (request, response) => {
       dynamicRunner,
       collectionSeriesArtifacts,
       collectionSeriesRunner,
+      seriesDetailArtifacts,
+      seriesDetailRunner,
       nativeSearchArtifacts,
       nativeSearchRunner,
       nativeSearchBatchArtifacts,

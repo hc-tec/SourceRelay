@@ -17,6 +17,9 @@ import type { BilibiliDynamicHostRunner } from './bilibili-dynamic-host-runner';
 import type { BilibiliCollectionSeriesArtifactStore } from './bilibili-collection-series-artifacts';
 import type { BilibiliCollectionSeriesHostRunner } from './bilibili-collection-series-host-runner';
 import { bilibiliCollectionSeriesInput } from './bilibili-collection-series-contract';
+import type { BilibiliSeriesDetailArtifactStore } from './bilibili-series-detail-artifacts';
+import type { BilibiliSeriesDetailHostRunner } from './bilibili-series-detail-host-runner';
+import { bilibiliSeriesDetailInput } from './bilibili-series-detail-contract';
 import type { BilibiliDanmakuArtifactStore } from './bilibili-danmaku-artifacts';
 import type { BilibiliDanmakuHostRunner } from './bilibili-danmaku-host-runner';
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
@@ -72,6 +75,8 @@ export interface GatewayRouteContext {
   dynamicRunner: BilibiliDynamicHostRunner;
   collectionSeriesArtifacts: BilibiliCollectionSeriesArtifactStore;
   collectionSeriesRunner: BilibiliCollectionSeriesHostRunner;
+  seriesDetailArtifacts: BilibiliSeriesDetailArtifactStore;
+  seriesDetailRunner: BilibiliSeriesDetailHostRunner;
   nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
   nativeSearchRunner: BilibiliNativeSearchHostRunner;
   nativeSearchBatchArtifacts: BilibiliNativeSearchBatchArtifactStore;
@@ -326,6 +331,48 @@ export async function handleGatewayRoute(
         artifact: result.artifact
       }
     });
+    return true;
+  }
+  const seriesDetailRun = url.pathname.match(
+    new RegExp(`^/v1/profiles/(${PROFILE_ID})/bilibili/collection-series/detail$`, 'i')
+  );
+  if (request.method === 'POST' && seriesDetailRun) {
+    if (!sameOrigin(request, response, context)) return true;
+    const body = await readJsonBody(request);
+    const detail = bilibiliSeriesDetailInput(body);
+    const result = await context.seriesDetailRunner.run({
+      profileId: seriesDetailRun[1]!,
+      ...detail
+    });
+    sendJson(response, 201, {
+      schemaVersion: 1,
+      result: {
+        runId: result.run.runId,
+        state: result.run.state,
+        errorCode: result.run.errorCode,
+        terminalReason: result.run.coverage.terminalReason,
+        coverage: result.run.coverage,
+        artifact: result.artifact
+      }
+    });
+    return true;
+  }
+  if (request.method === 'GET' && url.pathname === '/v1/bilibili-series-detail-artifacts') {
+    if (!sameOrigin(request, response, context)) return true;
+    sendJson(response, 200, { schemaVersion: 1, artifacts: context.seriesDetailArtifacts.list() });
+    return true;
+  }
+  const seriesDetailArtifact = url.pathname.match(
+    new RegExp(`^/v1/bilibili-series-detail-artifacts/(${PROFILE_ID})$`, 'i')
+  );
+  if (request.method === 'GET' && seriesDetailArtifact) {
+    if (!sameOrigin(request, response, context)) return true;
+    const artifact = await context.seriesDetailArtifacts.get(seriesDetailArtifact[1]!);
+    if (!artifact) {
+      sendJson(response, 404, { schemaVersion: 1, ok: false, error: 'artifact_not_found' });
+      return true;
+    }
+    sendJson(response, 200, { schemaVersion: 1, artifact });
     return true;
   }
   const nativeSearchRun = url.pathname.match(

@@ -2,6 +2,8 @@ import type { BrowserContext } from 'playwright';
 import {
   type BilibiliAccountVideoPageClickRequest,
   type BilibiliAccountVideoPageClickResult,
+  type BilibiliCollectionSeriesPageClickRequest,
+  type BilibiliCollectionSeriesPageClickResult,
   type BilibiliTranscriptChineseSelectionRequest,
   type BilibiliTranscriptChineseSelectionResult,
   type BilibiliDanmakuInteractionRequest,
@@ -34,6 +36,7 @@ import { createManagedPage } from './managed-page-creation.js';
 import { captureManagedPageVisualEvidence } from './page-visual-evidence.js';
 import { executeTrustedScroll } from './trusted-scroll.js';
 import { executeTrustedBilibiliAccountVideoPageClick } from './trusted-bilibili-account-video-page-click.js';
+import { executeTrustedBilibiliSeriesPageClick } from './trusted-bilibili-series-page-click.js';
 import { executeTrustedBilibiliTranscriptChineseSelection } from './trusted-bilibili-transcript-chinese-selection.js';
 import { executeTrustedBilibiliVideoDiscussionInteraction } from './trusted-bilibili-video-discussion-interaction.js';
 import { executeTrustedBilibiliDanmakuInteraction } from './trusted-bilibili-danmaku-interaction.js';
@@ -244,6 +247,20 @@ export class PageLedger {
   ): Promise<BilibiliAccountVideoPageClickResult> {
     const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
     return await executeTrustedBilibiliAccountVideoPageClick({
+      record,
+      request,
+      visualEvidenceDirectory,
+      assertLeasedRunRecord: () => this.#assertLeasedRunRecord(record, request),
+      emit: (eventType, reason, actionId) => this.#emit(eventType, record, reason, actionId)
+    });
+  }
+
+  async clickBilibiliCollectionSeriesPage(
+    request: BilibiliCollectionSeriesPageClickRequest,
+    visualEvidenceDirectory: string
+  ): Promise<BilibiliCollectionSeriesPageClickResult> {
+    const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
+    return await executeTrustedBilibiliSeriesPageClick({
       record,
       request,
       visualEvidenceDirectory,

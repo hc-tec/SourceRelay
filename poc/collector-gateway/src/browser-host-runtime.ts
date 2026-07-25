@@ -10,6 +10,8 @@ import {
   BILIBILI_TRANSCRIPT_CHINESE_SELECTION_SCHEMA_VERSION,
   type BilibiliAccountVideoPageClickRequest,
   type BilibiliAccountVideoPageClickResult,
+  type BilibiliCollectionSeriesPageClickRequest,
+  type BilibiliCollectionSeriesPageClickResult,
   type BilibiliTranscriptChineseSelectionRequest,
   type BilibiliTranscriptChineseSelectionResult,
   type BilibiliDanmakuInteractionRequest,
@@ -115,6 +117,14 @@ export class GatewayBrowserHostRuntime {
   ): Promise<BilibiliAccountVideoPageClickResult> {
     return bilibiliAccountVideoPageClickResponse(
       await this.#command({ type: 'click_bilibili_account_video_page', request }, false)
+    );
+  }
+
+  async clickBilibiliCollectionSeriesPage(
+    request: BilibiliCollectionSeriesPageClickRequest
+  ): Promise<BilibiliCollectionSeriesPageClickResult> {
+    return bilibiliAccountVideoPageClickResponse(
+      await this.#command({ type: 'click_bilibili_collection_series_page', request }, false)
     );
   }
 

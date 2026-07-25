@@ -44,7 +44,7 @@ export function isBilibiliSeriesMetadataResponse(response: ProjectableResponse, 
     return response.request().method() === 'GET' &&
       url.origin === 'https://api.bilibili.com' &&
       url.pathname === BILIBILI_SERIES_METADATA_PATH &&
-      url.searchParams.get('series_id') === seriesId;
+      (url.searchParams.get('series_id') === seriesId || url.searchParams.get('season_id') === seriesId);
   } catch {
     return false;
   }
@@ -60,8 +60,8 @@ export function isBilibiliSeriesArchivesResponse(
     return response.request().method() === 'GET' &&
       url.origin === 'https://api.bilibili.com' &&
       url.pathname === BILIBILI_SERIES_ARCHIVES_PATH &&
-      url.searchParams.get('series_id') === seriesId &&
-      url.searchParams.get('pn') === String(pageNumber);
+      (url.searchParams.get('series_id') === seriesId || url.searchParams.get('season_id') === seriesId) &&
+      (url.searchParams.get('page_num') === String(pageNumber) || url.searchParams.get('pn') === String(pageNumber));
   } catch {
     return false;
   }
@@ -150,7 +150,12 @@ export function projectBilibiliSeriesPageWithDom(
     pageNumber: projected.pageNumber,
     pageSize: projected.pageSize,
     declaredTotal: projected.declaredTotal,
-    items: titleMatches,
+    // The response is the complete page source of truth.  DOM cards are a
+    // visibility cross-check and may be a virtualised subset (for example
+    // 25 visible cards while the response contains 30).  Keep every
+    // response-projected item and expose the subset counts below instead of
+    // silently dropping five valid records.
+    items: projected.items,
     responseStatus: response.status,
     responseBodyBytes: response.bodyBytes,
     responseBodySha256: response.bodySha256,

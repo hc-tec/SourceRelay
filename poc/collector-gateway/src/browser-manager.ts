@@ -1,6 +1,8 @@
 import type {
   BilibiliAccountVideoPageClickRequest,
   BilibiliAccountVideoPageClickResult,
+  BilibiliCollectionSeriesPageClickRequest,
+  BilibiliCollectionSeriesPageClickResult,
   BilibiliTranscriptChineseSelectionRequest,
   BilibiliTranscriptChineseSelectionResult,
   BilibiliDanmakuInteractionRequest,
@@ -93,6 +95,13 @@ export class CollectionBrowserManager {
   ): Promise<BilibiliAccountVideoPageClickResult> {
     this.#registry.get(request.profileId);
     return await this.#runtime.clickBilibiliAccountVideoPage(request);
+  }
+
+  async clickBilibiliCollectionSeriesPage(
+    request: BilibiliCollectionSeriesPageClickRequest
+  ): Promise<BilibiliCollectionSeriesPageClickResult> {
+    this.#registry.get(request.profileId);
+    return await this.#runtime.clickBilibiliCollectionSeriesPage(request);
   }
 
   async selectBilibiliTranscriptChinese(

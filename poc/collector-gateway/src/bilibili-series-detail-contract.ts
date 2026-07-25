@@ -5,8 +5,13 @@ import {
 } from './bilibili-account-archive-contract';
 import type { BilibiliCollectionSeriesSchemaPath } from './bilibili-collection-series-contract';
 
-export const BILIBILI_SERIES_METADATA_PATH = '/x/series/series' as const;
-export const BILIBILI_SERIES_ARCHIVES_PATH = '/x/series/archives' as const;
+// The old /x/series/* routes are not used by the current space page.  Both
+// metadata and page cards arrive from this one public response.  Keep the
+// metadata/archives names as aliases so artifact code remains explicit about
+// what it projects without reintroducing the retired routes.
+export const BILIBILI_SERIES_DETAIL_PATH = '/x/polymer/web-space/seasons_archives_list' as const;
+export const BILIBILI_SERIES_METADATA_PATH = BILIBILI_SERIES_DETAIL_PATH;
+export const BILIBILI_SERIES_ARCHIVES_PATH = BILIBILI_SERIES_DETAIL_PATH;
 export const BILIBILI_SERIES_MAX_PAGES = 20;
 export const BILIBILI_SERIES_MAX_ITEMS_PER_PAGE = 50;
 export const BILIBILI_SERIES_RESPONSE_LIMIT = 2 * 1024 * 1024;
@@ -14,11 +19,13 @@ export const BILIBILI_SERIES_RESPONSE_LIMIT = 2 * 1024 * 1024;
 export interface BilibiliSeriesDetailInput {
   canonicalProfileUrl: string;
   stableSeriesId: string;
+  listType: 'series' | 'season';
   maxPages: number;
 }
 
 export interface BilibiliSeriesMetadataProjection {
   stableSeriesId: string;
+  listType: 'series' | 'season';
   stableAccountId: string;
   canonicalPath: string;
   title: string;
@@ -174,7 +181,7 @@ export interface BilibiliSeriesDetailRunRecord {
     requestBody: 'not_read';
     cookiesAndTokens: 'not_read';
     networkQueryAndFragmentValues: 'discarded';
-    canonicalPageQuery: 'stable_type_series_only';
+    canonicalPageQuery: 'stable_type_series_or_season';
     responseProjection: 'public_series_metadata_and_card_fields_allowlist';
     unknownResponseValues: 'not_persisted';
     sortRole: 'platform_default';
@@ -236,42 +243,47 @@ function timestamp(value: unknown): string | null {
 
 export function bilibiliSeriesDetailInput(value: unknown): BilibiliSeriesDetailInput {
   if (!isRecord(value) || Object.keys(value).some((key) =>
-    !['canonicalProfileUrl', 'stableSeriesId', 'maxPages'].includes(key)
+    !['canonicalProfileUrl', 'stableSeriesId', 'listType', 'maxPages'].includes(key)
   )) throw new Error('bilibili_series_detail_input_invalid');
   const canonicalProfileUrl = typeof value.canonicalProfileUrl === 'string'
     ? canonicalBilibiliProfileUrl(value.canonicalProfileUrl)
     : null;
   const stableSeriesId = positiveId(value.stableSeriesId);
+  const listType = value.listType === undefined ? 'series' : value.listType;
   const maxPages = value.maxPages === undefined ? BILIBILI_SERIES_MAX_PAGES : value.maxPages;
   if (
     !canonicalProfileUrl ||
     !stableSeriesId ||
+    (listType !== 'series' && listType !== 'season') ||
     typeof maxPages !== 'number' ||
     !Number.isSafeInteger(maxPages) ||
     maxPages < 1 ||
     maxPages > BILIBILI_SERIES_MAX_PAGES
   ) throw new Error('bilibili_series_detail_input_invalid');
-  return { canonicalProfileUrl, stableSeriesId, maxPages };
+  return { canonicalProfileUrl, stableSeriesId, listType, maxPages };
 }
 
 export function canonicalBilibiliSeriesDetailUrl(
   canonicalProfileUrl: string,
-  stableSeriesId: string
+  stableSeriesId: string,
+  listType: 'series' | 'season' = 'series'
 ): string {
   const canonical = canonicalBilibiliProfileUrl(canonicalProfileUrl);
   const seriesId = positiveId(stableSeriesId);
   if (!canonical || !seriesId) throw new Error('bilibili_series_detail_url_invalid');
-  return `${canonical}/lists/${seriesId}?type=series`;
+  if (listType !== 'series' && listType !== 'season') throw new Error('bilibili_series_detail_list_type_invalid');
+  return `${canonical}/lists/${seriesId}?type=${listType}`;
 }
 
 export function projectBilibiliSeriesMetadataResponse(
   value: unknown,
   expectedAccountId: string,
-  expectedSeriesId: string
+  expectedSeriesId: string,
+  expectedListType: 'series' | 'season' = 'series'
 ): BilibiliSeriesMetadataProjection | null {
   if (!isRecord(value) || value.code !== 0 || !isRecord(value.data)) return null;
   const meta = isRecord(value.data.meta) ? value.data.meta : value.data;
-  const seriesId = positiveId(meta.series_id);
+  const seriesId = positiveId(meta[expectedListType === 'season' ? 'season_id' : 'series_id']);
   const mid = String(meta.mid ?? '');
   const title = cleanText(meta.name ?? meta.title, 500);
   const declaredItemCount = nonNegativeInteger(meta.total);
@@ -285,6 +297,7 @@ export function projectBilibiliSeriesMetadataResponse(
   if (coverValue && !coverUrl) return null;
   return {
     stableSeriesId: seriesId,
+    listType: expectedListType,
     stableAccountId: expectedAccountId,
     canonicalPath: `/${expectedAccountId}/lists/${seriesId}`,
     title,
@@ -304,8 +317,8 @@ export function projectBilibiliSeriesPageResponse(
   const page = value.data.page;
   const archives = value.data.archives;
   if (!isRecord(page) || !Array.isArray(archives)) return null;
-  const pageNumber = positiveInteger(page.num ?? page.pn);
-  const pageSize = positiveInteger(page.size ?? page.ps);
+  const pageNumber = positiveInteger(page.page_num ?? page.num ?? page.pn);
+  const pageSize = positiveInteger(page.page_size ?? page.size ?? page.ps);
   const declaredTotal = nonNegativeInteger(page.total ?? page.count);
   if (
     pageNumber !== expectedPageNumber ||

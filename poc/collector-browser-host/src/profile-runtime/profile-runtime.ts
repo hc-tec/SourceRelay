@@ -2,6 +2,8 @@ import type { BrowserContext } from 'playwright';
 import {
   type BilibiliAccountVideoPageClickRequest,
   type BilibiliAccountVideoPageClickResult,
+  type BilibiliCollectionSeriesPageClickRequest,
+  type BilibiliCollectionSeriesPageClickResult,
   type BilibiliTranscriptChineseSelectionRequest,
   type BilibiliTranscriptChineseSelectionResult,
   type BilibiliDanmakuInteractionRequest,
@@ -198,6 +200,12 @@ export class ProfileRuntime {
     request: BilibiliAccountVideoPageClickRequest
   ): Promise<BilibiliAccountVideoPageClickResult> {
     return this.#ledger.clickBilibiliAccountVideoPage(request, this.#visualEvidenceDirectory);
+  }
+
+  clickBilibiliCollectionSeriesPage(
+    request: BilibiliCollectionSeriesPageClickRequest
+  ): Promise<BilibiliCollectionSeriesPageClickResult> {
+    return this.#ledger.clickBilibiliCollectionSeriesPage(request, this.#visualEvidenceDirectory);
   }
 
   selectBilibiliTranscriptChinese(

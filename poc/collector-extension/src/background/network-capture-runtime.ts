@@ -19,7 +19,8 @@ const MAXIMUM_ARM_LIFETIME_MS = 60_000;
 export type NetworkCaptureArmPurpose =
   | 'dynamic_strategy'
   | 'bilibili_transcript_strategy'
-  | 'collection_series_strategy';
+  | 'collection_series_strategy'
+  | 'collection_series_detail_strategy';
 
 export interface NetworkCaptureArm {
   platform: SupportedPlatform;
@@ -76,9 +77,25 @@ function canonicalCollectionSeriesUrl(value: string): string | null {
   }
 }
 
+function canonicalCollectionSeriesDetailUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    const match = url.protocol === 'https:' && url.hostname === 'space.bilibili.com'
+      ? url.pathname.match(/^\/(\d{1,20})\/lists\/(\d{1,20})\/?$/)
+      : null;
+    const type = url.searchParams.get('type');
+    return match?.[1] && match[2] && (type === 'series' || type === 'season')
+      ? `https://space.bilibili.com/${match[1]}/lists/${match[2]}?type=${type}`
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function canonicalNavigationUrl(purpose: NetworkCaptureArmPurpose, value: string): string | null {
   if (purpose === 'dynamic_strategy') return canonicalDynamicUrl(value);
   if (purpose === 'collection_series_strategy') return canonicalCollectionSeriesUrl(value);
+  if (purpose === 'collection_series_detail_strategy') return canonicalCollectionSeriesDetailUrl(value);
   return canonicalBilibiliVideoUrl(value, 'observed_document');
 }
 
@@ -86,7 +103,7 @@ function validContentScriptId(purpose: NetworkCaptureArmPurpose, value: unknown)
   return typeof value === 'string' && (
     purpose === 'dynamic_strategy'
       ? /^collector-dynamic-[a-z0-9-]{1,80}$/.test(value)
-      : purpose === 'collection_series_strategy'
+      : purpose === 'collection_series_strategy' || purpose === 'collection_series_detail_strategy'
         ? /^collector-collection-series-[a-z0-9-]{1,80}$/.test(value)
         : /^collector-transcript-[a-z0-9-]{1,80}$/.test(value)
   );
@@ -94,7 +111,7 @@ function validContentScriptId(purpose: NetworkCaptureArmPurpose, value: unknown)
 
 function isNetworkCaptureArmPurpose(value: unknown): value is NetworkCaptureArmPurpose {
   return value === 'dynamic_strategy' || value === 'bilibili_transcript_strategy' ||
-    value === 'collection_series_strategy';
+    value === 'collection_series_strategy' || value === 'collection_series_detail_strategy';
 }
 
 export async function armNetworkCapture(input: {
@@ -255,6 +272,16 @@ export async function readNetworkCaptures(
       .filter((candidate): candidate is NetworkCaptureObservation => candidate !== null)
       .slice(0, arm.maximumObservations)
     : [];
+}
+
+/**
+ * Keep the exact document/route arm alive while advancing a same-document
+ * paginator, but discard already-consumed response observations.  The
+ * detail strategy calls this only after returning a bounded observation so a
+ * subsequent trusted page click can produce a fresh response.
+ */
+export async function clearNetworkCaptureObservations(tabId: number): Promise<void> {
+  await chrome.storage.session.remove(networkCaptureStorageKey(tabId));
 }
 
 export async function clearNetworkCaptureState(tabId: number): Promise<void> {

@@ -25,6 +25,8 @@ export const NETWORK_CAPTURE_MAX_PER_PAGE = 3;
 export const BILIBILI_DYNAMIC_FEED_ROUTE_ID = 'bilibili.dynamic.account-feed.response.v1' as const;
 export const BILIBILI_COLLECTION_SERIES_OVERVIEW_ROUTE_ID =
   'bilibili.collection-series.overview.response.v1' as const;
+export const BILIBILI_COLLECTION_SERIES_DETAIL_ROUTE_ID =
+  'bilibili.collection-series.detail.response.v1' as const;
 
 const MAX_JSON_DEPTH = 8;
 const MAX_OBJECT_PROPERTIES = 80;
@@ -143,6 +145,16 @@ const researchValidationRoutes: readonly NetworkCaptureRoute[] = [
     admission: 'research_validation'
   },
   {
+    id: BILIBILI_COLLECTION_SERIES_DETAIL_ROUTE_ID,
+    platform: 'bilibili',
+    origin: 'https://api.bilibili.com',
+    pathname: '/x/polymer/web-space/seasons_archives_list',
+    pathnameMatch: 'exact',
+    maximumBodyBytes: 2 * 1024 * 1024,
+    projector: 'bounded_json',
+    admission: 'research_validation'
+  },
+  {
     id: BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
     platform: 'bilibili',
     origin: 'https://api.bilibili.com',
@@ -176,6 +188,10 @@ export function bilibiliDynamicResearchRouteIds(): readonly NetworkCaptureRouteI
 
 export function bilibiliCollectionSeriesResearchRouteIds(): readonly NetworkCaptureRouteId[] {
   return [BILIBILI_COLLECTION_SERIES_OVERVIEW_ROUTE_ID];
+}
+
+export function bilibiliCollectionSeriesDetailResearchRouteIds(): readonly NetworkCaptureRouteId[] {
+  return [BILIBILI_COLLECTION_SERIES_DETAIL_ROUTE_ID];
 }
 
 export function approvedNetworkCaptureRouteIds(platform: SupportedPlatform): readonly NetworkCaptureRouteId[] {

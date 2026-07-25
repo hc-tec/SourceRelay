@@ -27,6 +27,8 @@ export interface BilibiliAccountVideoPageClickRequest {
   /** Must equal `expectedActivePage + 1`; arbitrary page jumps are rejected. */
   targetPage: number;
   timeoutMs: number;
+  /** Set only for the same-document collection-series paginator. */
+  pageRole?: 'account_video_inventory' | 'series_detail';
 }
 
 export interface BilibiliAccountVideoPageClickBounds {
@@ -40,7 +42,7 @@ export interface BilibiliAccountVideoPageClickBounds {
 export interface BilibiliAccountVideoPageClickNetworkObservation {
   method: 'GET';
   origin: 'https://api.bilibili.com';
-  path: '/x/space/wbi/arc/search';
+  path: '/x/space/wbi/arc/search' | '/x/polymer/web-space/seasons_archives_list';
   status: number;
   receivedAt: string;
 }

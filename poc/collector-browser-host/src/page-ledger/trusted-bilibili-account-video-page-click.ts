@@ -25,7 +25,8 @@ const MINIMUM_TIMEOUT_MS = 1_000;
 const MAXIMUM_TIMEOUT_MS = 15_000;
 const MAXIMUM_SINGLE_SCROLL_DELTA = 2_400;
 const TARGET_ROUTE_ORIGIN = 'https://api.bilibili.com';
-const TARGET_ROUTE_PATH = '/x/space/wbi/arc/search';
+const ACCOUNT_VIDEO_ROUTE_PATH = '/x/space/wbi/arc/search';
+const SERIES_DETAIL_ROUTE_PATH = '/x/polymer/web-space/seasons_archives_list';
 
 interface PaginationProbe {
   activePage: number | null;
@@ -51,6 +52,9 @@ export function validateTrustedBilibiliAccountVideoPageClickRequest(
 ): void {
   if (request.schemaVersion !== BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_SCHEMA_VERSION) {
     throw hostError({ code: 'bilibili_page_click_schema_invalid', category: 'protocol', scope: 'action' });
+  }
+  if (request.pageRole !== undefined && request.pageRole !== 'account_video_inventory' && request.pageRole !== 'series_detail') {
+    throw hostError({ code: 'bilibili_page_click_page_role_rejected', category: 'page_identity', scope: 'page' });
   }
   if (!ACTION_ID_PATTERN.test(request.actionId)) {
     throw hostError({ code: 'bilibili_page_click_action_id_invalid', category: 'action', scope: 'action' });
@@ -102,7 +106,8 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
       retryClass: 'local_query_only'
     });
   }
-  if (record.platform !== 'bilibili' || record.pageRole !== 'account_video_inventory') {
+  const pageRole = request.pageRole ?? 'account_video_inventory';
+  if (record.platform !== 'bilibili' || record.pageRole !== pageRole) {
     throw hostError({ code: 'bilibili_page_click_page_role_rejected', category: 'page_identity', scope: 'page' });
   }
   if (record.documentGeneration !== request.expectedDocumentGeneration) {
@@ -126,11 +131,13 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
   let actionAttempted = false;
   try {
     let beforeScroll = await readTrustedScrollPosition(record.page, remaining(deadline));
+    const routeMode: PaginationRouteMode = pageRole === 'series_detail' ? 'series_detail' : 'account_video_inventory';
     let initial = await waitForInitialPaginationPrecondition(
       record.page,
       request.expectedActivePage,
       request.targetPage,
-      deadline
+      deadline,
+      routeMode
     );
 
     let afterScroll = beforeScroll;
@@ -164,7 +171,7 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
       );
       await withinDeadline(record.page.mouse.wheel(0, deltaY), remaining(deadline));
       afterScroll = await readTrustedScrollPosition(record.page, remaining(deadline));
-      initial = await readPaginationProbe(record.page, request.targetPage, remaining(deadline));
+      initial = await readPaginationProbe(record.page, request.targetPage, remaining(deadline), routeMode);
       assertInitialPrecondition(initial, request.expectedActivePage, request.targetPage);
       if (!initial.target!.inViewport) throw new Error('bilibili_page_click_target_not_in_viewport_after_scroll');
     }
@@ -180,7 +187,7 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
     const pointerX = Math.floor(target.bounds.x + target.bounds.width / 2);
     const pointerY = Math.floor(target.bounds.y + target.bounds.height / 2);
     await withinDeadline(record.page.mouse.move(pointerX, pointerY), remaining(deadline));
-    const hovered = await readPaginationProbe(record.page, request.targetPage, remaining(deadline));
+    const hovered = await readPaginationProbe(record.page, request.targetPage, remaining(deadline), routeMode);
     assertClickableTarget(hovered, request.expectedActivePage, request.targetPage);
     const beforeVisualEvidence = await withinDeadline(captureManagedPageVisualEvidence({
       page: record.page,
@@ -192,7 +199,7 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
 
     const observations: BilibiliAccountVideoPageClickNetworkObservation[] = [];
     const onResponse = (response: Response): void => {
-      const observation = routeObservation(response);
+      const observation = routeObservation(response, routeMode);
       if (observation && observations.length < BILIBILI_ACCOUNT_VIDEO_PAGE_CLICK_MAX_NETWORK_OBSERVATIONS) {
         observations.push(observation);
       }
@@ -203,7 +210,7 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
       await withinDeadline(record.page.mouse.up({ button: 'left' }), remaining(deadline));
       const neutral = await findNeutralPointerTarget(record.page, remaining(deadline));
       await withinDeadline(record.page.mouse.move(neutral.x, neutral.y), remaining(deadline));
-      const after = await waitForPaginationPostcondition(record.page, request.targetPage, observations, deadline);
+      const after = await waitForPaginationPostcondition(record.page, request.targetPage, observations, deadline, routeMode);
       assertSameDocument(record, request);
       const afterVisualEvidence = await withinDeadline(captureManagedPageVisualEvidence({
         page: record.page,
@@ -304,7 +311,14 @@ function requiredSingleScrollDelta(bounds: BilibiliAccountVideoPageClickBounds, 
   return delta >= 1 && delta <= MAXIMUM_SINGLE_SCROLL_DELTA ? delta : null;
 }
 
-async function readPaginationProbe(page: Page, targetPage: number, timeoutMs: number): Promise<PaginationProbe> {
+type PaginationRouteMode = 'account_video_inventory' | 'series_detail';
+
+async function readPaginationProbe(
+  page: Page,
+  targetPage: number,
+  timeoutMs: number,
+  _routeMode: PaginationRouteMode
+): Promise<PaginationProbe> {
   const value = await withinDeadline(page.evaluate((pageNumber) => {
     const rendered = (element: Element | null): element is HTMLButtonElement => {
       if (!(element instanceof HTMLButtonElement)) return false;
@@ -317,7 +331,11 @@ async function readPaginationProbe(page: Page, targetPage: number, timeoutMs: nu
       const text = (element?.textContent ?? '').trim();
       return /^\d{1,3}$/.test(text) ? Number(text) : null;
     };
-    const root = document.querySelector('.video-pagination.vui_pagenation');
+    // The account list currently adds `.video-pagination`, while the
+    // collection/series detail page exposes only the stable Bilibili
+    // pagination class.  Keep the platform-owned class as the fallback so
+    // both page roles use the same trusted input path.
+    const root = document.querySelector('.video-pagination.vui_pagenation, .vui_pagenation');
     const buttons = root ? Array.from(root.querySelectorAll<HTMLButtonElement>('button.vui_pagenation--btn-num')) : [];
     const active = buttons.find((button) => button.classList.contains('vui_button--active')) ?? null;
     const target = buttons.find((button) => numericPage(button) === pageNumber) ?? null;
@@ -326,9 +344,11 @@ async function readPaginationProbe(page: Page, targetPage: number, timeoutMs: nu
     const centerX = rect ? Math.floor(rect.x + rect.width / 2) : -1;
     const centerY = rect ? Math.floor(rect.y + rect.height / 2) : -1;
     const hit = targetRendered && rect ? document.elementFromPoint(centerX, centerY) : null;
-    const cards = document.querySelector('.video-list.grid-mode');
+    const cards = document.querySelector('.video-list.grid-mode, .list-video-item');
     const renderedCardCount = cards
-      ? Array.from(cards.querySelectorAll<HTMLElement>('.bili-video-card__wrap')).filter((card) => {
+      ? Array.from(cards.querySelectorAll<HTMLElement>('.bili-video-card__wrap, .list-video-item'))
+        .concat(cards.matches('.list-video-item') ? [cards as HTMLElement] : [])
+        .filter((card) => {
         const cardRect = card.getBoundingClientRect();
         const style = getComputedStyle(card);
         return cardRect.width > 0 && cardRect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
@@ -389,17 +409,21 @@ function validatePaginationProbe(value: unknown, targetPage: number): Pagination
   };
 }
 
-function routeObservation(response: Response): BilibiliAccountVideoPageClickNetworkObservation | null {
+function routeObservation(
+  response: Response,
+  routeMode: PaginationRouteMode
+): BilibiliAccountVideoPageClickNetworkObservation | null {
   try {
     if (response.request().method() !== 'GET') return null;
     const url = new URL(response.url());
-    if (url.origin !== TARGET_ROUTE_ORIGIN || url.pathname !== TARGET_ROUTE_PATH) return null;
+    const expectedPath = routeMode === 'series_detail' ? SERIES_DETAIL_ROUTE_PATH : ACCOUNT_VIDEO_ROUTE_PATH;
+    if (url.origin !== TARGET_ROUTE_ORIGIN || url.pathname !== expectedPath) return null;
     const status = response.status();
     if (!Number.isSafeInteger(status) || status < 100 || status > 599) return null;
     return {
       method: 'GET',
       origin: TARGET_ROUTE_ORIGIN,
-      path: TARGET_ROUTE_PATH,
+      path: expectedPath,
       status,
       receivedAt: new Date().toISOString()
     };
@@ -442,13 +466,14 @@ async function waitForPaginationPostcondition(
   page: Page,
   targetPage: number,
   observations: readonly BilibiliAccountVideoPageClickNetworkObservation[],
-  deadline: number
+  deadline: number,
+  routeMode: PaginationRouteMode
 ): Promise<PaginationProbe> {
   let latest: PaginationProbe | null = null;
   while (Date.now() < deadline) {
     const available = deadline - Date.now();
     if (available < 100) break;
-    latest = await readPaginationProbe(page, targetPage, available);
+    latest = await readPaginationProbe(page, targetPage, available, routeMode);
     if (latest.activePage === targetPage && observations.length > 0) return latest;
     await delay(Math.min(100, Math.max(1, deadline - Date.now())));
   }
@@ -460,13 +485,14 @@ async function waitForInitialPaginationPrecondition(
   page: Page,
   expectedActivePage: number,
   targetPage: number,
-  deadline: number
+  deadline: number,
+  routeMode: PaginationRouteMode
 ): Promise<PaginationProbe> {
   let latest: PaginationProbe | null = null;
   while (Date.now() < deadline) {
     const available = deadline - Date.now();
     if (available < 100) break;
-    latest = await readPaginationProbe(page, targetPage, available);
+    latest = await readPaginationProbe(page, targetPage, available, routeMode);
     if (hasInitialPrecondition(latest, expectedActivePage, targetPage)) return latest;
     await delay(Math.min(100, Math.max(1, deadline - Date.now())));
   }

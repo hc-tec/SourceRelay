@@ -50,8 +50,9 @@ try {
   assert.deepEqual(contract.bilibiliSeriesDetailInput({
     canonicalProfileUrl,
     stableSeriesId: seriesId,
+    listType: 'series',
     maxPages: 2
-  }), { canonicalProfileUrl, stableSeriesId: seriesId, maxPages: 2 });
+  }), { canonicalProfileUrl, stableSeriesId: seriesId, listType: 'series', maxPages: 2 });
   assert.throws(() => contract.bilibiliSeriesDetailInput({
     canonicalProfileUrl,
     stableSeriesId: seriesId,
@@ -61,6 +62,10 @@ try {
   assert.equal(
     contract.canonicalBilibiliSeriesDetailUrl(canonicalProfileUrl, seriesId),
     `${canonicalProfileUrl}/lists/${seriesId}?type=series`
+  );
+  assert.equal(
+    contract.canonicalBilibiliSeriesDetailUrl(canonicalProfileUrl, seriesId, 'season'),
+    `${canonicalProfileUrl}/lists/${seriesId}?type=season`
   );
 
   const metadata = contract.projectBilibiliSeriesMetadataResponse({
@@ -84,7 +89,7 @@ try {
     {
       code: 0,
       data: {
-        page: { num: 1, size: 2, total: 3 },
+        page: { page_num: 1, page_size: 2, total: 3 },
         archives: [
           {
             bvid: 'BV1qZSLBYEpa',
@@ -108,7 +113,7 @@ try {
     {
       code: 0,
       data: {
-        page: { num: 2, size: 2, total: 3 },
+        page: { page_num: 2, page_size: 2, total: 3 },
         archives: [{
           bvid: 'BV1GJ411x7h7',
           title: '公开视频三',
@@ -131,7 +136,7 @@ try {
     status: 200,
     bodyBytes: 1_000 + index,
     bodySha256: String(index + 1).repeat(64),
-    queryKeyNames: ['mid', 'only_normal', 'pn', 'ps', 'series_id', 'sort'],
+    queryKeyNames: ['mid', 'page_num', 'page_size', 'season_id', 'sort_reverse'],
     schemaPaths: [
       { path: '$', type: 'object' },
       { path: '$.data.archives', type: 'array', arrayLength: value.data.archives.length }
@@ -162,7 +167,7 @@ try {
   assert.equal(pages.flatMap((page) => page.items).length, 3);
 
   const metadataResponseEvidence = {
-    pathname: '/x/series/series',
+    pathname: '/x/polymer/web-space/seasons_archives_list',
     responseStatus: 200,
     responseBodyBytes: 900,
     responseBodySha256: 'a'.repeat(64),
@@ -235,7 +240,7 @@ try {
       requestBody: 'not_read',
       cookiesAndTokens: 'not_read',
       networkQueryAndFragmentValues: 'discarded',
-      canonicalPageQuery: 'stable_type_series_only',
+      canonicalPageQuery: 'stable_type_series_or_season',
       responseProjection: 'public_series_metadata_and_card_fields_allowlist',
       unknownResponseValues: 'not_persisted',
       sortRole: 'platform_default',

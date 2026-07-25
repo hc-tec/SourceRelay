@@ -5,6 +5,7 @@ import {
   BILIBILI_ACCOUNT_PROFILE_STRATEGY_ID,
   BILIBILI_ACCOUNT_VIDEO_INVENTORY_STRATEGY_ID,
   BILIBILI_COLLECTION_SERIES_STRATEGY_ID,
+  BILIBILI_COLLECTION_SERIES_DETAIL_STRATEGY_ID,
   BILIBILI_DANMAKU_STRATEGY_ID,
   BILIBILI_DISCUSSION_STRATEGY_ID,
   BILIBILI_DYNAMIC_STRATEGY_ID,
@@ -407,7 +408,8 @@ function isCollectorStrategyId(value: unknown): value is StrategyObserverBinding
     value === BILIBILI_TRANSCRIPT_STRATEGY_ID ||
     value === BILIBILI_DISCUSSION_STRATEGY_ID ||
     value === BILIBILI_DANMAKU_STRATEGY_ID ||
-    value === BILIBILI_COLLECTION_SERIES_STRATEGY_ID;
+    value === BILIBILI_COLLECTION_SERIES_STRATEGY_ID ||
+    value === BILIBILI_COLLECTION_SERIES_DETAIL_STRATEGY_ID;
 }
 
 function validStrategyBindingTargetAndBudget(
@@ -441,6 +443,9 @@ function validStrategyBindingTargetAndBudget(
   if (candidate.strategyId === BILIBILI_COLLECTION_SERIES_STRATEGY_ID) {
     return validCollectionSeriesTarget(candidate.target) && candidate.maximumResponseObservations === 1;
   }
+  if (candidate.strategyId === BILIBILI_COLLECTION_SERIES_DETAIL_STRATEGY_ID) {
+    return validCollectionSeriesDetailTarget(candidate.target) && candidate.maximumResponseObservations === 1;
+  }
   return false;
 }
 
@@ -470,6 +475,21 @@ function validCollectionSeriesTarget(value: unknown): boolean {
   const candidate = value as Partial<{ canonicalUrl: string; stableAccountId: string }>;
   if (typeof candidate.stableAccountId !== 'string' || !/^\d{1,20}$/.test(candidate.stableAccountId)) return false;
   return candidate.canonicalUrl === `https://space.bilibili.com/${candidate.stableAccountId}/lists`;
+}
+
+function validCollectionSeriesDetailTarget(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<{
+    canonicalUrl: string;
+    stableAccountId: string;
+    stableSeriesId: string;
+    listType: 'series' | 'season';
+  }>;
+  if (typeof candidate.stableAccountId !== 'string' || !/^\d{1,20}$/.test(candidate.stableAccountId)) return false;
+  if (typeof candidate.stableSeriesId !== 'string' || !/^\d{1,20}$/.test(candidate.stableSeriesId)) return false;
+  if (candidate.listType !== 'series' && candidate.listType !== 'season') return false;
+  return candidate.canonicalUrl ===
+    `https://space.bilibili.com/${candidate.stableAccountId}/lists/${candidate.stableSeriesId}?type=${candidate.listType}`;
 }
 
 function validAccountProfileTarget(value: unknown): boolean {

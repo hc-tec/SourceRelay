@@ -63,7 +63,8 @@ function platformForCurrentPage(): SupportedPlatform | null {
     ((url.hostname === 'www.bilibili.com' && /^\/video\/BV[0-9A-Za-z]{10}\/?$/.test(url.pathname)) ||
       (url.hostname === 'space.bilibili.com' &&
         (/^\/\d{1,20}\/dynamic\/?$/.test(url.pathname) ||
-          /^\/\d{1,20}\/lists\/?$/.test(url.pathname))))
+          /^\/\d{1,20}\/lists\/?$/.test(url.pathname) ||
+          /^\/\d{1,20}\/lists\/\d{1,20}\/?$/.test(url.pathname))))
   ) return 'bilibili';
   return null;
 }

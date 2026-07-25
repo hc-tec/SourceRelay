@@ -24,6 +24,7 @@ export type StrategySurface =
   | 'native_search'
   | 'account_profile'
   | 'account_listing'
+  | 'collection_series'
   | 'content_detail'
   | 'transcript'
   | 'comment_thread'
@@ -462,6 +463,45 @@ function bilibiliCollectionSeriesOverviewStrategy(): StaticPlatformStrategy {
   };
 }
 
+function bilibiliCollectionSeriesDetailStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'bilibili.collection-series.detail.response-dom.v1',
+    version: '1.0.0',
+    platform: 'bilibili',
+    evidenceObjectives: ['collection_series'],
+    acquisition: ['native_navigation', 'visible_dom', 'bounded_interaction', 'approved_response'],
+    maturity: 'build_ready',
+    surface: 'collection_series',
+    nativeEntry: { kind: 'canonical_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['native_navigation', 'visible_dom', 'bounded_interaction', 'approved_response']
+    },
+    bounds: {
+      maxRecords: 1_000,
+      maxReadOnlyActions: 20,
+      firstRenderedPageOnly: false,
+      allowsDetailNavigation: false,
+      allowsCommentNavigation: false,
+      allowsReadOnlyInteraction: true
+    },
+    output: {
+      kind: 'collection_state',
+      partialByDefault: true
+    },
+    browser: {
+      optionalHostPermissions: ['https://space.bilibili.com/*', 'https://api.bilibili.com/*'],
+      domContentMatches: ['https://space.bilibili.com/*'],
+      responseBridgeMatches: ['/x/polymer/web-space/seasons_archives_list']
+    },
+    approvedResponseRouteIds: [],
+    validation: {
+      mode: 'local_live_platform_only',
+      liveRecord: null
+    }
+  };
+}
+
 // This is a compiled, repository-local registry.  It is not a mechanism for
 // downloading plugins, evaluating remote code, or granting a strategy browser
 // privileges.  The Collector Core owns all privileged APIs.
@@ -470,6 +510,7 @@ export const STATIC_PLATFORM_STRATEGIES: readonly StaticPlatformStrategy[] = [
   bilibiliAccountProfileDomStrategy(),
   bilibiliAccountVideoInventoryDomStrategy(),
   bilibiliCollectionSeriesOverviewStrategy(),
+  bilibiliCollectionSeriesDetailStrategy(),
   bilibiliVideoDetailDomStrategy(),
   bilibiliVideoTranscriptTrustedResponseStrategy(),
   bilibiliVideoDiscussionDomStrategy(),

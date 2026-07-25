@@ -29,6 +29,10 @@ import type {
   BilibiliAccountVideoPageClickResult
 } from './bilibili-account-video-pagination.js';
 import type {
+  BilibiliCollectionSeriesPageClickRequest,
+  BilibiliCollectionSeriesPageClickResult
+} from './bilibili-collection-series-detail.js';
+import type {
   BilibiliTranscriptChineseSelectionRequest,
   BilibiliTranscriptChineseSelectionResult
 } from './bilibili-transcript-interaction.js';
@@ -80,6 +84,7 @@ export type BrowserHostCommandBody =
   | { type: 'navigate_page'; request: NavigatePageRequest }
   | { type: 'scroll_page'; request: ScrollPageRequest }
   | { type: 'click_bilibili_account_video_page'; request: BilibiliAccountVideoPageClickRequest }
+  | { type: 'click_bilibili_collection_series_page'; request: BilibiliCollectionSeriesPageClickRequest }
   | { type: 'select_bilibili_transcript_chinese'; request: BilibiliTranscriptChineseSelectionRequest }
   | { type: 'interact_bilibili_danmaku'; request: BilibiliDanmakuInteractionRequest }
   | { type: 'click_bilibili_video_discussion_control'; request: BilibiliVideoDiscussionInteractionRequest }
@@ -114,6 +119,7 @@ export type BrowserHostCommandResult =
   | ManagedPageSummary
   | PageScrollResult
   | BilibiliAccountVideoPageClickResult
+  | BilibiliCollectionSeriesPageClickResult
   | BilibiliTranscriptChineseSelectionResult
   | BilibiliDanmakuInteractionResult
   | BilibiliVideoDiscussionInteractionResult
