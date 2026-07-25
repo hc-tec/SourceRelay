@@ -2,9 +2,45 @@
 
 这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度。
 
-> **重要的生产边界（2026-07-25）。** 正式产品应部署为用户日常 Chrome/Edge 中的已配对扩展，使用用户浏览器本来就存在的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。当前已经实现并以真实本地 E2E 验证了“Gateway Console 显示固定身份指纹、创建一次性会话/配对码 → 已安装 MV3 扩展申请精确 loopback 权限 → 指纹/签名/HMAC browser binding”的安装连接基础；它不读取登录凭据、不打开平台页面。**但本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 仍是受管测试/隔离账号路径。** 日常浏览器采集调度和上层 API 尚未迁移，不能把当前启动说明当作完整的生产安装指南。目标架构、当前状态和 API 迁移规则见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
+> **重要的生产边界（2026-07-25）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。直接模式 MVP 已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab → 一次公开 B站详情导航 → 固定 DOM 投影 → HMAC result → raw-first local artifact。当前只发布 `bilibili.video_detail` 这一条 direct capability。它不读取登录凭据、Cookie、Token 或 Profile 文件。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
 
-## Local Collector Service API（MVP）
+## 日常浏览器 Direct API（当前生产 MVP）
+
+这条 API 的身份单位是 `browserBindingId`，不是 `profileId`。它只接受已经配对、最近在线、未被安全锁定的扩展实例；Gateway 仅投递已登记的 typed work item，不接收任意 URL、selector、脚本、坐标、CDP 或 Network body。
+
+```text
+本地应用（scoped token）
+  → GET  /v2/collector-service/browser-bindings
+  → POST /v2/collect
+  → GET  /v2/collect/operations/{operationId}
+  → GET  /v1/collect/artifacts/bilibili.video_detail/{artifactId}
+```
+
+当前只支持：
+
+```json
+{
+  "schemaVersion": 2,
+  "browserBindingId": "…",
+  "platform": "bilibili",
+  "capability": "bilibili.video_detail",
+  "executionTarget": "collector_work_tab",
+  "input": {
+    "canonicalVideoUrl": "https://www.bilibili.com/video/BV1qZSLBYEpa"
+  }
+}
+```
+
+- `GET /v2/openapi.json`：direct-mode OpenAPI 3.1 contract；
+- `browser-bindings:read`：发现安全摘要后的 binding；
+- `collect:execute`：投递一个异步的已登记 capability；
+- `operations:read`：读取 `queued / claimed / completed / partial / stopped / failed` 状态；
+- `artifacts:read`：读取终态返回的受控 artifact path；
+- `profiles:read` 不属于 direct mode。
+
+工作 tab 只由扩展建立并在成功后保留为可复用；风险、未知导航、用户接管或关闭时不会自动重开或重放。当前 direct runner 对一次结果提交最多进行三次本地 loopback 重试，但绝不重试平台导航。具体命令、安装与恢复流程见 runbook。
+
+## Local Collector Service API（Legacy test / isolated-account lane）
 
 Gateway 同时提供给其他本地应用调用的稳定 API 外观。它只暴露已经登记的采集能力，不提供任意 URL、CSS selector、脚本执行、鼠标坐标或 Network 请求/响应正文接口。当前受管测试路径仍经由 Browser Profile / PageLease；正式日常浏览器路径将改为已配对 extension binding、受限 tab lease、账号安全锁、动作预算、DOM/Network 交叉证据与 raw-first 本地产物。
 
@@ -52,8 +88,11 @@ Console 的“其他本地应用的服务访问”面板可创建、查看和撤
 
 | Scope | 允许的服务路由 |
 |---|---|
+| `browser-bindings:read` | `GET /v2/collector-service/browser-bindings` |
 | `profiles:read` | `GET /v1/collector-service/profiles` |
 | `collect:execute` | `POST /v1/collect` |
+| `collect:execute` | `POST /v2/collect` |
+| `operations:read` | `GET /v2/collect/operations/<operationId>` |
 | `artifacts:read` | `GET /v1/collect/artifacts/<capability>/<artifactId>` |
 
 scope 不足固定返回 `403 collector_service_client_scope_denied`，缺失、格式错误或已撤销 token 固定返回 `401 collector_service_client_authorization_rejected`。旧的 schema-v1 client 会在本地启动时一次性迁移成三个 scope，保留原先全量服务访问语义；新建 client 的 scope 始终按上表的稳定顺序保存。

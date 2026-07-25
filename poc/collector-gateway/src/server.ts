@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { AccountSafetyRegistry } from './account-safety';
+import { BrowserBindingSafetyRegistry } from './browser-binding-safety';
 import { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
 import { BilibiliAccountProfileHostRunner } from './bilibili-account-profile-host-runner';
 import { BilibiliAccountVideoDetailMaterializationArtifactStore } from './bilibili-account-video-detail-materialization-artifacts';
@@ -38,11 +39,14 @@ import { handleGatewayRoute } from './gateway-routes';
 import { safeErrorCode, sendJson } from './gateway-http';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker } from './pairing';
+import { ExtensionWorkQueue } from './extension-work-queue';
 import { BrowserProfileRegistry } from './profiles';
 
 const config = loadGatewayConfig();
 const identity = await loadGatewayIdentity(config);
 const pairingBroker = await PairingBroker.create(identity, config.stateDirectory);
+const browserBindingSafety = await BrowserBindingSafetyRegistry.create(config.stateDirectory);
+const workQueue = await ExtensionWorkQueue.create(identity, config.stateDirectory);
 const collectorServiceClients = await CollectorServiceClientRegistry.create(config.stateDirectory);
 const collectorServiceAudit = await CollectorServiceAuditLog.create(config.stateDirectory);
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
@@ -162,6 +166,8 @@ const server = createServer(async (request, response) => {
     const handled = await handleGatewayRoute(request, response, url, {
       identity,
       pairingBroker,
+      browserBindingSafety,
+      workQueue,
       collectorServiceClients,
       collectorServiceAudit,
       browserManager,

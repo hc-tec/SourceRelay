@@ -21,6 +21,15 @@ export function sendJson(response: ServerResponse, status: number, value: unknow
 }
 
 export async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  return (await readJsonBodyWithRaw(request)).value;
+}
+
+/**
+ * Authenticated extension writes sign the exact UTF-8 body.  Keep that body
+ * alongside the parsed value instead of reserialising JSON and accidentally
+ * validating a different byte sequence.
+ */
+export async function readJsonBodyWithRaw(request: IncomingMessage): Promise<{ raw: string; value: unknown }> {
   if (!String(request.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
     throw new Error('json_content_type_required');
   }
@@ -32,9 +41,10 @@ export async function readJsonBody(request: IncomingMessage): Promise<unknown> {
     if (bytes > MAXIMUM_JSON_BODY_BYTES) throw new Error('request_body_too_large');
     chunks.push(buffer);
   }
-  if (bytes === 0) return {};
+  if (bytes === 0) return { raw: '', value: {} };
+  const raw = Buffer.concat(chunks).toString('utf8');
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
+    return { raw, value: JSON.parse(raw) as unknown };
   } catch {
     throw new Error('request_json_invalid');
   }

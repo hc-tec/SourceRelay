@@ -20,6 +20,7 @@
     "verify:research-contracts": "node scripts/verify-bilibili-account-archive-contract.mjs && node scripts/verify-bilibili-account-profile-contract.mjs && node scripts/verify-bilibili-article-contract.mjs && node scripts/verify-bilibili-collection-series-contract.mjs && node scripts/verify-bilibili-series-detail-contract.mjs && node scripts/verify-transcript-artifacts.mjs && node scripts/verify-transcript-control-loop.mjs",
     "verify:host-integration": "node scripts/verify-real-browser-host-integration.mjs",
     "collector-client": "node scripts/collector-service-reference-client.mjs",
+    "collector-user-browser-client": "node scripts/user-browser-collector-service-reference-client.mjs",
     "verify:artifacts": "node scripts/verify-build-artifacts.mjs",
     "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:account-video-page-two-contract && npm run verify:account-video-inventory-contract && npm run verify:native-search-contract && npm run verify:dynamic-contract && npm run verify:video-detail-contract && npm run build && npm run verify:artifacts",
     "start": "node dist/server.js"

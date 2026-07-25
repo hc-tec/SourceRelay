@@ -94,9 +94,11 @@ export const consoleHtml = `<!doctype html>
         <fieldset class="scope-selector">
           <legend>允许调用</legend>
           <div class="scope-options">
-            <label class="scope-option"><input name="scopes" type="checkbox" value="profiles:read" checked><span><code>profiles:read</code><small>读取可用 Collection Profile 目录</small></span></label>
+            <label class="scope-option"><input name="scopes" type="checkbox" value="browser-bindings:read" checked><span><code>browser-bindings:read</code><small>读取已配对的日常浏览器绑定</small></span></label>
             <label class="scope-option"><input name="scopes" type="checkbox" value="collect:execute" checked><span><code>collect:execute</code><small>执行已登记的采集能力</small></span></label>
+            <label class="scope-option"><input name="scopes" type="checkbox" value="operations:read" checked><span><code>operations:read</code><small>读取异步工作项状态</small></span></label>
             <label class="scope-option"><input name="scopes" type="checkbox" value="artifacts:read" checked><span><code>artifacts:read</code><small>读取 capability 绑定的产物</small></span></label>
+            <label class="scope-option"><input name="scopes" type="checkbox" value="profiles:read"><span><code>profiles:read</code><small>仅旧的隔离 Browser Host 测试通道需要</small></span></label>
           </div>
         </fieldset>
         <button type="submit">创建本地 API token</button>

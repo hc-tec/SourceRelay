@@ -11,7 +11,9 @@ const MAXIMUM_CLIENTS = 32;
 
 export const COLLECTOR_SERVICE_CLIENT_SCOPES = [
   'profiles:read',
+  'browser-bindings:read',
   'collect:execute',
+  'operations:read',
   'artifacts:read'
 ] as const;
 

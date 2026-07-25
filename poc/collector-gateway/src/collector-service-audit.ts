@@ -18,10 +18,16 @@ export type CollectorServiceAuditActor =
   | { kind: 'console' | 'unidentified'; clientId: null }
   | { kind: 'client'; clientId: string };
 
-export type CollectorServiceAuditAction = 'profiles_read' | 'collect' | 'artifact_read';
+export type CollectorServiceAuditAction =
+  | 'profiles_read'
+  | 'browser_bindings_read'
+  | 'collect'
+  | 'operation_read'
+  | 'artifact_read';
 
 export type CollectorServiceAuditOutcome =
   | 'completed'
+  | 'queued'
   | 'partial'
   | 'failed'
   | 'not_found'
@@ -189,11 +195,13 @@ function isAuditActor(value: unknown): value is CollectorServiceAuditActor {
 }
 
 function isAuditAction(value: unknown): value is CollectorServiceAuditAction {
-  return value === 'profiles_read' || value === 'collect' || value === 'artifact_read';
+  return value === 'profiles_read' || value === 'browser_bindings_read' || value === 'collect' ||
+    value === 'operation_read' || value === 'artifact_read';
 }
 
 function isAuditOutcome(value: unknown): value is CollectorServiceAuditOutcome {
-  return value === 'completed' || value === 'partial' || value === 'failed' || value === 'not_found' || value === 'denied';
+  return value === 'completed' || value === 'queued' || value === 'partial' || value === 'failed' ||
+    value === 'not_found' || value === 'denied';
 }
 
 function isTimestamp(value: unknown): value is string {

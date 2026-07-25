@@ -7,6 +7,7 @@ import {
 import { COLLECTOR_EXTENSION_BUILD_FINGERPRINT } from '../shared/build-fingerprint';
 import { initialiseNativeBridge } from './native-bridge';
 import { initialiseNetworkObserverController } from './network-observer-controller';
+import { initialiseExtensionWorkRunner } from './extension-work-runner';
 import { cleanupStrategyScriptRegistrations } from './strategy-script-lifecycle';
 import { initialiseBilibiliAccountProfileDocumentBridge } from './strategies/bilibili-account-profile-strategy';
 import { initialiseBilibiliAccountVideoInventoryDocumentBridge } from './strategies/bilibili-account-video-inventory-strategy';
@@ -31,4 +32,5 @@ initialiseBilibiliVideoDetailDocumentBridge();
 void cleanupExpiredBilibiliCollectionSeriesObserverBindings();
 void cleanupExpiredBilibiliCollectionSeriesDetailObserverBindings();
 void initialiseNativeBridge();
+initialiseExtensionWorkRunner();
 void cleanupStrategyScriptRegistrations();

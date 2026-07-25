@@ -1,0 +1,306 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import {
+  canonicalBilibiliVideoWorkUrl,
+  isExtensionWorkResult,
+  type ExtensionWorkResult
+} from '@intelligence/collector-contracts';
+import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
+import type { BrowserBindingSafetyRegistry } from './browser-binding-safety';
+import { recordBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
+import type { ExtensionWorkQueue } from './extension-work-queue';
+import { readJsonBody, readJsonBodyWithRaw, requireSameOrigin, safeErrorCode, sendJson } from './gateway-http';
+import type { LoadedGatewayIdentity } from './identity';
+import type { PairingBroker } from './pairing';
+
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+const EXTENSION_ID = /^[a-p]{32}$/;
+const WORK_NEXT_PATH = '/v1/extension/work-items/next';
+const WORK_RESULT_PATH = '/v1/extension/work-items/result';
+const EXTENSION_CORS_HEADERS = [
+  'content-type',
+  'authorization',
+  'x-collector-extension-id',
+  'x-collector-extension-instance-id',
+  'x-collector-timestamp',
+  'x-collector-nonce',
+  'x-collector-body-sha256'
+].join(', ');
+
+export interface ExtensionWorkRouteContext {
+  identity: LoadedGatewayIdentity;
+  pairingBroker: PairingBroker;
+  workQueue: ExtensionWorkQueue;
+  browserBindingSafety: BrowserBindingSafetyRegistry;
+  videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
+}
+
+/**
+ * This route family has two deliberately separate callers:
+ *
+ * - an authenticated installed extension can only claim the next signed work
+ *   item and submit its fixed result;
+ * - the same-origin Gateway Console can enqueue/read one registered work
+ *   item or explicitly unlock a risk-stopped binding.
+ *
+ * Neither caller gets a general browser-control surface.
+ */
+export async function handleExtensionWorkRoute(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+  context: ExtensionWorkRouteContext
+): Promise<boolean> {
+  if (request.method === 'OPTIONS' && isExtensionWorkEndpoint(url.pathname)) {
+    const origin = extensionOrigin(request.headers.origin);
+    if (!origin) {
+      sendJson(response, 403, { schemaVersion: 1, ok: false, error: 'extension_origin_required' });
+      return true;
+    }
+    setExtensionCors(response, origin);
+    response.statusCode = 204;
+    response.setHeader('cache-control', 'no-store');
+    response.end();
+    return true;
+  }
+  if (request.method === 'POST' && url.pathname === WORK_NEXT_PATH) {
+    await handleExtensionWorkNext(request, response, context);
+    return true;
+  }
+  if (request.method === 'POST' && url.pathname === WORK_RESULT_PATH) {
+    await handleExtensionWorkResult(request, response, context);
+    return true;
+  }
+
+  const dispatch = url.pathname.match(new RegExp(`^/v1/browser-bindings/(${UUID})/work-items$`, 'i'));
+  if (request.method === 'POST' && dispatch) {
+    if (!requireSameOrigin(request, response, context.identity.publicIdentity.loopbackOrigin)) return true;
+    try {
+      const input = consoleDispatchInput(await readJsonBody(request));
+      const operation = await enqueueBilibiliVideoDetailWork(context, dispatch[1]!, input.canonicalVideoUrl);
+      sendJson(response, 201, { schemaVersion: 1, operation });
+    } catch (error) {
+      sendJson(response, workOperationStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
+    }
+    return true;
+  }
+
+  const operation = url.pathname.match(new RegExp(
+    `^/v1/browser-bindings/(${UUID})/work-items/(${UUID})$`,
+    'i'
+  ));
+  if (request.method === 'GET' && operation) {
+    if (!requireSameOrigin(request, response, context.identity.publicIdentity.loopbackOrigin)) return true;
+    await reconcileExpiredExtensionWork(context);
+    const record = await context.workQueue.get(operation[2]!);
+    if (!record || record.browserBindingId !== operation[1]!) {
+      sendJson(response, 404, { schemaVersion: 1, ok: false, error: 'extension_work_not_found' });
+      return true;
+    }
+    sendJson(response, 200, { schemaVersion: 1, operation: record });
+    return true;
+  }
+
+  const safety = url.pathname.match(new RegExp(`^/v1/browser-bindings/(${UUID})/safety$`, 'i'));
+  if (request.method === 'GET' && safety) {
+    if (!requireSameOrigin(request, response, context.identity.publicIdentity.loopbackOrigin)) return true;
+    const binding = context.pairingBroker.getBrowserBinding(safety[1]!);
+    sendJson(response, 200, {
+      schemaVersion: 1,
+      safety: context.browserBindingSafety.get(binding.browserBindingId, 'bilibili')
+    });
+    return true;
+  }
+
+  const unlock = url.pathname.match(new RegExp(`^/v1/browser-bindings/(${UUID})/safety/unlock$`, 'i'));
+  if (request.method === 'POST' && unlock) {
+    if (!requireSameOrigin(request, response, context.identity.publicIdentity.loopbackOrigin)) return true;
+    try {
+      const binding = context.pairingBroker.getBrowserBinding(unlock[1]!);
+      unlockInput(await readJsonBody(request));
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        safety: await context.browserBindingSafety.unlock(binding.browserBindingId, 'bilibili')
+      });
+    } catch (error) {
+      sendJson(response, workOperationStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
+    }
+    return true;
+  }
+  return false;
+}
+
+/** Shared by the Console and the scoped upper-application service route. */
+export async function enqueueBilibiliVideoDetailWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  canonicalVideoUrl: string
+) {
+  await reconcileExpiredExtensionWork(context);
+  const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
+  if (binding.state !== 'online') throw new Error('browser_binding_offline');
+  const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
+  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
+  if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
+  return await context.workQueue.enqueueBilibiliVideoDetail({
+    browserBindingId: binding.browserBindingId,
+    canonicalVideoUrl
+  });
+}
+
+async function handleExtensionWorkNext(
+  request: IncomingMessage,
+  response: ServerResponse,
+  context: ExtensionWorkRouteContext
+): Promise<void> {
+  const origin = extensionOrigin(request.headers.origin);
+  if (!origin) {
+    sendJson(response, 403, { schemaVersion: 1, ok: false, error: 'extension_origin_required' });
+    return;
+  }
+  setExtensionCors(response, origin);
+  try {
+    const authorised = await authoriseExtensionRequest(request, context, WORK_NEXT_PATH, '');
+    await reconcileExpiredExtensionWork(context);
+    const safety = context.browserBindingSafety.get(authorised.browserBindingId, 'bilibili');
+    if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
+    if (safety.state === 'running') {
+      sendJson(response, 200, { schemaVersion: 1, workItem: null });
+      return;
+    }
+    const item = await context.workQueue.claimNext(authorised.browserBindingId);
+    if (!item) {
+      sendJson(response, 200, { schemaVersion: 1, workItem: null });
+      return;
+    }
+    await context.browserBindingSafety.begin(authorised.browserBindingId, 'bilibili', item.operationId);
+    await context.browserBindingSafety.recordNavigationIntent(authorised.browserBindingId, 'bilibili', item.operationId);
+    sendJson(response, 200, { schemaVersion: 1, workItem: item });
+  } catch (error) {
+    sendJson(response, extensionWorkStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
+  }
+}
+
+async function handleExtensionWorkResult(
+  request: IncomingMessage,
+  response: ServerResponse,
+  context: ExtensionWorkRouteContext
+): Promise<void> {
+  const origin = extensionOrigin(request.headers.origin);
+  if (!origin) {
+    sendJson(response, 403, { schemaVersion: 1, ok: false, error: 'extension_origin_required' });
+    return;
+  }
+  setExtensionCors(response, origin);
+  try {
+    const body = await readJsonBodyWithRaw(request);
+    const authorised = await authoriseExtensionRequest(request, context, WORK_RESULT_PATH, body.raw);
+    if (!isExtensionWorkResult(body.value)) throw new Error('extension_work_result_invalid');
+    const result = body.value as ExtensionWorkResult;
+    const item = context.workQueue.claimedItem(authorised.browserBindingId, result.workId);
+    const artifact = await recordBilibiliVideoDetailExtensionWork({
+      item,
+      result,
+      artifacts: context.videoDetailArtifacts
+    });
+    const operation = await context.workQueue.complete(authorised.browserBindingId, result, artifact);
+    await context.browserBindingSafety.finish(
+      authorised.browserBindingId,
+      'bilibili',
+      result.operationId,
+      result
+    );
+    sendJson(response, 200, { schemaVersion: 1, operation });
+  } catch (error) {
+    sendJson(response, extensionWorkStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
+  }
+}
+
+async function authoriseExtensionRequest(
+  request: IncomingMessage,
+  context: ExtensionWorkRouteContext,
+  pathname: string,
+  body: string
+) {
+  return await context.pairingBroker.authoriseRequest({
+    origin: header(request, 'origin'),
+    extensionId: header(request, 'x-collector-extension-id'),
+    extensionInstanceId: header(request, 'x-collector-extension-instance-id'),
+    timestamp: header(request, 'x-collector-timestamp'),
+    nonce: header(request, 'x-collector-nonce'),
+    bodySha256: header(request, 'x-collector-body-sha256'),
+    authorization: header(request, 'authorization'),
+    method: request.method ?? 'POST',
+    pathname,
+    body
+  });
+}
+
+export async function reconcileExpiredExtensionWork(context: ExtensionWorkRouteContext): Promise<void> {
+  const expired = await context.workQueue.expire();
+  for (const operation of expired) {
+    await context.browserBindingSafety.expire(operation.browserBindingId, 'bilibili', operation.operationId);
+  }
+}
+
+function consoleDispatchInput(value: unknown): { canonicalVideoUrl: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('extension_work_dispatch_input_invalid');
+  const candidate = value as Record<string, unknown>;
+  if (
+    Object.keys(candidate).length !== 5 || candidate.schemaVersion !== 1 || candidate.platform !== 'bilibili' ||
+    candidate.capability !== 'bilibili.video_detail' || candidate.executionTarget !== 'collector_work_tab' ||
+    !candidate.input || typeof candidate.input !== 'object' || Array.isArray(candidate.input)
+  ) throw new Error('extension_work_dispatch_input_invalid');
+  const input = candidate.input as Record<string, unknown>;
+  if (Object.keys(input).length !== 1 || typeof input.canonicalVideoUrl !== 'string') {
+    throw new Error('extension_work_dispatch_input_invalid');
+  }
+  const canonicalVideoUrl = canonicalBilibiliVideoWorkUrl(input.canonicalVideoUrl);
+  if (!canonicalVideoUrl) throw new Error('extension_work_dispatch_input_invalid');
+  return { canonicalVideoUrl };
+}
+
+function unlockInput(value: unknown): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('browser_binding_safety_unlock_input_invalid');
+  const candidate = value as Record<string, unknown>;
+  if (Object.keys(candidate).length !== 1 || candidate.acknowledgement !== 'resume_user_owned_browser_collection') {
+    throw new Error('browser_binding_safety_unlock_acknowledgement_required');
+  }
+}
+
+function isExtensionWorkEndpoint(pathname: string): boolean {
+  return pathname === WORK_NEXT_PATH || pathname === WORK_RESULT_PATH;
+}
+
+function extensionOrigin(value: string | string[] | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const match = /^chrome-extension:\/\/([a-p]{32})$/.exec(value);
+  return match && EXTENSION_ID.test(match[1]!) ? value : null;
+}
+
+function setExtensionCors(response: ServerResponse, origin: string): void {
+  response.setHeader('access-control-allow-origin', origin);
+  response.setHeader('access-control-allow-methods', 'POST, OPTIONS');
+  response.setHeader('access-control-allow-headers', EXTENSION_CORS_HEADERS);
+  response.setHeader('access-control-max-age', '300');
+  response.setHeader('vary', 'Origin');
+}
+
+function header(request: IncomingMessage, name: string): string | undefined {
+  const value = request.headers[name];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function extensionWorkStatus(error: unknown): 400 | 401 | 409 {
+  const code = safeErrorCode(error);
+  if (code.startsWith('pairing_')) return 401;
+  if (code.startsWith('browser_binding_safety_') || code === 'extension_work_not_claimed') return 409;
+  return 400;
+}
+
+function workOperationStatus(error: unknown): 400 | 409 {
+  const code = safeErrorCode(error);
+  return code === 'browser_binding_offline' || code.startsWith('browser_binding_safety_') ||
+    code.startsWith('extension_work_binding_')
+    ? 409
+    : 400;
+}

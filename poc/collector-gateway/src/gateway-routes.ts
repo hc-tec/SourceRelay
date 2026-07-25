@@ -51,11 +51,19 @@ import {
   handleBrowserBindingRoute,
   type BrowserBindingRouteContext
 } from './browser-binding-routes';
+import {
+  handleExtensionWorkRoute,
+  type ExtensionWorkRouteContext
+} from './extension-work-routes';
 import type { CollectionBrowserManager } from './browser-manager';
 import {
   handleCollectorServiceRoute,
   type CollectorServiceRouteContext
 } from './collector-service-routes';
+import {
+  handleUserBrowserCollectorServiceRoute,
+  type UserBrowserCollectorServiceRouteContext
+} from './user-browser-collector-service-routes';
 import type { BrowserProfileRegistry } from './profiles';
 import { createBrowserProfileInput } from './profiles';
 import { consoleHtml, consoleScript, consoleStyles } from './console-assets';
@@ -63,7 +71,11 @@ import { readJsonBody, requireSameOrigin, send, sendJson } from './gateway-http'
 
 const PROFILE_ID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 
-export interface GatewayRouteContext extends CollectorServiceRouteContext, BrowserBindingRouteContext {
+export interface GatewayRouteContext extends
+  CollectorServiceRouteContext,
+  BrowserBindingRouteContext,
+  ExtensionWorkRouteContext,
+  UserBrowserCollectorServiceRouteContext {
   browserManager: CollectionBrowserManager;
   profileRegistry: BrowserProfileRegistry;
   accountSafety: AccountSafetyRegistry;
@@ -137,7 +149,9 @@ export async function handleGatewayRoute(
     });
     return true;
   }
+  if (await handleExtensionWorkRoute(request, response, url, context)) return true;
   if (await handleBrowserBindingRoute(request, response, url, context)) return true;
+  if (await handleUserBrowserCollectorServiceRoute(request, response, url, context)) return true;
   if (await handleCollectorServiceRoute(request, response, url, context)) return true;
   if (request.method === 'GET' && url.pathname === '/v1/browser-host/snapshot') {
     const snapshot = await context.browserManager.snapshotIfRunning();

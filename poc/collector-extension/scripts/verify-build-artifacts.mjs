@@ -12,7 +12,7 @@ const packageMetadata = JSON.parse(await readFile(resolve(root, 'package.json'),
 const runtimeBuild = JSON.parse(await readFile(resolve(outputDirectory, 'runtime-build.json'), 'utf8'));
 
 const approved = {
-  permissions: ['nativeMessaging', 'storage', 'scripting', 'webNavigation'],
+  permissions: ['alarms', 'nativeMessaging', 'storage', 'scripting', 'webNavigation'],
   hostPermissions: [
     'https://space.bilibili.com/*',
     'https://api.bilibili.com/*',
@@ -174,10 +174,26 @@ assert.match(
 assert.match(backgroundSource, new RegExp(runtimeBuild.buildFingerprint), 'worker must publish the current build fingerprint');
 assert.doesNotMatch(
   backgroundSource,
-  /collector\.pollGatewayTasks|collector\.pairGateway|collector\.startCapabilityValidation|collector\.startDetailCapabilityValidation|collector\.startTranscriptCapabilityValidation|collector\.collectionResult|stageLease|127\.0\.0\.1|localhost/i,
-  'retired Gateway loopback, polling, stage lease, and old task protocols must not ship'
+  /collector\.pollGatewayTasks|collector\.pairGateway|collector\.startCapabilityValidation|collector\.startDetailCapabilityValidation|collector\.startTranscriptCapabilityValidation|collector\.collectionResult|stageLease|localhost/i,
+  'retired Gateway loopback, stage lease, and old task protocols must not ship'
 );
-assert.doesNotMatch(backgroundSource, /\bfetch\s*\(/, 'worker must not make arbitrary loopback or platform fetches');
+assert.match(
+  backgroundSource,
+  /\/v1\/extension\/work-items\/next/,
+  'worker may poll only the fixed paired work-item read route'
+);
+assert.match(
+  backgroundSource,
+  /\/v1\/extension\/work-items\/result/,
+  'worker may submit only the fixed paired work-item result route'
+);
+assert.match(backgroundSource, /x-collector-body-sha256/, 'worker work transport must bind an exact body digest');
+assert.match(backgroundSource, /extension_work_signature_invalid/, 'worker must verify the Gateway work-item signature');
+assert.doesNotMatch(
+  backgroundSource,
+  /chrome\.debugger|chrome\.cookies|document\.cookie|localStorage|sessionStorage/i,
+  'worker must not gain debugger, credential, or arbitrary web storage access'
+);
 
 assert.match(bridgeSource, /armedRouteIds/, 'isolated bridge must revalidate exact armed route IDs');
 assert.match(bridgeSource, /collector\.networkCaptureBridgeReady/, 'isolated bridge must bind to the worker before forwarding');
@@ -232,6 +248,6 @@ console.log(JSON.stringify({
   permissions: manifest.permissions,
   hostPermissions: manifest.host_permissions ?? [],
   optionalHostPermissions: manifest.optional_host_permissions,
-  backgroundLoopbackRuntimeExcluded: true,
+  backgroundLoopbackRuntime: 'fixed_paired_auth_only',
   staticPlatformScriptsExcluded: true
 }, null, 2));

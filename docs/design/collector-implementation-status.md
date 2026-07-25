@@ -12,9 +12,9 @@
 
 ## 1. 当前结论
 
-> **2026-07-25 生产边界修正。** 正式产品必须部署为用户日常 Chrome/Edge 中的配对扩展，依托用户已存在的登录会话；Collector 不管理 Browser Profile，也不得启动或关闭用户浏览器。当前实现仍是 `profileId` + Browser Host + Playwright 持久 context 的受管测试/隔离账号路径，不能描述为已实现日常浏览器生产模式。后续服务 API 必须从 `profileId` 一次性迁移到 `browserBindingId`，受管 Browser Host 仅保留在 test/isolated-account lane。详见[用户自有浏览器扩展模式](user-owned-browser-extension-mode.md)。
+> **2026-07-25 生产边界修正。** 正式产品部署为用户日常 Chrome/Edge 中的配对扩展，依托用户已存在的登录会话；Collector 不管理 Browser Profile，也不得启动或关闭用户浏览器。`bilibili.video_detail` 已通过 `browserBindingId`、签名 work item、扩展自有 work tab、固定 DOM 投影和 `/v2/collect` 完成 direct-mode MVP；其余旧能力仍是 `profileId` + Browser Host + Playwright 持久 context 的受管测试/隔离账号路径，不能被 `/v2` fallback 调用。详见[用户自有浏览器扩展模式](user-owned-browser-extension-mode.md)。
 
-同日已完成日常浏览器模式的第一个真实本地检查点：Gateway Console 显示固定身份指纹并创建一次性配对会话/八位配对码，实际 MV3 扩展在普通 Chromium 浏览器中申请精确 `127.0.0.1` optional host permission，校验用户粘贴的 Gateway 身份指纹、Gateway 签名后建立 `browserBindingId`，并以 HMAC/nonce 回读在线状态。E2E 使用真实 Gateway 进程、真实生产扩展和 Windows 原生权限对话；没有平台导航、fake Gateway、fake 页面或受管 Profile。该检查点只完成“安装/配对/绑定”，当前 `/v1/collect` 仍然是旧 `profileId` 服务 API，下一步必须迁移任务 dispatch、扩展工作标签页和证据回传，不能把配对成功误写成采集已迁移。
+同日先完成安装/配对/绑定，再完成第二个真实检查点：实际 MV3 扩展在普通临时 Chromium 中接收 Gateway 签名、一次 claim 的 B站详情 work item，创建并保留自己的 work tab，最多导航一次并把 bounded 首屏 DOM 投影经 HMAC 回传为本地产物。真实 live canary 使用 scoped local API token、真实 Gateway、真实原生 loopback permission 和公开 B站详情页；没有 fake Gateway、fake 页面、受管 Profile、任意 selector/script/CDP 或平台输入重试。`/v1/collect` 仍是旧 `profileId` 测试 API；直接生产 MVP 在 `/v2`，其余能力必须独立迁移。
 
 Collector 已经从 fixture POC 迁移到最小权限 MV3 扩展加 loopback Gateway 的产品控制面。B站匿名首屏关键词搜索是目前唯一获得真实平台 admission、并完成正式 Research Task 调度与本地 Evidence batch 闭环的能力；其他平台和深度能力仍未发布。
 

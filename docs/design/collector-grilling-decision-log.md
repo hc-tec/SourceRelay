@@ -1160,6 +1160,24 @@ Control 页仅保留连接状态、当前页状态、暂停、接管和紧急停
 
 现有 Browser Host、Playwright 持久 context、Collection Profile 和 Native Messaging Host 控制链只保留为测试/隔离账号通道，不能再作为正式安装或上层服务的默认路径。日常浏览器模式的连续登录和可见交互不是绕过 CAPTCHA、风控、限流、付费限制、反自动化或平台规则的手段；account-safety、at-most-once、预算和风险停止规则继续完整适用。
 
+## 批次 172：日常浏览器 direct-mode MVP 交付边界
+
+### 172. 先发布一个不依赖可信页面点击的 direct capability
+
+首个 direct-mode 闭环仅发布 `bilibili.video_detail`：上层应用只能给出严格规范的 B站视频 URL，Gateway 将它转换为 60 秒、P-256 签名、一次 claim 的 typed work item。扩展只允许一次扩展自有 work tab 导航，读取固定首屏 DOM 投影；不读取 response body，不处理字幕、评论、弹幕、分页、hover 或任何 synthetic/trusted input 问题。其他能力不能因共享 B站域名或旧 Browser Host runner 而自动继承可用性。
+
+### 173. work tab 的终态以“保留但不一定复用”为默认
+
+成功且页面身份已验证的 work tab 进入 `idle_reusable`，扩展可在当前 worker 会话内再次租用；它不会关闭、刷新、激活或移动。验证码、限流、未知导航、worker 中断、用户接管、移动或关闭时，tab 被保留给用户检查但移出池，或标记为已丢失；没有自动重开、替换用户 tab、重新 claim 或平台动作重放。MV3 worker 失去运行上下文后，不重新取得旧 tab 所有权；它只报告保守终态。
+
+### 174. 生产 local API 以 `/v2` 独立切入，旧 `/v1` 不作 fallback
+
+direct mode 通过 `GET /v2/collector-service/browser-bindings`、`POST /v2/collect` 和 `GET /v2/collect/operations/{operationId}` 对本地应用提供 `browserBindingId` 身份模型。请求只能使用 `schemaVersion: 2`、`collector_work_tab` 和已登记 input；结果为异步 operation 和受控 artifact path。`/v1/collect` 与 `profiles:read` 保持 test/isolated-account lane，不能被 `/v2` 内部兼容、双写或 fallback 调用。最小 token scope 是 `browser-bindings:read`、`collect:execute`、`operations:read`、`artifacts:read`。
+
+### 175. Gateway 断链只允许有界重试本地 result delivery
+
+扩展每 30 秒进行一次固定、已配对 loopback work read；无 pair、无 work、Gateway 离线或 binding locked 时不做平台动作。平台 work 一旦 claim，不会因 worker 重启、Gateway 重启、过期、弱网或结果未知而再次投递。只有已产生的 HMAC result 可以最多重试三次本地 loopback 提交；到达上限时保持明确停止状态，等待用户恢复，而不是继续轮询或再次导航。
+
 ## 最终一致性审计结论
 
 2026-07-20 对第 1–170 题、产品规格、账号安全设计和当前分支实现进行了交叉审计。没有无法由“用户显式自定义 > 较晚决定 > 较早决定 > 旧规格 > 当前 POC”解决的阻塞冲突。权威覆盖关系为：
@@ -1174,6 +1192,7 @@ Control 页仅保留连接状态、当前页状态、暂停、接管和紧急停
 137 覆盖 130 曾允许薄适配器的候选方向
 165 固化 Page Pool 与 Account Safety 的职责边界
 171 覆盖 101–170 中所有将受管 Browser Host / Collection Profile 作为正式生产所有权模型的规定；它们仅在 test/isolated-account lane 中继续适用
+172–175 固化首个 direct capability、work tab 终态、`/v2` local API 与有界本地投递规则
 ```
 
 正式生产的权威规格为[用户自有浏览器扩展模式](user-owned-browser-extension-mode.md)。[Browser Host 与受管页面池 MVP](managed-page-pool-browser-host-mvp.md) 仅描述 test/isolated-account lane；只有真实平台验证或扩展/日常浏览器共存暴露现有规则无法决定的新选择时，才追加下一批问题。

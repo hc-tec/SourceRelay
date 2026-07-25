@@ -12,6 +12,7 @@
     "default_popup": "control.html"
   },
   "permissions": [
+    "alarms",
     "nativeMessaging",
     "storage",
     "scripting",

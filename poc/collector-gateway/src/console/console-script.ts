@@ -83,12 +83,17 @@ function profileCard(summary) {
 
 function browserBindingCard(binding) {
   const online = binding.state === 'online';
+  const safety = binding.safety ?? null;
+  const locked = safety?.state === 'locked';
+  const safetyLabel = safety ? '采集安全 ' + safety.state : '采集安全未初始化';
   return '<article class="client-card" data-browser-binding-id="' + escapeHtml(binding.browserBindingId) + '">' +
     '<div><h3>浏览器绑定 ' + escapeHtml(binding.browserBindingId) + '</h3>' +
       '<p>扩展 ' + escapeHtml(binding.extensionId) + '</p>' +
       '<p>配对于 ' + escapeHtml(binding.pairedAt) + ' · 最近连接 ' + escapeHtml(binding.lastSeenAt ?? '尚未验证') + '</p></div>' +
     '<div class="profile-actions">' +
       '<span class="badge ' + (online ? 'good' : 'neutral') + '">' + (online ? '在线' : '已配对') + '</span>' +
+      '<span class="badge ' + (locked ? 'bad' : safety?.state === 'running' ? 'warn' : 'neutral') + '">' + escapeHtml(safetyLabel) + '</span>' +
+      (locked ? '<button data-browser-binding-action="unlock">明确恢复采集</button>' : '') +
       '<button class="danger" data-browser-binding-action="revoke">撤销</button>' +
     '</div>' +
   '</article>';
@@ -167,7 +172,15 @@ async function refresh() {
   $('#managed-pages').textContent = runtimes.reduce((total, runtime) => total + runtime.managedPages, 0);
   profilesElement.innerHTML = profiles.map(profileCard).join('');
   emptyElement.hidden = profiles.length !== 0;
-  renderBrowserBindings(bindingPayload.bindings ?? []);
+  const bindings = await Promise.all((bindingPayload.bindings ?? []).map(async (binding) => {
+    try {
+      const safety = await api('/v1/browser-bindings/' + encodeURIComponent(binding.browserBindingId) + '/safety');
+      return { ...binding, safety: safety.safety ?? null };
+    } catch {
+      return { ...binding, safety: null };
+    }
+  }));
+  renderBrowserBindings(bindings);
   renderServiceClients(clientPayload.clients ?? []);
   renderServiceAudit(auditPayload.events ?? []);
 }
@@ -212,13 +225,25 @@ $('#create-browser-binding-pairing').addEventListener('click', async (event) => 
 
 browserBindingsElement.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-browser-binding-action]');
-  if (!button || button.dataset.browserBindingAction !== 'revoke') return;
+  if (!button) return;
   const card = button.closest('[data-browser-binding-id]');
   const bindingId = card?.dataset.browserBindingId;
-  if (!bindingId || !confirm('撤销后该浏览器扩展不能再连接 Gateway。继续？')) return;
+  const action = button.dataset.browserBindingAction;
+  if (!bindingId) return;
+  if (action === 'revoke' && !confirm('撤销后该浏览器扩展不能再连接 Gateway。继续？')) return;
+  if (action === 'unlock' && !confirm('这会恢复该绑定的新采集任务；它不会重放之前停止的页面操作。继续？')) return;
   button.disabled = true;
   try {
-    await api('/v1/browser-bindings/' + encodeURIComponent(bindingId) + '/revoke', { method: 'POST', body: '{}' });
+    if (action === 'revoke') {
+      await api('/v1/browser-bindings/' + encodeURIComponent(bindingId) + '/revoke', { method: 'POST', body: '{}' });
+    } else if (action === 'unlock') {
+      await api('/v1/browser-bindings/' + encodeURIComponent(bindingId) + '/safety/unlock', {
+        method: 'POST',
+        body: JSON.stringify({ acknowledgement: 'resume_user_owned_browser_collection' })
+      });
+    } else {
+      return;
+    }
     await refresh();
   } catch (error) {
     toast(error.message);

@@ -27,12 +27,12 @@ export interface BilibiliVideoDetailDomSnapshot {
  */
 export async function captureBilibiliVideoDetailDom(
   tabId: number,
-  documentId: string
+  documentId?: string
 ): Promise<BilibiliVideoDetailDomSnapshot> {
   let results: chrome.scripting.InjectionResult<BilibiliVideoDetailDomSnapshot>[];
   try {
     results = await chrome.scripting.executeScript({
-      target: { tabId, documentIds: [documentId] },
+      target: documentId ? { tabId, documentIds: [documentId] } : { tabId },
       world: 'ISOLATED',
       func: () => {
         const clean = (value: string | null | undefined, maximum: number): string | null => {

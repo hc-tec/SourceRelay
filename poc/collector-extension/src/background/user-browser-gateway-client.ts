@@ -48,9 +48,33 @@ export async function claimGatewayPairing(input: {
 }
 
 export async function readGatewayBinding(record: GatewayPairingRecord): Promise<BrowserBindingSummary> {
-  const method = 'GET';
-  const pathname = '/v1/extension/browser-binding';
-  const body = '';
+  const payload = await authenticatedGatewayJson(record, {
+    method: 'GET',
+    pathname: '/v1/extension/browser-binding',
+    body: ''
+  });
+  const binding = browserBindingSummary((payload as { binding?: unknown }).binding);
+  if (binding.browserBindingId !== record.browserBindingId) throw new Error('gateway_binding_identity_mismatch');
+  return binding;
+}
+
+/**
+ * Internal-only authenticated transport for the three fixed extension routes.
+ * The caller cannot choose a Gateway host, arbitrary path, headers, or body
+ * digest; those remain bound to the verified pairing record.
+ */
+export async function authenticatedGatewayJson(
+  record: GatewayPairingRecord,
+  request: {
+    method: 'GET' | 'POST';
+    pathname:
+      | '/v1/extension/browser-binding'
+      | '/v1/extension/work-items/next'
+      | '/v1/extension/work-items/result';
+    body: string;
+  }
+): Promise<unknown> {
+  const { method, pathname, body } = request;
   const timestamp = String(Date.now());
   const nonce = randomBase64Url(32);
   const bodySha256 = await sha256Hex(body);
@@ -58,20 +82,21 @@ export async function readGatewayBinding(record: GatewayPairingRecord): Promise<
     record.pairingAuthorization,
     [method, pathname, timestamp, nonce, bodySha256].join('\n')
   );
+  const headers: Record<string, string> = {
+    authorization,
+    'x-collector-extension-id': chrome.runtime.id,
+    'x-collector-extension-instance-id': record.extensionInstanceId,
+    'x-collector-timestamp': timestamp,
+    'x-collector-nonce': nonce,
+    'x-collector-body-sha256': bodySha256
+  };
+  if (body) headers['content-type'] = 'application/json';
   const payload = await fetchJson(`${record.loopbackOrigin}${pathname}`, {
     method,
-    headers: {
-      authorization,
-      'x-collector-extension-id': chrome.runtime.id,
-      'x-collector-extension-instance-id': record.extensionInstanceId,
-      'x-collector-timestamp': timestamp,
-      'x-collector-nonce': nonce,
-      'x-collector-body-sha256': bodySha256
-    }
+    headers,
+    ...(body ? { body } : {})
   });
-  const binding = browserBindingSummary((payload as { binding?: unknown }).binding);
-  if (binding.browserBindingId !== record.browserBindingId) throw new Error('gateway_binding_identity_mismatch');
-  return binding;
+  return payload;
 }
 
 async function verifyPairingClaim(input: {

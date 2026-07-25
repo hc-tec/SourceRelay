@@ -31,6 +31,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
   terminalReason: BilibiliVideoDetailTerminalReason;
   targetTabSelection: BilibiliVideoDetailRunRecord['safeguards']['targetTabSelection'];
   targetPage: BilibiliVideoDetailRunRecord['safeguards']['targetPage'];
+  safeguards?: BilibiliVideoDetailRunRecord['safeguards'];
 }): BilibiliVideoDetailRunRecord {
   const detail = input.detail;
   return {
@@ -67,7 +68,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
       loginOverlayVisible: detail?.loginOverlayVisible ?? false,
       terminalReason: input.terminalReason
     },
-    safeguards: {
+    safeguards: input.safeguards ?? {
       environment: 'local_user_controlled_collection_profile',
       browser: 'visible_playwright_chromium',
       acquisition: 'trusted_navigation_plus_bounded_dom_projection',
