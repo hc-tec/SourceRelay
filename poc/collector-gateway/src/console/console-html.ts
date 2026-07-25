@@ -63,11 +63,19 @@ export const consoleHtml = `<!doctype html>
           <h2>其他本地应用的服务访问</h2>
         </div>
       </div>
-      <p class="panel-copy">创建的 token 只显示一次；Gateway 只保存其摘要。它只能调用已登记的采集能力，不能读取浏览器凭据、Profile 路径或执行任意脚本。</p>
+      <p class="panel-copy">创建的 token 只显示一次；Gateway 只保存其摘要。请选择这个应用真正需要的最小权限。它只能调用已登记的采集能力，不能读取浏览器凭据、Profile 路径或执行任意脚本。</p>
       <form id="create-service-client" class="client-form">
         <label>客户端标签
           <input name="label" maxlength="80" required placeholder="例如：本地分析应用">
         </label>
+        <fieldset class="scope-selector">
+          <legend>允许调用</legend>
+          <div class="scope-options">
+            <label class="scope-option"><input name="scopes" type="checkbox" value="profiles:read" checked><span><code>profiles:read</code><small>读取可用 Collection Profile 目录</small></span></label>
+            <label class="scope-option"><input name="scopes" type="checkbox" value="collect:execute" checked><span><code>collect:execute</code><small>执行已登记的采集能力</small></span></label>
+            <label class="scope-option"><input name="scopes" type="checkbox" value="artifacts:read" checked><span><code>artifacts:read</code><small>读取 capability 绑定的产物</small></span></label>
+          </div>
+        </fieldset>
         <button type="submit">创建本地 API token</button>
       </form>
       <div id="issued-service-token" class="issued-token" hidden>
@@ -77,6 +85,18 @@ export const consoleHtml = `<!doctype html>
       </div>
       <div id="service-clients" class="client-grid" aria-live="polite"></div>
       <p id="service-clients-empty" class="empty" hidden>还没有本地 API 客户端。</p>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">SERVICE AUDIT</p>
+          <h2>去敏调用记录</h2>
+        </div>
+      </div>
+      <p class="panel-copy">只记录调用主体、能力、结果和去敏的 Profile 摘要；不保存查询词、URL、正文、token、Cookie、浏览器身份或 Profile 路径。</p>
+      <div id="service-audit" class="audit-grid" aria-live="polite"></div>
+      <p id="service-audit-empty" class="empty" hidden>还没有 Collector Service 调用记录。</p>
     </section>
 
     <section class="panel notice">

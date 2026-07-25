@@ -44,6 +44,10 @@ let collectorServiceClientTokenAuthorized = false;
 let collectorServiceArtifactTokenGateVerified = false;
 let collectorServiceForeignOriginWithTokenRejected = false;
 let collectorServiceMissingTokenRejected = false;
+let collectorServiceScopesEnforced = false;
+let collectorServiceRevokedTokenRejected = false;
+let collectorServiceAuditRedacted = false;
+let collectorServiceAuditConsoleOnly = false;
 try {
   await mkdir(runtimeRoot, { recursive: true });
   gateway = await startGateway(environment, origin);
@@ -109,6 +113,24 @@ try {
   assert.equal('token' in issuedServiceClient.client, false);
   const clientAuthorization = `Bearer ${issuedServiceClient.token}`;
 
+  const directAuditResponse = await fetch(`${origin}/v1/collector-service/audit`);
+  const directAuditBody = await directAuditResponse.json();
+  assert.equal(directAuditResponse.status, 403);
+  assert.equal(directAuditBody.error, 'console_origin_rejected');
+  collectorServiceAuditConsoleOnly = true;
+
+  const profilesOnlyClient = await request(origin, '/v1/collector-service/clients', {
+    method: 'POST',
+    body: { label: 'Gateway Host profiles-only client', scopes: ['profiles:read'] }
+  });
+  const profilesOnlyAuthorization = `Bearer ${profilesOnlyClient.token}`;
+
+  const artifactsOnlyClient = await request(origin, '/v1/collector-service/clients', {
+    method: 'POST',
+    body: { label: 'Gateway Host artifacts-only client', scopes: ['artifacts:read'] }
+  });
+  const artifactsOnlyAuthorization = `Bearer ${artifactsOnlyClient.token}`;
+
   const missingTokenProfilesResponse = await fetch(`${origin}/v1/collector-service/profiles`);
   const missingTokenProfilesBody = await missingTokenProfilesResponse.json();
   assert.equal(missingTokenProfilesResponse.status, 401);
@@ -123,6 +145,35 @@ try {
   assert.ok(clientProfilesBody.profiles?.some((profile) => profile.profileId === alphaProfileId));
   collectorServiceClientTokenAuthorized = true;
 
+  const profilesOnlyResponse = await fetch(`${origin}/v1/collector-service/profiles`, {
+    headers: { authorization: profilesOnlyAuthorization }
+  });
+  assert.equal(profilesOnlyResponse.status, 200);
+  const profilesOnlyCollectResponse = await fetch(`${origin}/v1/collect`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: profilesOnlyAuthorization
+    },
+    body: JSON.stringify({
+      schemaVersion: 1,
+      profileId: alphaProfileId,
+      platform: 'bilibili',
+      capability: 'bilibili.video_detail',
+      input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+    })
+  });
+  const profilesOnlyCollectBody = await profilesOnlyCollectResponse.json();
+  assert.equal(profilesOnlyCollectResponse.status, 403);
+  assert.equal(profilesOnlyCollectBody.error, 'collector_service_client_scope_denied');
+  const artifactsOnlyProfilesResponse = await fetch(`${origin}/v1/collector-service/profiles`, {
+    headers: { authorization: artifactsOnlyAuthorization }
+  });
+  const artifactsOnlyProfilesBody = await artifactsOnlyProfilesResponse.json();
+  assert.equal(artifactsOnlyProfilesResponse.status, 403);
+  assert.equal(artifactsOnlyProfilesBody.error, 'collector_service_client_scope_denied');
+  collectorServiceScopesEnforced = true;
+
   const unavailableArtifactResponse = await fetch(
     `${origin}/v1/collect/artifacts/bilibili.video_detail/11111111-1111-4111-8111-111111111111`,
     { headers: { authorization: clientAuthorization } }
@@ -131,6 +182,18 @@ try {
   assert.equal(unavailableArtifactResponse.status, 404);
   assert.equal(unavailableArtifactBody.error, 'collector_service_artifact_not_found');
   collectorServiceArtifactTokenGateVerified = true;
+
+  await request(origin, `/v1/collector-service/clients/${profilesOnlyClient.client.clientId}/revoke`, {
+    method: 'POST',
+    body: {}
+  });
+  const revokedProfilesResponse = await fetch(`${origin}/v1/collector-service/profiles`, {
+    headers: { authorization: profilesOnlyAuthorization }
+  });
+  const revokedProfilesBody = await revokedProfilesResponse.json();
+  assert.equal(revokedProfilesResponse.status, 401);
+  assert.equal(revokedProfilesBody.error, 'collector_service_client_authorization_rejected');
+  collectorServiceRevokedTokenRejected = true;
 
   const invalidCollectorResponse = await fetch(`${origin}/v1/collect`, {
     method: 'POST',
@@ -175,6 +238,39 @@ try {
   assert.equal(foreignOriginWithTokenResponse.status, 403);
   assert.equal(foreignOriginWithTokenBody.error, 'console_origin_rejected');
   collectorServiceForeignOriginWithTokenRejected = true;
+
+  const auditPayload = await request(origin, '/v1/collector-service/audit');
+  const auditEvents = auditPayload.events ?? [];
+  assert.ok(auditEvents.some((event) =>
+    event.action === 'profiles_read' &&
+    event.actor?.kind === 'client' &&
+    event.actor.clientId === issuedServiceClient.client.clientId &&
+    event.outcome === 'completed'
+  ));
+  assert.ok(auditEvents.some((event) =>
+    event.action === 'collect' &&
+    event.outcome === 'denied' &&
+    event.errorCode === 'collector_service_client_scope_denied' &&
+    event.actor?.kind === 'unidentified'
+  ));
+  assert.ok(auditEvents.some((event) =>
+    event.action === 'collect' &&
+    event.outcome === 'failed' &&
+    event.errorCode === 'bilibili_video_detail_input_invalid' &&
+    event.profileIdDigest &&
+    event.profileIdDigest !== alphaProfileId
+  ));
+  assert.ok(auditEvents.some((event) =>
+    event.action === 'artifact_read' &&
+    event.outcome === 'not_found' &&
+    event.errorCode === 'collector_service_artifact_not_found'
+  ));
+  const auditSerialized = JSON.stringify(auditPayload);
+  assert.equal(auditSerialized.includes(issuedServiceClient.token), false);
+  assert.equal(auditSerialized.includes(profilesOnlyClient.token), false);
+  assert.equal(auditSerialized.includes(alphaProfileId), false);
+  assert.equal(auditSerialized.includes('https://www.bilibili.com/video/BV1qZSLBYEpa'), false);
+  collectorServiceAuditRedacted = true;
 
   const launchedAlpha = await request(origin, `/v1/profiles/${alphaProfileId}/browser/launch`, {
     method: 'POST',
@@ -250,6 +346,10 @@ try {
     collectorServiceArtifactTokenGateVerified,
     collectorServiceForeignOriginWithTokenRejected,
     collectorServiceMissingTokenRejected,
+    collectorServiceScopesEnforced,
+    collectorServiceRevokedTokenRejected,
+    collectorServiceAuditRedacted,
+    collectorServiceAuditConsoleOnly,
     profileClosedOnlyByExplicitRequest: true,
     hostExitedOnlyByExplicitRequest: true,
     testScopedProcessResidue: 0,
@@ -339,10 +439,10 @@ async function request(origin, path, options = {}) {
   const body = options.body === undefined ? undefined : JSON.stringify(options.body);
   const response = await fetch(`${origin}${path}`, {
     method: options.method ?? 'GET',
-    headers: body === undefined ? undefined : {
-      'content-type': 'application/json',
+    headers: {
       origin,
-      'sec-fetch-site': 'same-origin'
+      'sec-fetch-site': 'same-origin',
+      ...(body === undefined ? {} : { 'content-type': 'application/json' })
     },
     body
   });

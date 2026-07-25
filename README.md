@@ -33,6 +33,8 @@ skills/recon-live-web-interactions/  真实网页人类视角交互侦察 Skill
 - Gateway ECDSA P-256 固定身份、一次性配对 Session、八位配对码、扩展 challenge、签名与 pairing authorization；
 - 配对后的 HMAC 请求认证、nonce 防重放、Gateway 签名 work item、EvidencePlan preflight 和 Console 计划展示；
 - Gateway 管理的持久 Collection / Validation Profile、可见 Playwright Chromium 启动器、生产扩展自动加载、运行状态与逻辑账号绑定；
+- 版本化 Local Collector Service API：外部应用只能调用已登记 capability，不能传任意 URL、selector、脚本、坐标或 Network route；
+- 可撤销 Local API token、显式最小权限 scope（Profile / collect / artifact）与去敏、持久化调用审计；
 - Research Task 按平台绑定同平台 Collection Profile；Validation Profile、任意磁盘路径和匿名 Profile 不能混入正式采集任务；
 - 独立的短时 Validation Run、真实 Chrome 权限、终态恢复、字段白名单、人工 review 与显式源码 admission；
 - B站匿名 `breadth_search + visible_dom` 的精确策略 `v1.1.0` 已完成真实验证；其他 `build_ready` 能力仍不能批准。
@@ -150,8 +152,8 @@ Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git
 
 1. 已完成独立 Contracts、Browser Host、受管多页面池、PageLease、真实本地 Chromium 生命周期门禁和 B站采集 runner；
 2. 将已有 runner 统一经由版本化的 Local Collector Service API 提供给其他本地应用；
-3. 已为独立本地客户端补充 Console 签发、仅摘要持久化、可即时撤销的 Local API token；不放宽 loopback、Profile 或平台安全边界；
-4. 为 Local API token 增加显式 scope 与调用审计，再按同一 API capability 模型逐个平台增加经过真实页面侦察验证的能力。
+3. 已为独立本地客户端补充 Console 签发、仅摘要持久化、可即时撤销的 Local API token，以及显式 scope 和去敏调用审计；不放宽 loopback、Profile 或平台安全边界；
+4. 后续只按同一 API capability 模型逐个平台增加经过真实页面侦察验证的能力；不开放任意浏览器控制接口。
 
 权威产品文档：
 

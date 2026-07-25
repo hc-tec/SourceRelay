@@ -4,6 +4,8 @@ const profilesElement = $('#profiles');
 const emptyElement = $('#empty');
 const serviceClientsElement = $('#service-clients');
 const serviceClientsEmptyElement = $('#service-clients-empty');
+const serviceAuditElement = $('#service-audit');
+const serviceAuditEmptyElement = $('#service-audit-empty');
 const issuedServiceTokenElement = $('#issued-service-token');
 const issuedServiceTokenValueElement = $('#issued-service-token-value');
 const toastElement = $('#toast');
@@ -78,9 +80,13 @@ function profileCard(summary) {
 
 function serviceClientCard(client) {
   const revoked = client.revokedAt !== null;
+  const scopes = Array.isArray(client.scopes) && client.scopes.length
+    ? client.scopes.map(escapeHtml).join(' · ')
+    : '—';
   return '<article class="client-card" data-client-id="' + escapeHtml(client.clientId) + '">' +
     '<div><h3>' + escapeHtml(client.label) + '</h3>' +
       '<p>Client ' + escapeHtml(client.clientId) + ' · fingerprint ' + escapeHtml(client.tokenFingerprint) + '</p>' +
+      '<p>权限 ' + scopes + '</p>' +
       '<p>最近使用 ' + escapeHtml(client.lastUsedAt ?? '从未') + '</p></div>' +
     '<div class="profile-actions">' +
       '<span class="badge ' + (revoked ? 'bad' : 'good') + '">' + (revoked ? '已撤销' : '有效') + '</span>' +
@@ -94,10 +100,39 @@ function renderServiceClients(clients) {
   serviceClientsEmptyElement.hidden = clients.length !== 0;
 }
 
+function auditActor(audit) {
+  if (audit.actor?.kind === 'client') return '本地客户端 ' + escapeHtml(audit.actor.clientId);
+  return audit.actor?.kind === 'console' ? 'Gateway Console' : '未识别调用方';
+}
+
+function auditValue(label, value) {
+  return value ? '<span>' + escapeHtml(label) + ' ' + escapeHtml(value) + '</span>' : '';
+}
+
+function serviceAuditCard(audit) {
+  return '<article class="audit-card">' +
+    '<div><h3>' + escapeHtml(audit.action) + ' · ' + escapeHtml(audit.outcome) + '</h3>' +
+      '<p>' + auditActor(audit) + '</p>' +
+      '<p class="audit-meta">' +
+        auditValue('能力', audit.capability) +
+        auditValue('产物', audit.artifactId) +
+        auditValue('操作', audit.operationId) +
+        auditValue('错误', audit.errorCode) +
+      '</p></div>' +
+    '<time>' + escapeHtml(audit.occurredAt) + '</time>' +
+  '</article>';
+}
+
+function renderServiceAudit(events) {
+  serviceAuditElement.innerHTML = events.map(serviceAuditCard).join('');
+  serviceAuditEmptyElement.hidden = events.length !== 0;
+}
+
 async function refresh() {
-  const [payload, clientPayload] = await Promise.all([
+  const [payload, clientPayload, auditPayload] = await Promise.all([
     api('/v1/profiles'),
-    api('/v1/collector-service/clients')
+    api('/v1/collector-service/clients'),
+    api('/v1/collector-service/audit')
   ]);
   const profiles = payload.profiles ?? [];
   const host = profiles.find((profile) => profile.host)?.host ?? null;
@@ -111,6 +146,7 @@ async function refresh() {
   profilesElement.innerHTML = profiles.map(profileCard).join('');
   emptyElement.hidden = profiles.length !== 0;
   renderServiceClients(clientPayload.clients ?? []);
+  renderServiceAudit(auditPayload.events ?? []);
 }
 
 profilesElement.addEventListener('click', async (event) => {
@@ -158,7 +194,10 @@ $('#create-service-client').addEventListener('submit', async (event) => {
   try {
     const payload = await api('/v1/collector-service/clients', {
       method: 'POST',
-      body: JSON.stringify({ label: String(form.get('label') ?? '').trim() })
+      body: JSON.stringify({
+        label: String(form.get('label') ?? '').trim(),
+        scopes: form.getAll('scopes').map((scope) => String(scope))
+      })
     });
     issuedServiceToken = payload.token;
     issuedServiceTokenValueElement.textContent = issuedServiceToken;

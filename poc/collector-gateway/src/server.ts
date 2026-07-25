@@ -31,6 +31,7 @@ import { BilibiliVideoDiscussionHostRunner } from './bilibili-video-discussion-h
 import { BilibiliTranscriptArtifactStore } from './bilibili-transcript-artifacts';
 import { BilibiliTranscriptHostRunner } from './bilibili-transcript-host-runner';
 import { CollectionBrowserManager } from './browser-manager';
+import { CollectorServiceAuditLog } from './collector-service-audit';
 import { CollectorServiceClientRegistry } from './collector-service-clients';
 import { loadGatewayConfig } from './config';
 import { handleGatewayRoute } from './gateway-routes';
@@ -41,6 +42,7 @@ import { BrowserProfileRegistry } from './profiles';
 const config = loadGatewayConfig();
 const identity = await loadGatewayIdentity(config);
 const collectorServiceClients = await CollectorServiceClientRegistry.create(config.stateDirectory);
+const collectorServiceAudit = await CollectorServiceAuditLog.create(config.stateDirectory);
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
 const accountSafety = await AccountSafetyRegistry.create(config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
@@ -158,6 +160,7 @@ const server = createServer(async (request, response) => {
     const handled = await handleGatewayRoute(request, response, url, {
       identity,
       collectorServiceClients,
+      collectorServiceAudit,
       browserManager,
       profileRegistry,
       accountSafety,

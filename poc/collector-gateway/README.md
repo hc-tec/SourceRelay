@@ -20,6 +20,7 @@ Local application
 - `GET /v1/collector-service/profiles`：返回可被当前服务使用的受管 Collection Profile 的安全目录；
 - `POST /v1/collect`：执行一个已注册 capability。请求 envelope 固定为 `schemaVersion`、`profileId`、`platform`、`capability` 和 capability-specific `input`；`input` 不能再携带 `profileId`；
 - `GET /v1/collect/artifacts/<capability>/<artifactId>`：读取上述结果 `artifact.retrievalPath` 指向的字段白名单化本地产物；
+- `GET /v1/collector-service/audit`：只供 Gateway Console 精确同源读取去敏调用历史，独立本地 client 不可读取；
 - 返回 `operationId` 和 `operationKind`（`run` 或 `batch`），而不是把批任务伪装成单次 run。
 
 例如（`profileId` 必须是已登记、`collection + user_managed + bilibili` 的受管 Profile）：
@@ -40,7 +41,17 @@ Local application
 
 ### 本地 client token
 
-Console 的“其他本地应用的服务访问”面板可创建、查看和撤销 Local API Client。创建时 token 只显示一次；Gateway 只以 `SHA-256` 摘要保存它，并记录最后使用时间与撤销时间。它不是平台 Cookie、登录 Token 或浏览器凭据，也不能用来导出这些数据。
+Console 的“其他本地应用的服务访问”面板可创建、查看和撤销 Local API Client。创建时 token 只显示一次；Gateway 只以 `SHA-256` 摘要保存它，并记录已授予 scope、最后使用时间与撤销时间。它不是平台 Cookie、登录 Token 或浏览器凭据，也不能用来导出这些数据。
+
+创建 client 时必须选择最小权限；Console 默认勾选完整的 MVP scope，调用方可以取消不需要的项：
+
+| Scope | 允许的服务路由 |
+|---|---|
+| `profiles:read` | `GET /v1/collector-service/profiles` |
+| `collect:execute` | `POST /v1/collect` |
+| `artifacts:read` | `GET /v1/collect/artifacts/<capability>/<artifactId>` |
+
+scope 不足固定返回 `403 collector_service_client_scope_denied`，缺失、格式错误或已撤销 token 固定返回 `401 collector_service_client_authorization_rejected`。旧的 schema-v1 client 会在本地启动时一次性迁移成三个 scope，保留原先全量服务访问语义；新建 client 的 scope 始终按上表的稳定顺序保存。
 
 独立桌面应用或 CLI 应在没有 `Origin` / `Sec-Fetch-Site` 浏览器头的本地 loopback 请求中带上：
 
@@ -48,7 +59,9 @@ Console 的“其他本地应用的服务访问”面板可创建、查看和撤
 Authorization: Bearer cst_...
 ```
 
-Console 自己仍使用精确同源检查。任何带外站 `Origin` 或非 `same-origin` `Sec-Fetch-Site` 的请求，即使携带有效 token，也会被拒绝；撤销立即失效。不要通过开放到 `0.0.0.0`、取消 loopback 限制或伪造浏览器同源头来“方便调用”。当前 token 是可撤销的本机服务访问凭据，后续若需要跨应用最小权限，将在其上增加显式 scope 和调用审计，而不是扩大浏览器控制面。
+Console 自己仍使用精确同源检查。任何带外站 `Origin` 或非 `same-origin` `Sec-Fetch-Site` 的请求，即使携带有效 token，也会被拒绝；撤销立即失效。不要通过开放到 `0.0.0.0`、取消 loopback 限制或伪造浏览器同源头来“方便调用”。
+
+每次服务目录读取、采集调用和产物读取都会写入有上限（最近 1,000 条）、原子保存的本地审计。审计仅保留时间、Console/本地 client 主体、动作、capability、结果、错误码、artifact / operation ID，以及不可逆的 Profile 摘要；它严格不保存 input、查询词、URL、query/hash、标题/正文、产物正文、token、token 摘要、Authorization、Cookie、Profile 路径或浏览器身份材料。审计读取本身不产生递归审计记录。
 
 当前检查点实现：
 
