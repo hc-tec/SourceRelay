@@ -40,6 +40,7 @@ import type { NativeBridgeServer } from '../native-bridge/native-bridge-server.j
 import type { NativeMessagingHostRegistration } from '../native-bridge/native-host-installer.js';
 import { PageLedger, type PageLedgerEvent } from '../page-ledger/page-ledger.js';
 import { PageReclamationManager } from '../reclamation/page-reclamation.js';
+import { ExternalRequestCounter } from './external-request-counter.js';
 import { launchProfileBrowser } from './profile-browser-launcher.js';
 
 export class ProfileRuntime {
@@ -53,8 +54,8 @@ export class ProfileRuntime {
   readonly #nativeHostRegistration: NativeMessagingHostRegistration | null;
   readonly #extensionRuntime: ExtensionRuntimeSummary | null;
   readonly #visualEvidenceDirectory: string;
+  readonly #externalRequestCounter: ExternalRequestCounter;
   #browserProcessId: number | null = null;
-  #livePlatformRequests = 0;
   #running = true;
   #closed = false;
 
@@ -70,6 +71,7 @@ export class ProfileRuntime {
     nativeHostRegistration: NativeMessagingHostRegistration | null;
     extensionRuntime: ExtensionRuntimeSummary | null;
     visualEvidenceDirectory: string;
+    externalRequestCounter: ExternalRequestCounter;
   }) {
     this.profileId = input.profileId;
     this.browserSessionId = input.browserSessionId;
@@ -82,6 +84,7 @@ export class ProfileRuntime {
     this.#nativeHostRegistration = input.nativeHostRegistration;
     this.#extensionRuntime = input.extensionRuntime;
     this.#visualEvidenceDirectory = input.visualEvidenceDirectory;
+    this.#externalRequestCounter = input.externalRequestCounter;
   }
 
   static async launch(input: {
@@ -103,16 +106,15 @@ export class ProfileRuntime {
     onClosed: () => void;
   }): Promise<ProfileRuntime> {
     let runtime: ProfileRuntime | null = null;
-    let requestsBeforeRuntime = 0;
+    const externalRequestCounter = new ExternalRequestCounter();
     const launched = await launchProfileBrowser({
       ...input,
-      onExternalHttpRequest: () => {
-        if (runtime) runtime.#livePlatformRequests += 1;
-        else requestsBeforeRuntime += 1;
-      }
+      onExternalHttpRequestStarted: (request) => externalRequestCounter.started(request),
+      onExternalHttpRequestSettled: (request) => externalRequestCounter.settled(request)
     });
     const { context, extensionRuntime, nativeHostRegistration } = launched;
     context.on('close', () => {
+      externalRequestCounter.clear();
       if (!runtime) return;
       runtime.#running = false;
       runtime.#browserProcessId = null;
@@ -165,9 +167,9 @@ export class ProfileRuntime {
         nativeBridgeCommands: input.nativeBridgeCommands,
         nativeHostRegistration,
         extensionRuntime,
-        visualEvidenceDirectory: input.visualEvidenceDirectory
+        visualEvidenceDirectory: input.visualEvidenceDirectory,
+        externalRequestCounter
       });
-      runtime.#livePlatformRequests = requestsBeforeRuntime;
       return runtime;
     } catch (error) {
       await context.close().catch(() => undefined);
@@ -349,7 +351,7 @@ export class ProfileRuntime {
             nativeBridgeConnected: this.#nativeBridgeRegistry.isReady(this.profileId, this.browserSessionId)
           }
         : null,
-      livePlatformRequests: this.#livePlatformRequests,
+      livePlatformRequests: this.#externalRequestCounter.count,
       pages: this.#ledger.summaries()
     };
   }

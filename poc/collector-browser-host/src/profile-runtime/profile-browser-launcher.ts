@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises';
-import { chromium, type BrowserContext } from 'playwright';
+import { chromium, type BrowserContext, type Request } from 'playwright';
 import {
   NATIVE_BRIDGE_PROTOCOL_VERSION,
   type ExtensionRuntimeExpectation,
@@ -34,7 +34,8 @@ interface LaunchProfileBrowserInput {
   nativeBridgeModulePath: string;
   headless: boolean;
   offlineOnly: boolean;
-  onExternalHttpRequest: () => void;
+  onExternalHttpRequestStarted: (request: Request) => void;
+  onExternalHttpRequestSettled: (request: Request) => void;
 }
 
 export async function launchProfileBrowser(input: LaunchProfileBrowserInput): Promise<LaunchedProfileBrowser> {
@@ -97,9 +98,18 @@ export async function launchProfileBrowser(input: LaunchProfileBrowserInput): Pr
     await clearNativeRegistration(input, registration);
     throw error;
   }
+  const observedExternalRequests = new WeakSet<Request>();
   context.on('request', (request) => {
-    if (isExternalHttpRequest(request.url())) input.onExternalHttpRequest();
+    if (!isExternalHttpRequest(request.url()) || observedExternalRequests.has(request)) return;
+    observedExternalRequests.add(request);
+    input.onExternalHttpRequestStarted(request);
   });
+  const settleExternalRequest = (request: Request) => {
+    if (!observedExternalRequests.delete(request)) return;
+    input.onExternalHttpRequestSettled(request);
+  };
+  context.on('requestfinished', settleExternalRequest);
+  context.on('requestfailed', settleExternalRequest);
   try {
     let extensionRuntime: ExtensionRuntimeSummary | null = null;
     if (preparation && input.extensionRuntime && registration) {
