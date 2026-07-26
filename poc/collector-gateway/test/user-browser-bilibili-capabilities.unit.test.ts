@@ -26,20 +26,36 @@ describe('user-owned browser Bilibili capability catalog', () => {
       }),
       expect.objectContaining({
         capability: 'bilibili.dynamic',
-        dispatchState: 'direct_canary_pending',
+        dispatchState: 'direct_ready',
         captureMode: 'passive_dom_projection',
         browserHostFallback: 'forbidden'
       }),
       expect.objectContaining({
         capability: 'bilibili.collection_series.overview',
-        dispatchState: 'direct_canary_pending',
+        dispatchState: 'direct_ready',
         captureMode: 'dom_and_fixed_network_metadata',
+        browserHostFallback: 'forbidden'
+      }),
+      expect.objectContaining({
+        capability: 'bilibili.collection_series.detail',
+        dispatchState: 'direct_ready',
+        captureMode: 'passive_dom_projection',
+        browserHostFallback: 'forbidden'
+      }),
+      expect.objectContaining({
+        capability: 'bilibili.danmaku',
+        dispatchState: 'direct_ready',
+        captureMode: 'passive_player_dom_projection',
         browserHostFallback: 'forbidden'
       })
     ]));
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.video_detail')).toBe(true);
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.account_profile')).toBe(true);
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.account_inventory')).toBe(true);
+    expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.dynamic')).toBe(true);
+    expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.collection_series.overview')).toBe(true);
+    expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.collection_series.detail')).toBe(true);
+    expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.danmaku')).toBe(true);
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.transcript')).toBe(false);
   });
 });
