@@ -28,8 +28,8 @@ export interface PassiveDirectArtifactView {
   provenance: {
     environment: 'user_owned_browser_extension';
     executionTarget: 'collector_work_tab';
-    captureMode: 'passive_dom_projection';
-    responseBodies: 'not_read';
+    captureMode: 'passive_dom_projection' | 'fixed_network_metadata_projection';
+    responseBodies: 'not_read' | 'transient_allowlisted_projection';
     semanticActions: 0;
     platformNavigations: 1;
     workTabAcquisition: BilibiliPassiveExtensionWorkResult['workTabAcquisition'];
@@ -108,8 +108,12 @@ export class ExtensionWorkPassiveArtifactStore {
       provenance: {
         environment: 'user_owned_browser_extension' as const,
         executionTarget: 'collector_work_tab' as const,
-        captureMode: 'passive_dom_projection' as const,
-        responseBodies: 'not_read' as const,
+        captureMode: input.item.capability === 'bilibili.collection_series.overview'
+          ? 'fixed_network_metadata_projection' as const
+          : 'passive_dom_projection' as const,
+        responseBodies: input.item.capability === 'bilibili.collection_series.overview'
+          ? 'transient_allowlisted_projection' as const
+          : 'not_read' as const,
         semanticActions: 0 as const,
         platformNavigations: 1 as const,
         workTabAcquisition: input.result.workTabAcquisition,
@@ -195,7 +199,10 @@ function isStoredArtifact(value: unknown): value is StoredArtifact {
   return value.artifactId === value.summary.artifactId && value.operationId === value.summary.operationId &&
     value.capability === value.summary.capability && value.state === value.summary.state && value.capturedAt === value.summary.capturedAt &&
     value.provenance.environment === 'user_owned_browser_extension' && value.provenance.executionTarget === 'collector_work_tab' &&
-    value.provenance.captureMode === 'passive_dom_projection' && value.provenance.responseBodies === 'not_read' &&
+    (value.provenance.captureMode === 'passive_dom_projection' ||
+      value.provenance.captureMode === 'fixed_network_metadata_projection') &&
+    (value.provenance.responseBodies === 'not_read' ||
+      value.provenance.responseBodies === 'transient_allowlisted_projection') &&
     value.provenance.semanticActions === 0 && value.provenance.platformNavigations === 1;
 }
 

@@ -421,7 +421,7 @@ export class ExtensionWorkQueue {
         canonicalOverviewUrl: `${identity.canonicalProfileUrl}/lists`,
         stableAccountId: identity.stableAccountId
       },
-      budget: fixedDirectWorkBudget()
+      budget: collectionSeriesOverviewWorkBudget()
     };
     return await this.#enqueueSigned(unsigned, identity.issuedAt);
   }
@@ -778,6 +778,20 @@ function fixedDirectWorkBudget(): {
     maximumPlatformNavigations: 1,
     maximumSemanticActions: 0,
     maximumResponseObservations: 0,
+    maximumPayloadBytes: 98_304
+  };
+}
+
+function collectionSeriesOverviewWorkBudget(): {
+  maximumPlatformNavigations: 1;
+  maximumSemanticActions: 0;
+  maximumResponseObservations: 1;
+  maximumPayloadBytes: 98_304;
+} {
+  return {
+    maximumPlatformNavigations: 1,
+    maximumSemanticActions: 0,
+    maximumResponseObservations: 1,
     maximumPayloadBytes: 98_304
   };
 }

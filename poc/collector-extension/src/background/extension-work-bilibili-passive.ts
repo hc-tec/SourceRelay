@@ -17,6 +17,11 @@ import { captureBilibiliCollectionSeriesDom } from './strategies/bilibili-collec
 import { captureBilibiliCollectionSeriesDetailDom } from './strategies/bilibili-series-detail-dom-projection';
 import { captureBilibiliDanmakuDom } from './strategies/bilibili-danmaku-dom-projection';
 import {
+  armBilibiliCollectionOverviewNetworkObservation,
+  clearBilibiliCollectionOverviewNetworkObservation,
+  readBilibiliCollectionOverviewNetworkObservation
+} from './extension-work-bilibili-collection-network';
+import {
   acquireExtensionWorkTab,
   abandonExtensionWorkTab,
   navigateExtensionWorkTabOnce,
@@ -46,8 +51,10 @@ type PassiveObservation =
 /**
  * One common runner for the passive Bilibili additions.  Every variant owns
  * exactly one signed navigation and no semantic page input.  It deliberately
- * does not reopen a page, retry a platform action, scroll, click a filter, or
- * read a network response body.
+ * does not reopen a page, retry a platform action, scroll, or click a filter.
+ * The collection-overview variant is the sole exception to DOM-only capture:
+ * it may read one fixed, temporary sanitised response and immediately reduce
+ * it to allowlisted public list identities before the result is returned.
  */
 export async function executeBilibiliPassiveExtensionWork(
   item: PassiveItem,
@@ -60,6 +67,7 @@ export async function executeBilibiliPassiveExtensionWork(
   let acquisition: WorkTabAcquisition | 'not_acquired' = 'not_acquired';
   let navigationAttempted = false;
   let observation: PassiveObservation | null = null;
+  let collectionOverviewNetworkTabId: number | null = null;
   if (Date.parse(item.expiresAt) <= Date.now()) {
     return result(item, {
       state: 'stopped', errorCode: 'extension_work_expired', terminalReason: 'run_deadline_exceeded',
@@ -70,10 +78,14 @@ export async function executeBilibiliPassiveExtensionWork(
     workTab = await acquireExtensionWorkTab();
     acquisition = workTab.acquisition;
     await lifecycle.onWorkTabAcquired?.(acquisition);
+    if (item.capability === 'bilibili.collection_series.overview') {
+      await armBilibiliCollectionOverviewNetworkObservation({ tabId: workTab.tabId, item });
+      collectionOverviewNetworkTabId = workTab.tabId;
+    }
     navigationAttempted = true;
     await lifecycle.onNavigationIntent?.();
     await navigateExtensionWorkTabOnce(workTab, item);
-    const observed = await observePassiveWork(workTab, item);
+    const observed = await observePassiveWork(workTab, item, collectionOverviewNetworkTabId !== null);
     observation = observed.observation;
     const disposition = observed.kind === 'ready' || observed.kind === 'empty'
       ? releaseExtensionWorkTab(workTab)
@@ -102,12 +114,17 @@ export async function executeBilibiliPassiveExtensionWork(
       state: 'failed', errorCode, terminalReason: terminalReasonForError(errorCode, navigationAttempted),
       navigationAttempted, acquisition, disposition, observation
     });
+  } finally {
+    if (collectionOverviewNetworkTabId !== null) {
+      await clearBilibiliCollectionOverviewNetworkObservation(collectionOverviewNetworkTabId).catch(() => undefined);
+    }
   }
 }
 
 async function observePassiveWork(
   workTab: ExtensionWorkTabLease,
-  item: PassiveItem
+  item: PassiveItem,
+  collectionOverviewNetworkArmed: boolean
 ): Promise<
   | { kind: 'ready'; observation: PassiveObservation; terminalReason: PassiveResult['terminalReason']; errorCode: null }
   | { kind: 'empty'; observation: PassiveObservation; terminalReason: PassiveResult['terminalReason']; errorCode: null }
@@ -135,7 +152,13 @@ async function observePassiveWork(
     }
     let observation: PassiveObservation;
     try {
-      observation = await captureObservation(item, workTab.tabId);
+      observation = item.capability === 'bilibili.collection_series.overview' && collectionOverviewNetworkArmed
+        ? await readBilibiliCollectionOverviewNetworkObservation({
+          tabId: workTab.tabId,
+          item,
+          deadlineMs: Math.max(1, deadline - Date.now())
+        })
+        : await captureObservation(item, workTab.tabId);
     } catch (error) {
       const code = safeErrorCode(error);
       return {
@@ -180,6 +203,12 @@ async function captureObservation(item: PassiveItem, tabId: number): Promise<Pas
           declaredItemCount: entry.declaredItemCount,
           previewBvids: [...entry.visiblePreviewBvids]
         })),
+        network: {
+          routeStatus: 'not_observed',
+          httpStatus: null,
+          responseIdentityCount: 0,
+          domMatchedItemCount: 0
+        },
         loginOverlayVisible: snapshot.loginOverlayVisible,
         risk: { ...snapshot.risk }
       };
@@ -232,7 +261,9 @@ function classifyObservation(
       : { kind: 'empty', observation, terminalReason: 'dynamic_empty', errorCode: null };
   }
   if (item.capability === 'bilibili.collection_series.overview' && isOverviewObservation(observation)) {
-    if (observation.stableAccountId !== item.input.stableAccountId || !observation.listVisible) return null;
+    if (observation.stableAccountId !== item.input.stableAccountId || !observation.listVisible ||
+      observation.network.routeStatus !== 'captured'
+    ) return null;
     return observation.items.length > 0
       ? { kind: 'ready', observation, terminalReason: 'collection_series_overview_ready', errorCode: null }
       : { kind: 'empty', observation, terminalReason: 'collection_series_overview_empty', errorCode: null };

@@ -154,4 +154,32 @@ describe('extension work queue state machine', () => {
       await rm(stateDirectory, { recursive: true, force: true });
     }
   });
+
+  test('gives collection overview exactly one fixed response-observation budget', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-collection-overview-'));
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const queued = await queue.enqueueBilibiliCollectionSeriesOverview({
+        browserBindingId: bindingId,
+        canonicalProfileUrl: 'https://space.bilibili.com/7481602'
+      }, base);
+      const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
+      expect(claimed).toMatchObject({
+        operationId: queued.operationId,
+        capability: 'bilibili.collection_series.overview',
+        input: {
+          canonicalOverviewUrl: 'https://space.bilibili.com/7481602/lists',
+          stableAccountId: '7481602'
+        },
+        budget: {
+          maximumPlatformNavigations: 1,
+          maximumSemanticActions: 0,
+          maximumResponseObservations: 1,
+          maximumPayloadBytes: 98_304
+        }
+      });
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
 });

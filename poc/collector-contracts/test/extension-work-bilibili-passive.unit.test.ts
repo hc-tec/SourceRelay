@@ -3,6 +3,8 @@ import {
   canonicalBilibiliPassiveVideoWorkUrl,
   isBilibiliPassiveExtensionWorkItem,
   isBilibiliPassiveExtensionWorkResultForItem,
+  type BilibiliCollectionSeriesOverviewWorkItem,
+  type BilibiliCollectionSeriesOverviewWorkResult,
   type BilibiliDynamicWorkItem,
   type BilibiliDynamicWorkResult
 } from '../src/index.js';
@@ -30,6 +32,31 @@ const item: BilibiliDynamicWorkItem = {
     maximumPayloadBytes: 98_304
   },
   gatewaySignature: 'a'.repeat(86)
+};
+
+const overviewItem: BilibiliCollectionSeriesOverviewWorkItem = {
+  schemaVersion: 1,
+  protocolVersion: 1,
+  workId: '44444444-4444-4444-8444-444444444444',
+  operationId: '55555555-5555-4555-8555-555555555555',
+  browserBindingId: item.browserBindingId,
+  platform: 'bilibili',
+  capability: 'bilibili.collection_series.overview',
+  executionTarget: 'collector_work_tab',
+  issuedAt: item.issuedAt,
+  expiresAt: item.expiresAt,
+  input: {
+    canonicalProfileUrl: 'https://space.bilibili.com/7481602',
+    canonicalOverviewUrl: 'https://space.bilibili.com/7481602/lists',
+    stableAccountId: '7481602'
+  },
+  budget: {
+    maximumPlatformNavigations: 1,
+    maximumSemanticActions: 0,
+    maximumResponseObservations: 1,
+    maximumPayloadBytes: 98_304
+  },
+  gatewaySignature: 'c'.repeat(86)
 };
 
 describe('passive user-owned-browser Bilibili work contract', () => {
@@ -100,5 +127,58 @@ describe('passive user-owned-browser Bilibili work contract', () => {
       ...result,
       workTabDisposition: 'retained_not_reusable'
     }, item)).toBe(false);
+  });
+
+  test('allows collection overview to project one fixed response identity but rejects an unbounded or raw-response carrier', () => {
+    expect(isBilibiliPassiveExtensionWorkItem(overviewItem)).toBe(true);
+    expect(isBilibiliPassiveExtensionWorkItem({
+      ...overviewItem,
+      budget: { ...overviewItem.budget, maximumResponseObservations: 0 }
+    })).toBe(false);
+
+    const result: BilibiliCollectionSeriesOverviewWorkResult = {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: overviewItem.workId,
+      operationId: overviewItem.operationId,
+      browserBindingId: overviewItem.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.collection_series.overview',
+      executionTarget: 'collector_work_tab',
+      state: 'completed',
+      errorCode: null,
+      terminalReason: 'collection_series_overview_ready',
+      completedAt: '2026-07-26T00:00:20.000Z',
+      navigation: { attempted: true, attemptCount: 1 },
+      workTabAcquisition: 'created',
+      workTabDisposition: 'idle_reusable',
+      observation: {
+        stableAccountId: '7481602',
+        listVisible: true,
+        items: [{
+          listType: 'series',
+          stableSeriesId: '100',
+          title: '公开合集',
+          declaredItemCount: 1,
+          previewBvids: ['BV1qZSLBYEpa']
+        }],
+        network: {
+          routeStatus: 'captured',
+          httpStatus: 200,
+          responseIdentityCount: 1,
+          domMatchedItemCount: 1
+        },
+        loginOverlayVisible: false,
+        risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+      }
+    };
+    expect(isBilibiliPassiveExtensionWorkResultForItem(result, overviewItem)).toBe(true);
+    expect(isBilibiliPassiveExtensionWorkResultForItem({
+      ...result,
+      observation: {
+        ...result.observation!,
+        network: { ...result.observation!.network, body: { unsafe: 'not-an-artifact-field' } }
+      }
+    }, overviewItem)).toBe(false);
   });
 });

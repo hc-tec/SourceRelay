@@ -77,7 +77,9 @@ export async function bindBilibiliCollectionSeriesObserver(
   });
   if (!permissionsReady) throw new Error('collection_series_strategy_permission_missing');
   const tab = await chrome.tabs.get(tabId);
-  if (tab.url && tab.url !== 'about:blank' && canonicalUrl(tab.url) !== binding.target.canonicalUrl) {
+  if (tab.url && tab.url !== 'about:blank' && canonicalUrl(tab.url) !== binding.target.canonicalUrl &&
+    binding.documentBindingMode !== 'next_navigation_only'
+  ) {
     throw new Error('collection_series_strategy_tab_context_rejected');
   }
   await clearStrategyBindingsForTab(tabId);

@@ -29,6 +29,12 @@ describe('user-owned browser Bilibili capability catalog', () => {
         dispatchState: 'direct_canary_pending',
         captureMode: 'passive_dom_projection',
         browserHostFallback: 'forbidden'
+      }),
+      expect.objectContaining({
+        capability: 'bilibili.collection_series.overview',
+        dispatchState: 'direct_canary_pending',
+        captureMode: 'dom_and_fixed_network_metadata',
+        browserHostFallback: 'forbidden'
       })
     ]));
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.video_detail')).toBe(true);

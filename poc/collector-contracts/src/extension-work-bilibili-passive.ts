@@ -64,7 +64,19 @@ export interface BilibiliCollectionSeriesOverviewWorkInput {
 export interface BilibiliCollectionSeriesOverviewWorkItem extends PassiveWorkEnvelope {
   capability: 'bilibili.collection_series.overview';
   input: BilibiliCollectionSeriesOverviewWorkInput;
-  budget: BilibiliPassiveOneNavigationBudget;
+  budget: BilibiliCollectionSeriesOverviewWorkBudget;
+}
+
+/**
+ * The overview owns one fixed public-response observation.  Callers cannot
+ * select a route or receive a raw response body; only an allowlisted identity
+ * projection can cross the signed work boundary.
+ */
+export interface BilibiliCollectionSeriesOverviewWorkBudget {
+  maximumPlatformNavigations: 1;
+  maximumSemanticActions: 0;
+  maximumResponseObservations: 1;
+  maximumPayloadBytes: 98_304;
 }
 
 /**
@@ -143,8 +155,16 @@ export interface BilibiliCollectionSeriesOverviewDomObservation {
   stableAccountId: string | null;
   listVisible: boolean;
   items: BilibiliCollectionSeriesOverviewDomItem[];
+  network: BilibiliCollectionSeriesOverviewNetworkEvidence;
   loginOverlayVisible: boolean;
   risk: BilibiliPassiveWorkRisk;
+}
+
+export interface BilibiliCollectionSeriesOverviewNetworkEvidence {
+  routeStatus: 'captured' | 'not_observed' | 'payload_rejected';
+  httpStatus: number | null;
+  responseIdentityCount: number;
+  domMatchedItemCount: number;
 }
 
 export interface BilibiliCollectionSeriesDetailDomCard {
@@ -347,13 +367,20 @@ export function isBilibiliPassiveExtensionWorkItem(value: unknown): value is Bil
   ]) || value.schemaVersion !== 1 || value.protocolVersion !== 1 || !isUuid(value.workId) ||
     !isUuid(value.operationId) || !isUuid(value.browserBindingId) || value.platform !== 'bilibili' ||
     value.executionTarget !== 'collector_work_tab' || !isTimestamp(value.issuedAt) || !isTimestamp(value.expiresAt) ||
-    Date.parse(value.expiresAt) <= Date.parse(value.issuedAt) || !isSignature(value.gatewaySignature) ||
-    !isBilibiliPassiveOneNavigationBudget(value.budget)
+    Date.parse(value.expiresAt) <= Date.parse(value.issuedAt) || !isSignature(value.gatewaySignature)
   ) return false;
-  if (value.capability === 'bilibili.dynamic') return isDynamicInput(value.input);
-  if (value.capability === 'bilibili.collection_series.overview') return isOverviewInput(value.input);
-  if (value.capability === 'bilibili.collection_series.detail') return isDetailInput(value.input);
-  if (value.capability === 'bilibili.danmaku') return isDanmakuInput(value.input);
+  if (value.capability === 'bilibili.dynamic') {
+    return isDynamicInput(value.input) && isBilibiliPassiveOneNavigationBudget(value.budget);
+  }
+  if (value.capability === 'bilibili.collection_series.overview') {
+    return isOverviewInput(value.input) && isBilibiliCollectionSeriesOverviewWorkBudget(value.budget);
+  }
+  if (value.capability === 'bilibili.collection_series.detail') {
+    return isDetailInput(value.input) && isBilibiliPassiveOneNavigationBudget(value.budget);
+  }
+  if (value.capability === 'bilibili.danmaku') {
+    return isDanmakuInput(value.input) && isBilibiliPassiveOneNavigationBudget(value.budget);
+  }
   return false;
 }
 
@@ -397,6 +424,9 @@ export function isBilibiliPassiveExtensionWorkResultForItem(
   }
   if (item.capability === 'bilibili.collection_series.overview' && value.capability === 'bilibili.collection_series.overview') {
     if (value.observation.stableAccountId !== item.input.stableAccountId || !value.observation.listVisible) return false;
+    if (value.observation.network.routeStatus !== 'captured' || value.observation.network.httpStatus === null ||
+      value.observation.network.httpStatus < 200 || value.observation.network.httpStatus >= 300
+    ) return false;
     return value.terminalReason === 'collection_series_overview_ready'
       ? value.observation.items.length > 0
       : value.terminalReason === 'collection_series_overview_empty' && value.observation.items.length === 0;
@@ -419,6 +449,15 @@ export function isBilibiliPassiveOneNavigationBudget(value: unknown): value is B
     'maximumPlatformNavigations', 'maximumSemanticActions', 'maximumResponseObservations', 'maximumPayloadBytes'
   ]) && value.maximumPlatformNavigations === 1 && value.maximumSemanticActions === 0 &&
     value.maximumResponseObservations === 0 && value.maximumPayloadBytes === 98_304;
+}
+
+export function isBilibiliCollectionSeriesOverviewWorkBudget(
+  value: unknown
+): value is BilibiliCollectionSeriesOverviewWorkBudget {
+  return isRecord(value) && hasExactKeys(value, [
+    'maximumPlatformNavigations', 'maximumSemanticActions', 'maximumResponseObservations', 'maximumPayloadBytes'
+  ]) && value.maximumPlatformNavigations === 1 && value.maximumSemanticActions === 0 &&
+    value.maximumResponseObservations === 1 && value.maximumPayloadBytes === 98_304;
 }
 
 function isDynamicInput(value: unknown): value is BilibiliDynamicWorkInput {
@@ -468,9 +507,22 @@ function isDynamicObservation(value: unknown): value is BilibiliDynamicDomObserv
 }
 
 function isOverviewObservation(value: unknown): value is BilibiliCollectionSeriesOverviewDomObservation {
-  return isRecord(value) && hasExactKeys(value, ['stableAccountId', 'listVisible', 'items', 'loginOverlayVisible', 'risk']) &&
+  return isRecord(value) && hasExactKeys(value, ['stableAccountId', 'listVisible', 'items', 'network', 'loginOverlayVisible', 'risk']) &&
     isNullableAccountId(value.stableAccountId) && typeof value.listVisible === 'boolean' &&
-    isArrayAtMost(value.items, 50, isOverviewItem) && typeof value.loginOverlayVisible === 'boolean' && isRisk(value.risk);
+    isArrayAtMost(value.items, 50, isOverviewItem) && isOverviewNetworkEvidence(value.network) &&
+    typeof value.loginOverlayVisible === 'boolean' && isRisk(value.risk);
+}
+
+function isOverviewNetworkEvidence(value: unknown): value is BilibiliCollectionSeriesOverviewNetworkEvidence {
+  return isRecord(value) && hasExactKeys(value, ['routeStatus', 'httpStatus', 'responseIdentityCount', 'domMatchedItemCount']) &&
+    (value.routeStatus === 'captured' || value.routeStatus === 'not_observed' || value.routeStatus === 'payload_rejected') &&
+    (value.httpStatus === null || (typeof value.httpStatus === 'number' && Number.isSafeInteger(value.httpStatus) &&
+      value.httpStatus >= 0 && value.httpStatus <= 599)) &&
+    isNonNegativeInteger(value.responseIdentityCount) && value.responseIdentityCount <= 50 &&
+    isNonNegativeInteger(value.domMatchedItemCount) && value.domMatchedItemCount <= 50 &&
+    (value.routeStatus === 'captured'
+      ? value.httpStatus !== null
+      : value.responseIdentityCount === 0 && value.domMatchedItemCount === 0);
 }
 
 function isDetailObservation(value: unknown): value is BilibiliCollectionSeriesDetailDomObservation {
