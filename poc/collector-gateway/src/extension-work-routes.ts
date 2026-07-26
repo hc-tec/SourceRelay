@@ -3,6 +3,8 @@ import {
   canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliVideoWorkUrl,
   isExtensionWorkResult,
+  isBilibiliPassiveExtensionWorkItem,
+  isBilibiliPassiveExtensionWorkResult,
   type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
 import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
@@ -14,6 +16,8 @@ import { recordBilibiliAccountInventoryExtensionWork } from './extension-work-bi
 import { recordBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
 import { recordBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
 import { recordBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
+import { recordBilibiliPassiveExtensionWork } from './extension-work-bilibili-passive';
+import type { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
 import type { ExtensionWorkArtifactReference, ExtensionWorkQueue } from './extension-work-queue';
 import { readJsonBody, readJsonBodyWithRaw, requireSameOrigin, safeErrorCode, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
@@ -42,6 +46,7 @@ export interface ExtensionWorkRouteContext {
   nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
   accountProfileArtifacts: BilibiliAccountProfileArtifactStore;
   accountVideoInventoryArtifacts: BilibiliAccountVideoInventoryArtifactStore;
+  passiveDirectArtifacts: ExtensionWorkPassiveArtifactStore;
 }
 
 /**
@@ -217,6 +222,50 @@ export async function enqueueBilibiliAccountInventoryWork(
   });
 }
 
+/** Shared by the Console and the scoped upper-application service route. */
+export async function enqueueBilibiliDynamicWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  canonicalProfileUrl: string
+) {
+  await assertBindingCanAcceptWork(context, browserBindingId);
+  return await context.workQueue.enqueueBilibiliDynamic({ browserBindingId, canonicalProfileUrl });
+}
+
+/** Shared by the Console and the scoped upper-application service route. */
+export async function enqueueBilibiliCollectionSeriesOverviewWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  canonicalProfileUrl: string
+) {
+  await assertBindingCanAcceptWork(context, browserBindingId);
+  return await context.workQueue.enqueueBilibiliCollectionSeriesOverview({ browserBindingId, canonicalProfileUrl });
+}
+
+/** Shared by the Console and the scoped upper-application service route. */
+export async function enqueueBilibiliCollectionSeriesDetailWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  canonicalProfileUrl: string,
+  stableSeriesId: string,
+  listType: 'series' | 'season'
+) {
+  await assertBindingCanAcceptWork(context, browserBindingId);
+  return await context.workQueue.enqueueBilibiliCollectionSeriesDetail({
+    browserBindingId, canonicalProfileUrl, stableSeriesId, listType
+  });
+}
+
+/** Shared by the Console and the scoped upper-application service route. */
+export async function enqueueBilibiliDanmakuWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  canonicalVideoUrl: string
+) {
+  await assertBindingCanAcceptWork(context, browserBindingId);
+  return await context.workQueue.enqueueBilibiliDanmaku({ browserBindingId, canonicalVideoUrl });
+}
+
 async function handleExtensionWorkNext(
   request: IncomingMessage,
   response: ServerResponse,
@@ -292,6 +341,12 @@ async function handleExtensionWorkResult(
         result,
         artifacts: context.accountVideoInventoryArtifacts
       });
+    } else if (isBilibiliPassiveExtensionWorkItem(item) && isBilibiliPassiveExtensionWorkResult(result)) {
+      artifact = await recordBilibiliPassiveExtensionWork({
+        item,
+        result,
+        artifacts: context.passiveDirectArtifacts
+      });
     } else {
       throw new Error('extension_work_result_capability_mismatch');
     }
@@ -306,6 +361,18 @@ async function handleExtensionWorkResult(
   } catch (error) {
     sendJson(response, extensionWorkStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
   }
+}
+
+async function assertBindingCanAcceptWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string
+): Promise<void> {
+  await reconcileExpiredExtensionWork(context);
+  const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
+  if (binding.state !== 'online') throw new Error('browser_binding_offline');
+  const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
+  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
+  if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
 }
 
 async function authoriseExtensionRequest(

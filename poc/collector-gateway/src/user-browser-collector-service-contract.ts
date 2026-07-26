@@ -1,5 +1,6 @@
 import {
   canonicalBilibiliAccountProfileUrl,
+  canonicalBilibiliPassiveVideoWorkUrl,
   canonicalBilibiliVideoWorkUrl,
   normaliseBilibiliNativeSearchRoute
 } from '@intelligence/collector-contracts';
@@ -48,11 +49,39 @@ export interface UserBrowserAccountInventoryCollectorServiceRequest extends User
   };
 }
 
+export interface UserBrowserDynamicCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
+  capability: 'bilibili.dynamic';
+  input: { canonicalProfileUrl: string };
+}
+
+export interface UserBrowserCollectionSeriesOverviewCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
+  capability: 'bilibili.collection_series.overview';
+  input: { canonicalProfileUrl: string };
+}
+
+export interface UserBrowserCollectionSeriesDetailCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
+  capability: 'bilibili.collection_series.detail';
+  input: {
+    canonicalProfileUrl: string;
+    stableSeriesId: string;
+    listType: 'series' | 'season';
+  };
+}
+
+export interface UserBrowserDanmakuCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
+  capability: 'bilibili.danmaku';
+  input: { canonicalVideoUrl: string };
+}
+
 export type UserBrowserCollectorServiceRequest =
   | UserBrowserVideoDetailCollectorServiceRequest
   | UserBrowserNativeSearchCollectorServiceRequest
   | UserBrowserAccountProfileCollectorServiceRequest
-  | UserBrowserAccountInventoryCollectorServiceRequest;
+  | UserBrowserAccountInventoryCollectorServiceRequest
+  | UserBrowserDynamicCollectorServiceRequest
+  | UserBrowserCollectionSeriesOverviewCollectorServiceRequest
+  | UserBrowserCollectionSeriesDetailCollectorServiceRequest
+  | UserBrowserDanmakuCollectorServiceRequest;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -123,6 +152,57 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
       capability: candidate.capability,
       executionTarget: 'collector_work_tab',
       input: { canonicalProfileUrl }
+    };
+  }
+  if (candidate.capability === 'bilibili.dynamic' || candidate.capability === 'bilibili.collection_series.overview') {
+    if (Object.keys(input).length !== 1 || typeof input.canonicalProfileUrl !== 'string') {
+      throw new Error('user_browser_collector_service_request_invalid');
+    }
+    const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(input.canonicalProfileUrl, 'strict_input');
+    if (!canonicalProfileUrl) throw new Error('user_browser_collector_service_request_invalid');
+    return {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      browserBindingId: candidate.browserBindingId,
+      platform: 'bilibili',
+      capability: candidate.capability,
+      executionTarget: 'collector_work_tab',
+      input: { canonicalProfileUrl }
+    };
+  }
+  if (candidate.capability === 'bilibili.collection_series.detail') {
+    if (Object.keys(input).length !== 3 || typeof input.canonicalProfileUrl !== 'string' ||
+      typeof input.stableSeriesId !== 'string' || (input.listType !== 'series' && input.listType !== 'season')
+    ) throw new Error('user_browser_collector_service_request_invalid');
+    const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(input.canonicalProfileUrl, 'strict_input');
+    if (!canonicalProfileUrl || !/^\d{1,20}$/.test(input.stableSeriesId) || input.stableSeriesId === '0') {
+      throw new Error('user_browser_collector_service_request_invalid');
+    }
+    return {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      browserBindingId: candidate.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.collection_series.detail',
+      executionTarget: 'collector_work_tab',
+      input: {
+        canonicalProfileUrl,
+        stableSeriesId: input.stableSeriesId,
+        listType: input.listType
+      }
+    };
+  }
+  if (candidate.capability === 'bilibili.danmaku') {
+    if (Object.keys(input).length !== 1 || typeof input.canonicalVideoUrl !== 'string') {
+      throw new Error('user_browser_collector_service_request_invalid');
+    }
+    const canonicalVideoUrl = canonicalBilibiliPassiveVideoWorkUrl(input.canonicalVideoUrl);
+    if (!canonicalVideoUrl) throw new Error('user_browser_collector_service_request_invalid');
+    return {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      browserBindingId: candidate.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.danmaku',
+      executionTarget: 'collector_work_tab',
+      input: { canonicalVideoUrl }
     };
   }
   throw new Error('user_browser_collector_service_request_invalid');

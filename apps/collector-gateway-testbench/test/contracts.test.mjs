@@ -68,6 +68,49 @@ test('maps a MID-only account request into the two fixed direct-mode account cap
   });
 });
 
+test('maps passive Bilibili canaries into fixed derived targets without a free-form URL', () => {
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'dynamic',
+    input: { accountId: '7481602' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.dynamic',
+    executionTarget: 'collector_work_tab',
+    input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+  });
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'collection_series_detail',
+    input: { accountId: '7481602', stableSeriesId: '123', listType: 'season' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.collection_series.detail',
+    executionTarget: 'collector_work_tab',
+    input: {
+      canonicalProfileUrl: 'https://space.bilibili.com/7481602',
+      stableSeriesId: '123',
+      listType: 'season'
+    }
+  });
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'danmaku',
+    input: { bvid: 'BV1qZSLBYEpa' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.danmaku',
+    executionTarget: 'collector_work_tab',
+    input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+  });
+});
+
 test('rejects arbitrary URL, extra request keys, invalid BVIDs, and control characters', () => {
   for (const value of [
     {
@@ -128,6 +171,13 @@ test('only accepts an artifact path derived from the matching direct operation c
       retrievalPath: `/v1/collect/artifacts/bilibili.account_inventory/${artifactId}`
     }
   }), `/v1/collect/artifacts/bilibili.account_inventory/${artifactId}`);
+  assert.equal(artifactPathFromOperation({
+    operationId,
+    capability: 'bilibili.dynamic',
+    artifact: {
+      retrievalPath: `/v1/collect/artifacts/bilibili.dynamic/${artifactId}`
+    }
+  }), `/v1/collect/artifacts/bilibili.dynamic/${artifactId}`);
 });
 
 test('keeps Gateway and testbench listener configuration on explicit loopback origins', () => {

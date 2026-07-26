@@ -2,6 +2,8 @@ export interface BilibiliCollectionSeriesDetailDomSnapshot {
   stableAccountId: string | null;
   stableSeriesId: string | null;
   listType: 'series' | 'season' | null;
+  detailVisible: boolean;
+  loginOverlayVisible: boolean;
   visibleTitle: string | null;
   declaredItemCount: number | null;
   activePageNumber: number | null;
@@ -17,10 +19,10 @@ export interface BilibiliCollectionSeriesDetailDomSnapshot {
 
 export async function captureBilibiliCollectionSeriesDetailDom(
   tabId: number,
-  documentId: string
+  documentId?: string
 ): Promise<BilibiliCollectionSeriesDetailDomSnapshot> {
   const results = await chrome.scripting.executeScript({
-    target: { tabId, documentIds: [documentId] },
+    target: documentId ? { tabId, documentIds: [documentId] } : { tabId },
     world: 'ISOLATED',
     func: () => {
       const clean = (value: string | null | undefined, maximum: number): string =>
@@ -84,6 +86,10 @@ export async function captureBilibiliCollectionSeriesDetailDom(
         stableAccountId: pathMatch?.[1] ?? null,
         stableSeriesId: pathMatch?.[2] ?? null,
         listType,
+        detailVisible: Boolean(title) || videos.length > 0,
+        loginOverlayVisible: Array.from(document.querySelectorAll<HTMLElement>(
+          '[role="dialog"], [aria-modal="true"], .bili-mini-mask, .bili-mini-login, .passport-login-container, [class*="login-modal" i], [class*="passport-layer" i]'
+        )).some(rendered),
         visibleTitle: title,
         declaredItemCount: positiveCount(subtitle) ?? positiveCount(clean(document.body?.innerText, 2_000)),
         activePageNumber,

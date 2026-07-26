@@ -21,6 +21,7 @@ element('video-form').addEventListener('submit', (event) => void submitVideo(eve
 element('search-form').addEventListener('submit', (event) => void submitSearch(event));
 element('profile-form').addEventListener('submit', (event) => void submitAccount(event, 'account_profile'));
 element('inventory-form').addEventListener('submit', (event) => void submitAccount(event, 'account_inventory'));
+element('passive-form').addEventListener('submit', (event) => void submitPassive(event));
 
 void refreshConnection();
 
@@ -129,8 +130,10 @@ function renderBindings() {
     select.disabled = false;
   }
   for (const control of document.querySelectorAll(
-    '#video-form input, #search-form input, #profile-form input, #inventory-form input, ' +
-    '#video-form button, #search-form button, #profile-form button, #inventory-form button'
+    '#video-form input, #video-form select, #search-form input, #search-form select, ' +
+    '#profile-form input, #profile-form select, #inventory-form input, #inventory-form select, ' +
+    '#passive-form input, #passive-form select, #video-form button, #search-form button, ' +
+    '#profile-form button, #inventory-form button, #passive-form button'
   )) {
     control.disabled = !enabled;
   }
@@ -197,6 +200,38 @@ async function submitAccount(event, kind) {
       }
     });
     form.elements.accountId.value = '';
+    acceptOperation(payload.result);
+  } catch (error) {
+    showOperationError(error);
+  } finally {
+    button.disabled = state.bindings.length === 0;
+  }
+}
+
+async function submitPassive(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  try {
+    const kind = form.elements.kind.value;
+    const input = kind === 'danmaku'
+      ? { bvid: form.elements.bvid.value }
+      : kind === 'collection_series_detail'
+        ? {
+          accountId: form.elements.accountId.value,
+          stableSeriesId: form.elements.stableSeriesId.value,
+          listType: form.elements.listType.value
+        }
+        : { accountId: form.elements.accountId.value };
+    const payload = await api('/api/operations', {
+      method: 'POST',
+      body: {
+        browserBindingId: form.elements.browserBindingId.value,
+        kind,
+        input
+      }
+    });
     acceptOperation(payload.result);
   } catch (error) {
     showOperationError(error);

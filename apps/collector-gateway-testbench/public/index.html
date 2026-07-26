@@ -121,6 +121,49 @@
             </label>
             <button type="submit" disabled>提交一次视频首屏测试</button>
           </form>
+
+          <form id="passive-form" class="workflow">
+            <div class="workflow-title">
+              <span class="step">E</span>
+              <div>
+                <h3>首批宿主浏览器被动能力</h3>
+                <p>仅允许已登记的固定目标：动态、合集概览/详情或视频弹幕 DOM；一次导航，零页面点击。</p>
+              </div>
+            </div>
+            <label>
+              在线 browser binding
+              <select class="binding-select" name="browserBindingId" required disabled></select>
+            </label>
+            <label>
+              能力
+              <select name="kind" required disabled>
+                <option value="dynamic">UP 主动态</option>
+                <option value="collection_series_overview">合集与系列概览</option>
+                <option value="collection_series_detail">单个合集或系列详情（首屏）</option>
+                <option value="danmaku">视频弹幕可见 DOM</option>
+              </select>
+            </label>
+            <label>
+              UP 主 MID（动态 / 合集使用）
+              <input name="accountId" inputmode="numeric" autocomplete="off" placeholder="例如 7481602" pattern="[1-9][0-9]{0,19}" disabled>
+            </label>
+            <label>
+              合集或系列 ID（仅详情）
+              <input name="stableSeriesId" inputmode="numeric" autocomplete="off" placeholder="先从概览 artifact 取得" pattern="[1-9][0-9]{0,19}" disabled>
+            </label>
+            <label>
+              列表类型（仅详情）
+              <select name="listType" disabled>
+                <option value="series">系列</option>
+                <option value="season">合集</option>
+              </select>
+            </label>
+            <label>
+              BVID（仅弹幕）
+              <input name="bvid" inputmode="text" autocomplete="off" placeholder="例如 BV1qZSLBYEpa" pattern="BV[0-9A-Za-z]{10}" disabled>
+            </label>
+            <button type="submit" disabled>提交一次被动能力测试</button>
+          </form>
         </div>
       </section>
 

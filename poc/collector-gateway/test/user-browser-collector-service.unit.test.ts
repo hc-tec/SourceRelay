@@ -31,14 +31,18 @@ describe('user-owned browser collector service', () => {
     })).toThrow('user_browser_collector_service_request_invalid');
   });
 
-  test('publishes four registered direct-mode capabilities without a Profile or browser-control primitive', () => {
+  test('publishes direct and canary passive capabilities without a Profile or browser-control primitive', () => {
     const document = userBrowserCollectorServiceOpenApiDocument('http://127.0.0.1:43127') as Record<string, any>;
     const variants = document.components.schemas.UserBrowserCollectRequest.oneOf;
     expect(variants).toEqual([
       { $ref: '#/components/schemas/UserBrowserVideoDetailCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserNativeSearchCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserAccountProfileCollectRequest' },
-      { $ref: '#/components/schemas/UserBrowserAccountInventoryCollectRequest' }
+      { $ref: '#/components/schemas/UserBrowserAccountInventoryCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserDynamicCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserCollectionSeriesOverviewCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserCollectionSeriesDetailCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserDanmakuCollectRequest' }
     ]);
     expect(document.components.schemas.UserBrowserNativeSearchCollectRequest.properties).toMatchObject({
       capability: { const: 'bilibili.native_search' },
@@ -76,6 +80,53 @@ describe('user-owned browser collector service', () => {
       capability: 'bilibili.account_inventory',
       executionTarget: 'collector_work_tab',
       input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602/upload/video' }
+    })).toThrow('user_browser_collector_service_request_invalid');
+  });
+
+  test('admits only fixed public identities for passive dynamic, collection and danmaku canaries', () => {
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.dynamic',
+      executionTarget: 'collector_work_tab',
+      input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+    })).toMatchObject({ capability: 'bilibili.dynamic' });
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.collection_series.detail',
+      executionTarget: 'collector_work_tab',
+      input: {
+        canonicalProfileUrl: 'https://space.bilibili.com/7481602',
+        stableSeriesId: '123',
+        listType: 'series'
+      }
+    })).toMatchObject({
+      capability: 'bilibili.collection_series.detail',
+      input: { stableSeriesId: '123', listType: 'series' }
+    });
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.danmaku',
+      executionTarget: 'collector_work_tab',
+      input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+    })).toMatchObject({ capability: 'bilibili.danmaku' });
+    expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.collection_series.detail',
+      executionTarget: 'collector_work_tab',
+      input: {
+        canonicalProfileUrl: 'https://space.bilibili.com/7481602',
+        stableSeriesId: '123',
+        listType: 'series',
+        page: 2
+      }
     })).toThrow('user_browser_collector_service_request_invalid');
   });
 });

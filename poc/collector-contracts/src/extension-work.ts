@@ -9,6 +9,17 @@ import {
   canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliAccountVideoInventoryUrl
 } from './bilibili-account-profile.js';
+import {
+  bilibiliPassiveExtensionWorkTargetUrl,
+  isBilibiliPassiveExtensionWorkItem,
+  isBilibiliPassiveExtensionWorkResult,
+  isBilibiliPassiveExtensionWorkResultForItem,
+  type BilibiliPassiveExtensionWorkCapability,
+  type BilibiliPassiveExtensionWorkItem,
+  type BilibiliPassiveExtensionWorkResult,
+  type BilibiliPassiveExtensionWorkTerminalReason,
+  type UnsignedBilibiliPassiveExtensionWorkItem
+} from './extension-work-bilibili-passive.js';
 import { canonicalJson } from './ipc.js';
 
 /**
@@ -30,7 +41,8 @@ export type ExtensionWorkCapability =
   | 'bilibili.video_detail'
   | 'bilibili.native_search'
   | 'bilibili.account_profile'
-  | 'bilibili.account_inventory';
+  | 'bilibili.account_inventory'
+  | BilibiliPassiveExtensionWorkCapability;
 export type ExtensionWorkExecutionTarget = 'collector_work_tab' | 'user_selected_tab';
 export type ExtensionWorkState = 'queued' | 'claimed' | 'completed' | 'partial' | 'stopped' | 'failed';
 
@@ -147,12 +159,14 @@ export type ExtensionWorkItem =
   | BilibiliVideoDetailWorkItem
   | BilibiliNativeSearchWorkItem
   | BilibiliAccountProfileWorkItem
-  | BilibiliAccountInventoryWorkItem;
+  | BilibiliAccountInventoryWorkItem
+  | BilibiliPassiveExtensionWorkItem;
 export type UnsignedExtensionWorkItem =
   | Omit<BilibiliVideoDetailWorkItem, 'gatewaySignature'>
   | Omit<BilibiliNativeSearchWorkItem, 'gatewaySignature'>
   | Omit<BilibiliAccountProfileWorkItem, 'gatewaySignature'>
-  | Omit<BilibiliAccountInventoryWorkItem, 'gatewaySignature'>;
+  | Omit<BilibiliAccountInventoryWorkItem, 'gatewaySignature'>
+  | UnsignedBilibiliPassiveExtensionWorkItem;
 
 export type SharedExtensionWorkTerminalReason =
   | 'verification_required'
@@ -189,7 +203,8 @@ export type ExtensionWorkTerminalReason =
   | BilibiliVideoDetailWorkTerminalReason
   | BilibiliNativeSearchWorkTerminalReason
   | BilibiliAccountProfileWorkTerminalReason
-  | BilibiliAccountInventoryWorkTerminalReason;
+  | BilibiliAccountInventoryWorkTerminalReason
+  | BilibiliPassiveExtensionWorkTerminalReason;
 
 export interface BilibiliVideoDetailDomObservation {
   bvid: string;
@@ -379,7 +394,8 @@ export type ExtensionWorkResult =
   | BilibiliVideoDetailWorkResult
   | BilibiliNativeSearchWorkResult
   | BilibiliAccountProfileWorkResult
-  | BilibiliAccountInventoryWorkResult;
+  | BilibiliAccountInventoryWorkResult
+  | BilibiliPassiveExtensionWorkResult;
 
 export function canonicalBilibiliVideoWorkUrl(value: string): string | null {
   try {
@@ -409,6 +425,11 @@ export function extensionWorkTargetUrl(item: ExtensionWorkItem): string {
       return item.input.canonicalProfileUrl;
     case 'bilibili.account_inventory':
       return item.input.canonicalInventoryUrl;
+    case 'bilibili.dynamic':
+    case 'bilibili.collection_series.overview':
+    case 'bilibili.collection_series.detail':
+    case 'bilibili.danmaku':
+      return bilibiliPassiveExtensionWorkTargetUrl(item);
   }
 }
 
@@ -442,7 +463,7 @@ export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem 
   if (value.capability === 'bilibili.account_inventory') {
     return isBilibiliAccountInventoryWorkInput(value.input) && isBilibiliAccountInventoryWorkBudget(value.budget);
   }
-  return false;
+  return isBilibiliPassiveExtensionWorkItem(value);
 }
 
 export function isExtensionWorkResult(value: unknown): value is ExtensionWorkResult {
@@ -475,7 +496,7 @@ export function isExtensionWorkResult(value: unknown): value is ExtensionWorkRes
     return isBilibiliAccountInventoryTerminalReason(value.terminalReason) &&
       (value.observation === null || isBilibiliAccountInventoryDomObservation(value.observation));
   }
-  return false;
+  return isBilibiliPassiveExtensionWorkResult(value);
 }
 
 export function isExtensionWorkResultForItem(
@@ -531,7 +552,7 @@ export function isExtensionWorkResultForItem(
       !value.observation.risk.sourceUnavailable && value.navigation.attemptCount === 1 &&
       value.workTabDisposition === 'idle_reusable';
   }
-  return false;
+  return isBilibiliPassiveExtensionWorkItem(item) && isBilibiliPassiveExtensionWorkResultForItem(value, item);
 }
 
 export function isBilibiliVideoDetailDomObservation(value: unknown): value is BilibiliVideoDetailDomObservation {

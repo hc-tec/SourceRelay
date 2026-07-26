@@ -7,6 +7,7 @@ import {
   bilibiliAccountProfileIdFromUrl,
   bilibiliNativeSearchUrl,
   canonicalBilibiliAccountProfileUrl,
+  canonicalBilibiliPassiveVideoWorkUrl,
   canonicalBilibiliVideoWorkUrl,
   extensionWorkSigningPayload,
   isExtensionWorkItem,
@@ -78,6 +79,28 @@ export interface EnqueueBilibiliAccountProfileWorkInput {
 export interface EnqueueBilibiliAccountInventoryWorkInput {
   browserBindingId: string;
   canonicalProfileUrl: string;
+}
+
+export interface EnqueueBilibiliDynamicWorkInput {
+  browserBindingId: string;
+  canonicalProfileUrl: string;
+}
+
+export interface EnqueueBilibiliCollectionSeriesOverviewWorkInput {
+  browserBindingId: string;
+  canonicalProfileUrl: string;
+}
+
+export interface EnqueueBilibiliCollectionSeriesDetailWorkInput {
+  browserBindingId: string;
+  canonicalProfileUrl: string;
+  stableSeriesId: string;
+  listType: 'series' | 'season';
+}
+
+export interface EnqueueBilibiliDanmakuWorkInput {
+  browserBindingId: string;
+  canonicalVideoUrl: string;
 }
 
 /**
@@ -351,6 +374,119 @@ export class ExtensionWorkQueue {
     return await this.#enqueueSigned(unsigned, issuedAt);
   }
 
+  async enqueueBilibiliDynamic(
+    input: EnqueueBilibiliDynamicWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    const identity = await this.#normaliseAccountWork(input.browserBindingId, input.canonicalProfileUrl, 'bilibili_dynamic_input_invalid', now);
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.dynamic',
+      executionTarget: 'collector_work_tab',
+      issuedAt: identity.issuedAt,
+      expiresAt: identity.expiresAt,
+      input: {
+        canonicalProfileUrl: identity.canonicalProfileUrl,
+        canonicalDynamicUrl: `${identity.canonicalProfileUrl}/dynamic`,
+        stableAccountId: identity.stableAccountId
+      },
+      budget: fixedDirectWorkBudget()
+    };
+    return await this.#enqueueSigned(unsigned, identity.issuedAt);
+  }
+
+  async enqueueBilibiliCollectionSeriesOverview(
+    input: EnqueueBilibiliCollectionSeriesOverviewWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    const identity = await this.#normaliseAccountWork(input.browserBindingId, input.canonicalProfileUrl, 'bilibili_collection_series_overview_input_invalid', now);
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.collection_series.overview',
+      executionTarget: 'collector_work_tab',
+      issuedAt: identity.issuedAt,
+      expiresAt: identity.expiresAt,
+      input: {
+        canonicalProfileUrl: identity.canonicalProfileUrl,
+        canonicalOverviewUrl: `${identity.canonicalProfileUrl}/lists`,
+        stableAccountId: identity.stableAccountId
+      },
+      budget: fixedDirectWorkBudget()
+    };
+    return await this.#enqueueSigned(unsigned, identity.issuedAt);
+  }
+
+  async enqueueBilibiliCollectionSeriesDetail(
+    input: EnqueueBilibiliCollectionSeriesDetailWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    const identity = await this.#normaliseAccountWork(input.browserBindingId, input.canonicalProfileUrl, 'bilibili_collection_series_detail_input_invalid', now);
+    if (!isPositiveNumericId(input.stableSeriesId) || (input.listType !== 'series' && input.listType !== 'season')) {
+      throw new Error('bilibili_collection_series_detail_input_invalid');
+    }
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.collection_series.detail',
+      executionTarget: 'collector_work_tab',
+      issuedAt: identity.issuedAt,
+      expiresAt: identity.expiresAt,
+      input: {
+        canonicalProfileUrl: identity.canonicalProfileUrl,
+        canonicalDetailUrl: `${identity.canonicalProfileUrl}/lists/${input.stableSeriesId}?type=${input.listType}`,
+        stableAccountId: identity.stableAccountId,
+        stableSeriesId: input.stableSeriesId,
+        listType: input.listType,
+        pageBudget: 1
+      },
+      budget: fixedDirectWorkBudget()
+    };
+    return await this.#enqueueSigned(unsigned, identity.issuedAt);
+  }
+
+  async enqueueBilibiliDanmaku(
+    input: EnqueueBilibiliDanmakuWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId)) throw new Error('extension_work_binding_invalid');
+    const canonicalVideoUrl = canonicalBilibiliPassiveVideoWorkUrl(input.canonicalVideoUrl);
+    const bvid = canonicalVideoUrl?.match(/\/video\/(BV[0-9A-Za-z]{10})$/)?.[1] ?? null;
+    if (!canonicalVideoUrl || !bvid) throw new Error('bilibili_danmaku_input_invalid');
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(input.browserBindingId);
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.danmaku',
+      executionTarget: 'collector_work_tab',
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: { canonicalVideoUrl, bvid },
+      budget: fixedDirectWorkBudget()
+    };
+    return await this.#enqueueSigned(unsigned, issuedAt);
+  }
+
   /** Claiming is the irreversible delivery point.  There is no lease renewal. */
   async claimNext(browserBindingId: string, now = new Date()): Promise<ExtensionWorkItem | null> {
     if (!isUuid(browserBindingId)) throw new Error('extension_work_binding_invalid');
@@ -427,6 +563,28 @@ export class ExtensionWorkQueue {
       operation.item.browserBindingId === browserBindingId &&
       (operation.state === 'queued' || operation.state === 'claimed')
     )) throw new Error('extension_work_binding_busy');
+  }
+
+  async #normaliseAccountWork(
+    browserBindingId: string,
+    rawProfileUrl: string,
+    errorCode: string,
+    now: Date
+  ): Promise<{ canonicalProfileUrl: string; stableAccountId: string; issuedAt: string; expiresAt: string }> {
+    if (!isUuid(browserBindingId)) throw new Error('extension_work_binding_invalid');
+    const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(rawProfileUrl, 'strict_input');
+    const stableAccountId = canonicalProfileUrl ? bilibiliAccountProfileIdFromUrl(canonicalProfileUrl) : null;
+    if (!canonicalProfileUrl || !stableAccountId) throw new Error(errorCode);
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(browserBindingId);
+    const issuedAt = now.toISOString();
+    return {
+      canonicalProfileUrl,
+      stableAccountId,
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString()
+    };
   }
 
   async #enqueueSigned(
@@ -576,7 +734,12 @@ function isTerminalState(value: ExtensionWorkState): boolean {
 function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason {
   return value === 'detail_ready' || value === 'search_ready' || value === 'search_empty' ||
     value === 'search_results_partial' || value === 'profile_ready' || value === 'inventory_ready' ||
-    value === 'inventory_partial' || value === 'verification_required' || value === 'rate_limited' ||
+    value === 'inventory_partial' || value === 'dynamic_ready' || value === 'dynamic_empty' ||
+    value === 'dynamic_partial' || value === 'collection_series_overview_ready' ||
+    value === 'collection_series_overview_empty' || value === 'collection_series_overview_partial' ||
+    value === 'collection_series_detail_ready' || value === 'collection_series_detail_partial' ||
+    value === 'danmaku_ready' || value === 'danmaku_partial' ||
+    value === 'verification_required' || value === 'rate_limited' ||
     value === 'source_unavailable' || value === 'dom_projection_failed' || value === 'document_context_changed' ||
     value === 'run_deadline_exceeded' || value === 'work_tab_closed' || value === 'work_tab_user_taken_over' ||
     value === 'navigation_outcome_unknown' || value === 'gateway_restarted_before_completion';
@@ -632,6 +795,10 @@ function sha256(value: string): string {
 
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
+function isPositiveNumericId(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{1,20}$/.test(value) && value !== '0';
 }
 
 function isTimestamp(value: unknown): value is string {

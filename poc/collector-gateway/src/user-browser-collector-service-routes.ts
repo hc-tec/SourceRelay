@@ -8,6 +8,10 @@ import type { CollectorServiceClientRegistry } from './collector-service-clients
 import {
   enqueueBilibiliAccountInventoryWork,
   enqueueBilibiliAccountProfileWork,
+  enqueueBilibiliCollectionSeriesDetailWork,
+  enqueueBilibiliCollectionSeriesOverviewWork,
+  enqueueBilibiliDanmakuWork,
+  enqueueBilibiliDynamicWork,
   enqueueBilibiliNativeSearchWork,
   enqueueBilibiliVideoDetailWork,
   reconcileExpiredExtensionWork,
@@ -97,11 +101,37 @@ export async function handleUserBrowserCollectorServiceRoute(
               collection.browserBindingId,
               collection.input.canonicalProfileUrl
             )
-            : await enqueueBilibiliAccountInventoryWork(
-              context,
-              collection.browserBindingId,
-              collection.input.canonicalProfileUrl
-            );
+            : collection.capability === 'bilibili.account_inventory'
+              ? await enqueueBilibiliAccountInventoryWork(
+                context,
+                collection.browserBindingId,
+                collection.input.canonicalProfileUrl
+              )
+              : collection.capability === 'bilibili.dynamic'
+                ? await enqueueBilibiliDynamicWork(
+                  context,
+                  collection.browserBindingId,
+                  collection.input.canonicalProfileUrl
+                )
+                : collection.capability === 'bilibili.collection_series.overview'
+                  ? await enqueueBilibiliCollectionSeriesOverviewWork(
+                    context,
+                    collection.browserBindingId,
+                    collection.input.canonicalProfileUrl
+                  )
+                  : collection.capability === 'bilibili.collection_series.detail'
+                    ? await enqueueBilibiliCollectionSeriesDetailWork(
+                      context,
+                      collection.browserBindingId,
+                      collection.input.canonicalProfileUrl,
+                      collection.input.stableSeriesId,
+                      collection.input.listType
+                    )
+                    : await enqueueBilibiliDanmakuWork(
+                      context,
+                      collection.browserBindingId,
+                      collection.input.canonicalVideoUrl
+                    );
       operationId = operation.operationId;
       await audit(context, access.principal, 'collect', collection.capability, operationId, 'queued', null);
       sendJson(response, 201, {
@@ -147,6 +177,10 @@ async function audit(
     | 'bilibili.native_search'
     | 'bilibili.account_profile'
     | 'bilibili.account_inventory'
+    | 'bilibili.dynamic'
+    | 'bilibili.collection_series.overview'
+    | 'bilibili.collection_series.detail'
+    | 'bilibili.danmaku'
     | null,
   operationId: string | null,
   outcome: CollectorServiceAuditOutcome,

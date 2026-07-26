@@ -64,10 +64,10 @@ export const USER_BROWSER_BILIBILI_CAPABILITIES = [
   descriptor('bilibili.video_detail', '视频公开详情', 'canonical_video_url', 'direct_ready', 'dom_only'),
   descriptor('bilibili.transcript', '视频字幕', 'canonical_video_url', 'trusted_interaction_migration_required', 'subtitle_menu_and_text_track'),
   descriptor('bilibili.discussion', '视频评论区', 'canonical_video_url_and_fixed_action_plan', 'trusted_interaction_migration_required', 'scroll_sort_and_thread_expansion'),
-  descriptor('bilibili.danmaku', '视频弹幕可见 DOM', 'canonical_video_url', 'direct_migration_required', 'passive_player_dom_projection'),
-  descriptor('bilibili.dynamic', 'UP 主动态', 'canonical_profile_url', 'direct_migration_required', 'dom_and_fixed_network_metadata'),
-  descriptor('bilibili.collection_series.overview', 'UP 主合集与系列概览', 'canonical_profile_url', 'direct_migration_required', 'dom_and_fixed_network_metadata'),
-  descriptor('bilibili.collection_series.detail', '单个合集或系列详情', 'profile_url_series_id_and_fixed_page_budget', 'direct_migration_required', 'dom_and_fixed_network_metadata')
+  descriptor('bilibili.danmaku', '视频弹幕可见 DOM', 'canonical_video_url', 'direct_canary_pending', 'passive_player_dom_projection'),
+  descriptor('bilibili.dynamic', 'UP 主动态', 'canonical_profile_url', 'direct_canary_pending', 'passive_dom_projection'),
+  descriptor('bilibili.collection_series.overview', 'UP 主合集与系列概览', 'canonical_profile_url', 'direct_canary_pending', 'passive_dom_projection'),
+  descriptor('bilibili.collection_series.detail', '单个合集或系列详情', 'profile_url_series_id_and_fixed_page_budget', 'direct_canary_pending', 'passive_dom_projection')
 ] as const satisfies readonly UserBrowserBilibiliCapabilityDescriptor[];
 
 export function listUserBrowserBilibiliCapabilities(): UserBrowserBilibiliCapabilityDescriptor[] {

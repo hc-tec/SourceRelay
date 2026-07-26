@@ -11,6 +11,7 @@ import {
   loadUserBrowserGatewayConfig
 } from './user-browser-config';
 import { ExtensionWorkQueue } from './extension-work-queue';
+import { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
 import { safeErrorCode, sendJson } from './gateway-http';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker } from './pairing';
@@ -29,6 +30,7 @@ const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(confi
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
 const accountProfileArtifacts = await BilibiliAccountProfileArtifactStore.create(config.stateDirectory);
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
+const passiveDirectArtifacts = await ExtensionWorkPassiveArtifactStore.create(config.stateDirectory);
 const expectedHost = config.host + ':' + config.port;
 
 const server = createServer(async (request, response) => {
@@ -48,7 +50,8 @@ const server = createServer(async (request, response) => {
       videoDetailArtifacts,
       nativeSearchArtifacts,
       accountProfileArtifacts,
-      accountVideoInventoryArtifacts
+      accountVideoInventoryArtifacts,
+      passiveDirectArtifacts
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 2, ok: false, error: 'route_not_found' });
   } catch (error) {

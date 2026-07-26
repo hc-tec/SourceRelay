@@ -1,8 +1,11 @@
 export interface BilibiliCollectionSeriesDomSnapshot {
   stableAccountId: string | null;
+  listVisible: boolean;
+  loginOverlayVisible: boolean;
   declaredNavigationCount: number | null;
   items: Array<{
     listType: 'series' | 'season';
+    stableSeriesId: string | null;
     title: string;
     declaredItemCount: number | null;
     visiblePreviewBvids: string[];
@@ -22,10 +25,10 @@ export interface BilibiliCollectionSeriesDomSnapshot {
 
 export async function captureBilibiliCollectionSeriesDom(
   tabId: number,
-  documentId: string
+  documentId?: string
 ): Promise<BilibiliCollectionSeriesDomSnapshot> {
   const results = await chrome.scripting.executeScript({
-    target: { tabId, documentIds: [documentId] },
+    target: documentId ? { tabId, documentIds: [documentId] } : { tabId },
     world: 'ISOLATED',
     func: () => {
       const clean = (value: string | null | undefined, maximum: number): string =>
@@ -51,10 +54,23 @@ export async function captureBilibiliCollectionSeriesDom(
           return null;
         }
       };
+      const seriesIdFromHref = (value: string): string | null => {
+        try {
+          const url = new URL(value, location.href);
+          const match = url.hostname === 'space.bilibili.com'
+            ? url.pathname.match(/^\/\d{1,20}\/lists\/(\d{1,20})\/?$/)
+            : null;
+          const type = url.searchParams.get('type');
+          return match && (type === 'series' || type === 'season') ? match[1] ?? null : null;
+        } catch {
+          return null;
+        }
+      };
       const pathMatch = location.hostname === 'space.bilibili.com'
         ? location.pathname.match(/^\/(\d{1,20})\/lists\/?$/)
         : null;
       const bodyText = clean(document.body?.innerText, 120_000);
+      const listRoot = document.querySelector<HTMLElement>('.space-lists');
       const items = Array.from(document.querySelectorAll<HTMLElement>('.space-lists .video-list'))
         .filter(rendered)
         .slice(0, 50)
@@ -62,6 +78,8 @@ export async function captureBilibiliCollectionSeriesDom(
           const title = clean(section.querySelector<HTMLElement>('.video-list__title')?.innerText, 500);
           const descText = clean(section.querySelector<HTMLElement>('.video-list__desc')?.innerText, 80);
           const listType: 'series' | 'season' = title.startsWith('系列·') ? 'series' : 'season';
+          const listLink = Array.from(section.querySelectorAll<HTMLAnchorElement>('a[href]'))
+            .find((anchor) => seriesIdFromHref(anchor.href) !== null) ?? null;
           const links = Array.from(section.querySelectorAll<HTMLAnchorElement>('.video-list__content a[href]'))
             .filter(rendered)
             .slice(0, 30);
@@ -92,6 +110,7 @@ export async function captureBilibiliCollectionSeriesDom(
             .slice(0, 8);
           return {
             listType,
+            stableSeriesId: listLink ? seriesIdFromHref(listLink.href) : null,
             title,
             declaredItemCount: positiveCount(descText),
             visiblePreviewBvids,
@@ -106,6 +125,10 @@ export async function captureBilibiliCollectionSeriesDom(
         .filter((item) => item.title.length > 0);
       return {
         stableAccountId: pathMatch?.[1] ?? null,
+        listVisible: rendered(listRoot) || items.length > 0,
+        loginOverlayVisible: Array.from(document.querySelectorAll<HTMLElement>(
+          '[role="dialog"], [aria-modal="true"], .bili-mini-mask, .bili-mini-login, .passport-login-container, [class*="login-modal" i], [class*="passport-layer" i]'
+        )).some(rendered),
         declaredNavigationCount: null,
         items,
         risk: {

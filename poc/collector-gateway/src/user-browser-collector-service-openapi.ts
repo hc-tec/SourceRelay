@@ -72,7 +72,9 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 type: 'string',
                 enum: [
                   'bilibili.video_detail', 'bilibili.native_search',
-                  'bilibili.account_profile', 'bilibili.account_inventory'
+                  'bilibili.account_profile', 'bilibili.account_inventory',
+                  'bilibili.dynamic', 'bilibili.collection_series.overview',
+                  'bilibili.collection_series.detail', 'bilibili.danmaku'
                 ]
               }
             },
@@ -172,7 +174,11 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             { $ref: '#/components/schemas/UserBrowserVideoDetailCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserNativeSearchCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserAccountProfileCollectRequest' },
-            { $ref: '#/components/schemas/UserBrowserAccountInventoryCollectRequest' }
+            { $ref: '#/components/schemas/UserBrowserAccountInventoryCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserDynamicCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserCollectionSeriesOverviewCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserCollectionSeriesDetailCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserDanmakuCollectRequest' }
           ]
         },
         UserBrowserVideoDetailCollectRequest: {
@@ -239,6 +245,44 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             }
           }
         },
+        UserBrowserDynamicCollectRequest: profileCollectRequest('bilibili.dynamic'),
+        UserBrowserCollectionSeriesOverviewCollectRequest: profileCollectRequest('bilibili.collection_series.overview'),
+        UserBrowserCollectionSeriesDetailCollectRequest: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            browserBindingId: { type: 'string', format: 'uuid' },
+            platform: { type: 'string', const: 'bilibili' },
+            capability: { type: 'string', const: 'bilibili.collection_series.detail' },
+            executionTarget: { type: 'string', const: 'collector_work_tab' },
+            input: {
+              type: 'object', additionalProperties: false,
+              required: ['canonicalProfileUrl', 'stableSeriesId', 'listType'],
+              properties: {
+                canonicalProfileUrl: { type: 'string', format: 'uri' },
+                stableSeriesId: { type: 'string', pattern: '^[1-9]\\d{0,19}$' },
+                listType: { type: 'string', enum: ['series', 'season'] }
+              }
+            }
+          }
+        },
+        UserBrowserDanmakuCollectRequest: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            browserBindingId: { type: 'string', format: 'uuid' },
+            platform: { type: 'string', const: 'bilibili' },
+            capability: { type: 'string', const: 'bilibili.danmaku' },
+            executionTarget: { type: 'string', const: 'collector_work_tab' },
+            input: {
+              type: 'object', additionalProperties: false,
+              required: ['canonicalVideoUrl'],
+              properties: { canonicalVideoUrl: { type: 'string', format: 'uri' } }
+            }
+          }
+        },
         QueuedOperationResponse: {
           type: 'object', additionalProperties: false,
           required: ['schemaVersion', 'result'],
@@ -262,7 +306,9 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
               type: 'string',
               enum: [
                 'bilibili.video_detail', 'bilibili.native_search',
-                'bilibili.account_profile', 'bilibili.account_inventory'
+                'bilibili.account_profile', 'bilibili.account_inventory',
+                'bilibili.dynamic', 'bilibili.collection_series.overview',
+                'bilibili.collection_series.detail', 'bilibili.danmaku'
               ]
             },
             executionTarget: { type: 'string', const: 'collector_work_tab' },
@@ -284,7 +330,9 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
               type: 'string',
               enum: [
                 'bilibili.video_detail', 'bilibili.native_search',
-                'bilibili.account_profile', 'bilibili.account_inventory'
+                'bilibili.account_profile', 'bilibili.account_inventory',
+                'bilibili.dynamic', 'bilibili.collection_series.overview',
+                'bilibili.collection_series.detail', 'bilibili.danmaku'
               ]
             },
             artifact: { type: 'object' }
@@ -305,6 +353,25 @@ function jsonResponse(schema: Record<string, unknown>): Record<string, unknown> 
 
 function errorResponse(): Record<string, unknown> {
   return jsonResponse({ $ref: '#/components/schemas/ErrorResponse' });
+}
+
+function profileCollectRequest(capability: 'bilibili.dynamic' | 'bilibili.collection_series.overview'): Record<string, unknown> {
+  return {
+    type: 'object', additionalProperties: false,
+    required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+    properties: {
+      schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+      browserBindingId: { type: 'string', format: 'uuid' },
+      platform: { type: 'string', const: 'bilibili' },
+      capability: { type: 'string', const: capability },
+      executionTarget: { type: 'string', const: 'collector_work_tab' },
+      input: {
+        type: 'object', additionalProperties: false,
+        required: ['canonicalProfileUrl'],
+        properties: { canonicalProfileUrl: { type: 'string', format: 'uri' } }
+      }
+    }
+  };
 }
 
 function validLoopbackOrigin(value: string): string {

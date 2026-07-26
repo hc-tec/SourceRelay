@@ -1,7 +1,11 @@
 import {
   canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliAccountVideoInventoryUrl,
+  canonicalBilibiliCollectionSeriesDetailWorkUrl,
+  canonicalBilibiliCollectionSeriesOverviewWorkUrl,
+  canonicalBilibiliDynamicWorkUrl,
   canonicalBilibiliNativeSearchUrl,
+  canonicalBilibiliPassiveVideoWorkUrl,
   canonicalBilibiliVideoWorkUrl,
   extensionWorkTargetUrl,
   isExtensionWorkItem,
@@ -212,6 +216,22 @@ export function isExpectedExtensionWorkNavigation(expectedCanonicalUrl: string, 
   const inventory = canonicalBilibiliAccountVideoInventoryUrl(expectedCanonicalUrl, 'strict_input');
   if (inventory && inventory === expectedCanonicalUrl) {
     return canonicalBilibiliAccountVideoInventoryUrl(observedUrl, 'observed_document') === expectedCanonicalUrl;
+  }
+  const dynamic = canonicalBilibiliDynamicWorkUrl(expectedCanonicalUrl, 'strict_input');
+  if (dynamic && dynamic === expectedCanonicalUrl) {
+    return canonicalBilibiliDynamicWorkUrl(observedUrl, 'observed_document') === expectedCanonicalUrl;
+  }
+  const overview = canonicalBilibiliCollectionSeriesOverviewWorkUrl(expectedCanonicalUrl, 'strict_input');
+  if (overview && overview === expectedCanonicalUrl) {
+    return canonicalBilibiliCollectionSeriesOverviewWorkUrl(observedUrl, 'observed_document') === expectedCanonicalUrl;
+  }
+  const detail = canonicalBilibiliCollectionSeriesDetailWorkUrl(expectedCanonicalUrl, 'strict_input');
+  if (detail && detail === expectedCanonicalUrl) {
+    return canonicalBilibiliCollectionSeriesDetailWorkUrl(observedUrl, 'observed_document') === expectedCanonicalUrl;
+  }
+  const passiveVideo = canonicalBilibiliPassiveVideoWorkUrl(expectedCanonicalUrl);
+  if (passiveVideo && passiveVideo === expectedCanonicalUrl) {
+    return canonicalBilibiliPassiveVideoWorkUrl(observedUrl) === expectedCanonicalUrl;
   }
   return false;
 }

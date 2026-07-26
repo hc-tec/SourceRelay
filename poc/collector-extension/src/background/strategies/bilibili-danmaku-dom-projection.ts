@@ -6,10 +6,10 @@ import type { BilibiliDanmakuDomSnapshot } from '../../shared/bilibili-danmaku-c
  */
 export async function captureBilibiliDanmakuDom(
   tabId: number,
-  documentId: string
+  documentId?: string
 ): Promise<BilibiliDanmakuDomSnapshot> {
   const results = await chrome.scripting.executeScript({
-    target: { tabId, documentIds: [documentId] },
+    target: documentId ? { tabId, documentIds: [documentId] } : { tabId },
     world: 'ISOLATED',
     func: () => {
       const clean = (value: string | null | undefined, maximum = 4_000): string =>

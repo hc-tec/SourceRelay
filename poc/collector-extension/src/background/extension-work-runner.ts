@@ -2,6 +2,7 @@ import type { ExtensionWorkItem, ExtensionWorkResult } from '@intelligence/colle
 import { executeBilibiliAccountInventoryExtensionWork } from './extension-work-bilibili-account-inventory';
 import { executeBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
 import { executeBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
+import { executeBilibiliPassiveExtensionWork } from './extension-work-bilibili-passive';
 import { executeBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
 import { claimNextExtensionWork, submitExtensionWorkResult } from './extension-work-client';
 import {
@@ -117,6 +118,10 @@ async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
   if (item.capability === 'bilibili.account_inventory') {
     return await executeBilibiliAccountInventoryExtensionWork(item, lifecycle);
   }
+  if (item.capability === 'bilibili.dynamic' || item.capability === 'bilibili.collection_series.overview' ||
+    item.capability === 'bilibili.collection_series.detail' || item.capability === 'bilibili.danmaku') {
+    return await executeBilibiliPassiveExtensionWork(item, lifecycle);
+  }
   throw new Error('extension_work_capability_rejected');
 }
 
@@ -191,7 +196,19 @@ function interruptedResult(active: ActiveExtensionWork): ExtensionWorkResult {
   if (active.item.capability === 'bilibili.account_profile') {
     return { ...base, capability: 'bilibili.account_profile', observation: null };
   }
-  return { ...base, capability: 'bilibili.account_inventory', observation: null };
+  if (active.item.capability === 'bilibili.account_inventory') {
+    return { ...base, capability: 'bilibili.account_inventory', observation: null };
+  }
+  if (active.item.capability === 'bilibili.dynamic') {
+    return { ...base, capability: 'bilibili.dynamic', observation: null };
+  }
+  if (active.item.capability === 'bilibili.collection_series.overview') {
+    return { ...base, capability: 'bilibili.collection_series.overview', observation: null };
+  }
+  if (active.item.capability === 'bilibili.collection_series.detail') {
+    return { ...base, capability: 'bilibili.collection_series.detail', observation: null };
+  }
+  return { ...base, capability: 'bilibili.danmaku', observation: null };
 }
 
 function terminalDeliveryError(errorCode: string): boolean {
