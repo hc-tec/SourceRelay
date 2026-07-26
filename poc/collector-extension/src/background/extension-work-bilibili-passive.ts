@@ -260,7 +260,7 @@ function targetReached(item: PassiveItem, observedUrl: string): boolean {
     case 'bilibili.collection_series.detail':
       return canonicalBilibiliCollectionSeriesDetailWorkUrl(observedUrl, 'observed_document') === item.input.canonicalDetailUrl;
     case 'bilibili.danmaku':
-      return canonicalBilibiliPassiveVideoWorkUrl(observedUrl) === item.input.canonicalVideoUrl;
+      return canonicalBilibiliPassiveVideoWorkUrl(observedUrl, 'observed_document') === item.input.canonicalVideoUrl;
   }
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  canonicalBilibiliPassiveVideoWorkUrl,
   isBilibiliPassiveExtensionWorkItem,
   isBilibiliPassiveExtensionWorkResultForItem,
   type BilibiliDynamicWorkItem,
@@ -32,6 +33,19 @@ const item: BilibiliDynamicWorkItem = {
 };
 
 describe('passive user-owned-browser Bilibili work contract', () => {
+  test('keeps signed video input query-free while accepting an observed Bilibili attribution query', () => {
+    expect(canonicalBilibiliPassiveVideoWorkUrl('https://www.bilibili.com/video/BV1qZSLBYEpa')).toBe(
+      'https://www.bilibili.com/video/BV1qZSLBYEpa'
+    );
+    expect(canonicalBilibiliPassiveVideoWorkUrl(
+      'https://www.bilibili.com/video/BV1qZSLBYEpa?spm_id_from=333.1007.top_right_bar_window_history.content.click'
+    )).toBeNull();
+    expect(canonicalBilibiliPassiveVideoWorkUrl(
+      'https://www.bilibili.com/video/BV1qZSLBYEpa?spm_id_from=333.1007.top_right_bar_window_history.content.click',
+      'observed_document'
+    )).toBe('https://www.bilibili.com/video/BV1qZSLBYEpa');
+  });
+
   test('binds dynamic work to one derived public page and rejects arbitrary carrier fields', () => {
     expect(isBilibiliPassiveExtensionWorkItem(item)).toBe(true);
     expect(isBilibiliPassiveExtensionWorkItem({

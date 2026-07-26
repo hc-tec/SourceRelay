@@ -306,13 +306,21 @@ export function canonicalBilibiliCollectionSeriesDetailWorkUrl(
   }
 }
 
-export function canonicalBilibiliPassiveVideoWorkUrl(value: string): string | null {
+/**
+ * Signed input remains query-free.  A reached Bilibili document can append
+ * transient attribution/navigation query values, which are discarded only
+ * after the public video identity has been checked and are never persisted.
+ */
+export function canonicalBilibiliPassiveVideoWorkUrl(
+  value: string,
+  mode: 'strict_input' | 'observed_document' = 'strict_input'
+): string | null {
   try {
     const url = new URL(value);
     const bvid = url.protocol === 'https:' && url.hostname === 'www.bilibili.com'
       ? url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/)?.[1] ?? null
       : null;
-    if (!bvid || url.username || url.password || url.search || url.hash) return null;
+    if (!bvid || url.username || url.password || url.hash || (mode === 'strict_input' && url.search)) return null;
     return `https://www.bilibili.com/video/${bvid}`;
   } catch {
     return null;

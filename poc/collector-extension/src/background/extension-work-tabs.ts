@@ -231,7 +231,7 @@ export function isExpectedExtensionWorkNavigation(expectedCanonicalUrl: string, 
   }
   const passiveVideo = canonicalBilibiliPassiveVideoWorkUrl(expectedCanonicalUrl);
   if (passiveVideo && passiveVideo === expectedCanonicalUrl) {
-    return canonicalBilibiliPassiveVideoWorkUrl(observedUrl) === expectedCanonicalUrl;
+    return canonicalBilibiliPassiveVideoWorkUrl(observedUrl, 'observed_document') === expectedCanonicalUrl;
   }
   return false;
 }
