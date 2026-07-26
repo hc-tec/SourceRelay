@@ -41,6 +41,24 @@ export interface BilibiliVideoDetailDomSnapshot {
 }
 
 /**
+ * Failure-only structural facts from a bounded DOM observation. They contain
+ * no page text, URLs, request metadata, browser identifiers or credentials;
+ * their only purpose is to explain why a first-screen projection was not
+ * admitted as a detail artifact.
+ */
+export interface BilibiliVideoDetailDomDiagnostics {
+  observationPresent: boolean;
+  titlePresent: boolean | null;
+  titleVisible: boolean | null;
+  playerVisible: boolean | null;
+  chargeExclusiveTrialVisible: boolean | null;
+  loginOverlayVisible: boolean | null;
+  verificationRequired: boolean | null;
+  rateLimited: boolean | null;
+  sourceUnavailable: boolean | null;
+}
+
+/**
  * One public, first-rendered video-detail projection.  There is deliberately
  * no player response, subtitle document, comment, recommendation, URL query,
  * or arbitrary page field in this contract.
@@ -123,6 +141,7 @@ export interface BilibiliVideoDetailRunRecord {
   startedAt: string;
   completedAt: string;
   detail: BilibiliVideoDetailProjection | null;
+  domDiagnostics?: BilibiliVideoDetailDomDiagnostics;
   visualEvidence: BilibiliVideoDetailVisualEvidence | null;
   /**
    * Failure-only, de-sensitised extension lifecycle evidence.  It intentionally

@@ -39,6 +39,7 @@ export interface BilibiliVideoDetailArtifactManifest
   coverage: BilibiliVideoDetailRunRecord['coverage'];
   detailFile: typeof DETAIL_FILE | null;
   detailFileSha256: string | null;
+  domDiagnostics?: BilibiliVideoDetailRunRecord['domDiagnostics'];
   visualEvidence: BilibiliVideoDetailRunRecord['visualEvidence'];
   bindingDiagnostics?: BilibiliVideoDetailRunRecord['bindingDiagnostics'];
   safeguards: BilibiliVideoDetailRunRecord['safeguards'];
@@ -177,6 +178,7 @@ export class BilibiliVideoDetailArtifactStore {
       coverage: run.coverage,
       detailFile,
       detailFileSha256,
+      ...(run.domDiagnostics ? { domDiagnostics: structuredClone(run.domDiagnostics) } : {}),
       visualEvidence: run.visualEvidence,
       ...(run.bindingDiagnostics ? { bindingDiagnostics: structuredClone(run.bindingDiagnostics) } : {}),
       safeguards: run.safeguards

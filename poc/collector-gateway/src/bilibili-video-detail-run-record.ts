@@ -5,6 +5,7 @@ import {
 import { createHash } from 'node:crypto';
 import type {
   BilibiliVideoDetailAction,
+  BilibiliVideoDetailDomDiagnostics,
   BilibiliVideoDetailProjection,
   BilibiliVideoDetailRunRecord,
   BilibiliVideoDetailTerminalReason,
@@ -25,6 +26,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
   state: BilibiliVideoDetailRunRecord['state'];
   errorCode: string | null;
   detail: BilibiliVideoDetailProjection | null;
+  domDiagnostics?: BilibiliVideoDetailDomDiagnostics;
   visualEvidence: BilibiliVideoDetailVisualEvidence | null;
   bindingDiagnostics?: StrategyBindingDiagnostics | null;
   actions: BilibiliVideoDetailAction[];
@@ -53,6 +55,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
     startedAt: input.startedAt,
     completedAt: input.completedAt,
     detail,
+    ...(input.domDiagnostics ? { domDiagnostics: structuredClone(input.domDiagnostics) } : {}),
     visualEvidence: input.visualEvidence,
     ...(input.bindingDiagnostics ? { bindingDiagnostics: structuredClone(input.bindingDiagnostics) } : {}),
     actions: input.actions,

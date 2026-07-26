@@ -1,7 +1,8 @@
-import type {
-  BilibiliVideoDetailDomObservation,
-  ExtensionWorkItem,
-  ExtensionWorkResult
+import {
+  canonicalBilibiliPassiveVideoWorkUrl,
+  type BilibiliVideoDetailDomObservation,
+  type ExtensionWorkItem,
+  type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
 import { captureBilibiliVideoDetailDom } from './strategies/bilibili-video-detail-dom-projection';
 import {
@@ -17,7 +18,9 @@ import {
 } from './extension-work-tabs';
 
 const PAGE_SETTLE_MS = 3_000;
-const DOM_OBSERVATION_WINDOW_MS = 12_000;
+// Match the proven passive-player settle budget. This is still one navigation
+// and a bounded read-only observation; it is not a refresh or replay.
+const DOM_OBSERVATION_WINDOW_MS = 30_000;
 const OBSERVATION_INTERVAL_MS = 350;
 
 /**
@@ -113,15 +116,18 @@ async function observeVideoDetail(
   | { kind: 'incomplete'; observation: BilibiliVideoDetailDomObservation | null; errorCode: string; terminalReason: 'dom_projection_failed' | 'run_deadline_exceeded' }
 > {
   const deadline = Math.min(Date.parse(expiresAt), Date.now() + DOM_OBSERVATION_WINDOW_MS + PAGE_SETTLE_MS);
+  const expectedCanonicalUrl = `https://www.bilibili.com/video/${expectedBvid}`;
   let pageReadyAt: number | null = null;
   let lastObservation: BilibiliVideoDetailDomObservation | null = null;
+  let lastIdentityError: 'bilibili_video_detail_document_identity_unavailable' |
+    'bilibili_video_detail_document_identity_mismatch' | null = null;
   while (Date.now() < deadline) {
     const tab = await readExtensionWorkTab(workTab);
     if (tab.status !== 'complete') {
       await delay(OBSERVATION_INTERVAL_MS);
       continue;
     }
-    if (!tab.url || !tab.url.startsWith('https://www.bilibili.com/video/')) {
+    if (canonicalBilibiliPassiveVideoWorkUrl(tab.url ?? '', 'observed_document') !== expectedCanonicalUrl) {
       return {
         kind: 'stopped',
         observation: null,
@@ -136,7 +142,13 @@ async function observeVideoDetail(
     }
     const dom = await captureBilibiliVideoDetailDom(workTab.tabId);
     const observation = toObservation(dom, expectedBvid);
-    if (observation) lastObservation = observation;
+    if (observation) {
+      lastObservation = observation;
+    } else {
+      lastIdentityError = dom.bvid === null
+        ? 'bilibili_video_detail_document_identity_unavailable'
+        : 'bilibili_video_detail_document_identity_mismatch';
+    }
     if (dom.risk.verificationRequired) {
       return {
         kind: 'stopped', observation, errorCode: 'bilibili_verification_required', terminalReason: 'verification_required'
@@ -160,7 +172,9 @@ async function observeVideoDetail(
   return {
     kind: 'incomplete',
     observation: lastObservation,
-    errorCode: 'bilibili_video_detail_dom_not_ready',
+    errorCode: lastObservation === null && lastIdentityError !== null
+      ? lastIdentityError
+      : 'bilibili_video_detail_dom_not_ready',
     terminalReason: Date.now() >= Date.parse(expiresAt) ? 'run_deadline_exceeded' : 'dom_projection_failed'
   };
 }

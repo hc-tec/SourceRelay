@@ -1,10 +1,14 @@
 import {
   COLLECTOR_EXTENSION_VERSION,
+  type BilibiliVideoDetailDomObservation,
   type ExtensionWorkItem,
   type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
 import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
-import { projectBilibiliVideoDetailDom } from './bilibili-video-detail-contract';
+import {
+  projectBilibiliVideoDetailDom,
+  type BilibiliVideoDetailDomDiagnostics
+} from './bilibili-video-detail-contract';
 import { createBilibiliVideoDetailRunRecord } from './bilibili-video-detail-run-record';
 import type { ExtensionWorkArtifactReference } from './extension-work-queue';
 
@@ -42,6 +46,7 @@ export async function recordBilibiliVideoDetailExtensionWork(input: {
         : 'failed',
     errorCode: input.result.errorCode,
     detail,
+    domDiagnostics: domDiagnostics(input.result.observation),
     visualEvidence: null,
     actions: [{
       actionId: 'open_canonical_video',
@@ -93,8 +98,43 @@ function actionOutcome(result: ExtensionWorkResult):
   if (result.terminalReason === 'verification_required' || result.terminalReason === 'rate_limited') {
     return 'risk_stopped';
   }
-  if (result.terminalReason === 'source_unavailable' || result.terminalReason === 'run_deadline_exceeded') {
+  if (result.terminalReason === 'source_unavailable' || result.terminalReason === 'run_deadline_exceeded' ||
+    result.terminalReason === 'dom_projection_failed'
+  ) {
     return 'postcondition_unmet';
   }
   return 'failed';
+}
+
+function domDiagnostics(
+  observation: Extract<ExtensionWorkResult, { capability: 'bilibili.video_detail' }>['observation']
+): BilibiliVideoDetailDomDiagnostics {
+  if (!observation) {
+    return {
+      observationPresent: false,
+      titlePresent: null,
+      titleVisible: null,
+      playerVisible: null,
+      chargeExclusiveTrialVisible: null,
+      loginOverlayVisible: null,
+      verificationRequired: null,
+      rateLimited: null,
+      sourceUnavailable: null
+    };
+  }
+  return diagnosticsFromObservation(observation);
+}
+
+function diagnosticsFromObservation(observation: BilibiliVideoDetailDomObservation): BilibiliVideoDetailDomDiagnostics {
+  return {
+    observationPresent: true,
+    titlePresent: observation.title !== null,
+    titleVisible: observation.titleVisible,
+    playerVisible: observation.playerVisible,
+    chargeExclusiveTrialVisible: observation.chargeExclusiveTrialVisible,
+    loginOverlayVisible: observation.loginOverlayVisible,
+    verificationRequired: observation.risk.verificationRequired,
+    rateLimited: observation.risk.rateLimited,
+    sourceUnavailable: observation.risk.sourceUnavailable
+  };
 }

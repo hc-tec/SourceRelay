@@ -50,7 +50,11 @@ export async function captureBilibiliVideoDetailDom(
           ? location.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/)?.[1] ?? null
           : null;
         const titleElement = Array.from(document.querySelectorAll<HTMLElement>('h1')).find(rendered) ?? null;
-        const player = document.querySelector<HTMLElement>('[aria-label="哔哩哔哩播放器"]');
+        // The current desktop player consistently exposes this structural
+        // video-area root. The ARIA-labelled shell remains preferred when it
+        // is present, but is not the sole readiness signal.
+        const player = document.querySelector<HTMLElement>('[aria-label="哔哩哔哩播放器"]') ??
+          document.querySelector<HTMLElement>('.bpx-player-video-area');
         // A charge-exclusive trial is a positive, visible access restriction.
         // It is intentionally not inferred from the creator's generic “充电”
         // entry, a black player, or the absence of a description. The current
