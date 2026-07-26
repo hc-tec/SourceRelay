@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'vitest';
 import {
-  isDirectCanaryPendingUserBrowserBilibiliCapability,
   isDirectReadyUserBrowserBilibiliCapability,
   listUserBrowserBilibiliCapabilities
 } from '../src/user-browser-bilibili-capabilities.js';
@@ -12,12 +11,12 @@ describe('user-owned browser Bilibili capability catalog', () => {
     expect(catalog).toEqual(expect.arrayContaining([
       expect.objectContaining({
         capability: 'bilibili.account_profile',
-        dispatchState: 'direct_canary_pending',
+        dispatchState: 'direct_ready',
         browserHostFallback: 'forbidden'
       }),
       expect.objectContaining({
         capability: 'bilibili.account_inventory',
-        dispatchState: 'direct_canary_pending',
+        dispatchState: 'direct_ready',
         browserHostFallback: 'forbidden'
       }),
       expect.objectContaining({
@@ -27,8 +26,8 @@ describe('user-owned browser Bilibili capability catalog', () => {
       })
     ]));
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.video_detail')).toBe(true);
-    expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.account_profile')).toBe(false);
-    expect(isDirectCanaryPendingUserBrowserBilibiliCapability('bilibili.account_profile')).toBe(true);
-    expect(isDirectCanaryPendingUserBrowserBilibiliCapability('bilibili.transcript')).toBe(false);
+    expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.account_profile')).toBe(true);
+    expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.account_inventory')).toBe(true);
+    expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.transcript')).toBe(false);
   });
 });

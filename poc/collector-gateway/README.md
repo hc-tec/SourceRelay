@@ -2,7 +2,7 @@
 
 这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度。
 
-> **重要的生产边界（2026-07-26）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。直接模式已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab → 一次公开 B站详情或固定首页搜索导航 → 固定 DOM 投影 → HMAC result → raw-first local artifact。`bilibili.account_profile` 与 `bilibili.account_inventory` 已按相同受限协议实现，分别只接受规范 UP 主空间主页并派生主页或投稿视频首屏；它们在首次真实 user-browser canary 前明确显示为 `direct_canary_pending`，不能被宣传为已验证能力。`GET /v2/capabilities` 会列出 12 项 B站既有实现的 direct-mode 迁移状态，避免把“仓库已有旧实现”误报成“日常浏览器已可安全 dispatch”。它不读取登录凭据、Cookie、Token、Profile 文件或 Network response body。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
+> **重要的生产边界（2026-07-26）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。直接模式已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab → 一次公开 B站详情、固定首页搜索、UP 主资料或 UP 主投稿视频首屏导航 → 固定 DOM 投影 → HMAC result → raw-first local artifact。`bilibili.account_profile` 与 `bilibili.account_inventory` 已完成真实 user-browser canary，分别只接受规范 UP 主空间主页并派生主页或投稿视频首屏；它们与详情、搜索一样显示为 `direct_ready`，但不会因此放宽到任意 URL、分页、筛选、滚动或 Browser Host fallback。`GET /v2/capabilities` 会列出 12 项 B站既有实现的 direct-mode 迁移状态，避免把“仓库已有旧实现”误报成“日常浏览器已可安全 dispatch”。它不读取登录凭据、Cookie、Token、Profile 文件或 Network response body。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
 
 ## 日常浏览器 Direct API（当前生产 MVP）
 
@@ -63,7 +63,7 @@
 }
 ```
 
-将 capability 换为 `bilibili.account_inventory` 可请求同一 MID 的首屏公开视频卡片。两项仅在 `/v2/capabilities` 为 `direct_canary_pending` 时供 Testbench 做第一次真实只读验证；取得终态 operation 与 artifact 前不升为 `direct_ready`。
+将 capability 换为 `bilibili.account_inventory` 可请求同一 MID 的首屏公开视频卡片。两项均已通过 Testbench 的真实 user-browser 只读验证，因此在 `/v2/capabilities` 中为 `direct_ready`；它们的输入与单页边界保持不变。
 
 - `GET /v2/openapi.json`：direct-mode OpenAPI 3.1 contract；
 - `browser-bindings:read`：发现安全摘要后的 binding；
