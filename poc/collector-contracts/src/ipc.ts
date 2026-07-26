@@ -14,7 +14,11 @@ import type {
   ReleasePageRequest
 } from './page-pool.js';
 import type { PageScrollResult, ScrollPageRequest } from './page-scroll.js';
-import type { CapturePageVisualEvidenceRequest, PageVisualEvidence } from './page-visual-evidence.js';
+import type {
+  CapturePageVisualEvidenceRequest,
+  CaptureRetainedPageVisualEvidenceRequest,
+  PageVisualEvidence
+} from './page-visual-evidence.js';
 import type { BrowserHostErrorRecord } from './errors.js';
 import type {
   StrategyObservationReadRequest,
@@ -89,6 +93,7 @@ export type BrowserHostCommandBody =
   | { type: 'interact_bilibili_danmaku'; request: BilibiliDanmakuInteractionRequest }
   | { type: 'click_bilibili_video_discussion_control'; request: BilibiliVideoDiscussionInteractionRequest }
   | { type: 'capture_page_visual_evidence'; request: CapturePageVisualEvidenceRequest }
+  | { type: 'capture_retained_page_visual_evidence'; request: CaptureRetainedPageVisualEvidenceRequest }
   | { type: 'bind_strategy_observer'; request: StrategyObserverBindingRequest }
   | { type: 'read_strategy_observation'; request: StrategyObservationReadRequest }
   | { type: 'read_strategy_binding_diagnostics'; request: StrategyBindingDiagnosticsRequest }

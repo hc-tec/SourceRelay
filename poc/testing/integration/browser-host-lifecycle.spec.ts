@@ -22,6 +22,7 @@ test('Browser Host manages a production Chromium page pool without platform navi
     repeatedLaunchDidNotCreateSecondBrowser: true,
     releasedPageReused: true,
     retainedPageProtected: true,
+    retainedPageVisualEvidenceReadOnly: true,
     commandReplayDidNotRepeatNavigation: true,
     testScopedExplicitCleanup: true
   });

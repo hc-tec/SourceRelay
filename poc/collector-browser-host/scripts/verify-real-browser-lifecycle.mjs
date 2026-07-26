@@ -172,10 +172,38 @@ try {
   }));
   assert.equal(reusedRetainedExact.page.pageAlias, pageC.page.pageAlias);
   assert.equal(reusedRetainedExact.selection, 'reused_exact_target');
-  await client.command({
+  const retainedAfterExactReuse = await client.command({
     type: 'release_page',
     request: releaseRequest(profileId, reusedRetainedExact, 'retained_for_review')
   });
+  assert.equal(retainedAfterExactReuse.state, 'retained_for_review');
+
+  const retainedVisual = await client.command({
+    type: 'capture_retained_page_visual_evidence',
+    request: {
+      profileId,
+      pageAlias: pageC.page.pageAlias,
+      expectedRecordVersion: retainedAfterExactReuse.recordVersion
+    }
+  });
+  assert.equal(retainedVisual.pageAlias, pageC.page.pageAlias);
+  assert.ok(retainedVisual.screenshot.byteLength > 0);
+  assert.ok((await readFile(resolve(stateDirectory, 'visual-evidence', retainedVisual.screenshot.fileName))).byteLength > 0);
+  const afterRetainedVisual = onlyProfile(asSnapshot(await client.command({ type: 'get_snapshot' })));
+  const retainedAfterVisual = afterRetainedVisual.pages.find((page) => page.pageAlias === pageC.page.pageAlias);
+  assert.equal(retainedAfterVisual?.state, 'retained_for_review');
+  assert.equal(retainedAfterVisual?.recordVersion, retainedAfterExactReuse.recordVersion);
+  await expectHostError(
+    () => client.command({
+      type: 'capture_retained_page_visual_evidence',
+      request: {
+        profileId,
+        pageAlias: pageC.page.pageAlias,
+        expectedRecordVersion: retainedAfterExactReuse.recordVersion + 1
+      }
+    }),
+    'retained_page_visual_evidence_record_version_mismatch'
+  );
 
   const plan = asReclaimPlan(await client.command({
     type: 'create_reclaim_plan',
@@ -290,6 +318,7 @@ try {
     idleStaleReconciledWithoutPlatformInput: true,
     retainedPageProtected: true,
     exactRetainedPageReusedWithoutNewTab: true,
+    retainedPageVisualEvidenceReadOnly: true,
     activeLeaseQuarantinedOnControllerDisconnect: true,
     reclaimPlanExecutedExplicitly: true,
     commandReplayDidNotRepeatNavigation: true,

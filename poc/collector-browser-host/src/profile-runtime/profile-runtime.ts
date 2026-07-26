@@ -14,6 +14,7 @@ import {
   type AcquirePageResult,
   type BrowserProfilePagePoolSummary,
   type CapturePageVisualEvidenceRequest,
+  type CaptureRetainedPageVisualEvidenceRequest,
   type CloseQuarantinedPageRequest,
   type CreateReclaimPlanRequest,
   type ExtensionRuntimeExpectation,
@@ -297,6 +298,10 @@ export class ProfileRuntime {
 
   async captureVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {
     return await this.#ledger.captureVisualEvidence(request, this.#visualEvidenceDirectory);
+  }
+
+  async captureRetainedVisualEvidence(request: CaptureRetainedPageVisualEvidenceRequest): Promise<PageVisualEvidence> {
+    return await this.#ledger.captureRetainedVisualEvidence(request, this.#visualEvidenceDirectory);
   }
 
   reconcile(request: ReconcilePageRequest) {

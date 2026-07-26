@@ -111,6 +111,8 @@ export class BrowserHostRuntime {
         return await this.#profile(body.request.profileId).interactBilibiliDanmaku(body.request);
       case 'capture_page_visual_evidence':
         return await this.#profile(body.request.profileId).captureVisualEvidence(body.request);
+      case 'capture_retained_page_visual_evidence':
+        return await this.#profile(body.request.profileId).captureRetainedVisualEvidence(body.request);
       case 'bind_strategy_observer':
         return await this.#profile(body.request.profileId).bindStrategyObserver(body.request);
       case 'read_strategy_observation':

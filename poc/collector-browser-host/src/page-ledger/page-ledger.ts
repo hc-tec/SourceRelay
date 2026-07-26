@@ -13,6 +13,7 @@ import {
   type AcquirePageRequest,
   type AcquirePageResult,
   type CapturePageVisualEvidenceRequest,
+  type CaptureRetainedPageVisualEvidenceRequest,
   type CloseQuarantinedPageRequest,
   type ManagedPageSummary,
   type NavigatePageRequest,
@@ -41,6 +42,7 @@ import { executeTrustedBilibiliTranscriptChineseSelection } from './trusted-bili
 import { executeTrustedBilibiliVideoDiscussionInteraction } from './trusted-bilibili-video-discussion-interaction.js';
 import { executeTrustedBilibiliDanmakuInteraction } from './trusted-bilibili-danmaku-interaction.js';
 import { closeQuarantinedPageRecord } from './quarantine-maintenance.js';
+import { assertRetainedPageVisualEvidenceEligible } from './retained-page-visual-evidence.js';
 import {
   DEFAULT_MAX_IDLE_TRUST_MS,
   leaseSelectedPage,
@@ -345,6 +347,27 @@ export class PageLedger {
       pageAlias: record.pageAlias,
       documentGeneration: context.documentGeneration,
       routeGeneration: context.routeGeneration,
+      directory
+    });
+  }
+
+  /**
+   * A retained page belongs to a person, not the generic page pool. Allow a
+   * current authenticated controller to save visual evidence of that exact
+   * page, but do not acquire a lease or expose any arbitrary page inspection
+   * surface. The helper verifies state, lease absence, and record version.
+   */
+  async captureRetainedVisualEvidence(
+    request: CaptureRetainedPageVisualEvidenceRequest,
+    directory: string
+  ): Promise<PageVisualEvidence> {
+    const record = this.#record(request.profileId, request.pageAlias);
+    assertRetainedPageVisualEvidenceEligible(record, request.expectedRecordVersion);
+    return await captureManagedPageVisualEvidence({
+      page: record.page,
+      pageAlias: record.pageAlias,
+      documentGeneration: record.documentGeneration,
+      routeGeneration: record.routeGeneration,
       directory
     });
   }
