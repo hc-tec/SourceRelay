@@ -227,6 +227,7 @@ try {
   };
   const navigationCommandId = randomUUID();
   const firstNavigation = await client.command(navigationBody, { commandId: navigationCommandId });
+  assert.equal(firstNavigation.state, 'leased', 'navigation succeeds only after the Host proves its managed tab visible');
   const replayedNavigation = await client.command(navigationBody, { commandId: navigationCommandId });
   assert.deepEqual(replayedNavigation, firstNavigation, 'same command id must return cached outcome');
   await expectHostError(
@@ -323,6 +324,7 @@ try {
     reclaimPlanExecutedExplicitly: true,
     commandReplayDidNotRepeatNavigation: true,
     commandIdPayloadConflictRejected: true,
+    foregroundPreconditionVerifiedByRealChromium: true,
     extensionPagesAtMostOne: true,
     testScopedExplicitCleanup: true
   }, null, 2));

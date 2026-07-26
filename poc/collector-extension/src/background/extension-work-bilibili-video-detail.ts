@@ -55,9 +55,10 @@ export async function executeBilibiliVideoDetailExtensionWork(
     workTab = await acquireExtensionWorkTab();
     acquisition = workTab.acquisition;
     await lifecycle.onWorkTabAcquired?.(acquisition);
-    navigationAttempted = true;
-    await lifecycle.onNavigationIntent?.();
-    await navigateExtensionWorkTabOnce(workTab, item);
+    await navigateExtensionWorkTabOnce(workTab, item, async () => {
+      navigationAttempted = true;
+      await lifecycle.onNavigationIntent?.();
+    });
     const observed = await observeVideoDetail(workTab, item.input.bvid, item.expiresAt);
     observation = observed.observation;
     const disposition = observed.kind === 'ready' || observed.kind === 'incomplete' ||
@@ -241,6 +242,7 @@ function terminalReasonForError(
 ): Extract<ExtensionWorkResult, { capability: 'bilibili.video_detail' }>['terminalReason'] {
   if (errorCode === 'work_tab_closed') return 'work_tab_closed';
   if (errorCode === 'work_tab_user_taken_over') return 'work_tab_user_taken_over';
+  if (errorCode === 'work_tab_foreground_unavailable') return 'work_tab_foreground_unavailable';
   return navigationAttempted ? 'navigation_outcome_unknown' : 'work_tab_closed';
 }
 

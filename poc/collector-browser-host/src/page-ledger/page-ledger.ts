@@ -43,6 +43,7 @@ import { executeTrustedBilibiliVideoDiscussionInteraction } from './trusted-bili
 import { executeTrustedBilibiliDanmakuInteraction } from './trusted-bilibili-danmaku-interaction.js';
 import { closeQuarantinedPageRecord } from './quarantine-maintenance.js';
 import { assertRetainedPageVisualEvidenceEligible } from './retained-page-visual-evidence.js';
+import { ensureManagedPageForeground } from './page-foreground.js';
 import {
   DEFAULT_MAX_IDLE_TRUST_MS,
   leaseSelectedPage,
@@ -203,6 +204,11 @@ export class PageLedger {
     if (this.#offlineOnly && protocol !== 'about:' && protocol !== 'data:') {
       throw hostError({ code: 'offline_profile_navigation_rejected', category: 'action', scope: 'action' });
     }
+    // Do this before marking the action attempted. If Chromium cannot make
+    // our already-leased page visible, no platform navigation was sent and
+    // the caller retains an accurate, safely retryable local precondition
+    // failure instead of an ambiguous navigation outcome.
+    await ensureManagedPageForeground(record.page);
     record.attemptedActionIds.add(request.actionId);
     touchRecord(record);
     this.#emit('action_attempted', record, null, request.actionId);

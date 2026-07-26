@@ -23,16 +23,25 @@ export interface ExtensionWorkTabLease {
 
 interface ManagedWorkTab {
   tabId: number;
+  windowId: number;
   state: 'idle_reusable' | 'leased';
   leaseId: string | null;
   expectedCanonicalUrl: string | null;
   expectedNavigationUntil: number | null;
+  /**
+   * The extension must distinguish its own one-time foreground transition
+   * from a person selecting a managed tab. Chrome's activation event has no
+   * initiator, so retain this very short acknowledgement window only around
+   * the internal `tabs.update({ active: true })` call.
+   */
+  expectedForegroundActivationUntil: number | null;
   initialBlankNavigationUntil: number;
 }
 
 const managedTabs = new Map<number, ManagedWorkTab>();
 const leaseLosses = new Map<string, Exclude<WorkTabDisposition, 'idle_reusable'>>();
 let listenersInitialised = false;
+const FOREGROUND_ACTIVATION_GRACE_MS = 2_000;
 
 /**
  * Only tabs created by this module enter `managedTabs`.  There is no tab
@@ -44,7 +53,26 @@ export function initialiseExtensionWorkTabs(): void {
   listenersInitialised = true;
   chrome.tabs.onRemoved.addListener((tabId) => forgetTab(tabId, 'closed_or_missing'));
   chrome.tabs.onMoved.addListener((tabId) => forgetTab(tabId, 'user_taken_over'));
-  chrome.tabs.onActivated.addListener(({ tabId }) => forgetTab(tabId, 'user_taken_over'));
+  chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
+    const activated = managedTabs.get(tabId);
+    if (activated && activated.state === 'leased' && activated.windowId === windowId &&
+      activated.expectedForegroundActivationUntil !== null &&
+      Date.now() <= activated.expectedForegroundActivationUntil
+    ) {
+      activated.expectedForegroundActivationUntil = null;
+      return;
+    }
+
+    // A leased work tab must stay foreground while its page settles. If a
+    // person activates any other tab in that browser window, do not try to
+    // steal focus back: lose the lease so observers stop rather than polling
+    // a throttled/background platform page indefinitely.
+    for (const record of [...managedTabs.values()]) {
+      if (record.state === 'leased' && record.windowId === windowId) {
+        forgetTab(record.tabId, 'user_taken_over');
+      }
+    }
+  });
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (!changeInfo.url) return;
     const record = managedTabs.get(tabId);
@@ -68,7 +96,7 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
     if (record.state !== 'idle_reusable') continue;
     try {
       const tab = await chrome.tabs.get(record.tabId);
-      if (tab.active) {
+      if (tab.windowId !== record.windowId || tab.active) {
         forgetTab(record.tabId, 'user_taken_over');
         continue;
       }
@@ -79,13 +107,17 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
   }
 
   const tab = await chrome.tabs.create({ url: 'about:blank', active: false });
-  if (!Number.isSafeInteger(tab.id)) throw new Error('extension_work_tab_create_failed');
+  if (!Number.isSafeInteger(tab.id) || !Number.isSafeInteger(tab.windowId)) {
+    throw new Error('extension_work_tab_create_failed');
+  }
   const record: ManagedWorkTab = {
     tabId: tab.id!,
+    windowId: tab.windowId,
     state: 'idle_reusable',
     leaseId: null,
     expectedCanonicalUrl: null,
     expectedNavigationUntil: null,
+    expectedForegroundActivationUntil: null,
     initialBlankNavigationUntil: Date.now() + 2_000
   };
   managedTabs.set(record.tabId, record);
@@ -95,15 +127,18 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
 /** One capability-approved platform navigation, issued exactly once per lease. */
 export async function navigateExtensionWorkTabOnce(
   workTab: ExtensionWorkTabLease,
-  item: ExtensionWorkItem
+  item: ExtensionWorkItem,
+  onNavigationIntent?: () => Promise<void> | void
 ): Promise<void> {
   // The target comes from a previously validated, signed registered work item.
   // This module deliberately accepts no free-form URL argument.
   if (!isExtensionWorkItem(item)) throw new Error('extension_work_target_invalid');
   const canonical = extensionWorkTargetUrl(item);
+  await ensureExtensionWorkTabForeground(workTab);
   const record = requireLease(workTab);
   record.expectedCanonicalUrl = canonical;
   record.expectedNavigationUntil = Date.now() + 15_000;
+  await onNavigationIntent?.();
   try {
     await chrome.tabs.update(workTab.tabId, { url: canonical });
   } catch {
@@ -114,10 +149,19 @@ export async function navigateExtensionWorkTabOnce(
 
 /** Read only the tab that this lease owns; never enumerate normal user tabs. */
 export async function readExtensionWorkTab(workTab: ExtensionWorkTabLease): Promise<chrome.tabs.Tab> {
-  requireLease(workTab);
+  const record = requireLease(workTab);
   try {
-    return await chrome.tabs.get(workTab.tabId);
+    const tab = await chrome.tabs.get(workTab.tabId);
+    if (tab.windowId !== record.windowId || !tab.active) {
+      forgetTab(workTab.tabId, 'user_taken_over');
+      throw new Error('work_tab_user_taken_over');
+    }
+    return tab;
   } catch {
+    const disposition = currentDisposition(workTab);
+    if (disposition === 'user_taken_over' || disposition === 'retained_not_reusable') {
+      throw new Error('work_tab_user_taken_over');
+    }
     forgetTab(workTab.tabId, 'closed_or_missing');
     throw new Error('work_tab_closed');
   }
@@ -136,6 +180,7 @@ export function releaseExtensionWorkTab(workTab: ExtensionWorkTabLease): WorkTab
   record.leaseId = null;
   record.expectedCanonicalUrl = null;
   record.expectedNavigationUntil = null;
+  record.expectedForegroundActivationUntil = null;
   return 'idle_reusable';
 }
 
@@ -164,7 +209,37 @@ function lease(record: ManagedWorkTab, acquisition: WorkTabAcquisition): Extensi
   record.leaseId = leaseId;
   record.expectedCanonicalUrl = null;
   record.expectedNavigationUntil = null;
+  record.expectedForegroundActivationUntil = null;
   return { leaseId, tabId: record.tabId, acquisition };
+}
+
+/**
+ * Page loading on several platforms is deliberately degraded for background
+ * tabs. This is an internal precondition for an extension-owned lease, not a
+ * caller-controlled tab-focus capability. It never focuses the browser
+ * window and never attempts to reclaim focus after a user takeover.
+ */
+async function ensureExtensionWorkTabForeground(workTab: ExtensionWorkTabLease): Promise<void> {
+  const record = requireLease(workTab);
+  record.expectedForegroundActivationUntil = Date.now() + FOREGROUND_ACTIVATION_GRACE_MS;
+  try {
+    const activated = await chrome.tabs.update(workTab.tabId, { active: true });
+    if (!activated || activated.windowId !== record.windowId || activated.active !== true) {
+      throw new Error('work_tab_foreground_unavailable');
+    }
+    const verified = await chrome.tabs.get(workTab.tabId);
+    if (verified.windowId !== record.windowId || verified.active !== true) {
+      throw new Error('work_tab_foreground_unavailable');
+    }
+  } catch (error) {
+    record.expectedForegroundActivationUntil = null;
+    const code = error instanceof Error ? error.message : '';
+    if (code === 'work_tab_foreground_unavailable') throw error;
+    const disposition = currentDisposition(workTab);
+    if (disposition === 'closed_or_missing') throw new Error('work_tab_closed');
+    if (disposition !== 'idle_reusable') throw new Error('work_tab_user_taken_over');
+    throw new Error('work_tab_foreground_unavailable');
+  }
 }
 
 function requireLease(workTab: ExtensionWorkTabLease): ManagedWorkTab {

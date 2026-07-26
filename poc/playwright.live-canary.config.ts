@@ -16,8 +16,11 @@ export default defineConfig({
   expect: { timeout: 20_000 },
   reporter: [['list']],
   use: {
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
+    // Playwright traces include raw request headers and cookies. A real-site
+    // canary must never persist them, even under its fresh test-owned profile.
+    // The spec itself saves only deliberately scoped visual evidence.
+    trace: 'off',
+    screenshot: 'off',
     video: 'off'
   },
   projects: [{ name: 'live-canary' }]

@@ -109,6 +109,7 @@ export type BilibiliNativeSearchTerminalReason =
   // interrupted or user-taken-over extension tab to a misleading legacy code.
   | 'work_tab_closed'
   | 'work_tab_user_taken_over'
+  | 'work_tab_foreground_unavailable'
   | 'navigation_outcome_unknown'
   | 'gateway_restarted_before_completion';
 

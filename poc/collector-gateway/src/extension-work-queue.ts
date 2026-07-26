@@ -742,6 +742,7 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'verification_required' || value === 'rate_limited' ||
     value === 'source_unavailable' || value === 'dom_projection_failed' || value === 'document_context_changed' ||
     value === 'run_deadline_exceeded' || value === 'work_tab_closed' || value === 'work_tab_user_taken_over' ||
+    value === 'work_tab_foreground_unavailable' ||
     value === 'navigation_outcome_unknown' || value === 'gateway_restarted_before_completion';
 }
 

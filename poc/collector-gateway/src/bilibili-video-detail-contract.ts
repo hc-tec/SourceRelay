@@ -119,6 +119,7 @@ export type BilibiliVideoDetailTerminalReason =
   | 'run_deadline_exceeded'
   | 'work_tab_closed'
   | 'work_tab_user_taken_over'
+  | 'work_tab_foreground_unavailable'
   | 'navigation_outcome_unknown'
   | 'gateway_restarted_before_completion';
 

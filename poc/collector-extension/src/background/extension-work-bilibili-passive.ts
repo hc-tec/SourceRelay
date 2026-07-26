@@ -82,9 +82,10 @@ export async function executeBilibiliPassiveExtensionWork(
       await armBilibiliCollectionOverviewNetworkObservation({ tabId: workTab.tabId, item });
       collectionOverviewNetworkTabId = workTab.tabId;
     }
-    navigationAttempted = true;
-    await lifecycle.onNavigationIntent?.();
-    await navigateExtensionWorkTabOnce(workTab, item);
+    await navigateExtensionWorkTabOnce(workTab, item, async () => {
+      navigationAttempted = true;
+      await lifecycle.onNavigationIntent?.();
+    });
     const observed = await observePassiveWork(workTab, item, collectionOverviewNetworkTabId !== null);
     observation = observed.observation;
     const disposition = observed.kind === 'ready' || observed.kind === 'empty'
@@ -361,6 +362,7 @@ function result(
 function terminalReasonForError(errorCode: string, navigationAttempted: boolean): PassiveResult['terminalReason'] {
   if (errorCode === 'work_tab_closed') return 'work_tab_closed';
   if (errorCode === 'work_tab_user_taken_over') return 'work_tab_user_taken_over';
+  if (errorCode === 'work_tab_foreground_unavailable') return 'work_tab_foreground_unavailable';
   return navigationAttempted ? 'navigation_outcome_unknown' : 'work_tab_closed';
 }
 
