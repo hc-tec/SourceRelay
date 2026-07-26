@@ -291,6 +291,8 @@ async function readExtensionRuntimeExpectation(extensionDirectory: string): Prom
   }
   if (!value || typeof value !== 'object' ||
     (value as { schemaVersion?: unknown }).schemaVersion !== 1 ||
+    (value as { collectorVersion?: unknown }).collectorVersion !== COLLECTOR_EXTENSION_VERSION ||
+    (value as { controlSurfaceRevision?: unknown }).controlSurfaceRevision !== COLLECTOR_CONTROL_SURFACE_REVISION ||
     typeof (value as { buildFingerprint?: unknown }).buildFingerprint !== 'string' ||
     !/^[a-f0-9]{64}$/.test((value as { buildFingerprint: string }).buildFingerprint)) {
     throw new Error('collector_extension_build_metadata_invalid');

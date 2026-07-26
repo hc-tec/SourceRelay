@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 import { access, readFile, readdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  COLLECTOR_CONTROL_SURFACE_REVISION,
+  COLLECTOR_EXTENSION_VERSION
+} from '@intelligence/collector-contracts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outputDirectory = resolve(root, 'dist');
@@ -33,6 +37,16 @@ const approved = {
 assert.equal(manifest.manifest_version, 3, 'build artifact must be Manifest V3');
 assert.equal(manifest.version, packageMetadata.version, 'manifest and package versions must match');
 assert.equal(runtimeBuild.schemaVersion, 1, 'runtime build metadata schema must be 1');
+assert.equal(
+  runtimeBuild.collectorVersion,
+  COLLECTOR_EXTENSION_VERSION,
+  'runtime build metadata must name the compiled collector version'
+);
+assert.equal(
+  runtimeBuild.controlSurfaceRevision,
+  COLLECTOR_CONTROL_SURFACE_REVISION,
+  'runtime build metadata must name the compiled control surface revision'
+);
 assert.match(runtimeBuild.buildFingerprint, /^[a-f0-9]{64}$/, 'runtime build fingerprint must be a SHA-256 hex digest');
 assert.equal(/\btest\b/i.test(manifest.name), false, 'production artifact must not be test-branded');
 assert.deepEqual(manifest.permissions ?? [], approved.permissions, 'core permissions changed without approval');

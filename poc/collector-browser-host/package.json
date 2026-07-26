@@ -14,7 +14,12 @@
     "verify:lifecycle": "node scripts/verify-real-browser-lifecycle.mjs",
     "verify:extension-runtime-rejection": "node scripts/verify-real-extension-runtime-rejection.mjs",
     "verify:multi-profile-isolation": "node scripts/verify-real-multi-profile-isolation.mjs",
-    "verify:strategy-binding": "node scripts/verify-real-strategy-binding.mjs"
+    "verify:strategy-binding": "node scripts/verify-real-strategy-binding.mjs",
+    "validation-browser": "node scripts/validation-browser.mjs",
+    "start:validation-browser": "node scripts/validation-browser.mjs start",
+    "rebuild:validation-browser": "node scripts/validation-browser.mjs rebuild",
+    "status:validation-browser": "node scripts/validation-browser.mjs status",
+    "stop:validation-browser": "node scripts/validation-browser.mjs stop"
   },
   "dependencies": {
     "@intelligence/collector-contracts": "0.1.0",

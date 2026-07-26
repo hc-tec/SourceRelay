@@ -2,12 +2,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  COLLECTOR_CONTROL_SURFACE_REVISION,
+  COLLECTOR_EXTENSION_VERSION
+} from '@intelligence/collector-contracts';
 import { launchProductionExtension } from './extension-test-harness.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const extensionPath = resolve(root, 'dist');
 const runtimeBuild = JSON.parse(await readFile(resolve(extensionPath, 'runtime-build.json'), 'utf8'));
 assert.equal(runtimeBuild.schemaVersion, 1);
+assert.equal(runtimeBuild.collectorVersion, COLLECTOR_EXTENSION_VERSION);
+assert.equal(runtimeBuild.controlSurfaceRevision, COLLECTOR_CONTROL_SURFACE_REVISION);
 assert.match(runtimeBuild.buildFingerprint, /^[a-f0-9]{64}$/);
 
 let launched;
@@ -36,8 +42,8 @@ try {
   assert.deepEqual(runtime.registeredContentScripts, [], 'fresh Profile must not register a platform observer');
   assert.deepEqual(runtime.runtimeBootstrap, {
     schemaVersion: 1,
-    collectorVersion: runtime.extensionVersion,
-    controlSurfaceRevision: 15,
+    collectorVersion: runtimeBuild.collectorVersion,
+    controlSurfaceRevision: runtimeBuild.controlSurfaceRevision,
     buildFingerprint: runtimeBuild.buildFingerprint
   }, 'service worker must publish its compiled runtime identity');
   assert.equal(runtime.nativeBridgeStatus?.state, 'unconfigured', 'fresh Profile must not invent a Browser Host bridge');
@@ -96,7 +102,7 @@ try {
     nativeBridgeStartsUnconfigured: true,
     controlSurfaceLoaded: true,
     directWorkKindsExposed: 4,
-    controlSurfaceRevision: runtime.runtimeBootstrap.controlSurfaceRevision,
+    controlSurfaceRevision: runtimeBuild.controlSurfaceRevision,
     buildFingerprint: runtime.runtimeBootstrap.buildFingerprint
   }, null, 2));
 } finally {

@@ -58,4 +58,24 @@ npm run verify:extension-load --workspace @intelligence/collector-extension
 
 本地构建验证只检查 production bundle、MV3 worker、控制页与制品边界，不访问平台页面。真实平台能力的开发或变更必须先遵循 [真实网页交互侦察](../../skills/recon-live-web-interactions/SKILL.md)：以可见浏览器、视觉、DOM、可信浏览器输入和 Network 证据证明人类流程，再修改能力实现。
 
-旧 Browser Host、隔离 Chromium 和受管账号策略只属于 `test/isolated-account` 测试通道。它们不是扩展在用户日常浏览器中的正式运行依赖，也不能作为 direct-mode API 的 fallback。
+## 开发验证浏览器（不会碰日常浏览器）
+
+扩展开发与真实本机回归使用一台由脚本完全管理的、可见的 Chromium。它是给开发/验证代理使用的独立通道，和正式部署到用户日常 Chrome / Edge 的通道严格分开：不会复制、导入、读取或复用日常浏览器的 Profile、Cookie、Storage 或登录态。
+
+```powershell
+Set-Location D:\AIProject\inteligence\poc
+npm run start:validation-browser
+npm run status:validation-browser
+npm run stop:validation-browser
+```
+
+`start:validation-browser` 会安全关闭旧的**验证浏览器**，重新构建 contracts、扩展和 Browser Host，再由项目已验证的 `collector-browser-host → Playwright launchPersistentContext` 启动新的可见 Chromium，并自动加载 `collector-extension/dist`。它不会打开 `chrome://extensions`，不会要求人工点击 Reload。启动成功的硬条件是实际 MV3 service worker 同时匹配制品中的：
+
+- manifest version；
+- collector runtime version；
+- control-surface revision；
+- build fingerprint。
+
+浏览器会在成功后保持打开，以便后续真实 E2E/侦察脚本通过 Browser Host 的认证本地 IPC 接管；`status` 只读取 Host 的 worker 标记和浏览器状态，不做平台导航。会话、独立 Profile、Host endpoint 与本地认证材料都在被 Git 忽略的 `poc/runtime/validation-browser/`；它们不会输出到终端或提交到 Git。若源代码已经重建，重新执行 `npm run start:validation-browser` 即可完成自动重启和扩展更新；不需要、也不应让用户手工重载扩展。
+
+Browser Host、隔离 Chromium 和受管账号策略只属于开发验证 / `test/isolated-account` 通道。它们不是扩展在用户日常浏览器中的正式运行依赖，也不能作为 direct-mode API 的 fallback。
