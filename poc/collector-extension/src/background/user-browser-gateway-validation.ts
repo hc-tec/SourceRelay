@@ -6,8 +6,11 @@ import type {
 import {
   EXTENSION_ID,
   SAFE_ERROR,
+  USER_BROWSER_DIRECT_WORK_CAPABILITIES,
   UUID,
-  type PairUserBrowserGatewayInput
+  type PairUserBrowserGatewayInput,
+  type UserBrowserGatewayCapabilityDescriptor,
+  type UserBrowserGatewayCapabilityDispatchState
 } from './user-browser-gateway-types';
 
 export function pairingInput(value: PairUserBrowserGatewayInput): PairUserBrowserGatewayInput {
@@ -81,9 +84,74 @@ export function browserBindingSummary(value: unknown): BrowserBindingSummary {
   return structuredClone(candidate) as BrowserBindingSummary;
 }
 
+/**
+ * The control page consumes only the fixed direct-work subset of the public
+ * Gateway catalog. It cannot turn an arbitrary descriptor into a browser
+ * capability, and it intentionally ignores legacy / research-only entries.
+ */
+export function userBrowserGatewayDirectCapabilityCatalog(
+  value: unknown
+): readonly UserBrowserGatewayCapabilityDescriptor[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('gateway_capability_catalog_invalid');
+  }
+  const candidate = value as { schemaVersion?: unknown; capabilities?: unknown };
+  if (candidate.schemaVersion !== 2 || !Array.isArray(candidate.capabilities)) {
+    throw new Error('gateway_capability_catalog_invalid');
+  }
+  const descriptors = candidate.capabilities
+    .map(userBrowserGatewayDirectCapabilityDescriptor)
+    .filter((descriptor): descriptor is UserBrowserGatewayCapabilityDescriptor => descriptor !== null);
+  const seen = new Set<string>();
+  for (const descriptor of descriptors) {
+    if (seen.has(descriptor.capability)) throw new Error('gateway_capability_catalog_invalid');
+    seen.add(descriptor.capability);
+  }
+  return descriptors.map((descriptor) => structuredClone(descriptor));
+}
+
 export function safeGatewayErrorCode(error: unknown): string {
   const value = error instanceof Error ? error.message : '';
   return SAFE_ERROR.test(value) ? value : 'gateway_connection_failed';
+}
+
+function userBrowserGatewayDirectCapabilityDescriptor(
+  value: unknown
+): UserBrowserGatewayCapabilityDescriptor | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = value as Partial<UserBrowserGatewayCapabilityDescriptor>;
+  if (!USER_BROWSER_DIRECT_WORK_CAPABILITIES.includes(candidate.capability as never)) return null;
+  if (
+    candidate.schemaVersion !== 1 ||
+    candidate.platform !== 'bilibili' ||
+    !safeDisplayText(candidate.title, 100) ||
+    !safeDisplayText(candidate.inputMode, 100) ||
+    !safeDisplayText(candidate.captureMode, 100) ||
+    !isGatewayCapabilityDispatchState(candidate.dispatchState) ||
+    candidate.legacyImplementationPresent !== true ||
+    candidate.browserHostFallback !== 'forbidden'
+  ) return null;
+  return {
+    schemaVersion: 1,
+    capability: candidate.capability as UserBrowserGatewayCapabilityDescriptor['capability'],
+    platform: 'bilibili',
+    title: candidate.title,
+    inputMode: candidate.inputMode,
+    dispatchState: candidate.dispatchState,
+    captureMode: candidate.captureMode,
+    legacyImplementationPresent: true,
+    browserHostFallback: 'forbidden'
+  };
+}
+
+function isGatewayCapabilityDispatchState(value: unknown): value is UserBrowserGatewayCapabilityDispatchState {
+  return value === 'direct_ready' || value === 'direct_canary_pending' ||
+    value === 'direct_migration_required' || value === 'trusted_interaction_migration_required';
+}
+
+function safeDisplayText(value: unknown, maximumLength: number): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= maximumLength &&
+    !/[\u0000-\u001f\u007f]/.test(value) && value.trim().length > 0;
 }
 
 function gatewayPairingChallenge(value: unknown): value is GatewayPairingClaimResponse['challenge'] {

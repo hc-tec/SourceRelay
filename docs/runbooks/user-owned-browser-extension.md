@@ -63,6 +63,8 @@ npm run prepare:user-browser-deployment -- --replace
 
 这一步是浏览器必须显示给用户确认的本地安装操作；Collector 不会也不能静默把扩展塞进日常浏览器。不要使用测试 Chromium、Browser Host 或旧的隔离运行目录。
 
+控制页中的“日常浏览器 Direct Work”才是当前已配对 Gateway 返回的正式 `/v2` 能力子集；页面会同时显示实际 MV3 worker 的短 build 指纹。下面的“研究 / 隔离 Strategy 库”只是编译进扩展的研究策略摘要，**不等于**它们已被日常浏览器 `/v2` API 开放。刷新扩展后，应先核对 build 指纹，再以 Direct Work 目录的真实状态判断能力是否可验证。
+
 ## 4. 启动 direct-only Gateway 并检查状态
 
 在另一个 PowerShell 窗口中：

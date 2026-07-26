@@ -1,7 +1,8 @@
 import type { GatewayPairingRecord } from '@intelligence/collector-contracts';
 import {
   claimGatewayPairing,
-  readGatewayBinding
+  readGatewayBinding,
+  readGatewayDirectCapabilityCatalog
 } from './user-browser-gateway-client';
 import {
   clearGatewayPairingRecord,
@@ -18,6 +19,7 @@ import {
   EXTENSION_ID,
   LOOPBACK_PERMISSION,
   type PairUserBrowserGatewayInput,
+  type UserBrowserGatewayCapabilityDescriptor,
   type UserBrowserGatewayConnection
 } from './user-browser-gateway-types';
 
@@ -69,6 +71,18 @@ export async function getUserBrowserGatewayConnection(): Promise<UserBrowserGate
     binding: null,
     errorCode: null
   };
+}
+
+/**
+ * Read the Gateway's signed-work catalog for this already paired loopback
+ * origin. This is a local UI read, not a browser-control or platform action.
+ */
+export async function getUserBrowserGatewayDirectCapabilityCatalog(): Promise<
+  readonly UserBrowserGatewayCapabilityDescriptor[]
+> {
+  const record = await loadGatewayPairingRecord();
+  if (!record) throw new Error('gateway_unpaired');
+  return await readGatewayDirectCapabilityCatalog(record);
 }
 
 export async function clearUserBrowserGatewayPairing(): Promise<void> {

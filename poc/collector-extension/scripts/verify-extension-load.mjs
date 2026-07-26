@@ -46,28 +46,40 @@ try {
   await controlPage.goto(`chrome-extension://${runtime.extensionId}/control.html`);
   await controlPage.locator('html[data-collector-control-ready="true"]').waitFor();
   assert.equal(await controlPage.locator('h1').textContent(), 'Collector Extension');
+  const controlText = await controlPage.locator('body').innerText();
+  assert.match(controlText, /日常浏览器 Direct Work/, 'control page must distinguish direct work from research Strategy cards');
+  assert.match(controlText, /研究 \/ 隔离 Strategy 库/, 'control page must label non-direct Strategy cards explicitly');
+  for (const capability of [
+    'bilibili.video_detail',
+    'bilibili.native_search',
+    'bilibili.account_profile',
+    'bilibili.account_inventory'
+  ]) {
+    assert.match(controlText, new RegExp(capability.replace('.', '\\.')),
+      `control page must expose local compiled direct work ${capability}`);
+  }
   assert.match(
-    await controlPage.locator('body').innerText(),
+    controlText,
     /bilibili\.dynamic\.account-feed\.response-dom\.v1/,
     'control page must describe the compiled narrow Strategy'
   );
   assert.match(
-    await controlPage.locator('body').innerText(),
+    controlText,
     /bilibili\.video\.detail\.dom\.v2/,
     'control page must describe the compiled DOM-only video-detail Strategy'
   );
   assert.match(
-    await controlPage.locator('body').innerText(),
+    controlText,
     /bilibili\.account\.video-inventory\.dom\.v1/,
     'control page must describe the compiled DOM-only account-video inventory Strategy'
   );
   assert.match(
-    await controlPage.locator('body').innerText(),
+    controlText,
     /bilibili\.account\.profile\.dom\.v2/,
     'control page must describe the compiled DOM-only account-profile Strategy'
   );
   assert.match(
-    await controlPage.locator('body').innerText(),
+    controlText,
     /bilibili\.search\.breadth\.dom\.v2/,
     'control page must describe the compiled Bilibili native-search Strategy'
   );
@@ -83,6 +95,7 @@ try {
     runtimeBootstrapPublished: true,
     nativeBridgeStartsUnconfigured: true,
     controlSurfaceLoaded: true,
+    directWorkKindsExposed: 4,
     controlSurfaceRevision: runtime.runtimeBootstrap.controlSurfaceRevision,
     buildFingerprint: runtime.runtimeBootstrap.buildFingerprint
   }, null, 2));

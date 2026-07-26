@@ -8,6 +8,40 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
 export const EXTENSION_ID = /^[a-p]{32}$/;
 export const SAFE_ERROR = /^[a-z0-9_.-]{1,120}$/i;
 
+/**
+ * The only signed direct work kinds this installed MV3 runtime can execute.
+ * This local allow-list is deliberately separate from the older static
+ * research Strategy registry: a catalog entry cannot turn into browser work
+ * unless both the Gateway and this extension agree on it.
+ */
+export const USER_BROWSER_DIRECT_WORK_CAPABILITIES = [
+  'bilibili.video_detail',
+  'bilibili.native_search',
+  'bilibili.account_profile',
+  'bilibili.account_inventory'
+] as const;
+
+export type UserBrowserDirectWorkCapability =
+  (typeof USER_BROWSER_DIRECT_WORK_CAPABILITIES)[number];
+
+export type UserBrowserGatewayCapabilityDispatchState =
+  | 'direct_ready'
+  | 'direct_canary_pending'
+  | 'direct_migration_required'
+  | 'trusted_interaction_migration_required';
+
+export interface UserBrowserGatewayCapabilityDescriptor {
+  schemaVersion: 1;
+  capability: UserBrowserDirectWorkCapability;
+  platform: 'bilibili';
+  title: string;
+  inputMode: string;
+  dispatchState: UserBrowserGatewayCapabilityDispatchState;
+  captureMode: string;
+  legacyImplementationPresent: true;
+  browserHostFallback: 'forbidden';
+}
+
 export interface PairUserBrowserGatewayInput {
   loopbackOrigin: string;
   identityFingerprint: string;

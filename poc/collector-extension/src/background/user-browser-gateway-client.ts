@@ -12,8 +12,10 @@ import {
 } from '../shared/cryptography';
 import {
   browserBindingSummary,
+  userBrowserGatewayDirectCapabilityCatalog,
   pairingClaimResponse
 } from './user-browser-gateway-validation';
+import type { UserBrowserGatewayCapabilityDescriptor } from './user-browser-gateway-types';
 import {
   EXTENSION_ID,
   SAFE_ERROR,
@@ -56,6 +58,21 @@ export async function readGatewayBinding(record: GatewayPairingRecord): Promise<
   const binding = browserBindingSummary((payload as { binding?: unknown }).binding);
   if (binding.browserBindingId !== record.browserBindingId) throw new Error('gateway_binding_identity_mismatch');
   return binding;
+}
+
+/**
+ * A fixed, read-only public catalog request used only by the extension control
+ * page. The caller supplies neither a host nor a pathname: both are bound to
+ * the verified pairing record and this exact `/v2/capabilities` endpoint.
+ */
+export async function readGatewayDirectCapabilityCatalog(
+  record: GatewayPairingRecord
+): Promise<readonly UserBrowserGatewayCapabilityDescriptor[]> {
+  const payload = await fetchJson(`${record.loopbackOrigin}/v2/capabilities`, {
+    method: 'GET',
+    headers: { accept: 'application/json' }
+  });
+  return userBrowserGatewayDirectCapabilityCatalog(payload);
 }
 
 /**

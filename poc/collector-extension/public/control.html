@@ -47,8 +47,19 @@
       <section>
         <div class="section-heading">
           <div>
-            <h2>已编译 Strategy</h2>
-            <p>只开放已登记能力；不提供任意脚本、任意 selector、任意 tab 控制或任意 Network 正文接口。</p>
+            <h2>日常浏览器 Direct Work</h2>
+            <p>这是当前已配对 Gateway 的真实 `/v2/capabilities` 子集；只有这里列出的固定 work 才能由日常浏览器扩展接收。</p>
+          </div>
+        </div>
+        <div id="direct-capability-state" class="empty-state">正在读取已配对 Gateway 的 direct work 目录…</div>
+        <div id="direct-capability-list" class="strategy-list" aria-live="polite"></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <div>
+            <h2>研究 / 隔离 Strategy 库</h2>
+            <p>以下是编译进扩展的研究 Strategy 摘要，不等于日常浏览器 `/v2` API 能调用它们。它们不会开放任意脚本、selector、tab 控制或 Network 正文接口。</p>
           </div>
         </div>
         <div class="strategy-card">
