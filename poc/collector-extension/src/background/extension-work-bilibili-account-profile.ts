@@ -15,10 +15,11 @@ import {
   type WorkTabAcquisition,
   type WorkTabDisposition
 } from './extension-work-tabs';
-
-const PAGE_SETTLE_MS = 3_000;
-const DOM_OBSERVATION_WINDOW_MS = 12_000;
-const OBSERVATION_INTERVAL_MS = 350;
+import {
+  BILIBILI_SPACE_DOM_OBSERVATION_INTERVAL_MS,
+  BILIBILI_SPACE_PAGE_SETTLE_MS,
+  boundedBilibiliSpaceDomObservationDeadline
+} from './extension-work-bilibili-space-observation';
 
 /**
  * One signed navigation to a public account home followed by a bounded,
@@ -121,13 +122,13 @@ async function observeAccountProfile(
     terminalReason: 'dom_projection_failed' | 'document_context_changed' | 'run_deadline_exceeded';
   }
 > {
-  const deadline = Math.min(Date.parse(expiresAt), Date.now() + DOM_OBSERVATION_WINDOW_MS + PAGE_SETTLE_MS);
+  const deadline = boundedBilibiliSpaceDomObservationDeadline(expiresAt);
   let pageReadyAt: number | null = null;
   let lastObservation: BilibiliAccountProfileDomObservation | null = null;
   while (Date.now() < deadline) {
     const tab = await readExtensionWorkTab(workTab);
     if (tab.status !== 'complete') {
-      await delay(OBSERVATION_INTERVAL_MS);
+      await delay(BILIBILI_SPACE_DOM_OBSERVATION_INTERVAL_MS);
       continue;
     }
     if (!tab.url || canonicalBilibiliAccountProfileUrl(tab.url, 'observed_document') !== input.canonicalProfileUrl) {
@@ -139,8 +140,8 @@ async function observeAccountProfile(
       };
     }
     pageReadyAt ??= Date.now();
-    if (Date.now() - pageReadyAt < PAGE_SETTLE_MS) {
-      await delay(OBSERVATION_INTERVAL_MS);
+    if (Date.now() - pageReadyAt < BILIBILI_SPACE_PAGE_SETTLE_MS) {
+      await delay(BILIBILI_SPACE_DOM_OBSERVATION_INTERVAL_MS);
       continue;
     }
     let dom: Awaited<ReturnType<typeof captureBilibiliAccountProfileDom>>;
@@ -182,7 +183,7 @@ async function observeAccountProfile(
     if (observation.profileHeaderVisible && observation.stableAccountId === input.stableAccountId && observation.displayName) {
       return { kind: 'ready', observation };
     }
-    await delay(OBSERVATION_INTERVAL_MS);
+    await delay(BILIBILI_SPACE_DOM_OBSERVATION_INTERVAL_MS);
   }
   return {
     kind: 'incomplete',

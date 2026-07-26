@@ -15,10 +15,11 @@ import {
   type WorkTabAcquisition,
   type WorkTabDisposition
 } from './extension-work-tabs';
-
-const PAGE_SETTLE_MS = 3_000;
-const DOM_OBSERVATION_WINDOW_MS = 12_000;
-const OBSERVATION_INTERVAL_MS = 350;
+import {
+  BILIBILI_SPACE_DOM_OBSERVATION_INTERVAL_MS,
+  BILIBILI_SPACE_PAGE_SETTLE_MS,
+  boundedBilibiliSpaceDomObservationDeadline
+} from './extension-work-bilibili-space-observation';
 
 /**
  * Public UP-video MVP: one extension-owned navigation to the derived
@@ -121,13 +122,13 @@ async function observeAccountInventory(
     terminalReason: 'inventory_partial' | 'dom_projection_failed' | 'document_context_changed' | 'run_deadline_exceeded';
   }
 > {
-  const deadline = Math.min(Date.parse(expiresAt), Date.now() + DOM_OBSERVATION_WINDOW_MS + PAGE_SETTLE_MS);
+  const deadline = boundedBilibiliSpaceDomObservationDeadline(expiresAt);
   let pageReadyAt: number | null = null;
   let lastObservation: BilibiliAccountInventoryDomObservation | null = null;
   while (Date.now() < deadline) {
     const tab = await readExtensionWorkTab(workTab);
     if (tab.status !== 'complete') {
-      await delay(OBSERVATION_INTERVAL_MS);
+      await delay(BILIBILI_SPACE_DOM_OBSERVATION_INTERVAL_MS);
       continue;
     }
     if (!tab.url || canonicalBilibiliAccountVideoInventoryUrl(tab.url, 'observed_document') !== input.canonicalInventoryUrl) {
@@ -139,8 +140,8 @@ async function observeAccountInventory(
       };
     }
     pageReadyAt ??= Date.now();
-    if (Date.now() - pageReadyAt < PAGE_SETTLE_MS) {
-      await delay(OBSERVATION_INTERVAL_MS);
+    if (Date.now() - pageReadyAt < BILIBILI_SPACE_PAGE_SETTLE_MS) {
+      await delay(BILIBILI_SPACE_DOM_OBSERVATION_INTERVAL_MS);
       continue;
     }
     let dom: Awaited<ReturnType<typeof captureBilibiliAccountVideoInventoryDom>>;
@@ -184,7 +185,7 @@ async function observeAccountInventory(
     ) {
       return { kind: 'ready', observation };
     }
-    await delay(OBSERVATION_INTERVAL_MS);
+    await delay(BILIBILI_SPACE_DOM_OBSERVATION_INTERVAL_MS);
   }
   return {
     kind: 'incomplete',
