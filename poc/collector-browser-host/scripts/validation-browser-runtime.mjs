@@ -30,6 +30,7 @@ export async function startValidationBrowser() {
     stateDirectory: browserHostStateDirectory,
     profileRoot: browserProfileRoot,
     extensionDirectory,
+    validationAutomationProfileId: validationProfileId,
     endpointPath: browserHostEndpointPath,
     timeoutMs: 30_000
   });

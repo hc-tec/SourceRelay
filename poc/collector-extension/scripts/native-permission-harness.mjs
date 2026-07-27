@@ -5,14 +5,15 @@ export function approveExactExtensionPermission(
   extensionRoot,
   expectedScopeOne,
   expectedScopeTwo = expectedScopeOne,
-  timeoutSeconds = 15
+  timeoutSeconds = 15,
+  options = {}
 ) {
   if (process.platform !== 'win32') {
     throw new Error('native_permission_automation_requires_windows');
   }
   const scriptPath = resolve(extensionRoot, 'scripts', 'approve-extension-permission.ps1');
   return new Promise((resolveApproval, rejectApproval) => {
-    const child = spawn('powershell.exe', [
+    const args = [
       '-NoLogo',
       '-NoProfile',
       '-NonInteractive',
@@ -28,7 +29,9 @@ export function approveExactExtensionPermission(
       expectedScopeTwo,
       '-TimeoutSeconds',
       String(timeoutSeconds)
-    ], { windowsHide: true });
+    ];
+    if (options.allowAbsence === true) args.push('-AllowAbsence');
+    const child = spawn('powershell.exe', args, { windowsHide: true });
     let stdout = '';
     let stderr = '';
     child.stdout.setEncoding('utf8');

@@ -33,7 +33,9 @@ import {
   type StrategyBindingDiagnosticsRequest,
   type StrategyObserverBindingRequest,
   type StrategyObserverBindingResult,
-  type PageVisualEvidence
+  type PageVisualEvidence,
+  type ValidationExtensionControlRequest,
+  type ValidationExtensionControlResult
 } from '@intelligence/collector-contracts';
 import type { NativeBridgeRegistry } from '../native-bridge/native-bridge-registry.js';
 import type { NativeBridgeServer } from '../native-bridge/native-bridge-server.js';
@@ -42,6 +44,7 @@ import { PageLedger, type PageLedgerEvent } from '../page-ledger/page-ledger.js'
 import { PageReclamationManager } from '../reclamation/page-reclamation.js';
 import { ExternalRequestCounter } from './external-request-counter.js';
 import { launchProfileBrowser } from './profile-browser-launcher.js';
+import { runValidationExtensionControl } from '../validation-extension-control.js';
 
 export class ProfileRuntime {
   readonly profileId: string;
@@ -304,6 +307,21 @@ export class ProfileRuntime {
       throw new Error('strategy_binding_diagnostics_result_invalid');
     }
     return result;
+  }
+
+  async runValidationExtensionControl(
+    request: ValidationExtensionControlRequest
+  ): Promise<ValidationExtensionControlResult> {
+    const extensionId = this.#extensionRuntime?.extensionId;
+    if (!extensionId) {
+      throw new Error('validation_extension_control_extension_runtime_unavailable');
+    }
+    return await runValidationExtensionControl({
+      context: this.#context,
+      profileId: this.profileId,
+      extensionId,
+      request
+    });
   }
 
   async captureVisualEvidence(request: CapturePageVisualEvidenceRequest): Promise<PageVisualEvidence> {

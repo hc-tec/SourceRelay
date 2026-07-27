@@ -2,7 +2,8 @@ param(
   [Parameter(Mandatory = $true)][string]$ExpectedExtensionName,
   [Parameter(Mandatory = $true)][string]$ExpectedScopeOne,
   [Parameter(Mandatory = $true)][string]$ExpectedScopeTwo,
-  [ValidateRange(1, 30)][int]$TimeoutSeconds = 15
+  [ValidateRange(1, 30)][int]$TimeoutSeconds = 15,
+  [switch]$AllowAbsence
 )
 
 $ErrorActionPreference = 'Stop'
@@ -139,6 +140,17 @@ while ((Get-Date) -lt $deadline) {
     exit 0
   }
   Start-Sleep -Milliseconds 100
+}
+
+if ($AllowAbsence) {
+  [pscustomobject]@{
+    ok = $true
+    extension = $ExpectedExtensionName
+    exactScopeConfirmed = $false
+    allowInvoked = $false
+    dialogObserved = $false
+  } | ConvertTo-Json -Compress
+  exit 0
 }
 
 throw 'extension_permission_dialog_scope_not_confirmed'

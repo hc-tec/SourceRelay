@@ -18,3 +18,4 @@ export * from './page-pool.js';
 export * from './page-scroll.js';
 export * from './page-visual-evidence.js';
 export * from './strategy-observation.js';
+export * from './validation-extension-control.js';

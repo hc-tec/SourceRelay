@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import {
   BrowserHostError,
   PAGE_POOL_SCHEMA_VERSION,
+  validationExtensionControlRequest,
   type BrowserHostCommandBody,
   type BrowserHostCommandResult,
   type LaunchProfileRequest,
@@ -28,6 +29,7 @@ export interface BrowserHostRuntimeConfig {
   visualEvidenceDirectory: string;
   nativeBridgeRegistry: NativeBridgeRegistry;
   nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
+  validationAutomationProfileId?: string | null;
 }
 
 export class BrowserHostRuntime {
@@ -41,6 +43,7 @@ export class BrowserHostRuntime {
   readonly #visualEvidenceDirectory: string;
   readonly #nativeBridgeRegistry: NativeBridgeRegistry;
   readonly #nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
+  readonly #validationAutomationProfileId: string | null;
   readonly #profiles = new Map<string, ProfileRuntime>();
   #controllerGeneration: string | null = null;
   #snapshotRevision = 0;
@@ -56,6 +59,9 @@ export class BrowserHostRuntime {
     this.#visualEvidenceDirectory = resolve(config.visualEvidenceDirectory);
     this.#nativeBridgeRegistry = config.nativeBridgeRegistry;
     this.#nativeBridgeCommands = config.nativeBridgeCommands;
+    this.#validationAutomationProfileId = config.validationAutomationProfileId
+      ? boundedIdentifier(config.validationAutomationProfileId, 'validation_automation_profile_id')
+      : null;
   }
 
   async initialise(): Promise<void> {
@@ -107,6 +113,18 @@ export class BrowserHostRuntime {
         return await this.#profile(body.request.profileId).selectBilibiliTranscriptChinese(body.request);
       case 'click_bilibili_video_discussion_control':
         return await this.#profile(body.request.profileId).clickBilibiliVideoDiscussionControl(body.request);
+      case 'run_validation_extension_control': {
+        const request = validationExtensionControlRequest(body.request);
+        if (!this.#validationAutomationProfileId || request.profileId !== this.#validationAutomationProfileId) {
+          throw hostError({
+            code: 'validation_extension_control_not_enabled',
+            category: 'validation',
+            scope: 'profile',
+            retryClass: 'never'
+          });
+        }
+        return await this.#profile(request.profileId).runValidationExtensionControl(request);
+      }
       case 'interact_bilibili_danmaku':
         return await this.#profile(body.request.profileId).interactBilibiliDanmaku(body.request);
       case 'capture_page_visual_evidence':

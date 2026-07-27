@@ -48,6 +48,10 @@ import type {
   BilibiliVideoDiscussionInteractionRequest,
   BilibiliVideoDiscussionInteractionResult
 } from './bilibili-video-discussion-interaction.js';
+import type {
+  ValidationExtensionControlRequest,
+  ValidationExtensionControlResult
+} from './validation-extension-control.js';
 
 export const BROWSER_HOST_PROTOCOL_VERSION = 7 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
@@ -101,6 +105,7 @@ export type BrowserHostCommandBody =
   | { type: 'select_bilibili_transcript_chinese'; request: BilibiliTranscriptChineseSelectionRequest }
   | { type: 'interact_bilibili_danmaku'; request: BilibiliDanmakuInteractionRequest }
   | { type: 'click_bilibili_video_discussion_control'; request: BilibiliVideoDiscussionInteractionRequest }
+  | { type: 'run_validation_extension_control'; request: ValidationExtensionControlRequest }
   | { type: 'capture_page_visual_evidence'; request: CapturePageVisualEvidenceRequest }
   | { type: 'capture_retained_page_visual_evidence'; request: CaptureRetainedPageVisualEvidenceRequest }
   | { type: 'bind_strategy_observer'; request: StrategyObserverBindingRequest }
@@ -137,6 +142,7 @@ export type BrowserHostCommandResult =
   | BilibiliTranscriptChineseSelectionResult
   | BilibiliDanmakuInteractionResult
   | BilibiliVideoDiscussionInteractionResult
+  | ValidationExtensionControlResult
   | PageVisualEvidence
   | ReclaimPlan
   | ReclaimExecutionResult

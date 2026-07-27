@@ -12,12 +12,13 @@ import { BrowserHostServer } from './ipc/browser-host-server.js';
 import { NativeBridgeRegistry } from './native-bridge/native-bridge-registry.js';
 import { NativeBridgeServer } from './native-bridge/native-bridge-server.js';
 import { createBootstrapSecret } from './security.js';
-import { absolutePath } from './validation.js';
+import { absolutePath, boundedIdentifier } from './validation.js';
 
 interface MainOptions {
   stateDirectory: string;
   profileRoot: string;
   extensionDirectory: string | null;
+  validationAutomationProfileId: string | null;
   endpointPath: string;
 }
 
@@ -49,7 +50,8 @@ async function main(): Promise<void> {
     nativeHostStateDirectory: resolve(options.stateDirectory, 'native-hosts'),
     visualEvidenceDirectory: resolve(options.stateDirectory, 'visual-evidence'),
     nativeBridgeRegistry,
-    nativeBridgeCommands: nativeBridgeServer
+    nativeBridgeCommands: nativeBridgeServer,
+    validationAutomationProfileId: options.validationAutomationProfileId
   });
   await runtime.initialise();
 
@@ -121,11 +123,15 @@ function parseOptions(args: readonly string[]): MainOptions {
   const profileRoot = absolutePath(values.get('--profile-root'), 'profile_root');
   const endpointPath = absolutePath(values.get('--endpoint-path'), 'endpoint_path');
   const extensionValue = values.get('--extension-dir');
+  const validationAutomationProfileId = values.get('--validation-automation-profile-id');
   return {
     stateDirectory,
     profileRoot,
     endpointPath,
-    extensionDirectory: extensionValue ? absolutePath(extensionValue, 'extension_directory') : null
+    extensionDirectory: extensionValue ? absolutePath(extensionValue, 'extension_directory') : null,
+    validationAutomationProfileId: validationAutomationProfileId
+      ? boundedIdentifier(validationAutomationProfileId, 'validation_automation_profile_id')
+      : null
   };
 }
 

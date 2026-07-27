@@ -10,6 +10,7 @@ export interface LaunchBrowserHostOptions {
   stateDirectory: string;
   profileRoot: string;
   extensionDirectory?: string | null;
+  validationAutomationProfileId?: string | null;
   endpointPath: string;
   timeoutMs?: number;
 }
@@ -25,6 +26,9 @@ export async function launchBrowserHost(options: LaunchBrowserHostOptions): Prom
     '--endpoint-path', options.endpointPath
   ];
   if (options.extensionDirectory) args.push('--extension-dir', options.extensionDirectory);
+  if (options.validationAutomationProfileId) {
+    args.push('--validation-automation-profile-id', options.validationAutomationProfileId);
+  }
   const child = spawn(process.execPath, args, {
     detached: true,
     windowsHide: true,
