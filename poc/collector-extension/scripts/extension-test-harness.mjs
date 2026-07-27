@@ -58,26 +58,14 @@ export async function launchProductionExtension(extensionPath, temporaryPrefix, 
       };
     } catch (headlessError) {
       await context?.close().catch(() => undefined);
-      context = await launch(extensionPath, userDataDirectory, false, options.onContext);
-      try {
-        const worker = await waitForServiceWorker(context);
-        return {
-          context,
-          worker,
-          userDataDirectory,
-          mode: 'headed-automated-fallback',
-          async close() {
-            await context?.close().catch(() => undefined);
-            await rm(userDataDirectory, { recursive: true, force: true });
-          }
-        };
-      } catch (headedError) {
-        await context.close().catch(() => undefined);
-        throw new AggregateError(
-          [headlessError, headedError],
-          'The production extension could not be loaded in Playwright-managed Chromium.'
-        );
-      }
+      // A short-lived visible fallback is not an acceptable default test
+      // behavior.  It looks like an unexplained browser/tab flash and can be
+      // mistaken for product automation.  Real headed validation belongs only
+      // to the long-lived, explicitly started validation-browser fixture.
+      throw new Error(
+        'production_extension_headless_load_failed_visible_fallback_disabled',
+        { cause: headlessError }
+      );
     }
   } catch (error) {
     await rm(userDataDirectory, { recursive: true, force: true });

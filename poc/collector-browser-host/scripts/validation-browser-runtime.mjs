@@ -41,7 +41,12 @@ export async function startValidationBrowser() {
       return resultFor('reused', profile, expected);
     }
     if (profile?.running) {
-      await client.command({ type: 'close_profile', profileId: validationProfileId });
+      // `start` is intentionally non-disruptive.  A developer may invoke it
+      // just to discover a running validation browser; it must never turn
+      // that harmless status-like action into a visible close/reopen cycle.
+      // The only command allowed to replace this test fixture is the
+      // explicitly named `rebuild` command below.
+      throw new Error('validation_browser_runtime_mismatch_requires_explicit_rebuild');
     }
     snapshot = await client.command({
       type: 'launch_profile',
