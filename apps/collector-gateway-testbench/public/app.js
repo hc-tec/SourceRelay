@@ -18,7 +18,8 @@ element('refresh-connection').addEventListener('click', () => void refreshConnec
 refreshOperation.addEventListener('click', () => void refreshCurrentOperation());
 readArtifact.addEventListener('click', () => void readCurrentArtifact());
 element('video-form').addEventListener('submit', (event) => void submitVideo(event));
-element('search-form').addEventListener('submit', (event) => void submitSearch(event));
+element('search-form').addEventListener('submit', (event) => void submitSearch(event, 'native_search'));
+element('search-batch-form').addEventListener('submit', (event) => void submitSearch(event, 'native_search_batch'));
 element('profile-form').addEventListener('submit', (event) => void submitAccount(event, 'account_profile'));
 element('inventory-form').addEventListener('submit', (event) => void submitAccount(event, 'account_inventory'));
 element('passive-form').addEventListener('submit', (event) => void submitPassive(event));
@@ -130,9 +131,9 @@ function renderBindings() {
     select.disabled = false;
   }
   for (const control of document.querySelectorAll(
-    '#video-form input, #video-form select, #search-form input, #search-form select, ' +
+    '#video-form input, #video-form select, #search-form input, #search-form select, #search-batch-form input, #search-batch-form select, ' +
     '#profile-form input, #profile-form select, #inventory-form input, #inventory-form select, ' +
-    '#passive-form input, #passive-form select, #video-form button, #search-form button, ' +
+    '#passive-form input, #passive-form select, #video-form button, #search-form button, #search-batch-form button, ' +
     '#profile-form button, #inventory-form button, #passive-form button'
   )) {
     control.disabled = !enabled;
@@ -162,7 +163,7 @@ async function submitVideo(event) {
   }
 }
 
-async function submitSearch(event) {
+async function submitSearch(event, kind) {
   event.preventDefault();
   const form = event.currentTarget;
   const button = form.querySelector('button');
@@ -172,7 +173,7 @@ async function submitSearch(event) {
       method: 'POST',
       body: {
         browserBindingId: form.elements.browserBindingId.value,
-        kind: 'native_search',
+        kind,
         input: { query: form.elements.query.value }
       }
     });

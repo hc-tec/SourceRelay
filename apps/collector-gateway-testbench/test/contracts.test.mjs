@@ -41,6 +41,26 @@ test('maps native search into the fixed first-page direct-mode Gateway contract'
   });
 });
 
+test('maps batch search into the fixed two-page direct-mode Gateway contract without exposing a page list', () => {
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'native_search_batch',
+    input: { query: '  DeepSeek   R1  ' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.native_search_batch',
+    executionTarget: 'collector_work_tab',
+    input: { query: 'DeepSeek R1' }
+  });
+  assert.throws(() => parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'native_search_batch',
+    input: { query: 'DeepSeek', pages: [1, 2] }
+  }), TestbenchInputError);
+});
+
 test('maps a MID-only account request into the two fixed direct-mode account capabilities', () => {
   assert.deepEqual(parseTestbenchSubmission({
     browserBindingId: bindingId,
@@ -157,6 +177,13 @@ test('only accepts an artifact path derived from the matching direct operation c
       retrievalPath: `/v1/collect/artifacts/bilibili.native_search/${artifactId}`
     }
   }), `/v1/collect/artifacts/bilibili.native_search/${artifactId}`);
+  assert.equal(artifactPathFromOperation({
+    operationId,
+    capability: 'bilibili.native_search_batch',
+    artifact: {
+      retrievalPath: `/v1/collect/artifacts/bilibili.native_search_batch/${artifactId}`
+    }
+  }), `/v1/collect/artifacts/bilibili.native_search_batch/${artifactId}`);
   assert.equal(artifactPathFromOperation({
     operationId,
     capability: 'bilibili.video_detail',

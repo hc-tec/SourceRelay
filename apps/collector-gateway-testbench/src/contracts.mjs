@@ -2,7 +2,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const TOKEN_PATTERN = /^cst_[A-Za-z0-9_-]{43}$/;
 const BVID_PATTERN = /^BV[0-9A-Za-z]{10}$/;
 const ACCOUNT_ID_PATTERN = /^[1-9]\d{0,19}$/;
-const ARTIFACT_PATH_PATTERN = /^\/v1\/collect\/artifacts\/(bilibili\.(?:video_detail|native_search|account_profile|account_inventory|dynamic|collection_series\.(?:overview|detail)|danmaku))\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+const ARTIFACT_PATH_PATTERN = /^\/v1\/collect\/artifacts\/(bilibili\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\.(?:overview|detail)|danmaku))\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
 export const TESTBENCH_SCHEMA_VERSION = 1;
 export const DIRECT_SCHEMA_VERSION = 2;
@@ -57,6 +57,21 @@ export function parseTestbenchSubmission(value) {
       browserBindingId: value.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search',
+      executionTarget: 'collector_work_tab',
+      input: { query }
+    };
+  }
+
+  if (value.kind === 'native_search_batch') {
+    if (!hasExactKeys(value.input, ['query']) || typeof value.input.query !== 'string') {
+      throw new TestbenchInputError('testbench_request_invalid');
+    }
+    const query = normaliseSearchQuery(value.input.query);
+    return {
+      schemaVersion: DIRECT_SCHEMA_VERSION,
+      browserBindingId: value.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search_batch',
       executionTarget: 'collector_work_tab',
       input: { query }
     };
@@ -193,6 +208,7 @@ function normaliseAccountId(value) {
 
 function isDirectArtifactCapability(value) {
   return value === 'bilibili.video_detail' || value === 'bilibili.native_search' ||
+    value === 'bilibili.native_search_batch' ||
     value === 'bilibili.account_profile' || value === 'bilibili.account_inventory' ||
     value === 'bilibili.dynamic' || value === 'bilibili.collection_series.overview' ||
     value === 'bilibili.collection_series.detail' || value === 'bilibili.danmaku';

@@ -20,6 +20,16 @@ import {
   type BilibiliPassiveExtensionWorkTerminalReason,
   type UnsignedBilibiliPassiveExtensionWorkItem
 } from './extension-work-bilibili-passive.js';
+import {
+  bilibiliNativeSearchBatchTargetUrl,
+  isBilibiliNativeSearchBatchWorkItem,
+  isBilibiliNativeSearchBatchWorkResult,
+  isBilibiliNativeSearchBatchWorkResultForItem,
+  type BilibiliNativeSearchBatchWorkItem,
+  type BilibiliNativeSearchBatchWorkResult,
+  type BilibiliNativeSearchBatchWorkTerminalReason,
+  type UnsignedBilibiliNativeSearchBatchWorkItem
+} from './extension-work-bilibili-native-search-batch.js';
 import { canonicalJson } from './ipc.js';
 
 /**
@@ -40,6 +50,7 @@ const BILIBILI_ACCOUNT_VIDEO_INVENTORY_MAX_VISIBLE_CARDS = 40;
 export type ExtensionWorkCapability =
   | 'bilibili.video_detail'
   | 'bilibili.native_search'
+  | 'bilibili.native_search_batch'
   | 'bilibili.account_profile'
   | 'bilibili.account_inventory'
   | BilibiliPassiveExtensionWorkCapability;
@@ -158,12 +169,14 @@ export interface BilibiliAccountInventoryWorkItem extends ExtensionWorkEnvelope 
 export type ExtensionWorkItem =
   | BilibiliVideoDetailWorkItem
   | BilibiliNativeSearchWorkItem
+  | BilibiliNativeSearchBatchWorkItem
   | BilibiliAccountProfileWorkItem
   | BilibiliAccountInventoryWorkItem
   | BilibiliPassiveExtensionWorkItem;
 export type UnsignedExtensionWorkItem =
   | Omit<BilibiliVideoDetailWorkItem, 'gatewaySignature'>
   | Omit<BilibiliNativeSearchWorkItem, 'gatewaySignature'>
+  | UnsignedBilibiliNativeSearchBatchWorkItem
   | Omit<BilibiliAccountProfileWorkItem, 'gatewaySignature'>
   | Omit<BilibiliAccountInventoryWorkItem, 'gatewaySignature'>
   | UnsignedBilibiliPassiveExtensionWorkItem;
@@ -203,6 +216,7 @@ export type BilibiliAccountInventoryWorkTerminalReason =
 export type ExtensionWorkTerminalReason =
   | BilibiliVideoDetailWorkTerminalReason
   | BilibiliNativeSearchWorkTerminalReason
+  | BilibiliNativeSearchBatchWorkTerminalReason
   | BilibiliAccountProfileWorkTerminalReason
   | BilibiliAccountInventoryWorkTerminalReason
   | BilibiliPassiveExtensionWorkTerminalReason;
@@ -394,6 +408,7 @@ export type ExtensionWorkTabAcquisition = 'created' | 'reused' | 'not_acquired';
 export type ExtensionWorkResult =
   | BilibiliVideoDetailWorkResult
   | BilibiliNativeSearchWorkResult
+  | BilibiliNativeSearchBatchWorkResult
   | BilibiliAccountProfileWorkResult
   | BilibiliAccountInventoryWorkResult
   | BilibiliPassiveExtensionWorkResult;
@@ -422,6 +437,8 @@ export function extensionWorkTargetUrl(item: ExtensionWorkItem): string {
       return item.input.canonicalVideoUrl;
     case 'bilibili.native_search':
       return item.input.canonicalSearchUrl;
+    case 'bilibili.native_search_batch':
+      return bilibiliNativeSearchBatchTargetUrl(item, 1);
     case 'bilibili.account_profile':
       return item.input.canonicalProfileUrl;
     case 'bilibili.account_inventory':
@@ -458,6 +475,9 @@ export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem 
   if (value.capability === 'bilibili.native_search') {
     return isBilibiliNativeSearchWorkInput(value.input) && isBilibiliNativeSearchWorkBudget(value.budget);
   }
+  if (value.capability === 'bilibili.native_search_batch') {
+    return isBilibiliNativeSearchBatchWorkItem(value);
+  }
   if (value.capability === 'bilibili.account_profile') {
     return isBilibiliAccountProfileWorkInput(value.input) && isBilibiliAccountProfileWorkBudget(value.budget);
   }
@@ -468,6 +488,7 @@ export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem 
 }
 
 export function isExtensionWorkResult(value: unknown): value is ExtensionWorkResult {
+  if (isBilibiliNativeSearchBatchWorkResult(value)) return true;
   if (!isRecord(value) || !hasExactKeys(value, [
     'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
     'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation',
@@ -504,6 +525,9 @@ export function isExtensionWorkResultForItem(
   value: unknown,
   item: ExtensionWorkItem
 ): value is ExtensionWorkResult {
+  if (item.capability === 'bilibili.native_search_batch') {
+    return isBilibiliNativeSearchBatchWorkResultForItem(value, item);
+  }
   if (!isExtensionWorkResult(value) || value.capability !== item.capability ||
     value.workId !== item.workId || value.operationId !== item.operationId ||
     value.browserBindingId !== item.browserBindingId || Date.parse(value.completedAt) < Date.parse(item.issuedAt) ||

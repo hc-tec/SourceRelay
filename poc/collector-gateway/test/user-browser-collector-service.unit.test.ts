@@ -31,12 +31,39 @@ describe('user-owned browser collector service', () => {
     })).toThrow('user_browser_collector_service_request_invalid');
   });
 
+  test('admits only a phrase for the fixed two-page search batch', () => {
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search_batch',
+      executionTarget: 'collector_work_tab',
+      input: { query: '  DeepSeek   两页  ' }
+    })).toEqual({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search_batch',
+      executionTarget: 'collector_work_tab',
+      input: { query: 'DeepSeek 两页' }
+    });
+    expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search_batch',
+      executionTarget: 'collector_work_tab',
+      input: { query: 'DeepSeek', pages: [1, 2] }
+    })).toThrow('user_browser_collector_service_request_invalid');
+  });
+
   test('publishes direct and canary passive capabilities without a Profile or browser-control primitive', () => {
     const document = userBrowserCollectorServiceOpenApiDocument('http://127.0.0.1:43127') as Record<string, any>;
     const variants = document.components.schemas.UserBrowserCollectRequest.oneOf;
     expect(variants).toEqual([
       { $ref: '#/components/schemas/UserBrowserVideoDetailCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserNativeSearchCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserNativeSearchBatchCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserAccountProfileCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserAccountInventoryCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserDynamicCollectRequest' },
@@ -46,6 +73,10 @@ describe('user-owned browser collector service', () => {
     ]);
     expect(document.components.schemas.UserBrowserNativeSearchCollectRequest.properties).toMatchObject({
       capability: { const: 'bilibili.native_search' },
+      input: { required: ['query'] }
+    });
+    expect(document.components.schemas.UserBrowserNativeSearchBatchCollectRequest.properties).toMatchObject({
+      capability: { const: 'bilibili.native_search_batch' },
       input: { required: ['query'] }
     });
     expect(Object.keys(document.paths)).not.toContain('/v1/profiles');

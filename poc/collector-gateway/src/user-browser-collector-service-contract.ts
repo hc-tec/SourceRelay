@@ -33,6 +33,14 @@ export interface UserBrowserNativeSearchCollectorServiceRequest extends UserBrow
   };
 }
 
+/** Fixed page 1 then page 2; applications cannot supply a page list or URL. */
+export interface UserBrowserNativeSearchBatchCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
+  capability: 'bilibili.native_search_batch';
+  input: {
+    query: string;
+  };
+}
+
 /** A caller may name one public account identity, never an arbitrary space URL. */
 export interface UserBrowserAccountProfileCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.account_profile';
@@ -76,6 +84,7 @@ export interface UserBrowserDanmakuCollectorServiceRequest extends UserBrowserCo
 export type UserBrowserCollectorServiceRequest =
   | UserBrowserVideoDetailCollectorServiceRequest
   | UserBrowserNativeSearchCollectorServiceRequest
+  | UserBrowserNativeSearchBatchCollectorServiceRequest
   | UserBrowserAccountProfileCollectorServiceRequest
   | UserBrowserAccountInventoryCollectorServiceRequest
   | UserBrowserDynamicCollectorServiceRequest
@@ -135,6 +144,26 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
       browserBindingId: candidate.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search',
+      executionTarget: 'collector_work_tab',
+      input: { query: route.query }
+    };
+  }
+  if (candidate.capability === 'bilibili.native_search_batch') {
+    if (Object.keys(input).length !== 1 || typeof input.query !== 'string') {
+      throw new Error('user_browser_collector_service_request_invalid');
+    }
+    const route = normaliseBilibiliNativeSearchRoute({
+      query: input.query,
+      resultType: 'comprehensive',
+      sort: 'relevance',
+      page: 1
+    });
+    if (!route) throw new Error('user_browser_collector_service_request_invalid');
+    return {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      browserBindingId: candidate.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search_batch',
       executionTarget: 'collector_work_tab',
       input: { query: route.query }
     };

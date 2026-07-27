@@ -12,6 +12,7 @@ import {
   enqueueBilibiliCollectionSeriesOverviewWork,
   enqueueBilibiliDanmakuWork,
   enqueueBilibiliDynamicWork,
+  enqueueBilibiliNativeSearchBatchWork,
   enqueueBilibiliNativeSearchWork,
   enqueueBilibiliVideoDetailWork,
   reconcileExpiredExtensionWork,
@@ -95,6 +96,12 @@ export async function handleUserBrowserCollectorServiceRoute(
             collection.browserBindingId,
             collection.input.query
           )
+          : collection.capability === 'bilibili.native_search_batch'
+            ? await enqueueBilibiliNativeSearchBatchWork(
+              context,
+              collection.browserBindingId,
+              collection.input.query
+            )
           : collection.capability === 'bilibili.account_profile'
             ? await enqueueBilibiliAccountProfileWork(
               context,
@@ -175,6 +182,7 @@ async function audit(
   capability:
     | 'bilibili.video_detail'
     | 'bilibili.native_search'
+    | 'bilibili.native_search_batch'
     | 'bilibili.account_profile'
     | 'bilibili.account_inventory'
     | 'bilibili.dynamic'

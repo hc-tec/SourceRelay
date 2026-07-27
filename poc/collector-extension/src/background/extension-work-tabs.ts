@@ -7,8 +7,12 @@ import {
   canonicalBilibiliNativeSearchUrl,
   canonicalBilibiliPassiveVideoWorkUrl,
   canonicalBilibiliVideoWorkUrl,
+  bilibiliNativeSearchBatchTargetUrl,
   extensionWorkTargetUrl,
+  isBilibiliNativeSearchBatchWorkItem,
   isExtensionWorkItem,
+  type BilibiliNativeSearchBatchPageNumber,
+  type BilibiliNativeSearchBatchWorkItem,
   type ExtensionWorkItem
 } from '@intelligence/collector-contracts';
 
@@ -133,7 +137,33 @@ export async function navigateExtensionWorkTabOnce(
   // The target comes from a previously validated, signed registered work item.
   // This module deliberately accepts no free-form URL argument.
   if (!isExtensionWorkItem(item)) throw new Error('extension_work_target_invalid');
-  const canonical = extensionWorkTargetUrl(item);
+  await navigateExtensionWorkTabToCanonicalTarget(workTab, extensionWorkTargetUrl(item), onNavigationIntent);
+}
+
+/**
+ * The batch runner can navigate only to one of the two URL targets already
+ * signed into its work item.  It never accepts a caller-provided URL, page
+ * number outside the reviewed pair, selector, or click instruction.
+ */
+export async function navigateBilibiliNativeSearchBatchPageOnce(
+  workTab: ExtensionWorkTabLease,
+  item: BilibiliNativeSearchBatchWorkItem,
+  page: BilibiliNativeSearchBatchPageNumber,
+  onNavigationIntent?: () => Promise<void> | void
+): Promise<void> {
+  if (!isBilibiliNativeSearchBatchWorkItem(item)) throw new Error('extension_work_target_invalid');
+  await navigateExtensionWorkTabToCanonicalTarget(
+    workTab,
+    bilibiliNativeSearchBatchTargetUrl(item, page),
+    onNavigationIntent
+  );
+}
+
+async function navigateExtensionWorkTabToCanonicalTarget(
+  workTab: ExtensionWorkTabLease,
+  canonical: string,
+  onNavigationIntent?: () => Promise<void> | void
+): Promise<void> {
   await ensureExtensionWorkTabForeground(workTab);
   const record = requireLease(workTab);
   record.expectedCanonicalUrl = canonical;

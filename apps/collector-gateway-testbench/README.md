@@ -18,6 +18,7 @@ Collector Gateway Testbench :43128
 - 从 Gateway 读取全部 12 项 B站既有能力的 direct-mode 登记状态；
 - 投递一个 `bilibili.video_detail` 测试（输入仅为 BVID）；
 - 投递一个 `bilibili.native_search` 测试（输入仅为关键词）；
+- 投递一个 `bilibili.native_search_batch` canary（输入仅为关键词；Gateway 固定派生综合相关性第 1、2 页，调用方不能传 URL、页码、排序或点击指令）；
 - 投递一个 `bilibili.account_profile` 测试（输入仅为 UP 主 MID）；
 - 投递一个 `bilibili.account_inventory` 测试（输入仅为 UP 主 MID，固定投稿视频首屏）；
 - 读取同一测试台提交过的 operation，并从该 operation 推导固定 artifact retrieval path；
@@ -66,7 +67,7 @@ $env:COLLECTOR_TESTBENCH_PORT = '43128'
 
 ## 真实测试语义
 
-一次提交只会向 Gateway 发起一个 `POST /v2/collect`。Gateway 与扩展仍负责 at-most-once claim、一次平台导航、工作项过期、账号安全锁与任务终态。Testbench 的自动轮询仅是读取本机 operation，最多 25 次；它不会在失败、超时、验证码、风控或登录失效后重新投递任务。
+一次提交只会向 Gateway 发起一个 `POST /v2/collect`。大多数 direct capability 最多执行一次已签名的平台导航；`bilibili.native_search_batch` 是唯一例外，但也只能按签名顺序执行固定第 1、2 页，最多两次导航、零 DOM 语义动作、零 response body，并在第 1 页为空、风险、用户接管、页面身份漂移、网络结果未知或任务过期时停止，不会进入第 2 页。Gateway 与扩展仍负责 at-most-once claim、工作项过期、账号安全锁与任务终态。Testbench 的自动轮询仅是读取本机 operation，最多 25 次；它不会在失败、超时、验证码、风控或登录失效后重新投递任务。
 
 每次 operation / artifact 读取都必须来自本 Testbench 当前进程已经提交并记住的 `operationId`。浏览器页面不能传任意 Gateway path，也不能把 token 带到前端。
 

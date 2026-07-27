@@ -3,6 +3,7 @@ import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-pro
 import type { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
+import type { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-native-search-batch-artifacts';
 import {
   ExtensionWorkPassiveArtifactStore,
   type PassiveDirectCapability
@@ -19,7 +20,7 @@ import {
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const DIRECT_ARTIFACT = new RegExp(
-  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search|account_profile|account_inventory|dynamic|collection_series\\.overview|collection_series\\.detail|danmaku))/(${UUID})$`,
+  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\\.overview|collection_series\\.detail|danmaku))/(${UUID})$`,
   'i'
 );
 
@@ -29,6 +30,7 @@ export interface UserBrowserGatewayAdminRouteContext {
   collectorServiceAudit: CollectorServiceAuditLog;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
   nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
+  nativeSearchBatchDirectArtifacts: ExtensionWorkNativeSearchBatchArtifactStore;
   accountProfileArtifacts: BilibiliAccountProfileArtifactStore;
   accountVideoInventoryArtifacts: BilibiliAccountVideoInventoryArtifactStore;
   passiveDirectArtifacts: ExtensionWorkPassiveArtifactStore;
@@ -77,6 +79,7 @@ export async function handleUserBrowserGatewayAdminRoute(
     const capability = artifact[1]! as
       | 'bilibili.video_detail'
       | 'bilibili.native_search'
+      | 'bilibili.native_search_batch'
       | 'bilibili.account_profile'
       | 'bilibili.account_inventory'
       | PassiveDirectCapability;
@@ -97,6 +100,8 @@ export async function handleUserBrowserGatewayAdminRoute(
       ? await context.videoDetailArtifacts.get(artifactId)
       : capability === 'bilibili.native_search'
         ? await context.nativeSearchArtifacts.get(artifactId)
+        : capability === 'bilibili.native_search_batch'
+          ? await context.nativeSearchBatchDirectArtifacts.get(artifactId)
         : capability === 'bilibili.account_profile'
           ? await context.accountProfileArtifacts.get(artifactId)
           : capability === 'bilibili.account_inventory'

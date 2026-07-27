@@ -71,7 +71,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
               schema: {
                 type: 'string',
                 enum: [
-                  'bilibili.video_detail', 'bilibili.native_search',
+                  'bilibili.video_detail', 'bilibili.native_search', 'bilibili.native_search_batch',
                   'bilibili.account_profile', 'bilibili.account_inventory',
                   'bilibili.dynamic', 'bilibili.collection_series.overview',
                   'bilibili.collection_series.detail', 'bilibili.danmaku'
@@ -173,6 +173,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           oneOf: [
             { $ref: '#/components/schemas/UserBrowserVideoDetailCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserNativeSearchCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserNativeSearchBatchCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserAccountProfileCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserAccountInventoryCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserDynamicCollectRequest' },
@@ -205,6 +206,22 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.native_search' },
+            executionTarget: { type: 'string', const: 'collector_work_tab' },
+            input: {
+              type: 'object', additionalProperties: false,
+              required: ['query'],
+              properties: { query: { type: 'string', minLength: 1, maxLength: 160 } }
+            }
+          }
+        },
+        UserBrowserNativeSearchBatchCollectRequest: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            browserBindingId: { type: 'string', format: 'uuid' },
+            platform: { type: 'string', const: 'bilibili' },
+            capability: { type: 'string', const: 'bilibili.native_search_batch' },
             executionTarget: { type: 'string', const: 'collector_work_tab' },
             input: {
               type: 'object', additionalProperties: false,

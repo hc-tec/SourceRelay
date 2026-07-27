@@ -13,6 +13,8 @@ export interface ActiveExtensionWork {
   schemaVersion: 1;
   item: ExtensionWorkItem;
   phase: 'claimed' | 'work_tab_acquired' | 'navigation_intent_recorded';
+  /** Number of irreversible signed URL-navigation intents recorded so far. */
+  navigationIntentCount: 0 | 1 | 2;
   workTabAcquisition: WorkTabAcquisition | 'not_acquired';
 }
 
@@ -59,14 +61,24 @@ export async function clearPendingExtensionWorkResult(): Promise<void> {
 function activeWork(value: unknown): ActiveExtensionWork | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const candidate = value as Partial<ActiveExtensionWork>;
+  const inferredNavigationIntentCount = candidate.navigationIntentCount === undefined
+    ? candidate.phase === 'navigation_intent_recorded' ? 1 : 0
+    : candidate.navigationIntentCount;
   if (
     candidate.schemaVersion !== 1 || !isExtensionWorkItem(candidate.item) ||
     (candidate.phase !== 'claimed' && candidate.phase !== 'work_tab_acquired' &&
       candidate.phase !== 'navigation_intent_recorded') ||
+    !(inferredNavigationIntentCount === 0 || inferredNavigationIntentCount === 1 || inferredNavigationIntentCount === 2) ||
     (candidate.workTabAcquisition !== 'created' && candidate.workTabAcquisition !== 'reused' &&
       candidate.workTabAcquisition !== 'not_acquired')
   ) return null;
-  return structuredClone(candidate as ActiveExtensionWork);
+  return {
+    schemaVersion: 1,
+    item: structuredClone(candidate.item),
+    phase: candidate.phase,
+    navigationIntentCount: inferredNavigationIntentCount,
+    workTabAcquisition: candidate.workTabAcquisition
+  };
 }
 
 function pendingResult(value: unknown): PendingExtensionWorkResult | null {

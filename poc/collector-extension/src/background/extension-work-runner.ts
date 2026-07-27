@@ -1,6 +1,7 @@
 import type { ExtensionWorkItem, ExtensionWorkResult } from '@intelligence/collector-contracts';
 import { executeBilibiliAccountInventoryExtensionWork } from './extension-work-bilibili-account-inventory';
 import { executeBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
+import { executeBilibiliNativeSearchBatchExtensionWork } from './extension-work-bilibili-native-search-batch';
 import { executeBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
 import { executeBilibiliPassiveExtensionWork } from './extension-work-bilibili-passive';
 import { executeBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
@@ -73,6 +74,7 @@ export async function pollForExtensionWork(): Promise<void> {
       schemaVersion: 1,
       item,
       phase: 'claimed',
+      navigationIntentCount: 0,
       workTabAcquisition: 'not_acquired'
     });
     const result = await execute(item);
@@ -112,6 +114,9 @@ async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
   if (item.capability === 'bilibili.native_search') {
     return await executeBilibiliNativeSearchExtensionWork(item, lifecycle);
   }
+  if (item.capability === 'bilibili.native_search_batch') {
+    return await executeBilibiliNativeSearchBatchExtensionWork(item, lifecycle);
+  }
   if (item.capability === 'bilibili.account_profile') {
     return await executeBilibiliAccountProfileExtensionWork(item, lifecycle);
   }
@@ -132,10 +137,14 @@ async function updateActivePhase(
 ): Promise<void> {
   const active = await loadActiveExtensionWork();
   if (!active || active.item.workId !== item.workId) throw new Error('extension_work_active_state_missing');
+  const navigationIntentCount = phase === 'navigation_intent_recorded'
+    ? nextNavigationIntentCount(item, active.navigationIntentCount)
+    : active.navigationIntentCount;
   await saveActiveExtensionWork({
     schemaVersion: 1,
     item,
     phase,
+    navigationIntentCount,
     workTabAcquisition
   });
 }
@@ -161,7 +170,34 @@ async function deliverPendingResult(pending: PendingExtensionWorkResult): Promis
 }
 
 function interruptedResult(active: ActiveExtensionWork): ExtensionWorkResult {
-  const navigationAttempted = active.phase === 'navigation_intent_recorded';
+  const navigationAttempted = active.navigationIntentCount > 0;
+  if (active.item.capability === 'bilibili.native_search_batch') {
+    return {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: active.item.workId,
+      operationId: active.item.operationId,
+      browserBindingId: active.item.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search_batch',
+      executionTarget: 'collector_work_tab',
+      state: 'stopped',
+      errorCode: navigationAttempted
+        ? 'extension_worker_interrupted_after_navigation_intent'
+        : 'extension_worker_interrupted_before_navigation',
+      terminalReason: navigationAttempted ? 'navigation_outcome_unknown' : 'work_tab_closed',
+      completedAt: new Date().toISOString(),
+      navigation: {
+        attempted: navigationAttempted,
+        attemptCount: active.navigationIntentCount
+      },
+      workTabAcquisition: active.workTabAcquisition,
+      workTabDisposition: active.workTabAcquisition === 'not_acquired'
+        ? 'closed_or_missing'
+        : 'retained_not_reusable',
+      observation: null
+    };
+  }
   const base = {
     schemaVersion: 1 as const,
     protocolVersion: 1 as const,
@@ -209,6 +245,15 @@ function interruptedResult(active: ActiveExtensionWork): ExtensionWorkResult {
     return { ...base, capability: 'bilibili.collection_series.detail', observation: null };
   }
   return { ...base, capability: 'bilibili.danmaku', observation: null };
+}
+
+function nextNavigationIntentCount(
+  item: ExtensionWorkItem,
+  current: ActiveExtensionWork['navigationIntentCount']
+): ActiveExtensionWork['navigationIntentCount'] {
+  const maximum = item.capability === 'bilibili.native_search_batch' ? 2 : 1;
+  if (current >= maximum) throw new Error('extension_work_navigation_budget_exceeded');
+  return (current + 1) as ActiveExtensionWork['navigationIntentCount'];
 }
 
 function terminalDeliveryError(errorCode: string): boolean {

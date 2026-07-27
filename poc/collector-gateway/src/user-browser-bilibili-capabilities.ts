@@ -38,6 +38,7 @@ export type UserBrowserBilibiliCapabilityCaptureMode =
   | 'passive_dom_projection'
   | 'passive_player_dom_projection'
   | 'multi_page_navigation'
+  | 'bounded_multi_page_dom_projection'
   | 'bounded_page_navigation'
   | 'subtitle_menu_and_text_track'
   | 'scroll_sort_and_thread_expansion'
@@ -57,7 +58,7 @@ export interface UserBrowserBilibiliCapabilityDescriptor {
 
 export const USER_BROWSER_BILIBILI_CAPABILITIES = [
   descriptor('bilibili.native_search', 'B站站内搜索', 'query', 'direct_ready', 'dom_only'),
-  descriptor('bilibili.native_search_batch', 'B站站内搜索多页批量', 'query_and_fixed_pages', 'direct_migration_required', 'multi_page_navigation'),
+  descriptor('bilibili.native_search_batch', 'B站站内搜索固定两页', 'query_and_fixed_pages', 'direct_canary_pending', 'bounded_multi_page_dom_projection'),
   descriptor('bilibili.account_profile', 'UP 主公开资料', 'canonical_profile_url', 'direct_ready', 'passive_dom_projection'),
   descriptor('bilibili.account_inventory', 'UP 主视频首屏', 'canonical_profile_url', 'direct_ready', 'passive_dom_projection'),
   descriptor('bilibili.account_inventory.pagination', 'UP 主视频有界翻页', 'canonical_profile_url_and_fixed_page_budget', 'direct_migration_required', 'bounded_page_navigation'),

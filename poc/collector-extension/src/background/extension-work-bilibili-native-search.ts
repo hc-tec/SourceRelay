@@ -1,24 +1,19 @@
 import {
-  canonicalBilibiliNativeSearchUrl,
   type BilibiliNativeSearchDomObservation,
   type ExtensionWorkItem,
   type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
-import { captureBilibiliNativeSearchDom } from './strategies/bilibili-native-search-dom-projection';
+import { observeBilibiliNativeSearchPage } from './extension-work-bilibili-native-search-page-observation';
+import type { BilibiliNativeSearchDomSnapshot } from './strategies/bilibili-native-search-dom-projection';
 import {
   acquireExtensionWorkTab,
   abandonExtensionWorkTab,
   navigateExtensionWorkTabOnce,
-  readExtensionWorkTab,
   releaseExtensionWorkTab,
   type ExtensionWorkTabLease,
   type WorkTabAcquisition,
   type WorkTabDisposition
 } from './extension-work-tabs';
-
-const PAGE_SETTLE_MS = 3_000;
-const DOM_OBSERVATION_WINDOW_MS = 12_000;
-const OBSERVATION_INTERVAL_MS = 350;
 
 /**
  * Direct native-search MVP: one signed navigation to the fixed public
@@ -134,82 +129,25 @@ async function observeNativeSearch(
     terminalReason: 'search_results_partial' | 'dom_projection_failed' | 'document_context_changed' | 'run_deadline_exceeded';
   }
 > {
-  const deadline = Math.min(Date.parse(expiresAt), Date.now() + DOM_OBSERVATION_WINDOW_MS + PAGE_SETTLE_MS);
-  let pageReadyAt: number | null = null;
-  let lastObservation: BilibiliNativeSearchDomObservation | null = null;
-  while (Date.now() < deadline) {
-    const tab = await readExtensionWorkTab(workTab);
-    if (tab.status !== 'complete') {
-      await delay(OBSERVATION_INTERVAL_MS);
-      continue;
-    }
-    if (!tab.url || canonicalBilibiliNativeSearchUrl(tab.url, 'observed_document') !== expectedCanonicalSearchUrl) {
-      return {
-        kind: 'stopped',
-        observation: null,
-        errorCode: 'bilibili_native_search_target_not_reached',
-        terminalReason: 'source_unavailable'
-      };
-    }
-    pageReadyAt ??= Date.now();
-    if (Date.now() - pageReadyAt < PAGE_SETTLE_MS) {
-      await delay(OBSERVATION_INTERVAL_MS);
-      continue;
-    }
-    let dom: Awaited<ReturnType<typeof captureBilibiliNativeSearchDom>>;
-    try {
-      dom = await captureBilibiliNativeSearchDom(workTab.tabId);
-    } catch (error) {
-      const code = safeErrorCode(error);
-      return {
-        kind: 'incomplete',
-        observation: lastObservation,
-        errorCode: code === 'native_search_strategy_document_context_changed'
-          ? 'bilibili_native_search_document_context_changed'
-          : 'bilibili_native_search_dom_projection_failed',
-        terminalReason: code === 'native_search_strategy_document_context_changed'
-          ? 'document_context_changed'
-          : 'dom_projection_failed'
-      };
-    }
-    const observation = toObservation(dom);
-    if (observation) lastObservation = observation;
-    if (dom.risk.verificationRequired) {
-      return {
-        kind: 'stopped', observation,
-        errorCode: 'bilibili_verification_required', terminalReason: 'verification_required'
-      };
-    }
-    if (dom.risk.rateLimited) {
-      return {
-        kind: 'stopped', observation,
-        errorCode: 'bilibili_rate_limited', terminalReason: 'rate_limited'
-      };
-    }
-    if (dom.risk.sourceUnavailable) {
-      return {
-        kind: 'stopped', observation,
-        errorCode: 'bilibili_source_unavailable', terminalReason: 'source_unavailable'
-      };
-    }
-    if (observation?.searchInputVisible && observation.emptyStateVisible) {
-      return { kind: 'empty', observation };
-    }
-    if (observation?.searchInputVisible && observation.resultListVisible && observation.semanticResultCardCount > 0) {
-      return { kind: 'ready', observation };
-    }
-    await delay(OBSERVATION_INTERVAL_MS);
+  const outcome = await observeBilibiliNativeSearchPage({
+    workTab,
+    expectedCanonicalSearchUrl,
+    expiresAt
+  });
+  const observation = outcome.dom ? toObservation(outcome.dom) : null;
+  if (outcome.kind === 'ready' || outcome.kind === 'empty') {
+    return { kind: outcome.kind, observation: observation! };
   }
   return {
-    kind: 'incomplete',
-    observation: lastObservation,
-    errorCode: 'bilibili_native_search_dom_not_ready',
-    terminalReason: Date.now() >= Date.parse(expiresAt) ? 'run_deadline_exceeded' : 'search_results_partial'
+    kind: outcome.kind,
+    observation,
+    errorCode: outcome.errorCode,
+    terminalReason: outcome.terminalReason
   };
 }
 
 function toObservation(
-  dom: Awaited<ReturnType<typeof captureBilibiliNativeSearchDom>>
+  dom: BilibiliNativeSearchDomSnapshot
 ): BilibiliNativeSearchDomObservation | null {
   if (dom.resultType !== 'comprehensive' || dom.sort !== 'relevance') return null;
   return {
@@ -274,8 +212,4 @@ function terminalReasonForError(
 function safeErrorCode(error: unknown): string {
   const code = error instanceof Error ? error.message : '';
   return /^[a-z0-9_]{1,100}$/.test(code) ? code : 'extension_work_execution_failed';
-}
-
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

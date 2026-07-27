@@ -71,6 +71,11 @@ export interface EnqueueBilibiliNativeSearchWorkInput {
   query: string;
 }
 
+export interface EnqueueBilibiliNativeSearchBatchWorkInput {
+  browserBindingId: string;
+  query: string;
+}
+
 export interface EnqueueBilibiliAccountProfileWorkInput {
   browserBindingId: string;
   canonicalProfileUrl: string;
@@ -109,7 +114,10 @@ export interface EnqueueBilibiliDanmakuWorkInput {
  * input is redacted to a digest so historic local operation state cannot be
  * used to recover a user's search phrase.
  */
-type StoredExtensionWorkItem = ExtensionWorkItem | RedactedBilibiliNativeSearchWorkItem;
+type StoredExtensionWorkItem =
+  | ExtensionWorkItem
+  | RedactedBilibiliNativeSearchWorkItem
+  | RedactedBilibiliNativeSearchBatchWorkItem;
 
 interface RedactedBilibiliNativeSearchWorkItem {
   schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
@@ -133,6 +141,31 @@ interface RedactedBilibiliNativeSearchWorkItem {
     maximumSemanticActions: 0;
     maximumResponseObservations: 0;
     maximumPayloadBytes: 98_304;
+  };
+}
+
+interface RedactedBilibiliNativeSearchBatchWorkItem {
+  schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
+  protocolVersion: typeof EXTENSION_WORK_PROTOCOL_VERSION;
+  workId: string;
+  operationId: string;
+  browserBindingId: string;
+  platform: 'bilibili';
+  capability: 'bilibili.native_search_batch';
+  executionTarget: 'collector_work_tab';
+  issuedAt: string;
+  expiresAt: string;
+  input: {
+    queryDigest: string;
+    resultType: 'comprehensive';
+    sort: 'relevance';
+    pages: [1, 2];
+  };
+  budget: {
+    maximumPlatformNavigations: 2;
+    maximumSemanticActions: 0;
+    maximumResponseObservations: 0;
+    maximumPayloadBytes: 57_344;
   };
 }
 
@@ -308,6 +341,55 @@ export class ExtensionWorkQueue {
     this.#trim();
     await this.#save();
     return summary(operation);
+  }
+
+  async enqueueBilibiliNativeSearchBatch(
+    input: EnqueueBilibiliNativeSearchBatchWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId)) throw new Error('extension_work_binding_invalid');
+    const pageOne = normaliseBilibiliNativeSearchRoute({
+      query: input.query,
+      resultType: 'comprehensive',
+      sort: 'relevance',
+      page: 1
+    });
+    const pageTwo = pageOne ? normaliseBilibiliNativeSearchRoute({ ...pageOne, page: 2 }) : null;
+    if (!pageOne || !pageTwo || pageOne.resultType !== 'comprehensive' || pageOne.sort !== 'relevance' ||
+      pageOne.page !== 1 || pageTwo.page !== 2
+    ) throw new Error('bilibili_native_search_batch_input_invalid');
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(input.browserBindingId);
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search_batch',
+      executionTarget: 'collector_work_tab',
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: {
+        query: pageOne.query,
+        resultType: 'comprehensive',
+        sort: 'relevance',
+        targets: [
+          { page: 1, canonicalSearchUrl: bilibiliNativeSearchUrl(pageOne) },
+          { page: 2, canonicalSearchUrl: bilibiliNativeSearchUrl(pageTwo) }
+        ]
+      },
+      budget: {
+        maximumPlatformNavigations: 2,
+        maximumSemanticActions: 0,
+        maximumResponseObservations: 0,
+        maximumPayloadBytes: 57_344
+      }
+    };
+    return await this.#enqueueSigned(unsigned, issuedAt);
   }
 
   async enqueueBilibiliAccountProfile(
@@ -683,7 +765,8 @@ function isStoredOperation(value: unknown): value is StoredOperation {
 }
 
 function isStoredExtensionWorkItem(value: unknown): value is StoredExtensionWorkItem {
-  return isExtensionWorkItem(value) || isRedactedBilibiliNativeSearchWorkItem(value);
+  return isExtensionWorkItem(value) || isRedactedBilibiliNativeSearchWorkItem(value) ||
+    isRedactedBilibiliNativeSearchBatchWorkItem(value);
 }
 
 function isRedactedBilibiliNativeSearchWorkItem(value: unknown): value is RedactedBilibiliNativeSearchWorkItem {
@@ -700,6 +783,25 @@ function isRedactedBilibiliNativeSearchWorkItem(value: unknown): value is Redact
     !/^[a-f0-9]{64}$/.test(stringValue(value.input.queryDigest)) ||
     value.input.resultType !== 'comprehensive' || value.input.sort !== 'relevance' || value.input.page !== 1 ||
     !isFixedDirectWorkBudget(value.budget)
+  ) return false;
+  return true;
+}
+
+function isRedactedBilibiliNativeSearchBatchWorkItem(value: unknown): value is RedactedBilibiliNativeSearchBatchWorkItem {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
+    'executionTarget', 'issuedAt', 'expiresAt', 'input', 'budget'
+  ]) || value.schemaVersion !== EXTENSION_WORK_SCHEMA_VERSION ||
+    value.protocolVersion !== EXTENSION_WORK_PROTOCOL_VERSION || !isUuid(value.workId) ||
+    !isUuid(value.operationId) || !isUuid(value.browserBindingId) || value.platform !== 'bilibili' ||
+    value.capability !== 'bilibili.native_search_batch' || value.executionTarget !== 'collector_work_tab' ||
+    !isTimestamp(value.issuedAt) || !isTimestamp(value.expiresAt) ||
+    Date.parse(value.expiresAt) <= Date.parse(value.issuedAt) || !isRecord(value.input) ||
+    !hasExactKeys(value.input, ['queryDigest', 'resultType', 'sort', 'pages']) ||
+    !/^[a-f0-9]{64}$/.test(stringValue(value.input.queryDigest)) ||
+    value.input.resultType !== 'comprehensive' || value.input.sort !== 'relevance' ||
+    !Array.isArray(value.input.pages) || value.input.pages.length !== 2 ||
+    value.input.pages[0] !== 1 || value.input.pages[1] !== 2 || !isBatchDirectWorkBudget(value.budget)
   ) return false;
   return true;
 }
@@ -733,7 +835,8 @@ function isTerminalState(value: ExtensionWorkState): boolean {
 
 function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason {
   return value === 'detail_ready' || value === 'search_ready' || value === 'search_empty' ||
-    value === 'search_results_partial' || value === 'profile_ready' || value === 'inventory_ready' ||
+    value === 'search_results_partial' || value === 'search_batch_ready' || value === 'search_batch_empty' ||
+    value === 'search_batch_page_partial' || value === 'profile_ready' || value === 'inventory_ready' ||
     value === 'inventory_partial' || value === 'dynamic_ready' || value === 'dynamic_empty' ||
     value === 'dynamic_partial' || value === 'collection_series_overview_ready' ||
     value === 'collection_series_overview_empty' || value === 'collection_series_overview_partial' ||
@@ -747,7 +850,30 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
 }
 
 function redactTerminalWorkItem(item: StoredExtensionWorkItem): StoredExtensionWorkItem {
-  if (item.capability !== 'bilibili.native_search' || !isExtensionWorkItem(item)) return item;
+  if (!isExtensionWorkItem(item) ||
+    (item.capability !== 'bilibili.native_search' && item.capability !== 'bilibili.native_search_batch')
+  ) return item;
+  if (item.capability === 'bilibili.native_search_batch') {
+    return {
+      schemaVersion: item.schemaVersion,
+      protocolVersion: item.protocolVersion,
+      workId: item.workId,
+      operationId: item.operationId,
+      browserBindingId: item.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search_batch',
+      executionTarget: 'collector_work_tab',
+      issuedAt: item.issuedAt,
+      expiresAt: item.expiresAt,
+      input: {
+        queryDigest: sha256(item.input.query),
+        resultType: 'comprehensive',
+        sort: 'relevance',
+        pages: [1, 2]
+      },
+      budget: { ...item.budget }
+    };
+  }
   return {
     schemaVersion: item.schemaVersion,
     protocolVersion: item.protocolVersion,
@@ -802,6 +928,13 @@ function isFixedDirectWorkBudget(value: unknown): boolean {
     'maximumPlatformNavigations', 'maximumSemanticActions', 'maximumResponseObservations', 'maximumPayloadBytes'
   ]) && value.maximumPlatformNavigations === 1 && value.maximumSemanticActions === 0 &&
     value.maximumResponseObservations === 0 && value.maximumPayloadBytes === 98_304;
+}
+
+function isBatchDirectWorkBudget(value: unknown): boolean {
+  return isRecord(value) && hasExactKeys(value, [
+    'maximumPlatformNavigations', 'maximumSemanticActions', 'maximumResponseObservations', 'maximumPayloadBytes'
+  ]) && value.maximumPlatformNavigations === 2 && value.maximumSemanticActions === 0 &&
+    value.maximumResponseObservations === 0 && value.maximumPayloadBytes === 57_344;
 }
 
 function sha256(value: string): string {

@@ -2,6 +2,7 @@ export * from './bilibili-account-video-pagination.js';
 export * from './browser-binding.js';
 export * from './extension-work.js';
 export * from './extension-work-bilibili-passive.js';
+export * from './extension-work-bilibili-native-search-batch.js';
 export * from './bilibili-collection-series-detail.js';
 export * from './bilibili-account-profile.js';
 export * from './bilibili-transcript-interaction.js';

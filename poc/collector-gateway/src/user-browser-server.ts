@@ -11,6 +11,7 @@ import {
   loadUserBrowserGatewayConfig
 } from './user-browser-config';
 import { ExtensionWorkQueue } from './extension-work-queue';
+import { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-native-search-batch-artifacts';
 import { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
 import { safeErrorCode, sendJson } from './gateway-http';
 import { loadGatewayIdentity } from './identity';
@@ -28,6 +29,7 @@ const collectorServiceClients = await CollectorServiceClientRegistry.create(conf
 const collectorServiceAudit = await CollectorServiceAuditLog.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
+const nativeSearchBatchDirectArtifacts = await ExtensionWorkNativeSearchBatchArtifactStore.create(config.stateDirectory);
 const accountProfileArtifacts = await BilibiliAccountProfileArtifactStore.create(config.stateDirectory);
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
 const passiveDirectArtifacts = await ExtensionWorkPassiveArtifactStore.create(config.stateDirectory);
@@ -49,6 +51,7 @@ const server = createServer(async (request, response) => {
       collectorServiceAudit,
       videoDetailArtifacts,
       nativeSearchArtifacts,
+      nativeSearchBatchDirectArtifacts,
       accountProfileArtifacts,
       accountVideoInventoryArtifacts,
       passiveDirectArtifacts

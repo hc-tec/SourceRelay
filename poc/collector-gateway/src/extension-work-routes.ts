@@ -2,6 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliVideoWorkUrl,
+  isBilibiliNativeSearchBatchWorkItem,
+  isBilibiliNativeSearchBatchWorkResult,
   isExtensionWorkResult,
   isBilibiliPassiveExtensionWorkItem,
   isBilibiliPassiveExtensionWorkResult,
@@ -15,9 +17,11 @@ import type { BrowserBindingSafetyRegistry } from './browser-binding-safety';
 import { recordBilibiliAccountInventoryExtensionWork } from './extension-work-bilibili-account-inventory';
 import { recordBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
 import { recordBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
+import { recordBilibiliNativeSearchBatchExtensionWork } from './extension-work-bilibili-native-search-batch';
 import { recordBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
 import { recordBilibiliPassiveExtensionWork } from './extension-work-bilibili-passive';
 import type { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
+import type { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-native-search-batch-artifacts';
 import type { ExtensionWorkArtifactReference, ExtensionWorkQueue } from './extension-work-queue';
 import { readJsonBody, readJsonBodyWithRaw, requireSameOrigin, safeErrorCode, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
@@ -44,6 +48,7 @@ export interface ExtensionWorkRouteContext {
   browserBindingSafety: BrowserBindingSafetyRegistry;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
   nativeSearchArtifacts: BilibiliNativeSearchArtifactStore;
+  nativeSearchBatchDirectArtifacts: ExtensionWorkNativeSearchBatchArtifactStore;
   accountProfileArtifacts: BilibiliAccountProfileArtifactStore;
   accountVideoInventoryArtifacts: BilibiliAccountVideoInventoryArtifactStore;
   passiveDirectArtifacts: ExtensionWorkPassiveArtifactStore;
@@ -181,6 +186,24 @@ export async function enqueueBilibiliNativeSearchWork(
   if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliNativeSearch({
+    browserBindingId: binding.browserBindingId,
+    query
+  });
+}
+
+/** Shared by the scoped upper-application service route; pages are fixed by the signed capability. */
+export async function enqueueBilibiliNativeSearchBatchWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  query: string
+) {
+  await reconcileExpiredExtensionWork(context);
+  const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
+  if (binding.state !== 'online') throw new Error('browser_binding_offline');
+  const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
+  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
+  if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
+  return await context.workQueue.enqueueBilibiliNativeSearchBatch({
     browserBindingId: binding.browserBindingId,
     query
   });
@@ -328,6 +351,12 @@ async function handleExtensionWorkResult(
         item,
         result,
         artifacts: context.nativeSearchArtifacts
+      });
+    } else if (isBilibiliNativeSearchBatchWorkItem(item) && isBilibiliNativeSearchBatchWorkResult(result)) {
+      artifact = await recordBilibiliNativeSearchBatchExtensionWork({
+        item,
+        result,
+        artifacts: context.nativeSearchBatchDirectArtifacts
       });
     } else if (item.capability === 'bilibili.account_profile' && result.capability === 'bilibili.account_profile') {
       artifact = await recordBilibiliAccountProfileExtensionWork({

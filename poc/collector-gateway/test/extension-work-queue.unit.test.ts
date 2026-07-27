@@ -116,6 +116,56 @@ describe('extension work queue state machine', () => {
     }
   });
 
+  test('derives a fixed two-page native-search batch and redacts both transient URLs after terminal delivery', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-search-batch-'));
+    const query = '不应长期保存的两页搜索短语';
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const queued = await queue.enqueueBilibiliNativeSearchBatch({ browserBindingId: bindingId, query }, base);
+      const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
+      expect(claimed).toMatchObject({
+        operationId: queued.operationId,
+        capability: 'bilibili.native_search_batch',
+        input: {
+          query,
+          resultType: 'comprehensive',
+          sort: 'relevance',
+          targets: [
+            { page: 1, canonicalSearchUrl: expect.stringContaining('keyword=') },
+            { page: 2, canonicalSearchUrl: expect.stringContaining('page=2') }
+          ]
+        },
+        budget: { maximumPlatformNavigations: 2, maximumSemanticActions: 0 }
+      });
+      if (!claimed || claimed.capability !== 'bilibili.native_search_batch') throw new Error('test_batch_claim_missing');
+      await queue.complete(bindingId, {
+        schemaVersion: 1,
+        protocolVersion: 1,
+        workId: claimed.workId,
+        operationId: claimed.operationId,
+        browserBindingId: claimed.browserBindingId,
+        platform: 'bilibili',
+        capability: 'bilibili.native_search_batch',
+        executionTarget: 'collector_work_tab',
+        state: 'stopped',
+        errorCode: 'bilibili_source_unavailable',
+        terminalReason: 'source_unavailable',
+        completedAt: new Date(base.getTime() + 2).toISOString(),
+        navigation: { attempted: true, attemptCount: 1 },
+        workTabAcquisition: 'created',
+        workTabDisposition: 'retained_not_reusable',
+        observation: null
+      }, null);
+      const persisted = await readFile(join(stateDirectory, 'extension-work-operations.json'), 'utf8');
+      expect(persisted).not.toContain(query);
+      expect(persisted).not.toContain('canonicalSearchUrl');
+      expect(persisted).toContain('queryDigest');
+      expect(persisted).toContain('native_search_batch');
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
   test('derives public profile and inventory targets from one canonical MID without accepting a free-form page', async () => {
     const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-account-'));
     try {

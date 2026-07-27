@@ -84,6 +84,25 @@
             <button type="submit" disabled>提交一次搜索测试</button>
           </form>
 
+          <form id="search-batch-form" class="workflow">
+            <div class="workflow-title">
+              <span class="step">B2</span>
+              <div>
+                <h3>B站站内搜索（固定两页）</h3>
+                <p>仅接收关键词；服务端固定第 1、2 页，零页面点击、最多两次 URL 导航。</p>
+              </div>
+            </div>
+            <label>
+              在线 browser binding
+              <select class="binding-select" name="browserBindingId" required disabled></select>
+            </label>
+            <label>
+              查询词
+              <input name="query" autocomplete="off" maxlength="80" placeholder="例如 DeepSeek" required disabled>
+            </label>
+            <button type="submit" disabled>提交一次固定两页搜索测试</button>
+          </form>
+
           <form id="profile-form" class="workflow">
             <div class="workflow-title">
               <span class="step">C</span>
