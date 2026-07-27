@@ -30,6 +30,14 @@ import {
   type BilibiliNativeSearchBatchWorkTerminalReason,
   type UnsignedBilibiliNativeSearchBatchWorkItem
 } from './extension-work-bilibili-native-search-batch.js';
+import {
+  isBilibiliVideoDiscussionUserSelectedTabWorkItem,
+  isBilibiliVideoDiscussionUserSelectedTabWorkResult,
+  isBilibiliVideoDiscussionUserSelectedTabWorkResultForItem,
+  type BilibiliVideoDiscussionUserSelectedTabWorkItem,
+  type BilibiliVideoDiscussionUserSelectedTabWorkResult,
+  type BilibiliVideoDiscussionUserSelectedTabTerminalReason
+} from './extension-work-bilibili-discussion-user-selected-tab.js';
 import { canonicalJson } from './ipc.js';
 
 /**
@@ -53,6 +61,7 @@ export type ExtensionWorkCapability =
   | 'bilibili.native_search_batch'
   | 'bilibili.account_profile'
   | 'bilibili.account_inventory'
+  | 'bilibili.discussion'
   | BilibiliPassiveExtensionWorkCapability;
 export type ExtensionWorkExecutionTarget = 'collector_work_tab' | 'user_selected_tab';
 export type ExtensionWorkState = 'queued' | 'claimed' | 'completed' | 'partial' | 'stopped' | 'failed';
@@ -205,6 +214,7 @@ export type ExtensionWorkItem =
   | BilibiliAccountProfileWorkItem
   | BilibiliAccountInventoryWorkItem
   | BilibiliAccountInventoryUserSelectedTabWorkItem
+  | BilibiliVideoDiscussionUserSelectedTabWorkItem
   | BilibiliPassiveExtensionWorkItem;
 export type UnsignedExtensionWorkItem =
   | Omit<BilibiliVideoDetailWorkItem, 'gatewaySignature'>
@@ -213,6 +223,7 @@ export type UnsignedExtensionWorkItem =
   | Omit<BilibiliAccountProfileWorkItem, 'gatewaySignature'>
   | Omit<BilibiliAccountInventoryWorkItem, 'gatewaySignature'>
   | Omit<BilibiliAccountInventoryUserSelectedTabWorkItem, 'gatewaySignature'>
+  | Omit<BilibiliVideoDiscussionUserSelectedTabWorkItem, 'gatewaySignature'>
   | UnsignedBilibiliPassiveExtensionWorkItem;
 
 export type SharedExtensionWorkTerminalReason =
@@ -269,6 +280,7 @@ export type ExtensionWorkTerminalReason =
   | BilibiliAccountProfileWorkTerminalReason
   | BilibiliAccountInventoryWorkTerminalReason
   | BilibiliAccountInventoryUserSelectedTabWorkTerminalReason
+  | BilibiliVideoDiscussionUserSelectedTabTerminalReason
   | BilibiliPassiveExtensionWorkTerminalReason;
 
 export interface BilibiliVideoDetailDomObservation {
@@ -491,6 +503,7 @@ export type ExtensionWorkResult =
   | BilibiliAccountProfileWorkResult
   | BilibiliAccountInventoryWorkResult
   | BilibiliAccountInventoryUserSelectedTabWorkResult
+  | BilibiliVideoDiscussionUserSelectedTabWorkResult
   | BilibiliPassiveExtensionWorkResult;
 
 export function canonicalBilibiliVideoWorkUrl(value: string): string | null {
@@ -523,6 +536,8 @@ export function extensionWorkTargetUrl(item: ExtensionWorkItem): string {
       return item.input.canonicalProfileUrl;
     case 'bilibili.account_inventory':
       return item.input.canonicalInventoryUrl;
+    case 'bilibili.discussion':
+      return item.input.canonicalVideoUrl;
     case 'bilibili.dynamic':
     case 'bilibili.collection_series.overview':
     case 'bilibili.collection_series.detail':
@@ -571,12 +586,17 @@ export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem 
         ? isBilibiliAccountInventoryWorkBudget(value.budget)
         : isBilibiliAccountInventoryUserSelectedTabWorkBudget(value.budget));
   }
+  if (value.capability === 'bilibili.discussion') {
+    return value.executionTarget === 'user_selected_tab' &&
+      isBilibiliVideoDiscussionUserSelectedTabWorkItem(value);
+  }
   return value.executionTarget === 'collector_work_tab' && isBilibiliPassiveExtensionWorkItem(value);
 }
 
 export function isExtensionWorkResult(value: unknown): value is ExtensionWorkResult {
   if (isBilibiliNativeSearchBatchWorkResult(value)) return true;
   if (isBilibiliAccountInventoryUserSelectedTabWorkResult(value)) return true;
+  if (isBilibiliVideoDiscussionUserSelectedTabWorkResult(value)) return true;
   if (!isRecord(value) || !hasExactKeys(value, [
     'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
     'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation',
@@ -613,6 +633,9 @@ export function isExtensionWorkResultForItem(
   value: unknown,
   item: ExtensionWorkItem
 ): value is ExtensionWorkResult {
+  if (isBilibiliVideoDiscussionUserSelectedTabWorkItem(item)) {
+    return isBilibiliVideoDiscussionUserSelectedTabWorkResultForItem(value, item);
+  }
   if (item.capability === 'bilibili.native_search_batch') {
     return isBilibiliNativeSearchBatchWorkResultForItem(value, item);
   }

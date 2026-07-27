@@ -132,6 +132,30 @@ const accountInventorySelectedTabItem: ExtensionWorkItem = {
   gatewaySignature: 'e'.repeat(86)
 };
 
+const discussionSelectedTabItem: ExtensionWorkItem = {
+  schemaVersion: 1,
+  protocolVersion: 1,
+  workId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  operationId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  browserBindingId: '33333333-3333-4333-8333-333333333333',
+  platform: 'bilibili',
+  capability: 'bilibili.discussion',
+  executionTarget: 'user_selected_tab',
+  issuedAt: '2026-07-25T00:00:00.000Z',
+  expiresAt: '2026-07-25T00:01:00.000Z',
+  input: {
+    canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa',
+    bvid: 'BV1qZSLBYEpa'
+  },
+  budget: {
+    maximumPlatformNavigations: 0,
+    maximumSemanticActions: 0,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 98_304
+  },
+  gatewaySignature: 'f'.repeat(86)
+};
+
 describe('direct extension work contract', () => {
   test('signs a fixed typed work item without allowing arbitrary carrier fields', () => {
     expect(isExtensionWorkItem(item)).toBe(true);
@@ -375,5 +399,59 @@ describe('direct extension work contract', () => {
       ...result,
       userSelectedTabDisposition: 'document_changed'
     }, accountInventorySelectedTabItem)).toBe(false);
+  });
+
+  test('allows an explicitly selected loaded discussion document only as a bounded passive projection', () => {
+    expect(isExtensionWorkItem(discussionSelectedTabItem)).toBe(true);
+    expect(isExtensionWorkItem({
+      ...discussionSelectedTabItem,
+      executionTarget: 'collector_work_tab'
+    })).toBe(false);
+    expect(isExtensionWorkItem({
+      ...discussionSelectedTabItem,
+      budget: { ...discussionSelectedTabItem.budget, maximumSemanticActions: 1 }
+    })).toBe(false);
+    expect(isExtensionWorkItem({ ...discussionSelectedTabItem, tabId: 42 })).toBe(false);
+
+    const result: ExtensionWorkResult = {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: discussionSelectedTabItem.workId,
+      operationId: discussionSelectedTabItem.operationId,
+      browserBindingId: discussionSelectedTabItem.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.discussion',
+      executionTarget: 'user_selected_tab',
+      state: 'completed',
+      errorCode: null,
+      terminalReason: 'discussion_ready',
+      completedAt: '2026-07-25T00:00:20.000Z',
+      navigation: { attempted: false, attemptCount: 0 },
+      userSelectedTabDisposition: 'observed',
+      observation: {
+        bvid: 'BV1qZSLBYEpa',
+        commentHostPresent: true,
+        commentHostVisible: true,
+        commentHostInViewport: true,
+        commentContentState: 'ready',
+        rootCommentTexts: ['已渲染的公开根评论'],
+        sortControls: { hotVisible: true, latestVisible: true, latestState: 'inactive' },
+        loginGateVisible: false,
+        risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+      }
+    };
+    expect(isExtensionWorkResultForItem(result, discussionSelectedTabItem)).toBe(true);
+    expect(isExtensionWorkResultForItem({
+      ...result,
+      navigation: { attempted: true, attemptCount: 1 }
+    }, discussionSelectedTabItem)).toBe(false);
+    expect(isExtensionWorkResultForItem({
+      ...result,
+      observation: { ...result.observation!, commentHostInViewport: false }
+    }, discussionSelectedTabItem)).toBe(false);
+    expect(isExtensionWorkResultForItem({
+      ...result,
+      observation: { ...result.observation!, bvid: 'BV1xx411c7mD' }
+    }, discussionSelectedTabItem)).toBe(false);
   });
 });
