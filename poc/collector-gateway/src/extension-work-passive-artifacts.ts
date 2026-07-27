@@ -3,13 +3,43 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type {
   BilibiliPassiveExtensionWorkItem,
-  BilibiliPassiveExtensionWorkResult
+  BilibiliPassiveExtensionWorkResult,
+  BilibiliVideoDiscussionUserSelectedTabWorkItem,
+  BilibiliVideoDiscussionUserSelectedTabWorkResult
 } from '@intelligence/collector-contracts';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_ARTIFACT_BYTES = 128 * 1024;
 
-export type PassiveDirectCapability = BilibiliPassiveExtensionWorkItem['capability'];
+type PassiveDirectWorkItem =
+  | BilibiliPassiveExtensionWorkItem
+  | BilibiliVideoDiscussionUserSelectedTabWorkItem;
+type PassiveDirectWorkResult =
+  | BilibiliPassiveExtensionWorkResult
+  | BilibiliVideoDiscussionUserSelectedTabWorkResult;
+
+export type PassiveDirectCapability = PassiveDirectWorkItem['capability'];
+
+type PassiveDirectArtifactProvenance =
+  | {
+    environment: 'user_owned_browser_extension';
+    executionTarget: 'collector_work_tab';
+    captureMode: 'passive_dom_projection' | 'fixed_network_metadata_projection';
+    responseBodies: 'not_read' | 'transient_allowlisted_projection';
+    semanticActions: 0;
+    platformNavigations: 1;
+    workTabAcquisition: BilibiliPassiveExtensionWorkResult['workTabAcquisition'];
+    workTabDisposition: BilibiliPassiveExtensionWorkResult['workTabDisposition'];
+  }
+  | {
+    environment: 'user_owned_browser_extension';
+    executionTarget: 'user_selected_tab';
+    captureMode: 'passive_dom_projection';
+    responseBodies: 'not_read';
+    semanticActions: 0;
+    platformNavigations: 0;
+    userSelectedTabDisposition: BilibiliVideoDiscussionUserSelectedTabWorkResult['userSelectedTabDisposition'];
+  };
 
 export interface PassiveDirectArtifactSummary {
   schemaVersion: 1;
@@ -25,24 +55,15 @@ export interface PassiveDirectArtifactSummary {
 export interface PassiveDirectArtifactView {
   schemaVersion: 1;
   summary: PassiveDirectArtifactSummary;
-  provenance: {
-    environment: 'user_owned_browser_extension';
-    executionTarget: 'collector_work_tab';
-    captureMode: 'passive_dom_projection' | 'fixed_network_metadata_projection';
-    responseBodies: 'not_read' | 'transient_allowlisted_projection';
-    semanticActions: 0;
-    platformNavigations: 1;
-    workTabAcquisition: BilibiliPassiveExtensionWorkResult['workTabAcquisition'];
-    workTabDisposition: BilibiliPassiveExtensionWorkResult['workTabDisposition'];
-  };
-  input: BilibiliPassiveExtensionWorkItem['input'];
+  provenance: PassiveDirectArtifactProvenance;
+  input: PassiveDirectWorkItem['input'];
   result: {
-    state: BilibiliPassiveExtensionWorkResult['state'];
+    state: PassiveDirectWorkResult['state'];
     errorCode: string | null;
-    terminalReason: BilibiliPassiveExtensionWorkResult['terminalReason'];
+    terminalReason: PassiveDirectWorkResult['terminalReason'];
     completedAt: string;
-    navigation: BilibiliPassiveExtensionWorkResult['navigation'];
-    observation: BilibiliPassiveExtensionWorkResult['observation'];
+    navigation: PassiveDirectWorkResult['navigation'];
+    observation: PassiveDirectWorkResult['observation'];
   };
 }
 
@@ -87,8 +108,8 @@ export class ExtensionWorkPassiveArtifactStore {
   }
 
   async record(input: {
-    item: BilibiliPassiveExtensionWorkItem;
-    result: BilibiliPassiveExtensionWorkResult;
+    item: PassiveDirectWorkItem;
+    result: PassiveDirectWorkResult;
   }): Promise<PassiveDirectArtifactSummary> {
     const existing = this.list().find((summary) => summary.operationId === input.item.operationId);
     if (existing) return existing;
@@ -97,15 +118,17 @@ export class ExtensionWorkPassiveArtifactStore {
     }
     const artifactId = randomUUID();
     const observation = input.result.observation;
-    const draft = {
-      schemaVersion: 1 as const,
-      artifactId,
-      operationId: input.item.operationId,
-      capability: input.item.capability,
-      state: input.result.state,
-      capturedAt: input.result.completedAt,
-      itemCount: itemCount(observation),
-      provenance: {
+    const provenance: PassiveDirectArtifactProvenance = input.item.executionTarget === 'user_selected_tab'
+      ? {
+        environment: 'user_owned_browser_extension' as const,
+        executionTarget: 'user_selected_tab' as const,
+        captureMode: 'passive_dom_projection' as const,
+        responseBodies: 'not_read' as const,
+        semanticActions: 0 as const,
+        platformNavigations: 0 as const,
+        userSelectedTabDisposition: (input.result as BilibiliVideoDiscussionUserSelectedTabWorkResult).userSelectedTabDisposition
+      }
+      : {
         environment: 'user_owned_browser_extension' as const,
         executionTarget: 'collector_work_tab' as const,
         captureMode: input.item.capability === 'bilibili.collection_series.overview'
@@ -116,9 +139,18 @@ export class ExtensionWorkPassiveArtifactStore {
           : 'not_read' as const,
         semanticActions: 0 as const,
         platformNavigations: 1 as const,
-        workTabAcquisition: input.result.workTabAcquisition,
-        workTabDisposition: input.result.workTabDisposition
-      },
+        workTabAcquisition: (input.result as BilibiliPassiveExtensionWorkResult).workTabAcquisition,
+        workTabDisposition: (input.result as BilibiliPassiveExtensionWorkResult).workTabDisposition
+      };
+    const draft = {
+      schemaVersion: 1 as const,
+      artifactId,
+      operationId: input.item.operationId,
+      capability: input.item.capability,
+      state: input.result.state,
+      capturedAt: input.result.completedAt,
+      itemCount: itemCount(observation),
+      provenance,
       input: structuredClone(input.item.input),
       result: {
         state: input.result.state,
@@ -176,8 +208,9 @@ export class ExtensionWorkPassiveArtifactStore {
   }
 }
 
-function itemCount(observation: BilibiliPassiveExtensionWorkResult['observation']): number {
+function itemCount(observation: PassiveDirectWorkResult['observation']): number {
   if (!observation) return 0;
+  if ('rootCommentTexts' in observation) return observation.rootCommentTexts.length;
   if ('cards' in observation) return observation.cards.length;
   if ('items' in observation) return observation.items.length;
   if ('overlayItems' in observation) return observation.overlayItems.length;
@@ -195,20 +228,15 @@ function isSummary(value: unknown): value is PassiveDirectArtifactSummary {
 
 function isStoredArtifact(value: unknown): value is StoredArtifact {
   if (!isRecord(value) || value.schemaVersion !== 1 || !isSummary(value.summary) || !isRecord(value.provenance) ||
-    !isRecord(value.result) || !('input' in value)) return false;
+    !isRecord(value.result) || !('input' in value) || containsForbiddenBrowserIdentifier(value)) return false;
   return value.artifactId === value.summary.artifactId && value.operationId === value.summary.operationId &&
     value.capability === value.summary.capability && value.state === value.summary.state && value.capturedAt === value.summary.capturedAt &&
-    value.provenance.environment === 'user_owned_browser_extension' && value.provenance.executionTarget === 'collector_work_tab' &&
-    (value.provenance.captureMode === 'passive_dom_projection' ||
-      value.provenance.captureMode === 'fixed_network_metadata_projection') &&
-    (value.provenance.responseBodies === 'not_read' ||
-      value.provenance.responseBodies === 'transient_allowlisted_projection') &&
-    value.provenance.semanticActions === 0 && value.provenance.platformNavigations === 1;
+    isProvenance(value.provenance);
 }
 
 function isCapability(value: unknown): value is PassiveDirectCapability {
   return value === 'bilibili.dynamic' || value === 'bilibili.collection_series.overview' ||
-    value === 'bilibili.collection_series.detail' || value === 'bilibili.danmaku';
+    value === 'bilibili.collection_series.detail' || value === 'bilibili.danmaku' || value === 'bilibili.discussion';
 }
 
 function isState(value: unknown): value is BilibiliPassiveExtensionWorkResult['state'] {
@@ -217,6 +245,52 @@ function isState(value: unknown): value is BilibiliPassiveExtensionWorkResult['s
 
 function isRecord(value: unknown): value is Record<string, any> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isProvenance(value: Record<string, any>): value is PassiveDirectArtifactProvenance {
+  if (value.environment !== 'user_owned_browser_extension' || value.semanticActions !== 0) return false;
+  if (value.executionTarget === 'collector_work_tab') {
+    return hasExactKeys(value, [
+      'environment', 'executionTarget', 'captureMode', 'responseBodies', 'semanticActions', 'platformNavigations',
+      'workTabAcquisition', 'workTabDisposition'
+    ]) && (value.captureMode === 'passive_dom_projection' || value.captureMode === 'fixed_network_metadata_projection') &&
+      (value.responseBodies === 'not_read' || value.responseBodies === 'transient_allowlisted_projection') &&
+      value.platformNavigations === 1 && isWorkTabAcquisition(value.workTabAcquisition) &&
+      isWorkTabDisposition(value.workTabDisposition);
+  }
+  return value.executionTarget === 'user_selected_tab' && hasExactKeys(value, [
+    'environment', 'executionTarget', 'captureMode', 'responseBodies', 'semanticActions', 'platformNavigations',
+    'userSelectedTabDisposition'
+  ]) && value.captureMode === 'passive_dom_projection' && value.responseBodies === 'not_read' &&
+    value.platformNavigations === 0 && isUserSelectedTabDisposition(value.userSelectedTabDisposition);
+}
+
+function isWorkTabAcquisition(value: unknown): boolean {
+  return value === 'created' || value === 'reused' || value === 'not_acquired';
+}
+
+function isWorkTabDisposition(value: unknown): boolean {
+  return value === 'idle_reusable' || value === 'retained_not_reusable' ||
+    value === 'user_taken_over' || value === 'closed_or_missing';
+}
+
+function isUserSelectedTabDisposition(value: unknown): boolean {
+  return value === 'observed' || value === 'selection_unavailable' || value === 'closed_or_missing' ||
+    value === 'document_changed' || value === 'target_mismatch';
+}
+
+function containsForbiddenBrowserIdentifier(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsForbiddenBrowserIdentifier);
+  if (!isRecord(value)) return false;
+  return Object.entries(value).some(([key, nested]) =>
+    key === 'tabId' || key === 'windowId' || key === 'documentId' || key === 'profileId' ||
+    containsForbiddenBrowserIdentifier(nested)
+  );
+}
+
+function hasExactKeys(value: Record<string, any>, keys: readonly string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }
 
 function sha256(value: string): string {

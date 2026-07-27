@@ -92,6 +92,11 @@ export interface EnqueueBilibiliAccountInventoryUserSelectedTabWorkInput {
   canonicalProfileUrl: string;
 }
 
+export interface EnqueueBilibiliDiscussionUserSelectedTabWorkInput {
+  browserBindingId: string;
+  canonicalVideoUrl: string;
+}
+
 export interface EnqueueBilibiliDynamicWorkInput {
   browserBindingId: string;
   canonicalProfileUrl: string;
@@ -501,6 +506,40 @@ export class ExtensionWorkQueue {
     return await this.#enqueueSigned(unsigned, issuedAt);
   }
 
+  /**
+   * The caller names one canonical public video only. The extension is solely
+   * responsible for creating and consuming its popup-selected tab/document
+   * lease; no browser identifier, selector or page action crosses this API.
+   */
+  async enqueueBilibiliDiscussionUserSelectedTab(
+    input: EnqueueBilibiliDiscussionUserSelectedTabWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId)) throw new Error('extension_work_binding_invalid');
+    const canonicalVideoUrl = canonicalBilibiliPassiveVideoWorkUrl(input.canonicalVideoUrl);
+    const bvid = canonicalVideoUrl?.match(/\/video\/(BV[0-9A-Za-z]{10})$/)?.[1] ?? null;
+    if (!canonicalVideoUrl || !bvid) throw new Error('bilibili_discussion_input_invalid');
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(input.browserBindingId);
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.discussion',
+      executionTarget: 'user_selected_tab',
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: { canonicalVideoUrl, bvid },
+      budget: userSelectedTabObservationBudget()
+    };
+    return await this.#enqueueSigned(unsigned, issuedAt);
+  }
+
   async enqueueBilibiliDynamic(
     input: EnqueueBilibiliDynamicWorkInput,
     now = new Date()
@@ -887,6 +926,7 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'collection_series_overview_empty' || value === 'collection_series_overview_partial' ||
     value === 'collection_series_detail_ready' || value === 'collection_series_detail_partial' ||
     value === 'danmaku_ready' || value === 'danmaku_partial' ||
+    value === 'discussion_ready' || value === 'discussion_empty' || value === 'discussion_partial' ||
     value === 'verification_required' || value === 'rate_limited' ||
     value === 'source_unavailable' || value === 'dom_projection_failed' || value === 'document_context_changed' ||
     value === 'run_deadline_exceeded' || value === 'work_tab_closed' || value === 'work_tab_user_taken_over' ||
@@ -894,7 +934,8 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'navigation_outcome_unknown' || value === 'gateway_restarted_before_completion' ||
     value === 'user_selected_tab_required' || value === 'user_selected_tab_closed' ||
     value === 'user_selected_tab_document_changed' || value === 'user_selected_tab_target_mismatch' ||
-    value === 'user_selected_tab_page_not_supported' || value === 'user_selected_tab_worker_interrupted';
+    value === 'user_selected_tab_page_not_supported' || value === 'user_selected_tab_worker_interrupted' ||
+    value === 'login_required';
 }
 
 function redactTerminalWorkItem(item: StoredExtensionWorkItem): StoredExtensionWorkItem {

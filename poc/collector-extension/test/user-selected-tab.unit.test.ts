@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 const originalChrome = globalThis.chrome;
 const inventoryUrl = 'https://space.bilibili.com/7481602/upload/video';
+const discussionUrl = 'https://www.bilibili.com/video/BV1qZSLBYEpa';
 
 afterEach(() => {
   Object.defineProperty(globalThis, 'chrome', {
@@ -105,6 +106,50 @@ describe('user-selected Bilibili inventory tab lease', () => {
     installChromeMock({ tabUrl: 'https://space.bilibili.com/7481602/dynamic' });
     const selection = await import('../src/background/user-selected-tab.js');
     await expect(selection.selectCurrentBilibiliAccountInventoryTab())
+      .rejects.toThrow('user_selected_tab_target_not_supported');
+  });
+});
+
+describe('user-selected Bilibili video discussion tab lease', () => {
+  test('records a user-visible video document and consumes it once without browser control APIs', async () => {
+    const chrome = installChromeMock({ tabUrl: discussionUrl });
+    const selection = await import('../src/background/user-selected-bilibili-video-discussion-tab.js');
+
+    await expect(selection.selectCurrentBilibiliVideoDiscussionTab()).resolves.toMatchObject({ state: 'available' });
+    await expect(selection.getSelectedBilibiliVideoDiscussionTabSummary()).resolves.toMatchObject({ state: 'available' });
+    await expect(selection.takeSelectedBilibiliVideoDiscussionTab(discussionUrl)).resolves.toMatchObject({
+      kind: 'ready',
+      lease: { canonicalVideoUrl: discussionUrl, bvid: 'BV1qZSLBYEpa', documentId: 'document-1' }
+    });
+    await expect(selection.takeSelectedBilibiliVideoDiscussionTab(discussionUrl)).resolves.toEqual({
+      kind: 'stopped',
+      errorCode: 'user_selected_tab_required',
+      disposition: 'selection_unavailable'
+    });
+    expect(chrome.query).toHaveBeenCalledTimes(1);
+    expect(chrome.get).toHaveBeenCalledTimes(1);
+    expect(chrome.getFrame).toHaveBeenCalledTimes(2);
+    expect((globalThis.chrome as unknown as Record<string, unknown>).scripting).toBeUndefined();
+  });
+
+  test('does not permit a target mismatch or same-URL document replacement to be reused', async () => {
+    const chrome = installChromeMock({ tabUrl: discussionUrl });
+    const selection = await import('../src/background/user-selected-bilibili-video-discussion-tab.js');
+
+    await selection.selectCurrentBilibiliVideoDiscussionTab();
+    await expect(selection.takeSelectedBilibiliVideoDiscussionTab('https://www.bilibili.com/video/BV1xx411c7mD'))
+      .resolves.toMatchObject({ kind: 'stopped', errorCode: 'user_selected_tab_target_mismatch', disposition: 'target_mismatch' });
+
+    await selection.selectCurrentBilibiliVideoDiscussionTab();
+    chrome.replaceDocument({ documentId: 'document-2' });
+    await expect(selection.takeSelectedBilibiliVideoDiscussionTab(discussionUrl))
+      .resolves.toMatchObject({ kind: 'stopped', errorCode: 'user_selected_tab_document_changed', disposition: 'document_changed' });
+  });
+
+  test('rejects a current tab outside the exact public Bilibili video document shape', async () => {
+    installChromeMock({ tabUrl: 'https://www.bilibili.com/read/cv1' });
+    const selection = await import('../src/background/user-selected-bilibili-video-discussion-tab.js');
+    await expect(selection.selectCurrentBilibiliVideoDiscussionTab())
       .rejects.toThrow('user_selected_tab_target_not_supported');
   });
 });

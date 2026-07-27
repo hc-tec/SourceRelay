@@ -30,6 +30,9 @@ export async function recordBilibiliAccountInventoryExtensionWork(input: {
     : null;
   const userSelected = input.item.executionTarget === 'user_selected_tab' &&
     input.result.executionTarget === 'user_selected_tab';
+  const userSelectedTabDisposition = input.result.executionTarget === 'user_selected_tab'
+    ? input.result.userSelectedTabDisposition
+    : null;
   const targetTabSelection = userSelected
     ? 'user_selected_tab' as const
     : input.result.executionTarget === 'collector_work_tab' && input.result.workTabAcquisition === 'created'
@@ -62,8 +65,8 @@ export async function recordBilibiliAccountInventoryExtensionWork(input: {
         actionId: 'observe_user_selected_account_inventory' as const,
         kind: 'passive_observation' as const,
         intent: 'Observe one explicitly user-selected Bilibili account inventory document without navigation or page interaction.' as const,
-        attempted: input.result.userSelectedTabDisposition === 'observed',
-        attemptCount: input.result.userSelectedTabDisposition === 'observed' ? 1 as const : 0 as const,
+        attempted: userSelectedTabDisposition === 'observed',
+        attemptCount: userSelectedTabDisposition === 'observed' ? 1 as const : 0 as const,
         outcome: actionOutcome(input.result),
         errorCode: input.result.errorCode
       }]

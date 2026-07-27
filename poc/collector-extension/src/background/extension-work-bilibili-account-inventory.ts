@@ -21,18 +21,27 @@ import {
   boundedBilibiliSpaceDomObservationDeadline
 } from './extension-work-bilibili-space-observation';
 
+type BilibiliAccountInventoryCollectorWorkItem = Extract<
+  ExtensionWorkItem,
+  { capability: 'bilibili.account_inventory'; executionTarget: 'collector_work_tab' }
+>;
+type BilibiliAccountInventoryCollectorWorkResult = Extract<
+  ExtensionWorkResult,
+  { capability: 'bilibili.account_inventory'; executionTarget: 'collector_work_tab' }
+>;
+
 /**
  * Public UP-video MVP: one extension-owned navigation to the derived
  * `/upload/video` page and a passive first-screen card projection. Pagination,
  * scrolling, sort and filter actions remain separate registered capabilities.
  */
 export async function executeBilibiliAccountInventoryExtensionWork(
-  item: Extract<ExtensionWorkItem, { capability: 'bilibili.account_inventory' }>,
+  item: BilibiliAccountInventoryCollectorWorkItem,
   lifecycle: {
     onWorkTabAcquired?(acquisition: WorkTabAcquisition): Promise<void>;
     onNavigationIntent?(): Promise<void>;
   } = {}
-): Promise<Extract<ExtensionWorkResult, { capability: 'bilibili.account_inventory' }>> {
+): Promise<BilibiliAccountInventoryCollectorWorkResult> {
   let workTab: ExtensionWorkTabLease | null = null;
   let acquisition: WorkTabAcquisition | 'not_acquired' = 'not_acquired';
   let navigationAttempted = false;
@@ -106,7 +115,7 @@ export async function executeBilibiliAccountInventoryExtensionWork(
 
 async function observeAccountInventory(
   workTab: ExtensionWorkTabLease,
-  input: Extract<ExtensionWorkItem, { capability: 'bilibili.account_inventory' }>['input'],
+  input: BilibiliAccountInventoryCollectorWorkItem['input'],
   expiresAt: string
 ): Promise<
   | { kind: 'ready'; observation: BilibiliAccountInventoryDomObservation }
@@ -209,17 +218,17 @@ function toObservation(
 }
 
 function result(
-  item: Extract<ExtensionWorkItem, { capability: 'bilibili.account_inventory' }>,
+  item: BilibiliAccountInventoryCollectorWorkItem,
   input: {
     state: 'completed' | 'partial' | 'stopped' | 'failed';
     errorCode: string | null;
-    terminalReason: Extract<ExtensionWorkResult, { capability: 'bilibili.account_inventory' }>['terminalReason'];
+    terminalReason: BilibiliAccountInventoryCollectorWorkResult['terminalReason'];
     navigationAttempted: boolean;
     acquisition: WorkTabAcquisition | 'not_acquired';
     disposition: WorkTabDisposition;
     observation: BilibiliAccountInventoryDomObservation | null;
   }
-): Extract<ExtensionWorkResult, { capability: 'bilibili.account_inventory' }> {
+): BilibiliAccountInventoryCollectorWorkResult {
   return {
     schemaVersion: 1,
     protocolVersion: 1,
@@ -246,7 +255,7 @@ function result(
 function terminalReasonForError(
   errorCode: string,
   navigationAttempted: boolean
-): Extract<ExtensionWorkResult, { capability: 'bilibili.account_inventory' }>['terminalReason'] {
+): BilibiliAccountInventoryCollectorWorkResult['terminalReason'] {
   if (errorCode === 'work_tab_closed') return 'work_tab_closed';
   if (errorCode === 'work_tab_user_taken_over') return 'work_tab_user_taken_over';
   if (errorCode === 'work_tab_foreground_unavailable') return 'work_tab_foreground_unavailable';

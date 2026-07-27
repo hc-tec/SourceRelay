@@ -2,6 +2,7 @@ import type { ExtensionWorkItem, ExtensionWorkResult } from '@intelligence/colle
 import { executeBilibiliAccountInventoryExtensionWork } from './extension-work-bilibili-account-inventory';
 import { executeBilibiliAccountInventoryUserSelectedTabExtensionWork } from './extension-work-bilibili-account-inventory-user-selected-tab';
 import { executeBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
+import { executeBilibiliDiscussionUserSelectedTabExtensionWork } from './extension-work-bilibili-discussion-user-selected-tab';
 import { executeBilibiliNativeSearchBatchExtensionWork } from './extension-work-bilibili-native-search-batch';
 import { executeBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
 import { executeBilibiliPassiveExtensionWork } from './extension-work-bilibili-passive';
@@ -127,6 +128,9 @@ async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
     }
     return await executeBilibiliAccountInventoryExtensionWork(item, lifecycle);
   }
+  if (item.capability === 'bilibili.discussion') {
+    return await executeBilibiliDiscussionUserSelectedTabExtensionWork(item);
+  }
   if (item.capability === 'bilibili.dynamic' || item.capability === 'bilibili.collection_series.overview' ||
     item.capability === 'bilibili.collection_series.detail' || item.capability === 'bilibili.danmaku') {
     return await executeBilibiliPassiveExtensionWork(item, lifecycle);
@@ -183,6 +187,25 @@ function interruptedResult(active: ActiveExtensionWork): ExtensionWorkResult {
       browserBindingId: active.item.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.account_inventory',
+      executionTarget: 'user_selected_tab',
+      state: 'stopped',
+      errorCode: 'user_selected_tab_worker_interrupted',
+      terminalReason: 'user_selected_tab_worker_interrupted',
+      completedAt: new Date().toISOString(),
+      navigation: { attempted: false, attemptCount: 0 },
+      userSelectedTabDisposition: 'selection_unavailable',
+      observation: null
+    };
+  }
+  if (active.item.capability === 'bilibili.discussion') {
+    return {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: active.item.workId,
+      operationId: active.item.operationId,
+      browserBindingId: active.item.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.discussion',
       executionTarget: 'user_selected_tab',
       state: 'stopped',
       errorCode: 'user_selected_tab_worker_interrupted',

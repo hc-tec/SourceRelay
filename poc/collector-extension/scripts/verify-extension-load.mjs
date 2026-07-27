@@ -55,12 +55,15 @@ try {
   const controlText = await controlPage.locator('body').innerText();
   assert.match(controlText, /日常浏览器 Direct Work/, 'control page must distinguish direct work from research Strategy cards');
   assert.match(controlText, /研究 \/ 隔离 Strategy 库/, 'control page must label non-direct Strategy cards explicitly');
-  for (const capability of [
+  const directWorkCapabilities = [
     'bilibili.video_detail',
     'bilibili.native_search',
+    'bilibili.native_search_batch',
     'bilibili.account_profile',
-    'bilibili.account_inventory'
-  ]) {
+    'bilibili.account_inventory',
+    'bilibili.discussion'
+  ];
+  for (const capability of directWorkCapabilities) {
     assert.match(controlText, new RegExp(capability.replace('.', '\\.')),
       `control page must expose local compiled direct work ${capability}`);
   }
@@ -101,7 +104,7 @@ try {
     runtimeBootstrapPublished: true,
     nativeBridgeStartsUnconfigured: true,
     controlSurfaceLoaded: true,
-    directWorkKindsExposed: 4,
+    directWorkKindsExposed: directWorkCapabilities.length,
     controlSurfaceRevision: runtimeBuild.controlSurfaceRevision,
     buildFingerprint: runtime.runtimeBootstrap.buildFingerprint
   }, null, 2));

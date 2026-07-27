@@ -74,7 +74,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                   'bilibili.video_detail', 'bilibili.native_search', 'bilibili.native_search_batch',
                   'bilibili.account_profile', 'bilibili.account_inventory',
                   'bilibili.dynamic', 'bilibili.collection_series.overview',
-                  'bilibili.collection_series.detail', 'bilibili.danmaku'
+                  'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion'
                 ]
               }
             },
@@ -176,6 +176,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             { $ref: '#/components/schemas/UserBrowserNativeSearchBatchCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserAccountProfileCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserAccountInventoryCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserVideoDiscussionCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserDynamicCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserCollectionSeriesOverviewCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserCollectionSeriesDetailCollectRequest' },
@@ -266,6 +267,23 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             }
           }
         },
+        UserBrowserVideoDiscussionCollectRequest: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          description: 'Requires a short-lived matching page/document selection made in the extension popup after the user manually makes comments visible. This API cannot name a tab, document, selector, script, or page action.',
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            browserBindingId: { type: 'string', format: 'uuid' },
+            platform: { type: 'string', const: 'bilibili' },
+            capability: { type: 'string', const: 'bilibili.discussion' },
+            executionTarget: { type: 'string', const: 'user_selected_tab' },
+            input: {
+              type: 'object', additionalProperties: false,
+              required: ['canonicalVideoUrl'],
+              properties: { canonicalVideoUrl: { type: 'string', format: 'uri' } }
+            }
+          }
+        },
         UserBrowserDynamicCollectRequest: profileCollectRequest('bilibili.dynamic'),
         UserBrowserCollectionSeriesOverviewCollectRequest: profileCollectRequest('bilibili.collection_series.overview'),
         UserBrowserCollectionSeriesDetailCollectRequest: {
@@ -329,7 +347,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'bilibili.video_detail', 'bilibili.native_search',
                 'bilibili.account_profile', 'bilibili.account_inventory',
                 'bilibili.dynamic', 'bilibili.collection_series.overview',
-                'bilibili.collection_series.detail', 'bilibili.danmaku'
+                'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion'
               ]
             },
             executionTarget: { type: 'string', enum: ['collector_work_tab', 'user_selected_tab'] },
@@ -353,7 +371,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'bilibili.video_detail', 'bilibili.native_search',
                 'bilibili.account_profile', 'bilibili.account_inventory',
                 'bilibili.dynamic', 'bilibili.collection_series.overview',
-                'bilibili.collection_series.detail', 'bilibili.danmaku'
+                'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion'
               ]
             },
             artifact: { type: 'object' }

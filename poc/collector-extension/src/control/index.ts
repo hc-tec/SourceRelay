@@ -14,6 +14,10 @@ import {
   selectCurrentBilibiliAccountInventoryTab
 } from '../background/user-selected-tab';
 import {
+  getSelectedBilibiliVideoDiscussionTabSummary,
+  selectCurrentBilibiliVideoDiscussionTab
+} from '../background/user-selected-bilibili-video-discussion-tab';
+import {
   USER_BROWSER_DIRECT_WORK_CAPABILITIES,
   type UserBrowserDirectWorkCapability,
   type UserBrowserGatewayCapabilityDescriptor
@@ -32,8 +36,10 @@ const pairingForm = element<HTMLFormElement>('pair-gateway');
 const forgetGateway = element<HTMLButtonElement>('forget-gateway');
 const directCapabilityState = element<HTMLDivElement>('direct-capability-state');
 const directCapabilityList = element<HTMLDivElement>('direct-capability-list');
-const userSelectedTabState = element<HTMLDivElement>('user-selected-tab-state');
+const userSelectedInventoryTabState = element<HTMLDivElement>('user-selected-inventory-tab-state');
 const selectCurrentInventoryTab = element<HTMLButtonElement>('select-current-bilibili-account-inventory');
+const userSelectedDiscussionTabState = element<HTMLDivElement>('user-selected-discussion-tab-state');
+const selectCurrentDiscussionTab = element<HTMLButtonElement>('select-current-bilibili-video-discussion');
 
 async function render(): Promise<void> {
   const [connection, runtime] = await Promise.all([
@@ -45,24 +51,42 @@ async function render(): Promise<void> {
     : `v${chrome.runtime.getManifest().version} · worker marker unavailable`;
   runtimeStatus.className = `status ${connection.state === 'online' ? 'ready' : ''}`;
   renderGatewayConnection(connection);
-  await renderUserSelectedTab(connection);
+  await Promise.all([
+    renderUserSelectedInventoryTab(connection),
+    renderUserSelectedDiscussionTab(connection)
+  ]);
   await renderDirectCapabilities(connection);
   document.documentElement.dataset.collectorControlReady = 'true';
 }
 
-async function renderUserSelectedTab(connection: UserBrowserGatewayConnection): Promise<void> {
+async function renderUserSelectedInventoryTab(connection: UserBrowserGatewayConnection): Promise<void> {
   const selection = await getSelectedBilibiliAccountInventoryTabSummary();
   selectCurrentInventoryTab.disabled = connection.state !== 'online';
   if (connection.state !== 'online') {
-    userSelectedTabState.textContent = '需先完成本机 Gateway 配对并保持在线；选择不会缓存到 Gateway，也不会在离线后自行执行。';
+    userSelectedInventoryTabState.textContent = '需先完成本机 Gateway 配对并保持在线；选择不会缓存到 Gateway，也不会在离线后自行执行。';
     return;
   }
   if (selection.state === 'available' && selection.expiresAt) {
-    userSelectedTabState.textContent = `当前投稿页已显式选择，短时有效至 ${new Date(selection.expiresAt).toLocaleTimeString('zh-CN')}。` +
+    userSelectedInventoryTabState.textContent = `当前投稿页已显式选择，短时有效至 ${new Date(selection.expiresAt).toLocaleTimeString('zh-CN')}。` +
       ' 后续 user_selected_tab work 只能被动观察这个精确页面一次。';
     return;
   }
-  userSelectedTabState.textContent = '尚未选择页面。请先切到一个已加载完成的 B 站 UP 主投稿视频首页，再打开此扩展 popup 点击选择。';
+  userSelectedInventoryTabState.textContent = '尚未选择页面。请先切到一个已加载完成的 B 站 UP 主投稿视频首页，再打开此扩展 popup 点击选择。';
+}
+
+async function renderUserSelectedDiscussionTab(connection: UserBrowserGatewayConnection): Promise<void> {
+  const selection = await getSelectedBilibiliVideoDiscussionTabSummary();
+  selectCurrentDiscussionTab.disabled = connection.state !== 'online';
+  if (connection.state !== 'online') {
+    userSelectedDiscussionTabState.textContent = '需先完成本机 Gateway 配对并保持在线；选择不会缓存到 Gateway，也不会在离线后自行执行。';
+    return;
+  }
+  if (selection.state === 'available' && selection.expiresAt) {
+    userSelectedDiscussionTabState.textContent = `当前已加载评论的视频页已显式选择，短时有效至 ${new Date(selection.expiresAt).toLocaleTimeString('zh-CN')}。` +
+      ' 后续 work 只会在同一 document 内被动投影，不会滚动、排序、展开回复或刷新。';
+    return;
+  }
+  userSelectedDiscussionTabState.textContent = '尚未选择页面。请先由你自己打开 B 站视频并将评论区滚到可见区域，再打开此扩展 popup 点击选择。';
 }
 
 function renderGatewayConnection(connection: UserBrowserGatewayConnection): void {
@@ -155,6 +179,8 @@ function directCapabilityFallbackTitle(capability: UserBrowserDirectWorkCapabili
       return 'UP 主公开资料';
     case 'bilibili.account_inventory':
       return 'UP 主视频首屏';
+    case 'bilibili.discussion':
+      return '视频评论区（用户已选页面）';
   }
 }
 
@@ -221,6 +247,20 @@ selectCurrentInventoryTab.addEventListener('click', () => {
   }).finally(async () => {
     const connection = await getUserBrowserGatewayConnection();
     selectCurrentInventoryTab.disabled = connection.state !== 'online';
+  });
+});
+
+selectCurrentDiscussionTab.addEventListener('click', () => {
+  selectCurrentDiscussionTab.disabled = true;
+  controlError.hidden = true;
+  void selectCurrentBilibiliVideoDiscussionTab().then(async () => {
+    await render();
+  }).catch((error) => {
+    controlError.textContent = error instanceof Error ? error.message : 'user_selected_tab_selection_failed';
+    controlError.hidden = false;
+  }).finally(async () => {
+    const connection = await getUserBrowserGatewayConnection();
+    selectCurrentDiscussionTab.disabled = connection.state !== 'online';
   });
 });
 

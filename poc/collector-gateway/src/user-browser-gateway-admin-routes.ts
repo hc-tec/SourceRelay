@@ -20,7 +20,7 @@ import {
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const DIRECT_ARTIFACT = new RegExp(
-  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\\.overview|collection_series\\.detail|danmaku))/(${UUID})$`,
+  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\\.overview|collection_series\\.detail|danmaku|discussion))/(${UUID})$`,
   'i'
 );
 

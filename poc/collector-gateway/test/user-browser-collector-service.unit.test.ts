@@ -66,6 +66,7 @@ describe('user-owned browser collector service', () => {
       { $ref: '#/components/schemas/UserBrowserNativeSearchBatchCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserAccountProfileCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserAccountInventoryCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserVideoDiscussionCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserDynamicCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserCollectionSeriesOverviewCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserCollectionSeriesDetailCollectRequest' },
@@ -82,6 +83,9 @@ describe('user-owned browser collector service', () => {
     expect(Object.keys(document.paths)).not.toContain('/v1/profiles');
     const schemaText = JSON.stringify(document.components.schemas);
     expect(schemaText).not.toContain('"profileId"');
+    expect(schemaText).not.toContain('"tabId"');
+    expect(schemaText).not.toContain('"windowId"');
+    expect(schemaText).not.toContain('"documentId"');
     expect(schemaText).not.toContain('"arbitraryUrl"');
     expect(schemaText).not.toContain('"selector"');
     expect(schemaText).not.toContain('"script"');
@@ -153,6 +157,50 @@ describe('user-owned browser collector service', () => {
     });
     expect(document.components.schemas.Operation.properties.executionTarget).toMatchObject({
       enum: ['collector_work_tab', 'user_selected_tab']
+    });
+  });
+
+  test('admits comments only as a canonical video bound to a popup-selected existing document', () => {
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.discussion',
+      executionTarget: 'user_selected_tab',
+      input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+    })).toEqual({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.discussion',
+      executionTarget: 'user_selected_tab',
+      input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+    });
+    expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.discussion',
+      executionTarget: 'collector_work_tab',
+      input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+    })).toThrow('user_browser_collector_service_request_invalid');
+    expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.discussion',
+      executionTarget: 'user_selected_tab',
+      input: {
+        canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa',
+        tabId: 7
+      }
+    })).toThrow('user_browser_collector_service_request_invalid');
+
+    const document = userBrowserCollectorServiceOpenApiDocument('http://127.0.0.1:43127') as Record<string, any>;
+    expect(document.components.schemas.UserBrowserVideoDiscussionCollectRequest.properties).toMatchObject({
+      capability: { const: 'bilibili.discussion' },
+      executionTarget: { const: 'user_selected_tab' },
+      input: { required: ['canonicalVideoUrl'] }
     });
   });
 

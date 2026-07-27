@@ -56,6 +56,7 @@ export type BilibiliVideoDiscussionUserSelectedTabTerminalReason =
   | 'user_selected_tab_document_changed'
   | 'user_selected_tab_target_mismatch'
   | 'user_selected_tab_worker_interrupted'
+  | 'login_required'
   | 'verification_required'
   | 'rate_limited'
   | 'source_unavailable'
@@ -217,7 +218,7 @@ function isTerminalReason(value: unknown): value is BilibiliVideoDiscussionUserS
   return value === 'discussion_ready' || value === 'discussion_empty' || value === 'discussion_partial' ||
     value === 'user_selected_tab_required' || value === 'user_selected_tab_closed' ||
     value === 'user_selected_tab_document_changed' || value === 'user_selected_tab_target_mismatch' ||
-    value === 'user_selected_tab_worker_interrupted' || value === 'verification_required' ||
+    value === 'user_selected_tab_worker_interrupted' || value === 'login_required' || value === 'verification_required' ||
     value === 'rate_limited' || value === 'source_unavailable' || value === 'dom_projection_failed' ||
     value === 'run_deadline_exceeded';
 }

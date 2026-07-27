@@ -5,6 +5,8 @@ import {
   isExtensionWorkResultForItem,
   isBilibiliNativeSearchBatchWorkItem,
   isBilibiliNativeSearchBatchWorkResult,
+  isBilibiliVideoDiscussionUserSelectedTabWorkItem,
+  isBilibiliVideoDiscussionUserSelectedTabWorkResult,
   isExtensionWorkResult,
   isBilibiliPassiveExtensionWorkItem,
   isBilibiliPassiveExtensionWorkResult,
@@ -19,6 +21,7 @@ import { recordBilibiliAccountInventoryExtensionWork } from './extension-work-bi
 import { recordBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
 import { recordBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
 import { recordBilibiliNativeSearchBatchExtensionWork } from './extension-work-bilibili-native-search-batch';
+import { recordBilibiliDiscussionUserSelectedTabExtensionWork } from './extension-work-bilibili-discussion-user-selected-tab';
 import { recordBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
 import { recordBilibiliPassiveExtensionWork } from './extension-work-bilibili-passive';
 import type { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
@@ -268,6 +271,28 @@ export async function enqueueBilibiliAccountInventoryUserSelectedTabWork(
   });
 }
 
+/**
+ * Queue a fixed zero-navigation comments projection only after the extension
+ * popup has locally selected the matching already-visible discussion document.
+ * The Gateway never receives, stores, or selects browser tab/document IDs.
+ */
+export async function enqueueBilibiliDiscussionUserSelectedTabWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  canonicalVideoUrl: string
+) {
+  await reconcileExpiredExtensionWork(context);
+  const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
+  if (binding.state !== 'online') throw new Error('browser_binding_offline');
+  const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
+  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
+  if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
+  return await context.workQueue.enqueueBilibiliDiscussionUserSelectedTab({
+    browserBindingId: binding.browserBindingId,
+    canonicalVideoUrl
+  });
+}
+
 /** Shared by the Console and the scoped upper-application service route. */
 export async function enqueueBilibiliDynamicWork(
   context: ExtensionWorkRouteContext,
@@ -398,6 +423,14 @@ async function handleExtensionWorkResult(
         item,
         result,
         artifacts: context.accountVideoInventoryArtifacts
+      });
+    } else if (isBilibiliVideoDiscussionUserSelectedTabWorkItem(item) &&
+      isBilibiliVideoDiscussionUserSelectedTabWorkResult(result)
+    ) {
+      artifact = await recordBilibiliDiscussionUserSelectedTabExtensionWork({
+        item,
+        result,
+        artifacts: context.passiveDirectArtifacts
       });
     } else if (isBilibiliPassiveExtensionWorkItem(item) && isBilibiliPassiveExtensionWorkResult(result)) {
       artifact = await recordBilibiliPassiveExtensionWork({

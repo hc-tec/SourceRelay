@@ -12,6 +12,7 @@ import {
   enqueueBilibiliCollectionSeriesDetailWork,
   enqueueBilibiliCollectionSeriesOverviewWork,
   enqueueBilibiliDanmakuWork,
+  enqueueBilibiliDiscussionUserSelectedTabWork,
   enqueueBilibiliDynamicWork,
   enqueueBilibiliNativeSearchBatchWork,
   enqueueBilibiliNativeSearchWork,
@@ -121,31 +122,37 @@ export async function handleUserBrowserCollectorServiceRoute(
                   collection.browserBindingId,
                   collection.input.canonicalProfileUrl
                 )
-              : collection.capability === 'bilibili.dynamic'
-                ? await enqueueBilibiliDynamicWork(
+              : collection.capability === 'bilibili.discussion'
+                  ? await enqueueBilibiliDiscussionUserSelectedTabWork(
+                    context,
+                    collection.browserBindingId,
+                    collection.input.canonicalVideoUrl
+                  )
+                  : collection.capability === 'bilibili.dynamic'
+                    ? await enqueueBilibiliDynamicWork(
                   context,
                   collection.browserBindingId,
                   collection.input.canonicalProfileUrl
                 )
-                : collection.capability === 'bilibili.collection_series.overview'
-                  ? await enqueueBilibiliCollectionSeriesOverviewWork(
-                    context,
-                    collection.browserBindingId,
-                    collection.input.canonicalProfileUrl
-                  )
-                  : collection.capability === 'bilibili.collection_series.detail'
-                    ? await enqueueBilibiliCollectionSeriesDetailWork(
-                      context,
-                      collection.browserBindingId,
-                      collection.input.canonicalProfileUrl,
-                      collection.input.stableSeriesId,
-                      collection.input.listType
-                    )
-                    : await enqueueBilibiliDanmakuWork(
-                      context,
-                      collection.browserBindingId,
-                      collection.input.canonicalVideoUrl
-                    );
+                    : collection.capability === 'bilibili.collection_series.overview'
+                      ? await enqueueBilibiliCollectionSeriesOverviewWork(
+                        context,
+                        collection.browserBindingId,
+                        collection.input.canonicalProfileUrl
+                      )
+                      : collection.capability === 'bilibili.collection_series.detail'
+                        ? await enqueueBilibiliCollectionSeriesDetailWork(
+                          context,
+                          collection.browserBindingId,
+                          collection.input.canonicalProfileUrl,
+                          collection.input.stableSeriesId,
+                          collection.input.listType
+                        )
+                        : await enqueueBilibiliDanmakuWork(
+                          context,
+                          collection.browserBindingId,
+                          collection.input.canonicalVideoUrl
+                        );
       operationId = operation.operationId;
       await audit(context, access.principal, 'collect', collection.capability, operationId, 'queued', null);
       sendJson(response, 201, {
@@ -192,6 +199,7 @@ async function audit(
     | 'bilibili.native_search_batch'
     | 'bilibili.account_profile'
     | 'bilibili.account_inventory'
+    | 'bilibili.discussion'
     | 'bilibili.dynamic'
     | 'bilibili.collection_series.overview'
     | 'bilibili.collection_series.detail'

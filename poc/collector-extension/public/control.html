@@ -48,12 +48,23 @@
         <div class="section-heading">
           <div>
             <h2>用户已选页面</h2>
-            <p>在当前 B 站 UP 主投稿视频首页点击此按钮，建立一次短时、单次使用的被动观察目标。不会导航、滚动、点击或接管该网页。</p>
+            <p>选择只建立短时、单次使用的被动 document lease。Gateway 不会得到 tab、window 或 document ID，也不能导航、滚动、点击或接管该网页。</p>
           </div>
         </div>
-        <div id="user-selected-tab-state" class="empty-state">读取当前页面选择状态中…</div>
-        <div class="pairing-row">
-          <button id="select-current-bilibili-account-inventory" type="button">选择当前 B 站投稿页面</button>
+        <div class="selection-card">
+          <p class="selection-title">UP 主投稿页面</p>
+          <p id="user-selected-inventory-tab-state" class="empty-state">读取当前页面选择状态中…</p>
+          <div class="pairing-row">
+            <button id="select-current-bilibili-account-inventory" type="button">选择当前 B 站投稿页面</button>
+          </div>
+        </div>
+        <div class="selection-card">
+          <p class="selection-title">已加载评论的 B 站视频页</p>
+          <p class="selection-hint">先由你自己把评论区滚到可见区域；后续 work 不会滚动、排序、展开回复或刷新。</p>
+          <p id="user-selected-discussion-tab-state" class="empty-state">读取当前视频评论页选择状态中…</p>
+          <div class="pairing-row">
+            <button id="select-current-bilibili-video-discussion" type="button">选择当前已加载评论的 B 站视频页</button>
+          </div>
         </div>
       </section>
 

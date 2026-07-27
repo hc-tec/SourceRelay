@@ -27,5 +27,5 @@ export async function recordBilibiliPassiveExtensionWork(input: {
 
 export function isPassiveDirectCapability(value: string): value is PassiveDirectCapability {
   return value === 'bilibili.dynamic' || value === 'bilibili.collection_series.overview' ||
-    value === 'bilibili.collection_series.detail' || value === 'bilibili.danmaku';
+    value === 'bilibili.collection_series.detail' || value === 'bilibili.danmaku' || value === 'bilibili.discussion';
 }

@@ -19,7 +19,8 @@ export const USER_BROWSER_DIRECT_WORK_CAPABILITIES = [
   'bilibili.native_search',
   'bilibili.native_search_batch',
   'bilibili.account_profile',
-  'bilibili.account_inventory'
+  'bilibili.account_inventory',
+  'bilibili.discussion'
 ] as const;
 
 export type UserBrowserDirectWorkCapability =

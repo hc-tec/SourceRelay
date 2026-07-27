@@ -40,6 +40,7 @@ import { safeErrorCode, sendJson } from './gateway-http';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker } from './pairing';
 import { ExtensionWorkQueue } from './extension-work-queue';
+import { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-native-search-batch-artifacts';
 import { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
 import { BrowserProfileRegistry } from './profiles';
 
@@ -70,6 +71,7 @@ const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(confi
 const discussionArtifacts = await BilibiliVideoDiscussionArtifactStore.create(config.stateDirectory);
 const transcriptArtifacts = await BilibiliTranscriptArtifactStore.create(config.stateDirectory);
 const danmakuArtifacts = await BilibiliDanmakuArtifactStore.create(config.stateDirectory);
+const nativeSearchBatchDirectArtifacts = await ExtensionWorkNativeSearchBatchArtifactStore.create(config.stateDirectory);
 const passiveDirectArtifacts = await ExtensionWorkPassiveArtifactStore.create(config.stateDirectory);
 const dynamicRunner = new BilibiliDynamicHostRunner({
   accountSafety,
@@ -184,6 +186,7 @@ const server = createServer(async (request, response) => {
       accountVideoPaginationArtifacts,
       accountVideoPaginationRunner,
       accountVideoInventoryArtifacts,
+      nativeSearchBatchDirectArtifacts,
       passiveDirectArtifacts,
       accountVideoInventoryRunner,
       dynamicArtifacts,

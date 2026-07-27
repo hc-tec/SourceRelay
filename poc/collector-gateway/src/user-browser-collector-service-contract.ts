@@ -95,6 +95,18 @@ export interface UserBrowserDanmakuCollectorServiceRequest extends UserBrowserCo
   input: { canonicalVideoUrl: string };
 }
 
+/**
+ * A zero-navigation comments projection. The user has already opened the
+ * video and manually made comments visible before the extension popup creates
+ * its short-lived, one-time tab/document lease. The upper application can name
+ * only the canonical public BV URL.
+ */
+export interface UserBrowserVideoDiscussionCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
+  capability: 'bilibili.discussion';
+  executionTarget: 'user_selected_tab';
+  input: { canonicalVideoUrl: string };
+}
+
 export type UserBrowserCollectorServiceRequest =
   | UserBrowserVideoDetailCollectorServiceRequest
   | UserBrowserNativeSearchCollectorServiceRequest
@@ -104,7 +116,8 @@ export type UserBrowserCollectorServiceRequest =
   | UserBrowserDynamicCollectorServiceRequest
   | UserBrowserCollectionSeriesOverviewCollectorServiceRequest
   | UserBrowserCollectionSeriesDetailCollectorServiceRequest
-  | UserBrowserDanmakuCollectorServiceRequest;
+  | UserBrowserDanmakuCollectorServiceRequest
+  | UserBrowserVideoDiscussionCollectorServiceRequest;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -264,6 +277,22 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
       platform: 'bilibili',
       capability: 'bilibili.danmaku',
       executionTarget: 'collector_work_tab',
+      input: { canonicalVideoUrl }
+    };
+  }
+  if (candidate.capability === 'bilibili.discussion') {
+    if (executionTarget !== 'user_selected_tab') throw new Error('user_browser_collector_service_request_invalid');
+    if (Object.keys(input).length !== 1 || typeof input.canonicalVideoUrl !== 'string') {
+      throw new Error('user_browser_collector_service_request_invalid');
+    }
+    const canonicalVideoUrl = canonicalBilibiliPassiveVideoWorkUrl(input.canonicalVideoUrl);
+    if (!canonicalVideoUrl) throw new Error('user_browser_collector_service_request_invalid');
+    return {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      browserBindingId: candidate.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.discussion',
+      executionTarget: 'user_selected_tab',
       input: { canonicalVideoUrl }
     };
   }

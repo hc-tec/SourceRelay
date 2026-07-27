@@ -138,8 +138,16 @@ async function observeNativeSearch(
   if (outcome.kind === 'ready' || outcome.kind === 'empty') {
     return { kind: outcome.kind, observation: observation! };
   }
+  if (outcome.kind === 'stopped') {
+    return {
+      kind: 'stopped',
+      observation,
+      errorCode: outcome.errorCode,
+      terminalReason: outcome.terminalReason
+    };
+  }
   return {
-    kind: outcome.kind,
+    kind: 'incomplete',
     observation,
     errorCode: outcome.errorCode,
     terminalReason: outcome.terminalReason

@@ -31,6 +31,13 @@ describe('user-owned browser Bilibili capability catalog', () => {
         browserHostFallback: 'forbidden'
       }),
       expect.objectContaining({
+        capability: 'bilibili.discussion',
+        dispatchState: 'direct_canary_pending',
+        inputMode: 'canonical_video_url_user_selected_tab',
+        captureMode: 'user_selected_tab_passive_dom_projection',
+        browserHostFallback: 'forbidden'
+      }),
+      expect.objectContaining({
         capability: 'bilibili.dynamic',
         dispatchState: 'direct_ready',
         captureMode: 'passive_dom_projection',
@@ -63,6 +70,7 @@ describe('user-owned browser Bilibili capability catalog', () => {
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.collection_series.overview')).toBe(true);
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.collection_series.detail')).toBe(true);
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.danmaku')).toBe(true);
+    expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.discussion')).toBe(false);
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.transcript')).toBe(false);
   });
 });
