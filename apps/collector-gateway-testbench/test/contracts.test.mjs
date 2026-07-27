@@ -24,6 +24,18 @@ test('maps a BVID-only detail test into the fixed direct-mode Gateway contract',
     executionTarget: 'collector_work_tab',
     input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
   });
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'account_inventory',
+    input: { accountId: '7481602', executionTarget: 'user_selected_tab' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.account_inventory',
+    executionTarget: 'user_selected_tab',
+    input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+  });
 });
 
 test('maps native search into the fixed first-page direct-mode Gateway contract', () => {
@@ -163,6 +175,11 @@ test('rejects arbitrary URL, extra request keys, invalid BVIDs, and control char
       browserBindingId: bindingId,
       kind: 'account_inventory',
       input: { accountId: '0' }
+    },
+    {
+      browserBindingId: bindingId,
+      kind: 'account_inventory',
+      input: { accountId: '7481602', executionTarget: 'user_selected_tab', tabId: 7 }
     }
   ]) {
     assert.throws(() => parseTestbenchSubmission(value), TestbenchInputError);

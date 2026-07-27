@@ -114,6 +114,48 @@ describe('user-owned browser collector service', () => {
     })).toThrow('user_browser_collector_service_request_invalid');
   });
 
+  test('admits user_selected_tab only for the fixed inventory identity and never lets the caller name browser controls', () => {
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_inventory',
+      executionTarget: 'user_selected_tab',
+      input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+    })).toEqual({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_inventory',
+      executionTarget: 'user_selected_tab',
+      input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+    });
+    expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_profile',
+      executionTarget: 'user_selected_tab',
+      input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+    })).toThrow('user_browser_collector_service_request_invalid');
+    expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_inventory',
+      executionTarget: 'user_selected_tab',
+      input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602', tabId: 7 }
+    })).toThrow('user_browser_collector_service_request_invalid');
+
+    const document = userBrowserCollectorServiceOpenApiDocument('http://127.0.0.1:43127') as Record<string, any>;
+    expect(document.components.schemas.UserBrowserAccountInventoryCollectRequest.properties.executionTarget).toMatchObject({
+      enum: ['collector_work_tab', 'user_selected_tab']
+    });
+    expect(document.components.schemas.Operation.properties.executionTarget).toMatchObject({
+      enum: ['collector_work_tab', 'user_selected_tab']
+    });
+  });
+
   test('admits only fixed public identities for passive dynamic, collection and danmaku canaries', () => {
     expect(userBrowserCollectorServiceRequestInput({
       schemaVersion: 2,

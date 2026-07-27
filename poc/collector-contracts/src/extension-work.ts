@@ -57,18 +57,30 @@ export type ExtensionWorkCapability =
 export type ExtensionWorkExecutionTarget = 'collector_work_tab' | 'user_selected_tab';
 export type ExtensionWorkState = 'queued' | 'claimed' | 'completed' | 'partial' | 'stopped' | 'failed';
 
-interface ExtensionWorkEnvelope {
+interface ExtensionWorkEnvelopeBase {
   schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
   protocolVersion: typeof EXTENSION_WORK_PROTOCOL_VERSION;
   workId: string;
   operationId: string;
   browserBindingId: string;
   platform: 'bilibili';
-  executionTarget: 'collector_work_tab';
   issuedAt: string;
   expiresAt: string;
   /** P-256 / SHA-256 signature over `extensionWorkSigningPayload(item)`. */
   gatewaySignature: string;
+}
+
+interface CollectorWorkTabExtensionWorkEnvelope extends ExtensionWorkEnvelopeBase {
+  executionTarget: 'collector_work_tab';
+}
+
+/**
+ * A user-selected tab is never named by an upper application. The extension
+ * establishes the short-lived tab/document lease from an explicit popup
+ * action, then consumes it exactly once when it receives this signed work.
+ */
+interface UserSelectedTabExtensionWorkEnvelope extends ExtensionWorkEnvelopeBase {
+  executionTarget: 'user_selected_tab';
 }
 
 export interface BilibiliVideoDetailWorkInput {
@@ -87,7 +99,7 @@ export interface BilibiliVideoDetailWorkBudget {
   maximumPayloadBytes: 98_304;
 }
 
-export interface BilibiliVideoDetailWorkItem extends ExtensionWorkEnvelope {
+export interface BilibiliVideoDetailWorkItem extends CollectorWorkTabExtensionWorkEnvelope {
   capability: 'bilibili.video_detail';
   input: BilibiliVideoDetailWorkInput;
   budget: BilibiliVideoDetailWorkBudget;
@@ -113,7 +125,7 @@ export interface BilibiliNativeSearchWorkBudget {
   maximumPayloadBytes: 98_304;
 }
 
-export interface BilibiliNativeSearchWorkItem extends ExtensionWorkEnvelope {
+export interface BilibiliNativeSearchWorkItem extends CollectorWorkTabExtensionWorkEnvelope {
   capability: 'bilibili.native_search';
   input: BilibiliNativeSearchWorkInput;
   budget: BilibiliNativeSearchWorkBudget;
@@ -136,7 +148,7 @@ export interface BilibiliAccountProfileWorkBudget {
   maximumPayloadBytes: 98_304;
 }
 
-export interface BilibiliAccountProfileWorkItem extends ExtensionWorkEnvelope {
+export interface BilibiliAccountProfileWorkItem extends CollectorWorkTabExtensionWorkEnvelope {
   capability: 'bilibili.account_profile';
   input: BilibiliAccountProfileWorkInput;
   budget: BilibiliAccountProfileWorkBudget;
@@ -160,10 +172,30 @@ export interface BilibiliAccountInventoryWorkBudget {
   maximumPayloadBytes: 98_304;
 }
 
-export interface BilibiliAccountInventoryWorkItem extends ExtensionWorkEnvelope {
+export interface BilibiliAccountInventoryWorkItem extends CollectorWorkTabExtensionWorkEnvelope {
   capability: 'bilibili.account_inventory';
   input: BilibiliAccountInventoryWorkInput;
   budget: BilibiliAccountInventoryWorkBudget;
+}
+
+/**
+ * The first user-selected-tab vertical slice observes the explicitly chosen
+ * inventory document only. It cannot navigate, scroll, click, sort, filter,
+ * or read a response body. The caller still supplies only the canonical
+ * account identity; it never receives or chooses a tab, document ID, URL
+ * variant, selector, or script.
+ */
+export interface BilibiliAccountInventoryUserSelectedTabWorkBudget {
+  maximumPlatformNavigations: 0;
+  maximumSemanticActions: 0;
+  maximumResponseObservations: 0;
+  maximumPayloadBytes: 98_304;
+}
+
+export interface BilibiliAccountInventoryUserSelectedTabWorkItem extends UserSelectedTabExtensionWorkEnvelope {
+  capability: 'bilibili.account_inventory';
+  input: BilibiliAccountInventoryWorkInput;
+  budget: BilibiliAccountInventoryUserSelectedTabWorkBudget;
 }
 
 export type ExtensionWorkItem =
@@ -172,6 +204,7 @@ export type ExtensionWorkItem =
   | BilibiliNativeSearchBatchWorkItem
   | BilibiliAccountProfileWorkItem
   | BilibiliAccountInventoryWorkItem
+  | BilibiliAccountInventoryUserSelectedTabWorkItem
   | BilibiliPassiveExtensionWorkItem;
 export type UnsignedExtensionWorkItem =
   | Omit<BilibiliVideoDetailWorkItem, 'gatewaySignature'>
@@ -179,6 +212,7 @@ export type UnsignedExtensionWorkItem =
   | UnsignedBilibiliNativeSearchBatchWorkItem
   | Omit<BilibiliAccountProfileWorkItem, 'gatewaySignature'>
   | Omit<BilibiliAccountInventoryWorkItem, 'gatewaySignature'>
+  | Omit<BilibiliAccountInventoryUserSelectedTabWorkItem, 'gatewaySignature'>
   | UnsignedBilibiliPassiveExtensionWorkItem;
 
 export type SharedExtensionWorkTerminalReason =
@@ -213,12 +247,28 @@ export type BilibiliAccountInventoryWorkTerminalReason =
   | 'inventory_partial'
   | SharedExtensionWorkTerminalReason;
 
+export type BilibiliAccountInventoryUserSelectedTabWorkTerminalReason =
+  | 'inventory_ready'
+  | 'inventory_partial'
+  | 'user_selected_tab_required'
+  | 'user_selected_tab_closed'
+  | 'user_selected_tab_document_changed'
+  | 'user_selected_tab_target_mismatch'
+  | 'user_selected_tab_page_not_supported'
+  | 'user_selected_tab_worker_interrupted'
+  | 'verification_required'
+  | 'rate_limited'
+  | 'source_unavailable'
+  | 'dom_projection_failed'
+  | 'run_deadline_exceeded';
+
 export type ExtensionWorkTerminalReason =
   | BilibiliVideoDetailWorkTerminalReason
   | BilibiliNativeSearchWorkTerminalReason
   | BilibiliNativeSearchBatchWorkTerminalReason
   | BilibiliAccountProfileWorkTerminalReason
   | BilibiliAccountInventoryWorkTerminalReason
+  | BilibiliAccountInventoryUserSelectedTabWorkTerminalReason
   | BilibiliPassiveExtensionWorkTerminalReason;
 
 export interface BilibiliVideoDetailDomObservation {
@@ -392,6 +442,35 @@ export interface BilibiliAccountInventoryWorkResult {
   observation: BilibiliAccountInventoryDomObservation | null;
 }
 
+/** Opaque disposition only; tab, window and document identifiers never leave the extension. */
+export type UserSelectedTabDisposition =
+  | 'observed'
+  | 'selection_unavailable'
+  | 'closed_or_missing'
+  | 'document_changed'
+  | 'target_mismatch';
+
+export interface BilibiliAccountInventoryUserSelectedTabWorkResult {
+  schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
+  protocolVersion: typeof EXTENSION_WORK_PROTOCOL_VERSION;
+  workId: string;
+  operationId: string;
+  browserBindingId: string;
+  platform: 'bilibili';
+  capability: 'bilibili.account_inventory';
+  executionTarget: 'user_selected_tab';
+  state: Exclude<ExtensionWorkState, 'queued' | 'claimed'>;
+  errorCode: string | null;
+  terminalReason: BilibiliAccountInventoryUserSelectedTabWorkTerminalReason;
+  completedAt: string;
+  navigation: {
+    attempted: false;
+    attemptCount: 0;
+  };
+  userSelectedTabDisposition: UserSelectedTabDisposition;
+  observation: BilibiliAccountInventoryDomObservation | null;
+}
+
 export interface ExtensionWorkNavigation {
   attempted: boolean;
   attemptCount: 0 | 1;
@@ -411,6 +490,7 @@ export type ExtensionWorkResult =
   | BilibiliNativeSearchBatchWorkResult
   | BilibiliAccountProfileWorkResult
   | BilibiliAccountInventoryWorkResult
+  | BilibiliAccountInventoryUserSelectedTabWorkResult
   | BilibiliPassiveExtensionWorkResult;
 
 export function canonicalBilibiliVideoWorkUrl(value: string): string | null {
@@ -464,31 +544,39 @@ export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem 
     value.schemaVersion !== EXTENSION_WORK_SCHEMA_VERSION ||
     value.protocolVersion !== EXTENSION_WORK_PROTOCOL_VERSION ||
     !isUuid(value.workId) || !isUuid(value.operationId) || !isUuid(value.browserBindingId) ||
-    value.platform !== 'bilibili' || value.executionTarget !== 'collector_work_tab' ||
+    value.platform !== 'bilibili' ||
+    (value.executionTarget !== 'collector_work_tab' && value.executionTarget !== 'user_selected_tab') ||
     !isTimestamp(value.issuedAt) || !isTimestamp(value.expiresAt) ||
     Date.parse(value.expiresAt) <= Date.parse(value.issuedAt) ||
     !BASE64URL_PATTERN.test(stringValue(value.gatewaySignature))
   ) return false;
   if (value.capability === 'bilibili.video_detail') {
-    return isBilibiliVideoDetailWorkInput(value.input) && isBilibiliVideoDetailWorkBudget(value.budget);
+    return value.executionTarget === 'collector_work_tab' &&
+      isBilibiliVideoDetailWorkInput(value.input) && isBilibiliVideoDetailWorkBudget(value.budget);
   }
   if (value.capability === 'bilibili.native_search') {
-    return isBilibiliNativeSearchWorkInput(value.input) && isBilibiliNativeSearchWorkBudget(value.budget);
+    return value.executionTarget === 'collector_work_tab' &&
+      isBilibiliNativeSearchWorkInput(value.input) && isBilibiliNativeSearchWorkBudget(value.budget);
   }
   if (value.capability === 'bilibili.native_search_batch') {
-    return isBilibiliNativeSearchBatchWorkItem(value);
+    return value.executionTarget === 'collector_work_tab' && isBilibiliNativeSearchBatchWorkItem(value);
   }
   if (value.capability === 'bilibili.account_profile') {
-    return isBilibiliAccountProfileWorkInput(value.input) && isBilibiliAccountProfileWorkBudget(value.budget);
+    return value.executionTarget === 'collector_work_tab' &&
+      isBilibiliAccountProfileWorkInput(value.input) && isBilibiliAccountProfileWorkBudget(value.budget);
   }
   if (value.capability === 'bilibili.account_inventory') {
-    return isBilibiliAccountInventoryWorkInput(value.input) && isBilibiliAccountInventoryWorkBudget(value.budget);
+    return isBilibiliAccountInventoryWorkInput(value.input) &&
+      (value.executionTarget === 'collector_work_tab'
+        ? isBilibiliAccountInventoryWorkBudget(value.budget)
+        : isBilibiliAccountInventoryUserSelectedTabWorkBudget(value.budget));
   }
-  return isBilibiliPassiveExtensionWorkItem(value);
+  return value.executionTarget === 'collector_work_tab' && isBilibiliPassiveExtensionWorkItem(value);
 }
 
 export function isExtensionWorkResult(value: unknown): value is ExtensionWorkResult {
   if (isBilibiliNativeSearchBatchWorkResult(value)) return true;
+  if (isBilibiliAccountInventoryUserSelectedTabWorkResult(value)) return true;
   if (!isRecord(value) || !hasExactKeys(value, [
     'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
     'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation',
@@ -531,6 +619,7 @@ export function isExtensionWorkResultForItem(
   if (!isExtensionWorkResult(value) || value.capability !== item.capability ||
     value.workId !== item.workId || value.operationId !== item.operationId ||
     value.browserBindingId !== item.browserBindingId || Date.parse(value.completedAt) < Date.parse(item.issuedAt) ||
+    value.executionTarget !== item.executionTarget ||
     value.navigation.attemptCount !== (value.navigation.attempted ? 1 : 0)
   ) return false;
   if (item.capability === 'bilibili.video_detail' && value.capability === 'bilibili.video_detail') {
@@ -569,6 +658,19 @@ export function isExtensionWorkResultForItem(
       value.workTabDisposition === 'idle_reusable';
   }
   if (item.capability === 'bilibili.account_inventory' && value.capability === 'bilibili.account_inventory') {
+    if (item.executionTarget === 'user_selected_tab') {
+      if (!isBilibiliAccountInventoryUserSelectedTabWorkItem(item) ||
+        !isBilibiliAccountInventoryUserSelectedTabWorkResult(value)
+      ) return false;
+      if (value.observation && value.observation.stableAccountId !== item.input.stableAccountId) return false;
+      if (value.state !== 'completed') return true;
+      return value.errorCode === null && value.terminalReason === 'inventory_ready' &&
+        value.userSelectedTabDisposition === 'observed' && value.observation !== null &&
+        value.observation.videoListVisible && value.observation.cards.some(isResolvedAccountInventoryCard) &&
+        !value.observation.risk.verificationRequired && !value.observation.risk.rateLimited &&
+        !value.observation.risk.sourceUnavailable && value.navigation.attemptCount === 0;
+    }
+    if (value.executionTarget !== 'collector_work_tab') return false;
     if (value.observation && value.observation.stableAccountId !== item.input.stableAccountId) return false;
     if (value.state !== 'completed') return true;
     return value.errorCode === null && value.terminalReason === 'inventory_ready' && value.observation !== null &&
@@ -639,6 +741,35 @@ export function isBilibiliAccountInventoryDomObservation(value: unknown): value 
     typeof value.loginOverlayVisible === 'boolean' && isBilibiliWorkRisk(value.risk);
 }
 
+export function isBilibiliAccountInventoryUserSelectedTabWorkItem(
+  value: unknown
+): value is BilibiliAccountInventoryUserSelectedTabWorkItem {
+  return isExtensionWorkItem(value) && value.capability === 'bilibili.account_inventory' &&
+    value.executionTarget === 'user_selected_tab';
+}
+
+export function isBilibiliAccountInventoryUserSelectedTabWorkResult(
+  value: unknown
+): value is BilibiliAccountInventoryUserSelectedTabWorkResult {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
+    'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation',
+    'userSelectedTabDisposition', 'observation'
+  ]) ||
+    value.schemaVersion !== EXTENSION_WORK_SCHEMA_VERSION ||
+    value.protocolVersion !== EXTENSION_WORK_PROTOCOL_VERSION ||
+    !isUuid(value.workId) || !isUuid(value.operationId) || !isUuid(value.browserBindingId) ||
+    value.platform !== 'bilibili' || value.capability !== 'bilibili.account_inventory' ||
+    value.executionTarget !== 'user_selected_tab' || !isTerminalWorkState(value.state) ||
+    !isSafeNullableErrorCode(value.errorCode) || !isTimestamp(value.completedAt) ||
+    !isUserSelectedTabNavigation(value.navigation) ||
+    !isUserSelectedTabDisposition(value.userSelectedTabDisposition) ||
+    !isBilibiliAccountInventoryUserSelectedTabTerminalReason(value.terminalReason) ||
+    (value.observation !== null && !isBilibiliAccountInventoryDomObservation(value.observation))
+  ) return false;
+  return true;
+}
+
 function isBilibiliVideoDetailWorkInput(value: unknown): value is BilibiliVideoDetailWorkInput {
   if (!isRecord(value) || Object.keys(value).length !== 2 || typeof value.canonicalVideoUrl !== 'string' || !isBvid(value.bvid)) {
     return false;
@@ -697,6 +828,14 @@ function isBilibiliAccountProfileWorkBudget(value: unknown): value is BilibiliAc
 
 function isBilibiliAccountInventoryWorkBudget(value: unknown): value is BilibiliAccountInventoryWorkBudget {
   return isFixedDirectWorkBudget(value);
+}
+
+function isBilibiliAccountInventoryUserSelectedTabWorkBudget(
+  value: unknown
+): value is BilibiliAccountInventoryUserSelectedTabWorkBudget {
+  return isRecord(value) && Object.keys(value).length === 4 &&
+    value.maximumPlatformNavigations === 0 && value.maximumSemanticActions === 0 &&
+    value.maximumResponseObservations === 0 && value.maximumPayloadBytes === 98_304;
 }
 
 function isFixedDirectWorkBudget(value: unknown): boolean {
@@ -800,6 +939,17 @@ function isBilibiliAccountInventoryTerminalReason(value: unknown): value is Bili
   return value === 'inventory_ready' || value === 'inventory_partial' || isSharedTerminalReason(value);
 }
 
+function isBilibiliAccountInventoryUserSelectedTabTerminalReason(
+  value: unknown
+): value is BilibiliAccountInventoryUserSelectedTabWorkTerminalReason {
+  return value === 'inventory_ready' || value === 'inventory_partial' ||
+    value === 'user_selected_tab_required' || value === 'user_selected_tab_closed' ||
+    value === 'user_selected_tab_document_changed' || value === 'user_selected_tab_target_mismatch' ||
+    value === 'user_selected_tab_page_not_supported' || value === 'user_selected_tab_worker_interrupted' ||
+    value === 'verification_required' || value === 'rate_limited' || value === 'source_unavailable' ||
+    value === 'dom_projection_failed' || value === 'run_deadline_exceeded';
+}
+
 function isSharedTerminalReason(value: unknown): value is SharedExtensionWorkTerminalReason {
   return value === 'verification_required' || value === 'rate_limited' || value === 'source_unavailable' ||
     value === 'dom_projection_failed' || value === 'document_context_changed' ||
@@ -812,6 +962,17 @@ function isSharedTerminalReason(value: unknown): value is SharedExtensionWorkTer
 function isNavigation(value: unknown): value is ExtensionWorkNavigation {
   return isRecord(value) && Object.keys(value).length === 2 && typeof value.attempted === 'boolean' &&
     (value.attemptCount === 0 || value.attemptCount === 1);
+}
+
+function isUserSelectedTabNavigation(
+  value: unknown
+): value is BilibiliAccountInventoryUserSelectedTabWorkResult['navigation'] {
+  return isRecord(value) && Object.keys(value).length === 2 && value.attempted === false && value.attemptCount === 0;
+}
+
+function isUserSelectedTabDisposition(value: unknown): value is UserSelectedTabDisposition {
+  return value === 'observed' || value === 'selection_unavailable' || value === 'closed_or_missing' ||
+    value === 'document_changed' || value === 'target_mismatch';
 }
 
 function isWorkTabDisposition(value: unknown): value is ExtensionWorkTabDisposition {

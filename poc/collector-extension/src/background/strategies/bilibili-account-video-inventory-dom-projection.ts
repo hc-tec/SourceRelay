@@ -8,6 +8,8 @@ export interface BilibiliAccountVideoInventoryDomCard {
 export interface BilibiliAccountVideoInventoryDomSnapshot {
   stableAccountId: string | null;
   videoListVisible: boolean;
+  /** Internal readiness guard; never becomes caller-controlled page selection. */
+  activePage: number | null;
   cards: BilibiliAccountVideoInventoryDomCard[];
   loginOverlayVisible: boolean;
   risk: {
@@ -70,6 +72,16 @@ export async function captureBilibiliAccountVideoInventoryDom(
           ? location.pathname.match(/^\/(\d{1,20})\/upload\/video\/?$/)
           : null;
         const videoList = document.querySelector<HTMLElement>('.video-list');
+        const activePage = Array.from(document.querySelectorAll<HTMLElement>('button, [role="button"]'))
+          .map((element) => {
+            const text = clean(element.innerText, 8);
+            const page = text && /^\d{1,2}$/.test(text) ? Number.parseInt(text, 10) : null;
+            const className = typeof element.className === 'string' ? element.className : '';
+            const active = element.getAttribute('aria-current') === 'page' ||
+              /(?:^|\s)(?:vui_button--active|active|selected)(?:\s|$)/.test(className);
+            return page && page >= 1 && page <= 20 && active ? page : null;
+          })
+          .find((page): page is number => page !== null) ?? null;
         const cards = videoList
           ? Array.from(videoList.querySelectorAll<HTMLElement>('.bili-video-card__wrap')).filter(rendered).slice(0, 40)
             .map((card) => {
@@ -92,6 +104,7 @@ export async function captureBilibiliAccountVideoInventoryDom(
         return {
           stableAccountId: pathMatch?.[1] ?? null,
           videoListVisible: rendered(videoList),
+          activePage,
           cards,
           loginOverlayVisible,
           risk: {

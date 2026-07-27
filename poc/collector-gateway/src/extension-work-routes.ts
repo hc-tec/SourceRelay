@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliVideoWorkUrl,
+  isExtensionWorkResultForItem,
   isBilibiliNativeSearchBatchWorkItem,
   isBilibiliNativeSearchBatchWorkResult,
   isExtensionWorkResult,
@@ -245,6 +246,28 @@ export async function enqueueBilibiliAccountInventoryWork(
   });
 }
 
+/**
+ * Dispatch a zero-navigation observation only after an extension-popup user
+ * has locally selected a matching inventory document. The Gateway receives no
+ * tab ID or document ID and cannot choose or reopen a browser tab.
+ */
+export async function enqueueBilibiliAccountInventoryUserSelectedTabWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  canonicalProfileUrl: string
+) {
+  await reconcileExpiredExtensionWork(context);
+  const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
+  if (binding.state !== 'online') throw new Error('browser_binding_offline');
+  const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
+  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
+  if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
+  return await context.workQueue.enqueueBilibiliAccountInventoryUserSelectedTab({
+    browserBindingId: binding.browserBindingId,
+    canonicalProfileUrl
+  });
+}
+
 /** Shared by the Console and the scoped upper-application service route. */
 export async function enqueueBilibiliDynamicWork(
   context: ExtensionWorkRouteContext,
@@ -314,8 +337,10 @@ async function handleExtensionWorkNext(
       sendJson(response, 200, { schemaVersion: 1, workItem: null });
       return;
     }
-    await context.browserBindingSafety.begin(authorised.browserBindingId, 'bilibili', item.operationId);
-    await context.browserBindingSafety.recordNavigationIntent(authorised.browserBindingId, 'bilibili', item.operationId);
+    if (item.executionTarget === 'collector_work_tab') {
+      await context.browserBindingSafety.begin(authorised.browserBindingId, 'bilibili', item.operationId);
+      await context.browserBindingSafety.recordNavigationIntent(authorised.browserBindingId, 'bilibili', item.operationId);
+    }
     sendJson(response, 200, { schemaVersion: 1, workItem: item });
   } catch (error) {
     sendJson(response, extensionWorkStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
@@ -339,6 +364,10 @@ async function handleExtensionWorkResult(
     if (!isExtensionWorkResult(body.value)) throw new Error('extension_work_result_invalid');
     const result = body.value as ExtensionWorkResult;
     const item = context.workQueue.claimedItem(authorised.browserBindingId, result.workId);
+    // Validate the target-specific signed envelope before an artifact writer
+    // can persist any projection. In particular, a work-tab result can never
+    // be relabelled as a user-selected-tab observation (or vice versa).
+    if (!isExtensionWorkResultForItem(result, item)) throw new Error('extension_work_result_invalid');
     let artifact: ExtensionWorkArtifactReference;
     if (item.capability === 'bilibili.video_detail' && result.capability === 'bilibili.video_detail') {
       artifact = await recordBilibiliVideoDetailExtensionWork({
@@ -380,12 +409,14 @@ async function handleExtensionWorkResult(
       throw new Error('extension_work_result_capability_mismatch');
     }
     const operation = await context.workQueue.complete(authorised.browserBindingId, result, artifact);
-    await context.browserBindingSafety.finish(
-      authorised.browserBindingId,
-      'bilibili',
-      result.operationId,
-      result
-    );
+    if (item.executionTarget === 'collector_work_tab') {
+      await context.browserBindingSafety.finish(
+        authorised.browserBindingId,
+        'bilibili',
+        result.operationId,
+        result
+      );
+    }
     sendJson(response, 200, { schemaVersion: 1, operation });
   } catch (error) {
     sendJson(response, extensionWorkStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
@@ -427,6 +458,7 @@ async function authoriseExtensionRequest(
 export async function reconcileExpiredExtensionWork(context: ExtensionWorkRouteContext): Promise<void> {
   const expired = await context.workQueue.expire();
   for (const operation of expired) {
+    if (operation.executionTarget === 'user_selected_tab') continue;
     await context.browserBindingSafety.expire(operation.browserBindingId, 'bilibili', operation.operationId);
   }
 }

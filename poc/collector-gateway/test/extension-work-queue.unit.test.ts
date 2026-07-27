@@ -205,6 +205,58 @@ describe('extension work queue state machine', () => {
     }
   });
 
+  test('signs a user-selected inventory observation without accepting a tab ID or allocating a navigation budget', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-selected-tab-'));
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const queued = await queue.enqueueBilibiliAccountInventoryUserSelectedTab({
+        browserBindingId: bindingId,
+        canonicalProfileUrl: 'https://space.bilibili.com/7481602'
+      }, base);
+      expect(queued.executionTarget).toBe('user_selected_tab');
+      const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
+      expect(claimed).toMatchObject({
+        operationId: queued.operationId,
+        capability: 'bilibili.account_inventory',
+        executionTarget: 'user_selected_tab',
+        input: {
+          canonicalProfileUrl: 'https://space.bilibili.com/7481602',
+          canonicalInventoryUrl: 'https://space.bilibili.com/7481602/upload/video',
+          stableAccountId: '7481602'
+        },
+        budget: {
+          maximumPlatformNavigations: 0,
+          maximumSemanticActions: 0,
+          maximumResponseObservations: 0
+        }
+      });
+      if (!claimed || claimed.executionTarget !== 'user_selected_tab') throw new Error('test_selected_claim_missing');
+      await queue.complete(bindingId, {
+        schemaVersion: 1,
+        protocolVersion: 1,
+        workId: claimed.workId,
+        operationId: claimed.operationId,
+        browserBindingId: claimed.browserBindingId,
+        platform: 'bilibili',
+        capability: 'bilibili.account_inventory',
+        executionTarget: 'user_selected_tab',
+        state: 'stopped',
+        errorCode: 'user_selected_tab_required',
+        terminalReason: 'user_selected_tab_required',
+        completedAt: new Date(base.getTime() + 2).toISOString(),
+        navigation: { attempted: false, attemptCount: 0 },
+        userSelectedTabDisposition: 'selection_unavailable',
+        observation: null
+      }, null);
+      const persisted = await readFile(join(stateDirectory, 'extension-work-operations.json'), 'utf8');
+      expect(persisted).not.toContain('"tabId"');
+      expect(persisted).not.toContain('"documentId"');
+      expect(persisted).toContain('"user_selected_tab"');
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
   test('gives collection overview exactly one fixed response-observation budget', async () => {
     const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-collection-overview-'));
     try {

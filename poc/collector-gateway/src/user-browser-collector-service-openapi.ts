@@ -254,7 +254,11 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.account_inventory' },
-            executionTarget: { type: 'string', const: 'collector_work_tab' },
+            executionTarget: {
+              type: 'string',
+              enum: ['collector_work_tab', 'user_selected_tab'],
+              description: 'user_selected_tab requires a short-lived selection made from the extension popup; callers cannot provide a tab, URL variant, selector, or script.'
+            },
             input: {
               type: 'object', additionalProperties: false,
               required: ['canonicalProfileUrl'],
@@ -272,7 +276,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.collection_series.detail' },
-            executionTarget: { type: 'string', const: 'collector_work_tab' },
+            executionTarget: { type: 'string', enum: ['collector_work_tab', 'user_selected_tab'] },
             input: {
               type: 'object', additionalProperties: false,
               required: ['canonicalProfileUrl', 'stableSeriesId', 'listType'],
@@ -328,7 +332,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'bilibili.collection_series.detail', 'bilibili.danmaku'
               ]
             },
-            executionTarget: { type: 'string', const: 'collector_work_tab' },
+            executionTarget: { type: 'string', enum: ['collector_work_tab', 'user_selected_tab'] },
             state: { type: 'string', enum: ['queued', 'claimed', 'completed', 'partial', 'stopped', 'failed'] },
             queuedAt: { type: 'string', format: 'date-time' },
             claimedAt: { type: ['string', 'null'], format: 'date-time' },

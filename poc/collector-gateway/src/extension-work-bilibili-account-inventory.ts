@@ -28,12 +28,20 @@ export async function recordBilibiliAccountInventoryExtensionWork(input: {
       input.result.completedAt
     )
     : null;
-  const targetTabSelection = input.result.workTabAcquisition === 'created'
-    ? 'created_extension_work_tab' as const
-    : input.result.workTabAcquisition === 'reused'
-      ? 'reused_extension_work_tab' as const
+  const userSelected = input.item.executionTarget === 'user_selected_tab' &&
+    input.result.executionTarget === 'user_selected_tab';
+  const targetTabSelection = userSelected
+    ? 'user_selected_tab' as const
+    : input.result.executionTarget === 'collector_work_tab' && input.result.workTabAcquisition === 'created'
+      ? 'created_extension_work_tab' as const
+      : input.result.executionTarget === 'collector_work_tab' && input.result.workTabAcquisition === 'reused'
+        ? 'reused_extension_work_tab' as const
+        : 'not_acquired' as const;
+  const targetPage = userSelected
+    ? 'user_selected_tab_retained' as const
+    : input.result.executionTarget === 'collector_work_tab'
+      ? input.result.workTabDisposition
       : 'not_acquired' as const;
-  const targetPage = input.result.workTabDisposition;
   const artifact = await input.artifacts.record(createBilibiliAccountVideoInventoryRunRecord({
     runId: input.item.operationId,
     collectorVersion: COLLECTOR_EXTENSION_VERSION,
@@ -49,22 +57,34 @@ export async function recordBilibiliAccountInventoryExtensionWork(input: {
     errorCode: input.result.errorCode,
     page,
     visualEvidence: null,
-    actions: [{
-      actionId: 'open_canonical_account_inventory',
-      kind: 'navigation',
-      intent: 'Open the canonical public Bilibili account video inventory exactly once.',
-      attempted: input.result.navigation.attempted,
-      attemptCount: input.result.navigation.attemptCount,
-      outcome: actionOutcome(input.result),
-      errorCode: input.result.errorCode
-    }],
+    actions: userSelected
+      ? [{
+        actionId: 'observe_user_selected_account_inventory' as const,
+        kind: 'passive_observation' as const,
+        intent: 'Observe one explicitly user-selected Bilibili account inventory document without navigation or page interaction.' as const,
+        attempted: input.result.userSelectedTabDisposition === 'observed',
+        attemptCount: input.result.userSelectedTabDisposition === 'observed' ? 1 as const : 0 as const,
+        outcome: actionOutcome(input.result),
+        errorCode: input.result.errorCode
+      }]
+      : [{
+        actionId: 'open_canonical_account_inventory',
+        kind: 'navigation' as const,
+        intent: 'Open the canonical public Bilibili account video inventory exactly once.' as const,
+        attempted: input.result.navigation.attempted,
+        attemptCount: input.result.navigation.attemptCount,
+        outcome: actionOutcome(input.result),
+        errorCode: input.result.errorCode
+      }],
     terminalReason: inventoryTerminalReason(input.result.terminalReason),
     targetTabSelection,
     targetPage,
     safeguards: {
       environment: 'user_owned_browser_extension',
       browser: 'user_owned_chromium_tab',
-      acquisition: 'extension_owned_tab_navigation_plus_bounded_dom_projection',
+      acquisition: userSelected
+        ? 'user_selected_tab_passive_dom_projection'
+        : 'extension_owned_tab_navigation_plus_bounded_dom_projection',
       requestHeaders: 'not_read',
       requestBody: 'not_read',
       cookiesAndTokens: 'not_read',
@@ -91,6 +111,19 @@ function actionOutcome(
   result: Extract<ExtensionWorkResult, { capability: 'bilibili.account_inventory' }>
 ): 'completed' | 'prerequisite_unmet' | 'postcondition_unmet' | 'risk_stopped' | 'failed' {
   if (result.state === 'completed') return 'completed';
+  if (result.executionTarget === 'user_selected_tab') {
+    if (result.terminalReason === 'verification_required' || result.terminalReason === 'rate_limited') {
+      return 'risk_stopped';
+    }
+    if (result.userSelectedTabDisposition === 'selection_unavailable' ||
+      result.userSelectedTabDisposition === 'closed_or_missing' ||
+      result.userSelectedTabDisposition === 'target_mismatch'
+    ) return 'prerequisite_unmet';
+    if (result.terminalReason === 'inventory_partial' || result.terminalReason === 'run_deadline_exceeded' ||
+      result.terminalReason === 'user_selected_tab_page_not_supported'
+    ) return 'postcondition_unmet';
+    return 'failed';
+  }
   if (!result.navigation.attempted) return 'prerequisite_unmet';
   if (result.terminalReason === 'verification_required' || result.terminalReason === 'rate_limited') {
     return 'risk_stopped';
@@ -108,7 +141,11 @@ function inventoryTerminalReason(
   if (terminalReason === 'inventory_partial') return 'page_one_partial';
   if (terminalReason === 'verification_required' || terminalReason === 'rate_limited' ||
     terminalReason === 'source_unavailable' || terminalReason === 'document_context_changed' ||
-    terminalReason === 'run_deadline_exceeded'
+    terminalReason === 'run_deadline_exceeded' || terminalReason === 'user_selected_tab_required' ||
+    terminalReason === 'user_selected_tab_closed' || terminalReason === 'user_selected_tab_document_changed' ||
+    terminalReason === 'user_selected_tab_target_mismatch' ||
+    terminalReason === 'user_selected_tab_page_not_supported' ||
+    terminalReason === 'user_selected_tab_worker_interrupted'
   ) return terminalReason;
   return 'dom_projection_failed';
 }

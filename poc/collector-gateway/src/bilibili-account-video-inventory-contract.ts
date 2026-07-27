@@ -61,7 +61,7 @@ export interface BilibiliAccountVideoInventoryVisualEvidence {
   };
 }
 
-export interface BilibiliAccountVideoInventoryAction {
+export interface BilibiliAccountVideoInventoryNavigationAction {
   actionId: string;
   kind: 'navigation';
   intent: 'Open the canonical public Bilibili account video inventory exactly once.';
@@ -71,9 +71,30 @@ export interface BilibiliAccountVideoInventoryAction {
   errorCode: string | null;
 }
 
+/** A fixed DOM projection of a popup-selected tab; it has no page input. */
+export interface BilibiliAccountVideoInventoryUserSelectedTabObservationAction {
+  actionId: 'observe_user_selected_account_inventory';
+  kind: 'passive_observation';
+  intent: 'Observe one explicitly user-selected Bilibili account inventory document without navigation or page interaction.';
+  attempted: boolean;
+  attemptCount: 0 | 1;
+  outcome: 'completed' | 'prerequisite_unmet' | 'postcondition_unmet' | 'risk_stopped' | 'failed';
+  errorCode: string | null;
+}
+
+export type BilibiliAccountVideoInventoryAction =
+  | BilibiliAccountVideoInventoryNavigationAction
+  | BilibiliAccountVideoInventoryUserSelectedTabObservationAction;
+
 export type BilibiliAccountVideoInventoryTerminalReason =
   | 'page_one_ready'
   | 'page_one_partial'
+  | 'user_selected_tab_required'
+  | 'user_selected_tab_closed'
+  | 'user_selected_tab_document_changed'
+  | 'user_selected_tab_target_mismatch'
+  | 'user_selected_tab_page_not_supported'
+  | 'user_selected_tab_worker_interrupted'
   | 'authentication_required'
   | 'verification_required'
   | 'rate_limited'
@@ -114,7 +135,10 @@ export interface BilibiliAccountVideoInventoryRunRecord {
   safeguards: {
     environment: 'local_user_controlled_collection_profile' | 'user_owned_browser_extension';
     browser: 'visible_playwright_chromium' | 'user_owned_chromium_tab';
-    acquisition: 'trusted_navigation_plus_bounded_dom_projection' | 'extension_owned_tab_navigation_plus_bounded_dom_projection';
+    acquisition:
+      | 'trusted_navigation_plus_bounded_dom_projection'
+      | 'extension_owned_tab_navigation_plus_bounded_dom_projection'
+      | 'user_selected_tab_passive_dom_projection';
     requestHeaders: 'not_read';
     requestBody: 'not_read';
     cookiesAndTokens: 'not_read';
@@ -131,6 +155,7 @@ export interface BilibiliAccountVideoInventoryRunRecord {
       | 'created_new_managed_tab'
       | 'created_extension_work_tab'
       | 'reused_extension_work_tab'
+      | 'user_selected_tab'
       | 'not_acquired';
     targetPage:
       | 'retained_after_run'
@@ -139,6 +164,7 @@ export interface BilibiliAccountVideoInventoryRunRecord {
       | 'retained_not_reusable'
       | 'user_taken_over'
       | 'closed_or_missing'
+      | 'user_selected_tab_retained'
       | 'not_acquired';
     admissionEligible: false;
   };

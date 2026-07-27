@@ -11,11 +11,12 @@ interface UserBrowserCollectorServiceRequestBase {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
   browserBindingId: string;
   platform: 'bilibili';
-  executionTarget: 'collector_work_tab';
+  executionTarget: 'collector_work_tab' | 'user_selected_tab';
 }
 
 export interface UserBrowserVideoDetailCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.video_detail';
+  executionTarget: 'collector_work_tab';
   input: {
     canonicalVideoUrl: string;
   };
@@ -28,6 +29,7 @@ export interface UserBrowserVideoDetailCollectorServiceRequest extends UserBrows
  */
 export interface UserBrowserNativeSearchCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.native_search';
+  executionTarget: 'collector_work_tab';
   input: {
     query: string;
   };
@@ -36,6 +38,7 @@ export interface UserBrowserNativeSearchCollectorServiceRequest extends UserBrow
 /** Fixed page 1 then page 2; applications cannot supply a page list or URL. */
 export interface UserBrowserNativeSearchBatchCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.native_search_batch';
+  executionTarget: 'collector_work_tab';
   input: {
     query: string;
   };
@@ -44,6 +47,7 @@ export interface UserBrowserNativeSearchBatchCollectorServiceRequest extends Use
 /** A caller may name one public account identity, never an arbitrary space URL. */
 export interface UserBrowserAccountProfileCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.account_profile';
+  executionTarget: 'collector_work_tab';
   input: {
     canonicalProfileUrl: string;
   };
@@ -52,6 +56,12 @@ export interface UserBrowserAccountProfileCollectorServiceRequest extends UserBr
 /** Fixed first page of an account's public video inventory; pagination is separate. */
 export interface UserBrowserAccountInventoryCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.account_inventory';
+  /**
+   * `user_selected_tab` is a single-use passive observation lease created by
+   * the extension popup. The request never carries a tab ID, selector, page
+   * number, URL variant, script, or page-action plan.
+   */
+  executionTarget: 'collector_work_tab' | 'user_selected_tab';
   input: {
     canonicalProfileUrl: string;
   };
@@ -59,16 +69,19 @@ export interface UserBrowserAccountInventoryCollectorServiceRequest extends User
 
 export interface UserBrowserDynamicCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.dynamic';
+  executionTarget: 'collector_work_tab';
   input: { canonicalProfileUrl: string };
 }
 
 export interface UserBrowserCollectionSeriesOverviewCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.collection_series.overview';
+  executionTarget: 'collector_work_tab';
   input: { canonicalProfileUrl: string };
 }
 
 export interface UserBrowserCollectionSeriesDetailCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.collection_series.detail';
+  executionTarget: 'collector_work_tab';
   input: {
     canonicalProfileUrl: string;
     stableSeriesId: string;
@@ -78,6 +91,7 @@ export interface UserBrowserCollectionSeriesDetailCollectorServiceRequest extend
 
 export interface UserBrowserDanmakuCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.danmaku';
+  executionTarget: 'collector_work_tab';
   input: { canonicalVideoUrl: string };
 }
 
@@ -104,16 +118,19 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     throw new Error('user_browser_collector_service_request_invalid');
   }
   const candidate = value as Record<string, unknown>;
+  const executionTarget = candidate.executionTarget;
   const allowed = new Set(['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input']);
   if (
     Object.keys(candidate).some((key) => !allowed.has(key)) ||
     candidate.schemaVersion !== USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION ||
     typeof candidate.browserBindingId !== 'string' || !UUID_PATTERN.test(candidate.browserBindingId) ||
-    candidate.platform !== 'bilibili' || candidate.executionTarget !== 'collector_work_tab' || !candidate.input ||
+    candidate.platform !== 'bilibili' ||
+    (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab') || !candidate.input ||
     typeof candidate.input !== 'object' || Array.isArray(candidate.input)
   ) throw new Error('user_browser_collector_service_request_invalid');
   const input = candidate.input as Record<string, unknown>;
   if (candidate.capability === 'bilibili.video_detail') {
+    if (executionTarget !== 'collector_work_tab') throw new Error('user_browser_collector_service_request_invalid');
     if (Object.keys(input).length !== 1 || typeof input.canonicalVideoUrl !== 'string') {
       throw new Error('user_browser_collector_service_request_invalid');
     }
@@ -129,6 +146,7 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     };
   }
   if (candidate.capability === 'bilibili.native_search') {
+    if (executionTarget !== 'collector_work_tab') throw new Error('user_browser_collector_service_request_invalid');
     if (Object.keys(input).length !== 1 || typeof input.query !== 'string') {
       throw new Error('user_browser_collector_service_request_invalid');
     }
@@ -149,6 +167,7 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     };
   }
   if (candidate.capability === 'bilibili.native_search_batch') {
+    if (executionTarget !== 'collector_work_tab') throw new Error('user_browser_collector_service_request_invalid');
     if (Object.keys(input).length !== 1 || typeof input.query !== 'string') {
       throw new Error('user_browser_collector_service_request_invalid');
     }
@@ -174,16 +193,28 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     }
     const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(input.canonicalProfileUrl, 'strict_input');
     if (!canonicalProfileUrl) throw new Error('user_browser_collector_service_request_invalid');
+    if (candidate.capability === 'bilibili.account_profile') {
+      if (executionTarget !== 'collector_work_tab') throw new Error('user_browser_collector_service_request_invalid');
+      return {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        browserBindingId: candidate.browserBindingId,
+        platform: 'bilibili',
+        capability: 'bilibili.account_profile',
+        executionTarget: 'collector_work_tab',
+        input: { canonicalProfileUrl }
+      };
+    }
     return {
       schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
       browserBindingId: candidate.browserBindingId,
       platform: 'bilibili',
-      capability: candidate.capability,
-      executionTarget: 'collector_work_tab',
+      capability: 'bilibili.account_inventory',
+      executionTarget,
       input: { canonicalProfileUrl }
     };
   }
   if (candidate.capability === 'bilibili.dynamic' || candidate.capability === 'bilibili.collection_series.overview') {
+    if (executionTarget !== 'collector_work_tab') throw new Error('user_browser_collector_service_request_invalid');
     if (Object.keys(input).length !== 1 || typeof input.canonicalProfileUrl !== 'string') {
       throw new Error('user_browser_collector_service_request_invalid');
     }
@@ -199,6 +230,7 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     };
   }
   if (candidate.capability === 'bilibili.collection_series.detail') {
+    if (executionTarget !== 'collector_work_tab') throw new Error('user_browser_collector_service_request_invalid');
     if (Object.keys(input).length !== 3 || typeof input.canonicalProfileUrl !== 'string' ||
       typeof input.stableSeriesId !== 'string' || (input.listType !== 'series' && input.listType !== 'season')
     ) throw new Error('user_browser_collector_service_request_invalid');
@@ -220,6 +252,7 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     };
   }
   if (candidate.capability === 'bilibili.danmaku') {
+    if (executionTarget !== 'collector_work_tab') throw new Error('user_browser_collector_service_request_invalid');
     if (Object.keys(input).length !== 1 || typeof input.canonicalVideoUrl !== 'string') {
       throw new Error('user_browser_collector_service_request_invalid');
     }

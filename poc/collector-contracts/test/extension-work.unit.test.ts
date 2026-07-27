@@ -107,6 +107,31 @@ const accountInventoryItem: ExtensionWorkItem = {
   gatewaySignature: 'd'.repeat(86)
 };
 
+const accountInventorySelectedTabItem: ExtensionWorkItem = {
+  schemaVersion: 1,
+  protocolVersion: 1,
+  workId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  operationId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  browserBindingId: '33333333-3333-4333-8333-333333333333',
+  platform: 'bilibili',
+  capability: 'bilibili.account_inventory',
+  executionTarget: 'user_selected_tab',
+  issuedAt: '2026-07-25T00:00:00.000Z',
+  expiresAt: '2026-07-25T00:01:00.000Z',
+  input: {
+    canonicalProfileUrl: 'https://space.bilibili.com/7481602',
+    canonicalInventoryUrl: 'https://space.bilibili.com/7481602/upload/video',
+    stableAccountId: '7481602'
+  },
+  budget: {
+    maximumPlatformNavigations: 0,
+    maximumSemanticActions: 0,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 98_304
+  },
+  gatewaySignature: 'e'.repeat(86)
+};
+
 describe('direct extension work contract', () => {
   test('signs a fixed typed work item without allowing arbitrary carrier fields', () => {
     expect(isExtensionWorkItem(item)).toBe(true);
@@ -296,5 +321,59 @@ describe('direct extension work contract', () => {
       ...inventoryResult,
       observation: { ...inventoryResult.observation!, stableAccountId: '1' }
     }, accountInventoryItem)).toBe(false);
+  });
+
+  test('allows an explicitly selected inventory tab only as zero-navigation, zero-action work', () => {
+    expect(isExtensionWorkItem(accountInventorySelectedTabItem)).toBe(true);
+    expect(isExtensionWorkItem({
+      ...accountInventorySelectedTabItem,
+      budget: { ...accountInventorySelectedTabItem.budget, maximumPlatformNavigations: 1 }
+    })).toBe(false);
+    expect(isExtensionWorkItem({
+      ...accountInventorySelectedTabItem,
+      tabId: 42
+    })).toBe(false);
+    expect(isExtensionWorkItem({
+      ...accountProfileItem,
+      executionTarget: 'user_selected_tab'
+    })).toBe(false);
+
+    const result: ExtensionWorkResult = {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: accountInventorySelectedTabItem.workId,
+      operationId: accountInventorySelectedTabItem.operationId,
+      browserBindingId: accountInventorySelectedTabItem.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_inventory',
+      executionTarget: 'user_selected_tab',
+      state: 'completed',
+      errorCode: null,
+      terminalReason: 'inventory_ready',
+      completedAt: '2026-07-25T00:00:20.000Z',
+      navigation: { attempted: false, attemptCount: 0 },
+      userSelectedTabDisposition: 'observed',
+      observation: {
+        stableAccountId: '7481602',
+        videoListVisible: true,
+        cards: [{
+          bvid: 'BV1qZSLBYEpa',
+          title: '公开视频',
+          visibleText: '公开视频 创作者',
+          thumbnailUrl: null
+        }],
+        loginOverlayVisible: false,
+        risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+      }
+    };
+    expect(isExtensionWorkResultForItem(result, accountInventorySelectedTabItem)).toBe(true);
+    expect(isExtensionWorkResultForItem({
+      ...result,
+      navigation: { attempted: true, attemptCount: 1 }
+    }, accountInventorySelectedTabItem)).toBe(false);
+    expect(isExtensionWorkResultForItem({
+      ...result,
+      userSelectedTabDisposition: 'document_changed'
+    }, accountInventorySelectedTabItem)).toBe(false);
   });
 });

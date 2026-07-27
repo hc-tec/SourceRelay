@@ -10,6 +10,10 @@ import {
   type UserBrowserGatewayConnection
 } from '../background/user-browser-gateway';
 import {
+  getSelectedBilibiliAccountInventoryTabSummary,
+  selectCurrentBilibiliAccountInventoryTab
+} from '../background/user-selected-tab';
+import {
   USER_BROWSER_DIRECT_WORK_CAPABILITIES,
   type UserBrowserDirectWorkCapability,
   type UserBrowserGatewayCapabilityDescriptor
@@ -28,6 +32,8 @@ const pairingForm = element<HTMLFormElement>('pair-gateway');
 const forgetGateway = element<HTMLButtonElement>('forget-gateway');
 const directCapabilityState = element<HTMLDivElement>('direct-capability-state');
 const directCapabilityList = element<HTMLDivElement>('direct-capability-list');
+const userSelectedTabState = element<HTMLDivElement>('user-selected-tab-state');
+const selectCurrentInventoryTab = element<HTMLButtonElement>('select-current-bilibili-account-inventory');
 
 async function render(): Promise<void> {
   const [connection, runtime] = await Promise.all([
@@ -39,8 +45,24 @@ async function render(): Promise<void> {
     : `v${chrome.runtime.getManifest().version} · worker marker unavailable`;
   runtimeStatus.className = `status ${connection.state === 'online' ? 'ready' : ''}`;
   renderGatewayConnection(connection);
+  await renderUserSelectedTab(connection);
   await renderDirectCapabilities(connection);
   document.documentElement.dataset.collectorControlReady = 'true';
+}
+
+async function renderUserSelectedTab(connection: UserBrowserGatewayConnection): Promise<void> {
+  const selection = await getSelectedBilibiliAccountInventoryTabSummary();
+  selectCurrentInventoryTab.disabled = connection.state !== 'online';
+  if (connection.state !== 'online') {
+    userSelectedTabState.textContent = '需先完成本机 Gateway 配对并保持在线；选择不会缓存到 Gateway，也不会在离线后自行执行。';
+    return;
+  }
+  if (selection.state === 'available' && selection.expiresAt) {
+    userSelectedTabState.textContent = `当前投稿页已显式选择，短时有效至 ${new Date(selection.expiresAt).toLocaleTimeString('zh-CN')}。` +
+      ' 后续 user_selected_tab work 只能被动观察这个精确页面一次。';
+    return;
+  }
+  userSelectedTabState.textContent = '尚未选择页面。请先切到一个已加载完成的 B 站 UP 主投稿视频首页，再打开此扩展 popup 点击选择。';
 }
 
 function renderGatewayConnection(connection: UserBrowserGatewayConnection): void {
@@ -163,18 +185,18 @@ pairingForm.addEventListener('submit', (event) => {
     identityFingerprint: String(form.get('identityFingerprint') ?? '').trim().toLowerCase(),
     pairingSessionId: String(form.get('pairingSessionId') ?? '').trim(),
     pairingCode: String(form.get('pairingCode') ?? '').trim()
-  }).then(
-    (connection) => {
-      renderGatewayConnection(connection);
-      pairingForm.reset();
-      const origin = pairingForm.elements.namedItem('loopbackOrigin');
-      if (origin instanceof HTMLInputElement) origin.value = 'http://127.0.0.1:43127';
-    },
-    (error) => {
-      controlError.textContent = error instanceof Error ? error.message : 'gateway_pairing_failed';
-      controlError.hidden = false;
-    }
-  ).finally(() => {
+  }).then(async () => {
+    pairingForm.reset();
+    const origin = pairingForm.elements.namedItem('loopbackOrigin');
+    if (origin instanceof HTMLInputElement) origin.value = 'http://127.0.0.1:43127';
+    // Pairing changes the availability of user-selected passive observation.
+    // Re-render the whole local control surface instead of leaving its initial
+    // unpaired state on screen after the connection banner turns online.
+    await render();
+  }).catch((error) => {
+    controlError.textContent = error instanceof Error ? error.message : 'gateway_pairing_failed';
+    controlError.hidden = false;
+  }).finally(() => {
     submit.disabled = false;
   });
 });
@@ -185,6 +207,20 @@ forgetGateway.addEventListener('click', () => {
   }).catch((error) => {
     controlError.textContent = error instanceof Error ? error.message : 'gateway_pairing_clear_failed';
     controlError.hidden = false;
+  });
+});
+
+selectCurrentInventoryTab.addEventListener('click', () => {
+  selectCurrentInventoryTab.disabled = true;
+  controlError.hidden = true;
+  void selectCurrentBilibiliAccountInventoryTab().then(async () => {
+    await render();
+  }).catch((error) => {
+    controlError.textContent = error instanceof Error ? error.message : 'user_selected_tab_selection_failed';
+    controlError.hidden = false;
+  }).finally(async () => {
+    const connection = await getUserBrowserGatewayConnection();
+    selectCurrentInventoryTab.disabled = connection.state !== 'online';
   });
 });
 

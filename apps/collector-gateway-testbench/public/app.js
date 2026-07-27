@@ -192,12 +192,14 @@ async function submitAccount(event, kind) {
   const button = form.querySelector('button');
   button.disabled = true;
   try {
+    const input = { accountId: form.elements.accountId.value };
+    if (kind === 'account_inventory') input.executionTarget = form.elements.executionTarget.value;
     const payload = await api('/api/operations', {
       method: 'POST',
       body: {
         browserBindingId: form.elements.browserBindingId.value,
         kind,
-        input: { accountId: form.elements.accountId.value }
+        input
       }
     });
     form.elements.accountId.value = '';

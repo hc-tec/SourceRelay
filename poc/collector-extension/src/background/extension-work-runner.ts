@@ -1,5 +1,6 @@
 import type { ExtensionWorkItem, ExtensionWorkResult } from '@intelligence/collector-contracts';
 import { executeBilibiliAccountInventoryExtensionWork } from './extension-work-bilibili-account-inventory';
+import { executeBilibiliAccountInventoryUserSelectedTabExtensionWork } from './extension-work-bilibili-account-inventory-user-selected-tab';
 import { executeBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
 import { executeBilibiliNativeSearchBatchExtensionWork } from './extension-work-bilibili-native-search-batch';
 import { executeBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
@@ -121,6 +122,9 @@ async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
     return await executeBilibiliAccountProfileExtensionWork(item, lifecycle);
   }
   if (item.capability === 'bilibili.account_inventory') {
+    if (item.executionTarget === 'user_selected_tab') {
+      return await executeBilibiliAccountInventoryUserSelectedTabExtensionWork(item);
+    }
     return await executeBilibiliAccountInventoryExtensionWork(item, lifecycle);
   }
   if (item.capability === 'bilibili.dynamic' || item.capability === 'bilibili.collection_series.overview' ||
@@ -170,6 +174,25 @@ async function deliverPendingResult(pending: PendingExtensionWorkResult): Promis
 }
 
 function interruptedResult(active: ActiveExtensionWork): ExtensionWorkResult {
+  if (active.item.capability === 'bilibili.account_inventory' && active.item.executionTarget === 'user_selected_tab') {
+    return {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: active.item.workId,
+      operationId: active.item.operationId,
+      browserBindingId: active.item.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_inventory',
+      executionTarget: 'user_selected_tab',
+      state: 'stopped',
+      errorCode: 'user_selected_tab_worker_interrupted',
+      terminalReason: 'user_selected_tab_worker_interrupted',
+      completedAt: new Date().toISOString(),
+      navigation: { attempted: false, attemptCount: 0 },
+      userSelectedTabDisposition: 'selection_unavailable',
+      observation: null
+    };
+  }
   const navigationAttempted = active.navigationIntentCount > 0;
   if (active.item.capability === 'bilibili.native_search_batch') {
     return {

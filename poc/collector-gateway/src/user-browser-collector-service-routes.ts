@@ -7,6 +7,7 @@ import type {
 import type { CollectorServiceClientRegistry } from './collector-service-clients';
 import {
   enqueueBilibiliAccountInventoryWork,
+  enqueueBilibiliAccountInventoryUserSelectedTabWork,
   enqueueBilibiliAccountProfileWork,
   enqueueBilibiliCollectionSeriesDetailWork,
   enqueueBilibiliCollectionSeriesOverviewWork,
@@ -109,11 +110,17 @@ export async function handleUserBrowserCollectorServiceRoute(
               collection.input.canonicalProfileUrl
             )
             : collection.capability === 'bilibili.account_inventory'
-              ? await enqueueBilibiliAccountInventoryWork(
-                context,
-                collection.browserBindingId,
-                collection.input.canonicalProfileUrl
-              )
+              ? collection.executionTarget === 'user_selected_tab'
+                ? await enqueueBilibiliAccountInventoryUserSelectedTabWork(
+                  context,
+                  collection.browserBindingId,
+                  collection.input.canonicalProfileUrl
+                )
+                : await enqueueBilibiliAccountInventoryWork(
+                  context,
+                  collection.browserBindingId,
+                  collection.input.canonicalProfileUrl
+                )
               : collection.capability === 'bilibili.dynamic'
                 ? await enqueueBilibiliDynamicWork(
                   context,

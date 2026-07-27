@@ -78,16 +78,26 @@ export function parseTestbenchSubmission(value) {
   }
 
   if (value.kind === 'account_profile' || value.kind === 'account_inventory') {
-    if (!hasExactKeys(value.input, ['accountId']) || typeof value.input.accountId !== 'string') {
+    const inventoryInput = value.kind === 'account_inventory';
+    const validKeys = inventoryInput
+      ? hasExactKeys(value.input, ['accountId']) || hasExactKeys(value.input, ['accountId', 'executionTarget'])
+      : hasExactKeys(value.input, ['accountId']);
+    if (!validKeys || typeof value.input.accountId !== 'string') {
       throw new TestbenchInputError('testbench_request_invalid');
     }
     const accountId = normaliseAccountId(value.input.accountId);
+    const executionTarget = inventoryInput
+      ? value.input.executionTarget ?? 'collector_work_tab'
+      : 'collector_work_tab';
+    if (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab') {
+      throw new TestbenchInputError('testbench_request_invalid');
+    }
     return {
       schemaVersion: DIRECT_SCHEMA_VERSION,
       browserBindingId: value.browserBindingId,
       platform: 'bilibili',
       capability: value.kind === 'account_profile' ? 'bilibili.account_profile' : 'bilibili.account_inventory',
-      executionTarget: 'collector_work_tab',
+      executionTarget,
       input: { canonicalProfileUrl: `https://space.bilibili.com/${accountId}` }
     };
   }

@@ -14,6 +14,7 @@ import {
   isExtensionWorkResultForItem,
   normaliseBilibiliNativeSearchRoute,
   type ExtensionWorkCapability,
+  type ExtensionWorkExecutionTarget,
   type ExtensionWorkItem,
   type ExtensionWorkResult,
   type ExtensionWorkState,
@@ -39,7 +40,7 @@ export interface ExtensionWorkOperationSummary {
   browserBindingId: string;
   platform: 'bilibili';
   capability: ExtensionWorkCapability;
-  executionTarget: 'collector_work_tab';
+  executionTarget: ExtensionWorkExecutionTarget;
   state: ExtensionWorkState;
   queuedAt: string;
   claimedAt: string | null;
@@ -82,6 +83,11 @@ export interface EnqueueBilibiliAccountProfileWorkInput {
 }
 
 export interface EnqueueBilibiliAccountInventoryWorkInput {
+  browserBindingId: string;
+  canonicalProfileUrl: string;
+}
+
+export interface EnqueueBilibiliAccountInventoryUserSelectedTabWorkInput {
   browserBindingId: string;
   canonicalProfileUrl: string;
 }
@@ -452,6 +458,45 @@ export class ExtensionWorkQueue {
         stableAccountId
       },
       budget: fixedDirectWorkBudget()
+    };
+    return await this.#enqueueSigned(unsigned, issuedAt);
+  }
+
+  /**
+   * The Gateway derives the same strict inventory identity as the direct
+   * work-tab path, but signs a zero-navigation observation for a tab that the
+   * extension user has selected locally. No caller can name a tab or URL
+   * variant, and the Gateway never receives browser tab/document identifiers.
+   */
+  async enqueueBilibiliAccountInventoryUserSelectedTab(
+    input: EnqueueBilibiliAccountInventoryUserSelectedTabWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId)) throw new Error('extension_work_binding_invalid');
+    const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(input.canonicalProfileUrl, 'strict_input');
+    const stableAccountId = canonicalProfileUrl ? bilibiliAccountProfileIdFromUrl(canonicalProfileUrl) : null;
+    if (!canonicalProfileUrl || !stableAccountId) throw new Error('bilibili_account_inventory_input_invalid');
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(input.browserBindingId);
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.account_inventory',
+      executionTarget: 'user_selected_tab',
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: {
+        canonicalProfileUrl,
+        canonicalInventoryUrl: `${canonicalProfileUrl}/upload/video`,
+        stableAccountId
+      },
+      budget: userSelectedTabObservationBudget()
     };
     return await this.#enqueueSigned(unsigned, issuedAt);
   }
@@ -846,7 +891,10 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'source_unavailable' || value === 'dom_projection_failed' || value === 'document_context_changed' ||
     value === 'run_deadline_exceeded' || value === 'work_tab_closed' || value === 'work_tab_user_taken_over' ||
     value === 'work_tab_foreground_unavailable' ||
-    value === 'navigation_outcome_unknown' || value === 'gateway_restarted_before_completion';
+    value === 'navigation_outcome_unknown' || value === 'gateway_restarted_before_completion' ||
+    value === 'user_selected_tab_required' || value === 'user_selected_tab_closed' ||
+    value === 'user_selected_tab_document_changed' || value === 'user_selected_tab_target_mismatch' ||
+    value === 'user_selected_tab_page_not_supported' || value === 'user_selected_tab_worker_interrupted';
 }
 
 function redactTerminalWorkItem(item: StoredExtensionWorkItem): StoredExtensionWorkItem {
@@ -903,6 +951,20 @@ function fixedDirectWorkBudget(): {
 } {
   return {
     maximumPlatformNavigations: 1,
+    maximumSemanticActions: 0,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 98_304
+  };
+}
+
+function userSelectedTabObservationBudget(): {
+  maximumPlatformNavigations: 0;
+  maximumSemanticActions: 0;
+  maximumResponseObservations: 0;
+  maximumPayloadBytes: 98_304;
+} {
+  return {
+    maximumPlatformNavigations: 0,
     maximumSemanticActions: 0,
     maximumResponseObservations: 0,
     maximumPayloadBytes: 98_304

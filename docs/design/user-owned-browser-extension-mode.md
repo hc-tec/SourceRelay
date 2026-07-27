@@ -170,7 +170,7 @@ GET  /v1/collect/artifacts/{capability}/{artifactId}
 }
 ```
 
-`/v2` 当前承诺三条 direct capability：严格规范 BV URL 的 `bilibili.video_detail`，只接受关键词的固定首页 `bilibili.native_search`，以及同样只接受关键词、固定第 1、2 页的 `bilibili.native_search_batch`。它返回异步 `operationId`，由 `operations:read` 查询终态；它没有 `profileId` 兼容适配、双写或 fallback。所有已发布 capability 完成 direct migration 后，正式 API 才统一收敛为：
+`/v2` 当前承诺三条 `collector_work_tab` direct capability：严格规范 BV URL 的 `bilibili.video_detail`，只接受关键词的固定首页 `bilibili.native_search`，以及同样只接受关键词、固定第 1、2 页的 `bilibili.native_search_batch`。此外，`bilibili.account_inventory` 已发布一个不同的、经真实 canary 验证的 `user_selected_tab` 首屏被动观察切片：用户必须刚刚在扩展控制面明确选择当前公开投稿首页。它返回异步 `operationId`，由 `operations:read` 查询终态；它没有 `profileId` 兼容适配、双写或 fallback。所有已发布 capability 完成 direct migration 后，正式 API 才统一收敛为：
 
 ```text
 GET  /v1/collector-service/browser-bindings
@@ -187,8 +187,8 @@ POST /v1/collect {
 规则如下：
 
 - `browserBindingId` 只能引用已配对、在线、授权了目标平台、且未被账号安全锁定的扩展实例；
-- 当前 `/v2` 只发布 `collector_work_tab`；它只复用扩展自己创建、当前 worker session 仍可证明所有权的 tab；
-- `user_selected_tab` 仍是后续能力，届时只能消费用户刚刚从扩展 UI 显式建立的短期选择，缺失时返回 `user_selected_tab_required`，不能回退到任意浏览器 tab；
+- `collector_work_tab` 只复用扩展自己创建、当前 worker session 仍可证明所有权的 tab；
+- 当前 `user_selected_tab` 只对 `bilibili.account_inventory` 的公开投稿**第 1 页**开放。它只能消费用户刚刚从扩展 UI 显式建立的 120 秒、单次 tab/document lease；缺失、关闭、重载、目标不匹配或第 2 页都会明确停止，不能回退到任意浏览器 tab，也不能自动翻页；
 - `input` 依旧只能是 capability 注册的强类型输入。例如 B站详情可以接受规范 BV URL；两种 direct 搜索都只接受 `query`，单页能力固定第 1 页、batch 能力固定第 1/2 页，不能把 URL、页码、排序、selector、脚本或鼠标坐标的权力下放给调用方；
 - `browserBindingId` 是服务选择目标扩展的标识，不是账号标识；若用户在浏览器中切换登录账号，平台策略必须在动作前用允许的公开可见身份证据重新核验，无法核验则阻断；
 - 不提供 `profileId` 的兼容适配、双写或 fallback。受管 Profile API 留在显式 test/isolated lane，不与生产 API 混用。
@@ -229,10 +229,10 @@ Native Messaging 若保留，只能作为本地唤醒/传输实现细节，不�
 这是一次生产所有权模型切换，不是给旧 `profileId` 增加一个别名。
 
 1. **合同与状态模型**：在 `collector-contracts` 增加 `ExtensionInstance`、`BrowserBinding`、`WorkTabLease` 和明确的 tab ownership state；删除生产路径中的 Profile 语义。
-2. **扩展生产控制面**：已完成 loopback pairing、绑定状态、`collector_work_tab` 建立/复用/接管/外部终止，以及 MV3 恢复时的保守停止；不启动任何浏览器进程。`user_selected_tab` 尚未发布。
+2. **扩展生产控制面**：已完成 loopback pairing、绑定状态、`collector_work_tab` 建立/复用/接管/外部终止，以及 MV3 恢复时的保守停止；不启动任何浏览器进程。`user_selected_tab` 已发布为 B站投稿第 1 页的单次、被动 DOM 观察：精确 tab/document 标识仅留在 `chrome.storage.session`，不会进入 API、Gateway state 或 artifact。
 3. **Gateway 服务面**：已完成 browser-binding registry、认证 dispatch/result、binding/platform safety、`/v2` scoped local API、capability-bound artifact retrieval，以及独立的 direct-only server entry。生产 Console 只显示扩展配对、绑定安全、本地 API client 和去敏审计；`/v1` Profile 服务只存在于 isolated entry，direct entry 对它明确返回 `user_browser_legacy_route_not_available`。
-4. **能力迁移**：已完成 B站 `video_detail`、固定首页 `native_search` 和固定两页 `native_search_batch` 的扩展主导 DOM direct path；两种搜索通过只读、签名 URL 导航和白名单卡片投影避免页面语义输入。评论、字幕、弹幕、有界投稿分页、筛选、账号页等必须各自完成真实三面侦察，不能复用这些 MVP 的“无需语义输入”结论。
-5. **真实本地验证**：用临时 Chrome/Edge 安装模拟真实扩展安装、Gateway 配对、工作标签复用和故障停止；它是测试环境，不是生产 Browser Host。平台验证仍以真实页面、低频、只读、已授权的 run 为准，不能用 fake 页面或 fake Gateway 证明能力。
+4. **能力迁移**：已完成 B站 `video_detail`、固定首页 `native_search` 和固定两页 `native_search_batch` 的扩展主导 DOM direct path；两种搜索通过只读、签名 URL 导航和白名单卡片投影避免页面语义输入。`account_inventory` 的首屏已另以 `user_selected_tab` 被动观察完成真实闭环；自动分页仍保持 `direct_migration_required`。评论、字幕、弹幕、有界投稿分页、筛选、账号页等必须各自完成真实三面侦察，不能复用这些 MVP 的“无需语义输入”结论。
+5. **真实本地验证**：用临时 Chrome/Edge 安装模拟真实扩展安装、Gateway 配对、工作标签复用和故障停止；它是测试环境，不是生产 Browser Host。2026-07-27 已用真实 B站公开投稿首页、真实生产 MV3、真实 loopback Gateway 完成 `user_selected_tab` 的零 work 导航闭环；平台验证仍以真实页面、低频、只读、已授权的 run 为准，不能用 fake 页面或 fake Gateway 证明能力。
 6. **隔离生产旧路径**：已从生产入口移除服务 API 的 `profileId`、Browser Host 启动依赖和受管 Profile Console 面板；Browser Host 保留在明确的 `start:isolated-browser` 测试/隔离账号命令中，不与正式启动路径、状态根目录或 Console 共用。
 
 ## 11. 验收标准
@@ -257,6 +257,7 @@ Native Messaging 若保留，只能作为本地唤醒/传输实现细节，不�
 - 生产 MV3 扩展在控制页中请求唯一的 optional `http://127.0.0.1/*` 权限，验证 Gateway P-256 签名、配对码摘要与 HMAC 授权后，在扩展 storage 保存配对记录；
 - Gateway 持久化的配对记录使用 `browserBindingId + extensionId + extensionInstanceId`，没有 Profile ID、磁盘路径、Cookie、Token、密码或账号身份；状态读取需要 timestamp、nonce、body digest 和 HMAC；
 - 已用真实 Gateway 进程、真实生产扩展、真实 Chromium 原生权限对话和真实 loopback CORS/HMAC 请求完成自动本地 E2E；没有打开任何平台页，所有 HTTP 请求都限定在临时 `127.0.0.1` Gateway。
+- 2026-07-27 的独立真实 canary 已证明 B站 `bilibili.account_inventory` 可在用户明确选择当前投稿首页后，以 `user_selected_tab` 完成一次零 work 导航、零 work 语义输入的受限 DOM artifact；完整去敏证据与未证明边界见 [验证记录](../validation/bilibili-user-selected-tab-inventory-canary-v0.1.md)。
 
 同日完成 Checkpoint B：Gateway 对 `bilibili.video_detail` 创建 60 秒、P-256 签名、一次 claim 的 typed work item；扩展对已配对 Gateway 做 HMAC/nonce poll，验证 work signature，在只由扩展创建的可见 work tab 中最多导航一次，固定投影首屏 DOM，并回传经 HMAC 认证的 bounded result。成功 tab 进入 `idle_reusable`；风险、未知、关闭、移动或接管会停止并移出复用池。工作项、binding safety 和 artifact 均不包含 Profile 路径、Cookie、Token、浏览器进程或 tab ID。
 

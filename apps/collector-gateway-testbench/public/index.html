@@ -127,7 +127,7 @@
               <span class="step">D</span>
               <div>
                 <h3>UP 主视频首屏</h3>
-                <p>仅接收 UP 主 MID；固定投稿视频首屏，不翻页、不滚动。</p>
+                <p>仅接收 UP 主 MID；可由扩展新建受管工作页，或只被动观察你刚从扩展 popup 明确选择的投稿首页；不翻页、不滚动。</p>
               </div>
             </div>
             <label>
@@ -137,6 +137,13 @@
             <label>
               UP 主 MID
               <input name="accountId" inputmode="numeric" autocomplete="off" placeholder="例如 7481602" pattern="[1-9][0-9]{0,19}" required disabled>
+            </label>
+            <label>
+              执行目标
+              <select name="executionTarget" disabled>
+                <option value="collector_work_tab">扩展受管工作标签页</option>
+                <option value="user_selected_tab">我刚在扩展 popup 选择的当前投稿首页</option>
+              </select>
             </label>
             <button type="submit" disabled>提交一次视频首屏测试</button>
           </form>
