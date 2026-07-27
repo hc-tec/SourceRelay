@@ -38,6 +38,26 @@ test('maps a BVID-only detail test into the fixed direct-mode Gateway contract',
   });
 });
 
+test('maps a BVID-only discussion test into the fixed user-selected-tab contract', () => {
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'discussion',
+    input: { bvid: 'BV1qZSLBYEpa' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'bilibili',
+    capability: 'bilibili.discussion',
+    executionTarget: 'user_selected_tab',
+    input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+  });
+  assert.throws(() => parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'discussion',
+    input: { bvid: 'BV1qZSLBYEpa', tabId: 7 }
+  }), TestbenchInputError);
+});
+
 test('maps native search into the fixed first-page direct-mode Gateway contract', () => {
   assert.deepEqual(parseTestbenchSubmission({
     browserBindingId: bindingId,
@@ -222,6 +242,13 @@ test('only accepts an artifact path derived from the matching direct operation c
       retrievalPath: `/v1/collect/artifacts/bilibili.dynamic/${artifactId}`
     }
   }), `/v1/collect/artifacts/bilibili.dynamic/${artifactId}`);
+  assert.equal(artifactPathFromOperation({
+    operationId,
+    capability: 'bilibili.discussion',
+    artifact: {
+      retrievalPath: `/v1/collect/artifacts/bilibili.discussion/${artifactId}`
+    }
+  }), `/v1/collect/artifacts/bilibili.discussion/${artifactId}`);
 });
 
 test('keeps Gateway and testbench listener configuration on explicit loopback origins', () => {

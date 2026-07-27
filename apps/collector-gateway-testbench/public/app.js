@@ -22,6 +22,7 @@ element('search-form').addEventListener('submit', (event) => void submitSearch(e
 element('search-batch-form').addEventListener('submit', (event) => void submitSearch(event, 'native_search_batch'));
 element('profile-form').addEventListener('submit', (event) => void submitAccount(event, 'account_profile'));
 element('inventory-form').addEventListener('submit', (event) => void submitAccount(event, 'account_inventory'));
+element('discussion-form').addEventListener('submit', (event) => void submitDiscussion(event));
 element('passive-form').addEventListener('submit', (event) => void submitPassive(event));
 
 void refreshConnection();
@@ -133,8 +134,9 @@ function renderBindings() {
   for (const control of document.querySelectorAll(
     '#video-form input, #video-form select, #search-form input, #search-form select, #search-batch-form input, #search-batch-form select, ' +
     '#profile-form input, #profile-form select, #inventory-form input, #inventory-form select, ' +
+    '#discussion-form input, #discussion-form select, ' +
     '#passive-form input, #passive-form select, #video-form button, #search-form button, #search-batch-form button, ' +
-    '#profile-form button, #inventory-form button, #passive-form button'
+    '#profile-form button, #inventory-form button, #discussion-form button, #passive-form button'
   )) {
     control.disabled = !enabled;
   }
@@ -203,6 +205,29 @@ async function submitAccount(event, kind) {
       }
     });
     form.elements.accountId.value = '';
+    acceptOperation(payload.result);
+  } catch (error) {
+    showOperationError(error);
+  } finally {
+    button.disabled = state.bindings.length === 0;
+  }
+}
+
+async function submitDiscussion(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  try {
+    const payload = await api('/api/operations', {
+      method: 'POST',
+      body: {
+        browserBindingId: form.elements.browserBindingId.value,
+        kind: 'discussion',
+        input: { bvid: form.elements.bvid.value }
+      }
+    });
+    form.elements.bvid.value = '';
     acceptOperation(payload.result);
   } catch (error) {
     showOperationError(error);

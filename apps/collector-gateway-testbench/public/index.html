@@ -148,9 +148,28 @@
             <button type="submit" disabled>提交一次视频首屏测试</button>
           </form>
 
-          <form id="passive-form" class="workflow">
+          <form id="discussion-form" class="workflow">
             <div class="workflow-title">
               <span class="step">E</span>
+              <div>
+                <h3>视频评论区（用户已选页面）</h3>
+                <p>先由你自己打开视频、将评论区滚到可见区域，并在扩展 popup 选择当前页；本请求只提交 BVID，后续不会导航、滚动、排序、展开回复或刷新。</p>
+              </div>
+            </div>
+            <label>
+              在线 browser binding
+              <select class="binding-select" name="browserBindingId" required disabled></select>
+            </label>
+            <label>
+              BVID
+              <input name="bvid" inputmode="text" autocomplete="off" placeholder="例如 BV1qZSLBYEpa" pattern="BV[0-9A-Za-z]{10}" required disabled>
+            </label>
+            <button type="submit" disabled>提交一次已加载评论页观察</button>
+          </form>
+
+          <form id="passive-form" class="workflow">
+            <div class="workflow-title">
+              <span class="step">F</span>
               <div>
                 <h3>首批宿主浏览器被动能力</h3>
                 <p>仅允许已登记的固定目标：动态、合集概览/详情或视频弹幕 DOM；一次导航，零页面点击。</p>
