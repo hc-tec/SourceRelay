@@ -8,13 +8,16 @@ import {
   validationProfileId
 } from './validation-browser-config.mjs';
 
-const origin = loopbackOrigin(process.env.COLLECTOR_SERVICE_ORIGIN ?? 'http://127.0.0.1:43127');
 const extensionSourceDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'collector-extension');
-let client = null;
+const defaultOrigin = process.env.COLLECTOR_SERVICE_ORIGIN ?? 'http://127.0.0.1:43127';
 
-try {
-  const pairing = await createPairing(origin);
-  client = await BrowserHostClient.connect(browserHostEndpointPath, 'validation-extension-control');
+export async function runValidationExtensionControl(options = {}) {
+  const origin = loopbackOrigin(options.origin ?? defaultOrigin);
+  let client = null;
+  let approval = null;
+  try {
+    const pairing = await createPairing(origin);
+    client = await BrowserHostClient.connect(browserHostEndpointPath, 'validation-extension-control');
   const snapshot = await client.command({ type: 'get_snapshot' });
   const profile = Array.isArray(snapshot.profiles)
     ? snapshot.profiles.find((candidate) => candidate?.profileId === validationProfileId)
@@ -24,40 +27,59 @@ try {
   // This is a programmatic exact-scope native permission approval.  It does
   // not use a human click and reports a benign absence when permission was
   // already granted in the persistent validation profile.
-  const approval = approveExactExtensionPermission(
-    extensionSourceDirectory,
-    '127.0.0.1',
-    '127.0.0.1',
-    8,
-    { allowAbsence: true }
-  );
-  const result = await client.command({
-    type: 'run_validation_extension_control',
-    request: {
-      schemaVersion: 1,
-      profileId: validationProfileId,
-      loopbackOrigin: origin,
-      identityFingerprint: pairing.identityFingerprint,
-      pairingSessionId: pairing.pairingSessionId,
-      pairingCode: pairing.pairingCode,
-      selection: 'bilibili_discussion_current_active_tab'
-    }
-  }, { timeoutMs: 35_000 });
-  const permission = await approval;
-  if (!isControlResult(result)) throw new Error('validation_extension_control_result_invalid');
-  writeJson({
-    ok: true,
-    profileId: result.profileId,
-    pairingState: result.connectionState,
-    discussionSelection: result.discussionSelection,
-    controlTargetDisposed: result.controlTargetDisposed,
-    permission: permission?.allowInvoked === true ? 'approved_once' : 'already_granted_or_not_requested'
-  });
-} catch (error) {
-  writeJson({ ok: false, error: safeErrorCode(error) });
-  process.exitCode = 1;
-} finally {
-  client?.close();
+    approval = approveExactExtensionPermission(
+      extensionSourceDirectory,
+      '127.0.0.1',
+      '127.0.0.1',
+      8,
+      { allowAbsence: true }
+    );
+    const result = await client.command({
+      type: 'run_validation_extension_control',
+      request: {
+        schemaVersion: 1,
+        profileId: validationProfileId,
+        loopbackOrigin: origin,
+        identityFingerprint: pairing.identityFingerprint,
+        pairingSessionId: pairing.pairingSessionId,
+        pairingCode: pairing.pairingCode,
+        selection: 'bilibili_discussion_current_active_tab'
+      }
+    }, { timeoutMs: 35_000 });
+    const permission = await approval;
+    if (!isControlResult(result)) throw new Error('validation_extension_control_result_invalid');
+    return {
+      browserBindingId: result.browserBindingId,
+      profileId: result.profileId,
+      pairingState: result.connectionState,
+      discussionSelection: result.discussionSelection,
+      controlTargetDisposed: result.controlTargetDisposed,
+      permission: permission?.allowInvoked === true ? 'approved_once' : 'already_granted_or_not_requested'
+    };
+  } finally {
+    client?.close();
+    // When the command fails before its permission request, the short helper
+    // can still be alive. Await its bounded completion so this CLI never
+    // leaves an orphaned local UI-automation child process behind.
+    await approval?.catch(() => undefined);
+  }
+}
+
+async function main() {
+  try {
+    const result = await runValidationExtensionControl();
+    writeJson({
+      ok: true,
+      profileId: result.profileId,
+      pairingState: result.pairingState,
+      discussionSelection: result.discussionSelection,
+      controlTargetDisposed: result.controlTargetDisposed,
+      permission: result.permission
+    });
+  } catch (error) {
+    writeJson({ ok: false, error: safeErrorCode(error) });
+    process.exitCode = 1;
+  }
 }
 
 async function createPairing(loopbackOrigin) {
@@ -113,4 +135,8 @@ function safeErrorCode(error) {
 
 function writeJson(value) {
   writeSync(process.stdout.fd, `${JSON.stringify(value)}\n`, undefined, 'utf8');
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
 }

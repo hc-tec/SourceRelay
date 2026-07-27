@@ -37,19 +37,20 @@ Collector Gateway Testbench 对全部 `direct_ready` B 站能力做了真实只�
 
 `bilibili.danmaku` 本次闭环证明了“被动读取当前页面可见弹幕 DOM”的 direct 能力可以完成；它**不等于**已采集完整弹幕历史。本次结果为零条可见行，属于公开页面当前可见投影的真实零结果，不应被包装成弹幕内容丰富度验证。
 
-## 当前不在日常浏览器 direct-mode 范围内的能力
+## 原始验收时未纳入日常浏览器 direct-mode 的能力（历史记录）
 
-以下 3 项在 `/v2/capabilities` 中已明确登记为迁移边界。本次没有把它们偷渡到旧 Browser Host 或任何回退路径，因此不记为失败、也不记为通过。
+以下 2 项在 `/v2/capabilities` 中已明确登记为迁移边界。本次没有把它们偷渡到旧 Browser Host 或任何回退路径，因此不记为失败、也不记为通过。
 
 | 能力 | 登记状态 | 原因 |
 | --- | --- | --- |
 | `bilibili.account_inventory.pagination` | `direct_migration_required` | 有界翻页仍待迁移到日常浏览器直连执行模型 |
 | `bilibili.transcript` | `trusted_interaction_migration_required` | 需要可信 hover/click 触发字幕菜单与文本轨道观察 |
-| `bilibili.discussion` | `trusted_interaction_migration_required` | 需要可信滚动、排序和评论线程展开 |
 
 ## 后续独立 direct canary
 
 本文件上方的 **8 / 8** 是当日用户日常、已登录浏览器的原始验收范围，保持不改写。随后使用独立、临时、可见 Chromium 与 production MV3 / direct Gateway / Testbench 完成了 [`bilibili.native_search_batch`](bilibili-native-search-batch-direct-canary-v0.1.md) 的真实闭环：固定第 1、2 页各一次签名导航，`search_batch_ready`，24 项受控公开投影，零页面语义动作和零 response body。因此能力登记册现将它标为 `direct_ready`；它不代表任何用户日常浏览器已经被接管或自动重载。
+
+随后又在独立、持久的隔离验证浏览器中完成 [`bilibili.discussion` 用户已选页面 direct canary](bilibili-discussion-user-selected-direct-canary-v0.1.md)：测试准备阶段只进行一次导航和一次可信滚动；正式 direct work 本身为 `completed / discussion_ready`，同一 document 被动投影 20 条根评论，且 artifact 保持零导航、零页面语义动作、零 response body、无 browser 标识符。能力登记册现将 `bilibili.discussion` 标为 `direct_ready`；产品路径仍要求最终用户自己将评论区加载出来并在扩展 popup 明确选择当前页。
 
 ## 原始验收的辅助测试分层（历史记录，不替代真实平台证据）
 
@@ -72,4 +73,4 @@ Collector Gateway Testbench 对全部 `direct_ready` B 站能力做了真实只�
 
 1. 将上表 8 项以及后续独立验证通过的固定两页搜索，作为上层 Deep Research / 分析应用可依赖的正式 direct 基础服务矩阵。
 2. 下一项优先迁移 `account_inventory.pagination`；它仍需要新的已登录隔离 Profile 三面实证，不能借用搜索分页结论。
-3. 字幕与评论继续先做“真实人类流程 + DOM/XHR 并行侦察”，验证可信浏览器输入后再进入 extension/Gateway 产品闭环；不要用 synthetic DOM click 或旧 Browser Host fallback 代替。
+3. 字幕，以及评论的排序、回复树与全量分页，继续先做“真实人类流程 + DOM/XHR 并行侦察”，验证可信浏览器输入后再进入 extension/Gateway 产品闭环；不要用 synthetic DOM click 或旧 Browser Host fallback 代替。

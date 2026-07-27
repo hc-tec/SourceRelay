@@ -20,7 +20,8 @@
     "rebuild:validation-browser": "node scripts/validation-browser.mjs rebuild",
     "status:validation-browser": "node scripts/validation-browser.mjs status",
     "stop:validation-browser": "node scripts/validation-browser.mjs stop",
-    "validate:extension-control": "node scripts/validate-extension-control.mjs"
+    "validate:extension-control": "node scripts/validate-extension-control.mjs",
+    "canary:discussion-user-selected": "node scripts/validate-bilibili-discussion-e2e.mjs"
   },
   "dependencies": {
     "@intelligence/collector-contracts": "0.1.0",

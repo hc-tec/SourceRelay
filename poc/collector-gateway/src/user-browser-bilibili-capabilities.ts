@@ -66,7 +66,7 @@ export const USER_BROWSER_BILIBILI_CAPABILITIES = [
   descriptor('bilibili.account_inventory.pagination', 'UP 主视频有界翻页', 'canonical_profile_url_and_fixed_page_budget', 'direct_migration_required', 'bounded_page_navigation'),
   descriptor('bilibili.video_detail', '视频公开详情', 'canonical_video_url', 'direct_ready', 'dom_only'),
   descriptor('bilibili.transcript', '视频字幕', 'canonical_video_url', 'trusted_interaction_migration_required', 'subtitle_menu_and_text_track'),
-  descriptor('bilibili.discussion', '视频评论区（用户已选页）', 'canonical_video_url_user_selected_tab', 'direct_canary_pending', 'user_selected_tab_passive_dom_projection'),
+  descriptor('bilibili.discussion', '视频评论区（用户已选页）', 'canonical_video_url_user_selected_tab', 'direct_ready', 'user_selected_tab_passive_dom_projection'),
   descriptor('bilibili.danmaku', '视频弹幕可见 DOM', 'canonical_video_url', 'direct_ready', 'passive_player_dom_projection'),
   descriptor('bilibili.dynamic', 'UP 主动态', 'canonical_profile_url', 'direct_ready', 'passive_dom_projection'),
   descriptor('bilibili.collection_series.overview', 'UP 主合集与系列概览', 'canonical_profile_url', 'direct_ready', 'dom_and_fixed_network_metadata'),
@@ -86,6 +86,7 @@ export function isDirectReadyUserBrowserBilibiliCapability(
   | 'bilibili.video_detail'
   | 'bilibili.account_profile'
   | 'bilibili.account_inventory'
+  | 'bilibili.discussion'
   | 'bilibili.danmaku'
   | 'bilibili.dynamic'
   | 'bilibili.collection_series.overview'
@@ -93,7 +94,7 @@ export function isDirectReadyUserBrowserBilibiliCapability(
 > {
   return value === 'bilibili.native_search' || value === 'bilibili.native_search_batch' ||
     value === 'bilibili.video_detail' ||
-    value === 'bilibili.account_profile' || value === 'bilibili.account_inventory' ||
+    value === 'bilibili.account_profile' || value === 'bilibili.account_inventory' || value === 'bilibili.discussion' ||
     value === 'bilibili.danmaku' || value === 'bilibili.dynamic' ||
     value === 'bilibili.collection_series.overview' || value === 'bilibili.collection_series.detail';
 }
