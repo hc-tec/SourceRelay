@@ -77,6 +77,15 @@ describe('Browser Host security primitives', () => {
       nonce: 'nonce-1',
       issuedAt: '2026-07-22T00:00:00.000Z'
     });
+    const observerHandshake = { ...handshake, connectionMode: 'observer' as const };
+    expect(withoutHandshakeAuthentication(observerHandshake)).toEqual({
+      type: 'handshake',
+      protocolVersion: BROWSER_HOST_PROTOCOL_VERSION,
+      connectionMode: 'observer',
+      gatewayInstanceId: 'gateway-1',
+      nonce: 'nonce-1',
+      issuedAt: '2026-07-22T00:00:00.000Z'
+    });
   });
 
   test('keeps identifiers and state paths inside the local runtime root', () => {

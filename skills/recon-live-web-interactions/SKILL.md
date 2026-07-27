@@ -49,6 +49,7 @@ description: Investigate and prove interactions on real websites before automati
 - 优先复用项目受管的持久 Validation/Collection Profile；浏览器与目标页只在显式 session 终态关闭。页面闪退不能被 `finally` 自动关闭掩盖。
 - 屏幕出现意外闪烁、反复开关 tab/window 或浏览器进程异常退出时，立即停止新的平台动作，先审计进程、Profile、页面所有权和本地证据；修复生命周期问题后才能开始新的独立 run。
 - 不得附着、关闭、重启或为了测试而短暂接管用户日常浏览器。日常浏览器上的扩展只由用户正常使用；自动化验证使用独立受管 Profile。
+- 使用 Browser Host 时，一个真实 run 的 `controller` 本地 IPC 连接必须从 acquire 到显式 release/stop 全程保持；不要把 acquire、导航、截图和输入拆成会断开连接的短命 shell。控制连接断开或被另一个 controller 取代时，Host 必须将 active lease 隔离为 `controller_disconnected`，此后不得继续向该页发送平台动作。状态/日志读取必须走只读 observer 通道，observer 只能取去敏 snapshot，绝不能接管 controller 或影响 lease。
 
 ## 第 2 阶段：并行三面侦察
 

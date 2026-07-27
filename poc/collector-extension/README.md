@@ -79,6 +79,6 @@ npm run stop:validation-browser
 - control-surface revision；
 - build fingerprint。
 
-浏览器会在成功后保持打开，以便后续真实 E2E/侦察脚本通过 Browser Host 的认证本地 IPC 接管；`status` 只读取 Host 的 worker 标记和浏览器状态，不做平台导航。会话、独立测试 Profile、Host endpoint 与本地认证材料都在被 Git 忽略的 `poc/runtime/validation-browser/`；它们不会输出到终端或提交到 Git。修改扩展后使用 `npm run rebuild:validation-browser` 完成一次明确、可预期的测试环境更新；不需要、也不应让用户手工重载扩展。
+浏览器会在成功后保持打开，以便后续真实 E2E/侦察脚本通过 Browser Host 的认证本地 IPC 接管；`status` 使用只读 observer 连接，只读取 Host 的 worker 标记和浏览器状态，不做平台导航、不会接管 controller、不会中断已有 page lease。会话、独立测试 Profile、Host endpoint 与本地认证材料都在被 Git 忽略的 `poc/runtime/validation-browser/`；它们不会输出到终端或提交到 Git。修改扩展后使用 `npm run rebuild:validation-browser` 完成一次明确、可预期的测试环境更新；不需要、也不应让用户手工重载扩展。
 
 Browser Host、隔离 Chromium 和受管账号策略只属于开发验证 / `test/isolated-account` 通道。它们不是扩展在用户日常浏览器中的正式运行依赖，也不能作为 direct-mode API 的 fallback。

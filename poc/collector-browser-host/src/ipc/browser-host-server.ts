@@ -4,6 +4,7 @@ import {
   BROWSER_HOST_MAX_MESSAGE_BYTES,
   BROWSER_HOST_PROTOCOL_VERSION,
   BrowserHostError,
+  type BrowserHostConnectionMode,
   commandAuthenticationPayload,
   handshakeAuthenticationPayload,
   type BrowserHostCommandEnvelope,
@@ -25,6 +26,7 @@ import {
 
 interface ConnectionState {
   accepted: boolean;
+  connectionMode: BrowserHostConnectionMode | null;
   gatewayInstanceId: string | null;
   controllerGeneration: string | null;
   buffer: string;
@@ -89,6 +91,7 @@ export class BrowserHostServer {
     socket.setEncoding('utf8');
     const state: ConnectionState = {
       accepted: false,
+      connectionMode: null,
       gatewayInstanceId: null,
       controllerGeneration: null,
       buffer: '',
@@ -148,22 +151,27 @@ export class BrowserHostServer {
       socket.end();
       return;
     }
-    if (this.#activeSocket && this.#activeSocket !== socket && this.#activeControllerGeneration) {
-      this.#runtime.disconnectController(this.#activeControllerGeneration);
-      this.#activeSocket.destroy();
-    }
+    const connectionMode = request.connectionMode ?? 'controller';
     const controllerGeneration = randomUUID();
     state.accepted = true;
+    state.connectionMode = connectionMode;
     state.gatewayInstanceId = request.gatewayInstanceId;
     state.controllerGeneration = controllerGeneration;
-    this.#activeSocket = socket;
-    this.#activeControllerGeneration = controllerGeneration;
-    this.#runtime.adoptController(controllerGeneration);
+    if (connectionMode === 'controller') {
+      if (this.#activeSocket && this.#activeSocket !== socket && this.#activeControllerGeneration) {
+        this.#runtime.disconnectController(this.#activeControllerGeneration);
+        this.#activeSocket.destroy();
+      }
+      this.#activeSocket = socket;
+      this.#activeControllerGeneration = controllerGeneration;
+      this.#runtime.adoptController(controllerGeneration);
+    }
     const response: BrowserHostHandshakeResponse = {
       ok: true,
       type: 'handshake_accepted',
       hostInstanceId: this.#runtime.hostInstanceId,
       controllerGeneration,
+      connectionMode,
       protocolVersion: BROWSER_HOST_PROTOCOL_VERSION
     };
     this.#write(socket, response);
@@ -200,7 +208,12 @@ export class BrowserHostServer {
     this.#rememberNonce(envelope.nonce);
     let response: BrowserHostCommandResponse | BrowserHostErrorResponse;
     try {
-      const result = await this.#runtime.execute(envelope.body, envelope.controllerGeneration);
+      if (state.connectionMode === 'observer' && envelope.body.type !== 'get_snapshot') {
+        throw hostError({ code: 'observer_command_rejected', category: 'protocol', scope: 'host' });
+      }
+      const result = state.connectionMode === 'observer'
+        ? this.#runtime.snapshot()
+        : await this.#runtime.execute(envelope.body, envelope.controllerGeneration);
       response = { ok: true, type: 'command_result', commandId: envelope.commandId, result };
     } catch (error) {
       response = this.#errorResponse(envelope.commandId, error);
@@ -218,6 +231,9 @@ export class BrowserHostServer {
 
   #handshakeValid(request: BrowserHostHandshakeRequest): boolean {
     if (request.protocolVersion !== BROWSER_HOST_PROTOCOL_VERSION) return false;
+    if (request.connectionMode !== undefined && request.connectionMode !== 'controller' && request.connectionMode !== 'observer') {
+      return false;
+    }
     if (typeof request.gatewayInstanceId !== 'string' || request.gatewayInstanceId.length < 1) return false;
     if (typeof request.nonce !== 'string' || request.nonce.length < 16) return false;
     if (!timestampIsFresh(request.issuedAt)) return false;

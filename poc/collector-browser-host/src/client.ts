@@ -9,6 +9,7 @@ import {
   type BrowserHostCommandBody,
   type BrowserHostCommandEnvelope,
   type BrowserHostCommandResult,
+  type BrowserHostConnectionMode,
   type BrowserHostEndpointRecord,
   type BrowserHostHandshakeRequest,
   type BrowserHostWireResponse
@@ -23,6 +24,7 @@ export class BrowserHostClient {
   readonly hostInstanceId: string;
   readonly controllerGeneration: string;
   readonly #gatewayInstanceId: string;
+  readonly #connectionMode: BrowserHostConnectionMode;
   readonly #secret: string;
   readonly #socket: Socket;
   readonly #lines: string[] = [];
@@ -35,18 +37,25 @@ export class BrowserHostClient {
     hostInstanceId: string;
     controllerGeneration: string;
     gatewayInstanceId: string;
+    connectionMode: BrowserHostConnectionMode;
     secret: string;
     socket: Socket;
   }) {
     this.hostInstanceId = input.hostInstanceId;
     this.controllerGeneration = input.controllerGeneration;
     this.#gatewayInstanceId = input.gatewayInstanceId;
+    this.#connectionMode = input.connectionMode;
     this.#secret = input.secret;
     this.#socket = input.socket;
     this.#wireSocket();
   }
 
-  static async connect(endpointPath: string, gatewayInstanceId = randomUUID()): Promise<BrowserHostClient> {
+  static async connect(
+    endpointPath: string,
+    gatewayInstanceId = randomUUID(),
+    options: { connectionMode?: BrowserHostConnectionMode } = {}
+  ): Promise<BrowserHostClient> {
+    const connectionMode = options.connectionMode ?? 'controller';
     const endpoint = JSON.parse(await readFile(endpointPath, 'utf8')) as BrowserHostEndpointRecord;
     if (endpoint.protocolVersion !== BROWSER_HOST_PROTOCOL_VERSION || typeof endpoint.bootstrapSecret !== 'string') {
       throw new Error('browser_host_endpoint_invalid');
@@ -56,12 +65,14 @@ export class BrowserHostClient {
       hostInstanceId: endpoint.hostInstanceId,
       controllerGeneration: 'pending',
       gatewayInstanceId,
+      connectionMode,
       secret: endpoint.bootstrapSecret,
       socket
     });
     const unsigned: Omit<BrowserHostHandshakeRequest, 'authenticationDigest'> = {
       type: 'handshake',
       protocolVersion: BROWSER_HOST_PROTOCOL_VERSION,
+      connectionMode,
       gatewayInstanceId,
       nonce: randomBytes(18).toString('base64url'),
       issuedAt: new Date().toISOString()
@@ -73,19 +84,38 @@ export class BrowserHostClient {
     provisional.#socket.write(`${JSON.stringify(request)}\n`);
     const response = JSON.parse(await provisional.#nextLine()) as BrowserHostWireResponse;
     if (!response.ok) throw new BrowserHostError(response.error);
-    if (response.type !== 'handshake_accepted') throw new Error('browser_host_handshake_response_invalid');
+    // A running Host may predate the additive observer field. Preserve a
+    // controller-only compatibility path so an explicit rebuild can still
+    // stop that old test Host; an observer connection must never silently
+    // downgrade to a controller.
+    if (response.type !== 'handshake_accepted' ||
+      (response.connectionMode ?? 'controller') !== connectionMode) {
+      throw new Error('browser_host_handshake_response_invalid');
+    }
     return new BrowserHostClient({
       hostInstanceId: response.hostInstanceId,
       controllerGeneration: response.controllerGeneration,
       gatewayInstanceId,
+      connectionMode,
       secret: endpoint.bootstrapSecret,
       socket: provisional.#detachSocket()
     });
   }
 
+  /**
+   * Read-only status clients must not evict the action-owning controller.
+   * The server accepts only `get_snapshot` from this connection class.
+   */
+  static async connectObserver(endpointPath: string, gatewayInstanceId = randomUUID()): Promise<BrowserHostClient> {
+    return await BrowserHostClient.connect(endpointPath, gatewayInstanceId, { connectionMode: 'observer' });
+  }
+
   command(body: BrowserHostCommandBody, options: { commandId?: string; timeoutMs?: number } = {}): Promise<BrowserHostCommandResult> {
     const run = async () => {
       if (this.#closed) throw new Error('browser_host_client_closed');
+      if (this.#connectionMode === 'observer' && body.type !== 'get_snapshot') {
+        throw new Error('browser_host_observer_command_rejected');
+      }
       const now = new Date();
       const unsigned: Omit<BrowserHostCommandEnvelope, 'authenticationDigest'> = {
         type: 'command',

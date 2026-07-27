@@ -33,10 +33,14 @@ export async function startValidationBrowser() {
     endpointPath: browserHostEndpointPath,
     timeoutMs: 30_000
   });
-  const client = await BrowserHostClient.connect(browserHostEndpointPath, 'validation-browser-controller');
+  // A normal start is a non-disruptive query first. It must not take over an
+  // in-flight test controller merely to discover that the visible fixture is
+  // already healthy.
+  const observer = await BrowserHostClient.connectObserver(browserHostEndpointPath, 'validation-browser-start-observer');
+  let snapshot;
   try {
-    let snapshot = await client.command({ type: 'get_snapshot' });
-    let profile = profileFrom(snapshot);
+    snapshot = await observer.command({ type: 'get_snapshot' });
+    const profile = profileFrom(snapshot);
     if (profile?.running && runtimeMatches(profile.extensionRuntime, expected)) {
       return resultFor('reused', profile, expected);
     }
@@ -46,6 +50,20 @@ export async function startValidationBrowser() {
       // that harmless status-like action into a visible close/reopen cycle.
       // The only command allowed to replace this test fixture is the
       // explicitly named `rebuild` command below.
+      throw new Error('validation_browser_runtime_mismatch_requires_explicit_rebuild');
+    }
+  } finally {
+    observer.close();
+  }
+
+  const client = await BrowserHostClient.connect(browserHostEndpointPath, 'validation-browser-controller');
+  try {
+    snapshot = await client.command({ type: 'get_snapshot' });
+    let profile = profileFrom(snapshot);
+    if (profile?.running && runtimeMatches(profile.extensionRuntime, expected)) {
+      return resultFor('reused', profile, expected);
+    }
+    if (profile?.running) {
       throw new Error('validation_browser_runtime_mismatch_requires_explicit_rebuild');
     }
     snapshot = await client.command({
@@ -75,7 +93,7 @@ export async function startValidationBrowser() {
 
 export async function validationBrowserStatus() {
   const expected = await readExtensionRuntimeExpectation();
-  const connected = await connectExistingHost();
+  const connected = await connectExistingHost('observer');
   if (!connected) return { ok: true, state: 'not_running', runtime: publicRuntime(expected, null) };
   try {
     const snapshot = await connected.client.command({ type: 'get_snapshot' });
@@ -120,7 +138,7 @@ export async function rebuildValidationBrowser() {
   return { ...started, action: 'rebuilt_and_started', previousBrowser: stopped.state };
 }
 
-async function connectExistingHost() {
+async function connectExistingHost(connectionMode = 'controller') {
   let endpoint;
   try {
     endpoint = JSON.parse(await readFile(browserHostEndpointPath, 'utf8'));
@@ -130,7 +148,10 @@ async function connectExistingHost() {
   const processId = Number.isSafeInteger(endpoint?.processId) ? endpoint.processId : null;
   try {
     const { BrowserHostClient } = await browserHostApi();
-    return { client: await BrowserHostClient.connect(browserHostEndpointPath, 'validation-browser-status'), processId };
+    const client = connectionMode === 'observer'
+      ? await BrowserHostClient.connectObserver(browserHostEndpointPath, 'validation-browser-status')
+      : await BrowserHostClient.connect(browserHostEndpointPath, 'validation-browser-controller');
+    return { client, processId };
   } catch {
     if (!isLiveProcess(processId)) {
       await rm(browserHostEndpointPath, { force: true }).catch(() => undefined);

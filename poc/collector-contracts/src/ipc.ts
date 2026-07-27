@@ -51,6 +51,8 @@ import type {
 
 export const BROWSER_HOST_PROTOCOL_VERSION = 7 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
+export const BROWSER_HOST_CONNECTION_MODES = ['controller', 'observer'] as const;
+export type BrowserHostConnectionMode = (typeof BROWSER_HOST_CONNECTION_MODES)[number];
 
 export interface BrowserHostEndpointRecord {
   schemaVersion: 1;
@@ -66,6 +68,12 @@ export interface BrowserHostEndpointRecord {
 export interface BrowserHostHandshakeRequest {
   type: 'handshake';
   protocolVersion: typeof BROWSER_HOST_PROTOCOL_VERSION;
+  /**
+   * `observer` is authenticated but can read only a de-sensitised Host
+   * snapshot. It must never replace the one active controller or affect a
+   * leased page.
+   */
+  connectionMode?: BrowserHostConnectionMode;
   gatewayInstanceId: string;
   nonce: string;
   issuedAt: string;
@@ -77,6 +85,7 @@ export interface BrowserHostHandshakeResponse {
   type: 'handshake_accepted';
   hostInstanceId: string;
   controllerGeneration: string;
+  connectionMode: BrowserHostConnectionMode;
   protocolVersion: typeof BROWSER_HOST_PROTOCOL_VERSION;
 }
 

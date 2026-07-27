@@ -231,13 +231,21 @@ export class ProfileRuntime {
 
   async bindStrategyObserver(request: StrategyObserverBindingRequest): Promise<StrategyObserverBindingResult> {
     const context = this.#ledger.extensionCommandContext(request);
+    // A passive selected-tab observation may intentionally bind the already
+    // stable current document. Fresh blank pages still require the next
+    // navigation because document generation zero has no platform document
+    // identity to observe.
+    const nextDocumentGeneration = request.documentBindingMode === 'current_document_or_next_navigation' &&
+      context.documentGeneration > 0
+      ? context.documentGeneration
+      : context.documentGeneration + 1;
     const result = await this.#nativeBridgeCommands.command(
       this.profileId,
       this.browserSessionId,
       {
         type: 'collector_bind_strategy_observer',
         tabId: context.extensionTabId,
-        nextDocumentGeneration: context.documentGeneration + 1,
+        nextDocumentGeneration,
         binding: request
       },
       5_000
@@ -245,7 +253,7 @@ export class ProfileRuntime {
     if (result.type !== 'collector_strategy_observer_binding' ||
       result.observerBindingId !== request.observerBindingId ||
       result.pageAlias !== request.pageAlias ||
-      result.nextDocumentGeneration !== context.documentGeneration + 1) {
+      result.nextDocumentGeneration !== nextDocumentGeneration) {
       throw new Error('strategy_observer_binding_result_invalid');
     }
     return result;
