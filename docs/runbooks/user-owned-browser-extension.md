@@ -1,7 +1,7 @@
 # 日常浏览器扩展模式：安装、配对与本地 API
 
 - 状态：可用的 direct-mode MVP
-- 已有真实 direct canary：`bilibili.video_detail`、`bilibili.native_search`、`bilibili.account_profile`、`bilibili.account_inventory`
+- 已有真实 direct canary：`bilibili.video_detail`、`bilibili.native_search`、`bilibili.native_search_batch`、`bilibili.account_profile`、`bilibili.account_inventory`
 - 已登记 B站能力：`GET /v2/capabilities` 会列出 12 项已有实现及其 direct-mode 迁移状态；登记不等于自动开放旧 Browser Host fallback。
 - API：`/v2/openapi.json`、`/v2/capabilities`、`/v2/collector-service/browser-bindings`、`/v2/collect`、`/v2/collect/operations/{operationId}`
 - 不属于本 runbook 的旧通道：`profileId`、Browser Host、Playwright persistent context、受管 Collection Profile、`POST /v1/collect`
@@ -17,7 +17,7 @@
 
 Collector 不创建、复制、读取、启动或关闭你的浏览器 Profile。浏览器自己的登录态仍只由浏览器维护；扩展不会导出 Cookie、密码、Token、Storage 或 Profile 文件。
 
-每个 direct work 都会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**。已完成真实 canary 的详情只导航一次到严格规范的视频 URL；搜索只导航一次到 Gateway 从关键词推导出的“综合 / 相关性 / 第 1 页”搜索页，既不点击搜索按钮，也不翻页、滚动、改排序或读取 Network response body。UP 主公开资料与 UP 主视频首屏也只接受规范空间主页：Gateway 分别推导空间主页和固定 `/upload/video` 首屏，前者投影公开账号头信息，后者投影首屏可见视频卡片；两项均已通过 user-owned-browser real canary，均不翻页、不滚动、不筛选。成功后标签页留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”。用户关闭、移动、激活接管或导航该标签页时，当前 run 停止；不会自动重开、刷新、换 tab 或重放平台动作。
+每个 direct work 都会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**。已完成真实 canary 的详情只导航一次到严格规范的视频 URL；单页搜索只导航一次到 Gateway 从关键词推导出的“综合 / 相关性 / 第 1 页”搜索页，既不点击搜索按钮，也不翻页、滚动、改排序或读取 Network response body。固定两页搜索是独立能力：Gateway 只接收同一个 `query`，签名第 1、2 页并按顺序导航，最多两次导航、零页面语义动作；第 1 页为空、风险、用户接管、未知导航或过期时不会进入第 2 页。UP 主公开资料与 UP 主视频首屏也只接受规范空间主页：Gateway 分别推导空间主页和固定 `/upload/video` 首屏，前者投影公开账号头信息，后者投影首屏可见视频卡片；两项均已通过 user-owned-browser real canary，均不翻页、不滚动、不筛选。成功后标签页留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”。用户关闭、移动、激活接管或导航该标签页时，当前 run 停止；不会自动重开、刷新、换 tab 或重放平台动作。
 
 ## 2. 一次性准备稳定的扩展目录
 
@@ -245,4 +245,18 @@ scoped local API token
   → raw-first local artifact（关键词只以 digest 持久化）
 ```
 
-这不等于“B站所有能力已经迁到日常浏览器模式”。字幕、评论、弹幕、动态、合集、批量搜索与有界分页仍各自保持迁移状态；旧 B站能力矩阵也不能被生产 `/v2` API 当作 Browser Host fallback 调用。每个后续能力仍遵循：真实视觉、DOM、Network 三面侦察 → 固定 capability contract → work-tab 或用户显式选择 tab 的安全执行 → real canary。
+固定两页搜索也已在独立、临时、可见 Chromium 中通过真实 direct canary：
+
+```text
+scoped local API token
+  → /v2/collect(bilibili.native_search_batch)
+  → one signed work item with fixed pages [1, 2]
+  → one extension-owned retained/reused work tab
+  → page 1 then page 2, at most two URL navigations
+  → bounded visible-BV-card DOM projection (at most 12 per page)
+  → signed HMAC result and direct-only artifact
+```
+
+这不是任意分页接口，也不让调用方传 page、URL、排序、selector 或脚本。完整去敏证据见[固定两页搜索 direct canary](../validation/bilibili-native-search-batch-direct-canary-v0.1.md)。
+
+这不等于“B站所有能力已经迁到日常浏览器模式”。字幕、评论、有界投稿分页等仍各自保持迁移状态；旧 B站能力矩阵也不能被生产 `/v2` API 当作 Browser Host fallback 调用。每个后续能力仍遵循：真实视觉、DOM、Network 三面侦察 → 固定 capability contract → work-tab 或用户显式选择 tab 的安全执行 → real canary。

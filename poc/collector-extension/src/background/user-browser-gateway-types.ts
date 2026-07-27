@@ -17,6 +17,7 @@ export const SAFE_ERROR = /^[a-z0-9_.-]{1,120}$/i;
 export const USER_BROWSER_DIRECT_WORK_CAPABILITIES = [
   'bilibili.video_detail',
   'bilibili.native_search',
+  'bilibili.native_search_batch',
   'bilibili.account_profile',
   'bilibili.account_inventory'
 ] as const;

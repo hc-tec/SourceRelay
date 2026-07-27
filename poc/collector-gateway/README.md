@@ -2,7 +2,7 @@
 
 这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度。
 
-> **重要的生产边界（2026-07-26）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。直接模式已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab → 一次公开 B站详情、固定首页搜索、UP 主资料或 UP 主投稿视频首屏导航 → 固定 DOM 投影 → HMAC result → raw-first local artifact。`bilibili.account_profile` 与 `bilibili.account_inventory` 已完成真实 user-browser canary，分别只接受规范 UP 主空间主页并派生主页或投稿视频首屏；它们与详情、搜索一样显示为 `direct_ready`，但不会因此放宽到任意 URL、分页、筛选、滚动或 Browser Host fallback。`GET /v2/capabilities` 会列出 12 项 B站既有实现的 direct-mode 迁移状态，避免把“仓库已有旧实现”误报成“日常浏览器已可安全 dispatch”。它不读取登录凭据、Cookie、Token、Profile 文件或 Network response body。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
+> **重要的生产边界（2026-07-27）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。直接模式已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab → 一次公开 B站详情、固定首页搜索、固定两页搜索、UP 主资料或 UP 主投稿视频首屏导航 → 固定 DOM 投影 → HMAC result → raw-first local artifact。`bilibili.account_profile`、`bilibili.account_inventory` 与 `bilibili.native_search_batch` 都已完成真实 direct canary；它们与详情、固定首页搜索一样显示为 `direct_ready`，但不会因此放宽到任意 URL、分页、筛选、滚动或 Browser Host fallback。`GET /v2/capabilities` 会列出 12 项 B站既有实现的 direct-mode 迁移状态，避免把“仓库已有旧实现”误报成“日常浏览器已可安全 dispatch”。它不读取登录凭据、Cookie、Token、Profile 文件或 Network response body。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
 
 ## 日常浏览器 Direct API（当前生产 MVP）
 
@@ -47,6 +47,23 @@
 ```
 
 搜索任务由 Gateway 推导规范目标，固定为综合/相关性/第 1 页。调用方不能传 URL、排序、页码、selector 或脚本；产物路径为 `/v1/collect/artifacts/bilibili.native_search/{artifactId}`，终态 work ledger 与 artifact 不保存原 query 或带 query URL，只保存 SHA-256 摘要。
+
+需要稳定的最小广度时，可改用固定两页搜索；调用方仍只提供关键词：
+
+```json
+{
+  "schemaVersion": 2,
+  "browserBindingId": "…",
+  "platform": "bilibili",
+  "capability": "bilibili.native_search_batch",
+  "executionTarget": "collector_work_tab",
+  "input": {
+    "query": "DeepSeek"
+  }
+}
+```
+
+`bilibili.native_search_batch` 由 Gateway 固定签名综合/相关性的第 1、2 页，扩展只按顺序导航这两个 URL：最多两次导航、零 DOM click/scroll/filter/sort、零 response body；第 1 页为空、风险、用户接管、页面身份漂移、未知导航或 deadline 到期都会停止，不会进入或重放第 2 页。每页最多返回 12 张规范 BV 卡；产物路径是 `/v1/collect/artifacts/bilibili.native_search_batch/{artifactId}`，同样只持久化 query digest。
 
 新增的 UP 主资料与视频首屏都只接收规范空间主页；Gateway 分别派生主页与 `/upload/video`，调用方不能传页码、筛选、任意路径或 URL：
 

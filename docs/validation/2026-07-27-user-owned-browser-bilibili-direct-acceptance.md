@@ -39,16 +39,19 @@ Collector Gateway Testbench 对全部 `direct_ready` B 站能力做了真实只�
 
 ## 当前不在日常浏览器 direct-mode 范围内的能力
 
-以下 4 项在 `/v2/capabilities` 中已明确登记为迁移边界。本次没有把它们偷渡到旧 Browser Host 或任何回退路径，因此不记为失败、也不记为通过。
+以下 3 项在 `/v2/capabilities` 中已明确登记为迁移边界。本次没有把它们偷渡到旧 Browser Host 或任何回退路径，因此不记为失败、也不记为通过。
 
 | 能力 | 登记状态 | 原因 |
 | --- | --- | --- |
 | `bilibili.account_inventory.pagination` | `direct_migration_required` | 有界翻页仍待迁移到日常浏览器直连执行模型 |
-| `bilibili.native_search_batch` | `direct_migration_required` | 多页站内搜索仍待迁移到日常浏览器直连执行模型 |
 | `bilibili.transcript` | `trusted_interaction_migration_required` | 需要可信 hover/click 触发字幕菜单与文本轨道观察 |
 | `bilibili.discussion` | `trusted_interaction_migration_required` | 需要可信滚动、排序和评论线程展开 |
 
-## 辅助测试分层（不替代真实平台证据）
+## 后续独立 direct canary
+
+本文件上方的 **8 / 8** 是当日用户日常、已登录浏览器的原始验收范围，保持不改写。随后使用独立、临时、可见 Chromium 与 production MV3 / direct Gateway / Testbench 完成了 [`bilibili.native_search_batch`](bilibili-native-search-batch-direct-canary-v0.1.md) 的真实闭环：固定第 1、2 页各一次签名导航，`search_batch_ready`，24 项受控公开投影，零页面语义动作和零 response body。因此能力登记册现将它标为 `direct_ready`；它不代表任何用户日常浏览器已经被接管或自动重载。
+
+## 原始验收的辅助测试分层（历史记录，不替代真实平台证据）
 
 | 层级 | 执行命令/方式 | 结果 |
 | --- | --- | --- |
@@ -57,7 +60,7 @@ Collector Gateway Testbench 对全部 `direct_ready` B 站能力做了真实只�
 | 核心单元/领域测试 | `poc` 的 `npm run test:unit` | 57 个测试文件、183 个测试通过 |
 | 本地真实进程 integration/E2E | `poc` 的 `npm run test:real-local` | 8 / 8 通过；含实际 MV3 启动、direct Gateway 配对、隔离 Profile 边界和 Gateway/Browser Host 生命周期 |
 
-## 收尾状态
+## 原始验收结束时状态（历史记录）
 
 - 日常浏览器绑定：仍为 `online`。
 - Testbench 与 Gateway：仍可达；Testbench 记住本轮 8 个 operation，便于当前进程内审阅。
@@ -67,6 +70,6 @@ Collector Gateway Testbench 对全部 `direct_ready` B 站能力做了真实只�
 
 ## 后续建议
 
-1. 将上表 8 项作为上层 Deep Research / 分析应用可依赖的正式 direct 基础服务矩阵。
-2. 先迁移 `account_inventory.pagination` 和 `native_search_batch`，它们属于低交互、多页预算控制问题。
+1. 将上表 8 项以及后续独立验证通过的固定两页搜索，作为上层 Deep Research / 分析应用可依赖的正式 direct 基础服务矩阵。
+2. 下一项优先迁移 `account_inventory.pagination`；它仍需要新的已登录隔离 Profile 三面实证，不能借用搜索分页结论。
 3. 字幕与评论继续先做“真实人类流程 + DOM/XHR 并行侦察”，验证可信浏览器输入后再进入 extension/Gateway 产品闭环；不要用 synthetic DOM click 或旧 Browser Host fallback 代替。

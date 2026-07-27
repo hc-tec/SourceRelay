@@ -25,11 +25,13 @@ describe('user-browser Gateway direct capability catalog', () => {
       schemaVersion: 2,
       capabilities: [
         descriptor({ capability: 'bilibili.video_detail', dispatchState: 'direct_ready' }),
+        descriptor({ capability: 'bilibili.native_search_batch', dispatchState: 'direct_ready' }),
         descriptor({ capability: 'bilibili.account_profile' }),
         descriptor({ capability: 'bilibili.dynamic', dispatchState: 'direct_migration_required' })
       ]
     })).toEqual([
       expect.objectContaining({ capability: 'bilibili.video_detail', dispatchState: 'direct_ready' }),
+      expect.objectContaining({ capability: 'bilibili.native_search_batch', dispatchState: 'direct_ready' }),
       expect.objectContaining({ capability: 'bilibili.account_profile', dispatchState: 'direct_canary_pending' })
     ]);
   });

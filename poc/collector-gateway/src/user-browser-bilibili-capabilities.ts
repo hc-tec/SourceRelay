@@ -58,7 +58,7 @@ export interface UserBrowserBilibiliCapabilityDescriptor {
 
 export const USER_BROWSER_BILIBILI_CAPABILITIES = [
   descriptor('bilibili.native_search', 'B站站内搜索', 'query', 'direct_ready', 'dom_only'),
-  descriptor('bilibili.native_search_batch', 'B站站内搜索固定两页', 'query_and_fixed_pages', 'direct_canary_pending', 'bounded_multi_page_dom_projection'),
+  descriptor('bilibili.native_search_batch', 'B站站内搜索固定两页', 'query_and_fixed_pages', 'direct_ready', 'bounded_multi_page_dom_projection'),
   descriptor('bilibili.account_profile', 'UP 主公开资料', 'canonical_profile_url', 'direct_ready', 'passive_dom_projection'),
   descriptor('bilibili.account_inventory', 'UP 主视频首屏', 'canonical_profile_url', 'direct_ready', 'passive_dom_projection'),
   descriptor('bilibili.account_inventory.pagination', 'UP 主视频有界翻页', 'canonical_profile_url_and_fixed_page_budget', 'direct_migration_required', 'bounded_page_navigation'),
@@ -80,6 +80,7 @@ export function isDirectReadyUserBrowserBilibiliCapability(
 ): value is Extract<
   UserBrowserBilibiliCapability,
   | 'bilibili.native_search'
+  | 'bilibili.native_search_batch'
   | 'bilibili.video_detail'
   | 'bilibili.account_profile'
   | 'bilibili.account_inventory'
@@ -88,7 +89,8 @@ export function isDirectReadyUserBrowserBilibiliCapability(
   | 'bilibili.collection_series.overview'
   | 'bilibili.collection_series.detail'
 > {
-  return value === 'bilibili.native_search' || value === 'bilibili.video_detail' ||
+  return value === 'bilibili.native_search' || value === 'bilibili.native_search_batch' ||
+    value === 'bilibili.video_detail' ||
     value === 'bilibili.account_profile' || value === 'bilibili.account_inventory' ||
     value === 'bilibili.danmaku' || value === 'bilibili.dynamic' ||
     value === 'bilibili.collection_series.overview' || value === 'bilibili.collection_series.detail';

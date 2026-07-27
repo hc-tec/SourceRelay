@@ -10,6 +10,12 @@ describe('user-owned browser Bilibili capability catalog', () => {
     expect(catalog).toHaveLength(12);
     expect(catalog).toEqual(expect.arrayContaining([
       expect.objectContaining({
+        capability: 'bilibili.native_search_batch',
+        dispatchState: 'direct_ready',
+        captureMode: 'bounded_multi_page_dom_projection',
+        browserHostFallback: 'forbidden'
+      }),
+      expect.objectContaining({
         capability: 'bilibili.account_profile',
         dispatchState: 'direct_ready',
         browserHostFallback: 'forbidden'
@@ -50,6 +56,7 @@ describe('user-owned browser Bilibili capability catalog', () => {
       })
     ]));
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.video_detail')).toBe(true);
+    expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.native_search_batch')).toBe(true);
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.account_profile')).toBe(true);
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.account_inventory')).toBe(true);
     expect(isDirectReadyUserBrowserBilibiliCapability('bilibili.dynamic')).toBe(true);

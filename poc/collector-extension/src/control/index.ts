@@ -127,6 +127,8 @@ function directCapabilityFallbackTitle(capability: UserBrowserDirectWorkCapabili
       return '视频公开详情';
     case 'bilibili.native_search':
       return 'B站站内搜索';
+    case 'bilibili.native_search_batch':
+      return 'B站站内搜索固定两页';
     case 'bilibili.account_profile':
       return 'UP 主公开资料';
     case 'bilibili.account_inventory':

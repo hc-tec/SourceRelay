@@ -18,7 +18,7 @@ Collector Gateway Testbench :43128
 - 从 Gateway 读取全部 12 项 B站既有能力的 direct-mode 登记状态；
 - 投递一个 `bilibili.video_detail` 测试（输入仅为 BVID）；
 - 投递一个 `bilibili.native_search` 测试（输入仅为关键词）；
-- 投递一个 `bilibili.native_search_batch` canary（输入仅为关键词；Gateway 固定派生综合相关性第 1、2 页，调用方不能传 URL、页码、排序或点击指令）；
+- 投递一个 `bilibili.native_search_batch` 测试（输入仅为关键词；Gateway 固定派生综合相关性第 1、2 页，调用方不能传 URL、页码、排序或点击指令）；
 - 投递一个 `bilibili.account_profile` 测试（输入仅为 UP 主 MID）；
 - 投递一个 `bilibili.account_inventory` 测试（输入仅为 UP 主 MID，固定投稿视频首屏）；
 - 读取同一测试台提交过的 operation，并从该 operation 推导固定 artifact retrieval path；
