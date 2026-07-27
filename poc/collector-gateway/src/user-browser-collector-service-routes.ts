@@ -32,7 +32,7 @@ import {
   sendUserBrowserServiceAccessDenied,
   type UserBrowserServicePrincipal
 } from './user-browser-collector-service-access';
-import { listUserBrowserBilibiliCapabilities } from './user-browser-bilibili-capabilities';
+import { listUserBrowserCapabilities } from './user-browser-capabilities';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 
@@ -59,7 +59,7 @@ export async function handleUserBrowserCollectorServiceRoute(
   if (request.method === 'GET' && url.pathname === '/v2/capabilities') {
     sendJson(response, 200, {
       schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
-      capabilities: listUserBrowserBilibiliCapabilities()
+      capabilities: listUserBrowserCapabilities()
     });
     return true;
   }

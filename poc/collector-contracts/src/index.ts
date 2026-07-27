@@ -4,6 +4,7 @@ export * from './extension-work.js';
 export * from './extension-work-bilibili-passive.js';
 export * from './extension-work-bilibili-discussion-user-selected-tab.js';
 export * from './extension-work-bilibili-native-search-batch.js';
+export * from './xiaohongshu-current-page-network.js';
 export * from './bilibili-collection-series-detail.js';
 export * from './bilibili-account-profile.js';
 export * from './bilibili-transcript-interaction.js';

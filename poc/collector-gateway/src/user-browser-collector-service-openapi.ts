@@ -15,7 +15,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
       '/v2/capabilities': {
         get: {
           operationId: 'listUserBrowserCapabilities',
-          summary: 'List every implemented Bilibili capability and its direct-mode migration state.',
+          summary: 'List registered user-owned-browser capabilities and their dispatch or route-admission state.',
           responses: { '200': jsonResponse({ $ref: '#/components/schemas/UserBrowserCapabilityCatalog' }) }
         }
       },
@@ -126,6 +126,12 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           }
         },
         UserBrowserCapability: {
+          oneOf: [
+            { $ref: '#/components/schemas/BilibiliUserBrowserCapability' },
+            { $ref: '#/components/schemas/XiaohongshuUserBrowserCapability' }
+          ]
+        },
+        BilibiliUserBrowserCapability: {
           type: 'object', additionalProperties: false,
           required: [
             'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'dispatchState', 'captureMode',
@@ -154,6 +160,43 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             },
             captureMode: { type: 'string' },
             legacyImplementationPresent: { type: 'boolean', const: true },
+            browserHostFallback: { type: 'string', const: 'forbidden' }
+          }
+        },
+        XiaohongshuUserBrowserCapability: {
+          type: 'object', additionalProperties: false,
+          required: [
+            'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'executionTarget', 'dispatchState',
+            'captureMode', 'responseBodies', 'routeAdmission', 'budget', 'browserHostFallback'
+          ],
+          properties: {
+            schemaVersion: { type: 'integer', const: 1 },
+            capability: { type: 'string', const: 'xiaohongshu.current_page.network_metadata' },
+            platform: { type: 'string', const: 'xiaohongshu' },
+            title: { type: 'string' },
+            inputMode: { type: 'string', const: 'explicit_current_page_selection_no_caller_url' },
+            executionTarget: { type: 'string', const: 'user_selected_tab' },
+            dispatchState: { type: 'string', const: 'policy_ready_route_admission_required' },
+            captureMode: { type: 'string', const: 'prearmed_same_document_network_metadata' },
+            responseBodies: { type: 'string', const: 'not_read' },
+            routeAdmission: { type: 'string', const: 'no_public_content_route_admitted' },
+            budget: {
+              type: 'object', additionalProperties: false,
+              required: [
+                'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+                'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumNetworkMetadataObservations',
+                'maximumRawPayloadBytes'
+              ],
+              properties: {
+                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPageReloads: { type: 'integer', const: 0 },
+                maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
+                maximumSemanticActions: { type: 'integer', const: 0 },
+                maximumNetworkResponseBodies: { type: 'integer', const: 0 },
+                maximumNetworkMetadataObservations: { type: 'integer', const: 24 },
+                maximumRawPayloadBytes: { type: 'integer', const: 0 }
+              }
+            },
             browserHostFallback: { type: 'string', const: 'forbidden' }
           }
         },

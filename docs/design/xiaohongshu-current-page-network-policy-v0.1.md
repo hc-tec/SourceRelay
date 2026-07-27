@@ -1,0 +1,66 @@
+# 小红书当前页网络优先策略 v0.1
+
+- 状态：**已登记能力接口，未开放任务调度**。
+- 适用能力：`xiaohongshu.current_page.network_metadata`。
+- 目的：把小红书的高风险页面生命周期限制写进共享契约、Gateway 能力目录与未来扩展 work，而不是依赖调用方“记得小心”。
+
+## 产品边界
+
+小红书不走普通“搜索 -> 点击卡片 -> 打开详情 -> 翻页”的采集模型。对于此平台，Collector 只能观察已经存在的同一 document：
+
+```text
+用户自行打开原始页面
+  → （未来）扩展在该 document 之前被明确预置为只读观察
+  → 用户明确选择当前页面
+  → Gateway 只接收 capability + browserBindingId，不接收 URL 或浏览器标识
+  → 同一 document 中生成一次有界网络元数据结果
+```
+
+这里的“原始页面”可以是用户正常通过地址栏、书签或外部入口打开的页面；它不允许扩展、Gateway 或页面内脚本通过点击卡片、搜索、分页、弹层、history、刷新或新开 tab 抵达目标。
+
+## 不可绕过的预算
+
+| 项目 | 上限 | 含义 |
+| --- | ---: | --- |
+| 平台导航 | 0 | work 不能打开、改写或跳转页面。 |
+| 刷新 | 0 | 不能用 reload 重新触发接口。 |
+| 页面内新 document | 0 | 不能点击卡片、详情、话题、作者、评论或任何可能切页的控件。 |
+| 语义动作 | 0 | 不能 click、hover、scroll、筛选、排序、搜索或展开。 |
+| Network response body | 0 | 当前版本只做分类元数据，不能复制 JSON/HTML 正文。 |
+| 原始 payload | 0 bytes | Gateway 与上层应用不接收原始网络材料。 |
+| Network 元数据 | 最多 24 条 | 只允许去 query 的 route 分类计数，避免把安全接口变成可枚举数据。 |
+
+同时固定：不读取 Cookie、Token、request/response header、query 值、browser Profile、tab/window/document ID；不调用 Browser Host fallback。
+
+## 为什么是预置同一 document 观察
+
+用户在页面完全加载后才选择当前 tab，扩展无法倒带读取已经结束的 XHR/FETCH response body。为了不以刷新补救，未来若要观察网络，只能在**用户打开原始页面之前**对该同一 document 建立明确、短时、只读的观察窗口。
+
+这不是“后台监控所有小红书页面”：预置必须来自扩展 UI 的一次明确操作，窗口必须与一个 tab/document 生命周期绑定并自动过期；如果 document 已改变、用户手动跳走、出现登录/验证/限流，work 立即停止。
+
+## 路由准入规则
+
+当前没有任何小红书 response body route 获得准入。匿名 `/explore` 实证中，Network 面只有登录、身份、配置、安全与遥测相关请求；可见推荐卡片并不能证明其中任一路由是公开内容数据源。
+
+未来新建正文能力至少需要独立满足：
+
+1. 在真实可见页面上，route 与目标公开内容具有明确语义；
+2. 页面视觉与 DOM 同时出现能对应的公开字段；
+3. route 不是登录、身份、安全、验证码、风控、配置、遥测或广告面；
+4. body 是 JSON、大小受限、敏感字段递归剔除，且不会保存短期访问上下文；
+5. 一次操作即可证明，失败不刷新、不重放、不改走 DOM 爬取。
+
+通过后必须使用新的、固定的 capability ID 与单独的 canary；不能把 route body 偷渡进 `xiaohongshu.current_page.network_metadata`。
+
+## API 可见性
+
+`GET /v2/capabilities` 会显示该能力的状态：
+
+```text
+dispatchState: policy_ready_route_admission_required
+captureMode: prearmed_same_document_network_metadata
+responseBodies: not_read
+routeAdmission: no_public_content_route_admitted
+```
+
+这是一条给上层应用的真实能力声明，不是可执行采集承诺。因此它目前不出现在 `/v2/collect` 的可调度请求集合中；调用方不能用它触发页面动作或网络正文读取。
