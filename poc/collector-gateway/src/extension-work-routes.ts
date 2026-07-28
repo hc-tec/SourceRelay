@@ -18,6 +18,8 @@ import {
   isXiaohongshuNotePublicDetailWorkResult,
   isXiaohongshuNotePublicCommentsWorkItem,
   isXiaohongshuNotePublicCommentsWorkResult,
+  isXiaohongshuNotePublicCommentRepliesWorkItem,
+  isXiaohongshuNotePublicCommentRepliesWorkResult,
   type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
 import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
@@ -36,12 +38,14 @@ import { recordXiaohongshuPublicNotesExtensionWork } from './extension-work-xiao
 import { recordXiaohongshuAccountPublicNotesExtensionWork } from './extension-work-xiaohongshu-account-public-notes';
 import { recordXiaohongshuNotePublicDetailExtensionWork } from './extension-work-xiaohongshu-note-public-detail';
 import { recordXiaohongshuNotePublicCommentsExtensionWork } from './extension-work-xiaohongshu-note-public-comments';
+import { recordXiaohongshuReplyWork } from './extension-work-xiaohongshu-note-public-comment-replies';
 import type { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
 import type { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-native-search-batch-artifacts';
 import type { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-artifacts';
 import type { XiaohongshuAccountPublicNotesArtifactStore } from './xiaohongshu-account-public-notes-artifacts';
 import type { XiaohongshuNotePublicDetailArtifactStore } from './xiaohongshu-note-public-detail-artifacts';
 import type { XiaohongshuNotePublicCommentsArtifactStore } from './xiaohongshu-note-public-comments-artifacts';
+import type { XiaohongshuReplyArtifactStore } from './xiaohongshu-note-public-comment-replies-artifacts';
 import type { ExtensionWorkArtifactReference, ExtensionWorkQueue } from './extension-work-queue';
 import { readJsonBody, readJsonBodyWithRaw, requireSameOrigin, safeErrorCode, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
@@ -76,6 +80,7 @@ export interface ExtensionWorkRouteContext {
   xiaohongshuAccountPublicNotesArtifacts: XiaohongshuAccountPublicNotesArtifactStore;
   xiaohongshuNotePublicDetailArtifacts: XiaohongshuNotePublicDetailArtifactStore;
   xiaohongshuNotePublicCommentsArtifacts: XiaohongshuNotePublicCommentsArtifactStore;
+  xiaohongshuReplyArtifacts: XiaohongshuReplyArtifactStore;
 }
 
 /**
@@ -389,6 +394,8 @@ export async function enqueueXiaohongshuNotePublicCommentsWork(
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
   return await context.workQueue.enqueueXiaohongshuNotePublicComments({ browserBindingId, maximumScrolls });
 }
+export async function enqueueXiaohongshuReplyWork(context:ExtensionWorkRouteContext,browserBindingId:string,maximumThreads:1){
+  await assertBindingCanAcceptWork(context,browserBindingId,'xiaohongshu');return await context.workQueue.enqueueXiaohongshuNotePublicCommentReplies({browserBindingId,maximumThreads});}
 
 async function handleExtensionWorkNext(
   request: IncomingMessage,
@@ -522,6 +529,9 @@ async function handleExtensionWorkResult(
       artifact = await recordXiaohongshuNotePublicCommentsExtensionWork({
         item, result, artifacts: context.xiaohongshuNotePublicCommentsArtifacts
       });
+    } else if (isXiaohongshuNotePublicCommentRepliesWorkItem(item) &&
+      isXiaohongshuNotePublicCommentRepliesWorkResult(result)) {
+      artifact = await recordXiaohongshuReplyWork({ item, result, artifacts: context.xiaohongshuReplyArtifacts });
     } else {
       throw new Error('extension_work_result_capability_mismatch');
     }

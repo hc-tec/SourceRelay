@@ -17,6 +17,7 @@ import { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-
 import { XiaohongshuAccountPublicNotesArtifactStore } from './xiaohongshu-account-public-notes-artifacts';
 import { XiaohongshuNotePublicDetailArtifactStore } from './xiaohongshu-note-public-detail-artifacts';
 import { XiaohongshuNotePublicCommentsArtifactStore } from './xiaohongshu-note-public-comments-artifacts';
+import { XiaohongshuReplyArtifactStore } from './xiaohongshu-note-public-comment-replies-artifacts';
 import { safeErrorCode, sendJson } from './gateway-http';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker } from './pairing';
@@ -44,6 +45,7 @@ const xiaohongshuNotePublicDetailArtifacts =
   await XiaohongshuNotePublicDetailArtifactStore.create(config.stateDirectory);
 const xiaohongshuNotePublicCommentsArtifacts =
   await XiaohongshuNotePublicCommentsArtifactStore.create(config.stateDirectory);
+const xiaohongshuReplyArtifacts=await XiaohongshuReplyArtifactStore.create(config.stateDirectory);
 const expectedHost = config.host + ':' + config.port;
 
 const server = createServer(async (request, response) => {
@@ -69,7 +71,8 @@ const server = createServer(async (request, response) => {
       xiaohongshuPublicNotesArtifacts,
       xiaohongshuAccountPublicNotesArtifacts,
       xiaohongshuNotePublicDetailArtifacts,
-      xiaohongshuNotePublicCommentsArtifacts
+      xiaohongshuNotePublicCommentsArtifacts,
+      xiaohongshuReplyArtifacts
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 2, ok: false, error: 'route_not_found' });
   } catch (error) {

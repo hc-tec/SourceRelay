@@ -21,6 +21,7 @@ import {
   enqueueXiaohongshuAccountPublicNotesWork,
   enqueueXiaohongshuNotePublicDetailWork,
   enqueueXiaohongshuNotePublicCommentsWork,
+  enqueueXiaohongshuReplyWork,
   reconcileExpiredExtensionWork,
   type ExtensionWorkRouteContext
 } from './extension-work-routes';
@@ -90,7 +91,9 @@ export async function handleUserBrowserCollectorServiceRoute(
     let operationId: string | null = null;
     try {
       const collection = userBrowserCollectorServiceRequestInput(await readJsonBody(request));
-      const operation = collection.capability === 'xiaohongshu.note.public_comments.v1'
+      const operation = collection.capability === 'xiaohongshu.note.public_comment_replies.v1'
+        ? await enqueueXiaohongshuReplyWork(context,collection.browserBindingId,collection.input.maximumThreads)
+        : collection.capability === 'xiaohongshu.note.public_comments.v1'
         ? await enqueueXiaohongshuNotePublicCommentsWork(context, collection.browserBindingId, collection.input.maximumScrolls)
         : collection.capability === 'xiaohongshu.note.public_detail.v1'
         ? await enqueueXiaohongshuNotePublicDetailWork(
@@ -240,6 +243,7 @@ async function audit(
     | 'xiaohongshu.account.public_notes.v1'
     | 'xiaohongshu.note.public_detail.v1'
     | 'xiaohongshu.note.public_comments.v1'
+    | 'xiaohongshu.note.public_comment_replies.v1'
     | null,
   operationId: string | null,
   outcome: CollectorServiceAuditOutcome,

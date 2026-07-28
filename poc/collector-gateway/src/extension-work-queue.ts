@@ -17,6 +17,7 @@ import {
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
+  XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
   type ExtensionWorkCapability,
   type ExtensionWorkExecutionTarget,
   type ExtensionWorkItem,
@@ -141,6 +142,7 @@ export interface EnqueueXiaohongshuNotePublicCommentsWorkInput {
   browserBindingId: string;
   maximumScrolls: 1 | 2 | 3;
 }
+export interface EnqueueXiaohongshuNotePublicCommentRepliesWorkInput { browserBindingId: string; maximumThreads: 1; }
 
 /**
  * Queued and claimed operations retain their signed envelope because it is
@@ -799,6 +801,15 @@ export class ExtensionWorkQueue {
     };
     return await this.#enqueueSigned(unsigned, issuedAt);
   }
+  async enqueueXiaohongshuNotePublicCommentReplies(input: EnqueueXiaohongshuNotePublicCommentRepliesWorkInput,
+    now=new Date()):Promise<ExtensionWorkOperationSummary>{
+    if(!isUuid(input.browserBindingId)||input.maximumThreads!==1)throw new Error('xiaohongshu_note_public_comment_replies_input_invalid');
+    const expired=this.#expire(now);if(expired.length>0)await this.#save();this.#assertBindingIdle(input.browserBindingId);
+    const issuedAt=now.toISOString();const unsigned:UnsignedExtensionWorkItem={schemaVersion:EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion:EXTENSION_WORK_PROTOCOL_VERSION,workId:randomUUID(),operationId:randomUUID(),
+      browserBindingId:input.browserBindingId,platform:'xiaohongshu',capability:'xiaohongshu.note.public_comment_replies.v1',
+      executionTarget:'existing_public_note_overlay',issuedAt,expiresAt:new Date(now.getTime()+WORK_ITEM_TTL_MS).toISOString(),
+      input:{maximumThreads:1},budget:XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET};return await this.#enqueueSigned(unsigned,issuedAt);}
 
   /** Claiming is the irreversible delivery point.  There is no lease renewal. */
   async claimNext(

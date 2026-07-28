@@ -132,7 +132,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             { $ref: '#/components/schemas/XiaohongshuPublicNotesSearchCapability' },
             { $ref: '#/components/schemas/XiaohongshuAccountPublicNotesCapability' },
             { $ref: '#/components/schemas/XiaohongshuNotePublicDetailCapability' },
-            { $ref: '#/components/schemas/XiaohongshuNotePublicCommentsCapability' }
+            { $ref: '#/components/schemas/XiaohongshuNotePublicCommentsCapability' },
+            { $ref: '#/components/schemas/XiaohongshuReplyCapability' }
           ]
         },
         BilibiliUserBrowserCapability: {
@@ -364,6 +365,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             browserHostFallback: { type: 'string', const: 'forbidden' }
           }
         },
+        XiaohongshuReplyCapability:{type:'object',additionalProperties:false,required:['schemaVersion','capability','platform','title','inputMode','executionTarget','accountScopedSurfaces','dispatchState','managedValidationState','captureMode','responseBodies','routeAdmission','budget','browserHostFallback'],properties:{schemaVersion:{type:'integer',const:1},capability:{type:'string',const:'xiaohongshu.note.public_comment_replies.v1'},platform:{type:'string',const:'xiaohongshu'},title:{type:'string'},inputMode:{type:'string',const:'single_thread_budget_only_no_caller_identity'},executionTarget:{type:'string',const:'existing_public_note_overlay'},accountScopedSurfaces:{type:'string',const:'forbidden'},dispatchState:{type:'string',const:'direct_canary_pending'},managedValidationState:{type:'string',const:'implementation_ready_live_e2e_pending'},captureMode:{type:'string',const:'network_archive_first_dom_hierarchy_fallback_trusted_click'},responseBodies:{type:'string',const:'temporarily_read_projected_not_stored'},routeAdmission:{type:'string',const:'preloaded_public_reply_shape_no_url_dependency'},budget:{type:'object',additionalProperties:false,required:['maximumPlatformNavigations','maximumPageReloads','maximumPageInitiatedNewDocuments','maximumSemanticActions','maximumNetworkResponseBodies','maximumProjectedItems','maximumRawPayloadBytesStored'],properties:{maximumPlatformNavigations:{type:'integer',const:0},maximumPageReloads:{type:'integer',const:0},maximumPageInitiatedNewDocuments:{type:'integer',const:0},maximumSemanticActions:{type:'integer',const:1},maximumNetworkResponseBodies:{type:'integer',const:8},maximumProjectedItems:{type:'integer',const:40},maximumRawPayloadBytesStored:{type:'integer',const:0}}},browserHostFallback:{type:'string',const:'forbidden'}}},
         UserBrowserCollectRequest: {
           oneOf: [
             { $ref: '#/components/schemas/UserBrowserVideoDetailCollectRequest' },
@@ -379,7 +381,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             { $ref: '#/components/schemas/UserBrowserXiaohongshuPublicNotesSearchCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserXiaohongshuAccountPublicNotesCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicDetailCollectRequest' },
-            { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicCommentsCollectRequest' }
+            { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicCommentsCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserXiaohongshuReplyCollectRequest' }
           ]
         },
         UserBrowserVideoDetailCollectRequest: {
@@ -583,6 +586,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             input: { type: 'object', additionalProperties: false, required: ['maximumScrolls'],
               properties: { maximumScrolls: { type: 'integer', enum: [1, 2, 3] } } } }
         },
+        UserBrowserXiaohongshuReplyCollectRequest:{type:'object',additionalProperties:false,description:'Expands exactly the first visible public reply thread in the unique existing note overlay. No URL, note or comment identity, selector, coordinate, script, route or cursor can be supplied.',required:['schemaVersion','browserBindingId','platform','capability','executionTarget','input'],properties:{schemaVersion:{type:'integer',const:USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION},browserBindingId:{type:'string',format:'uuid'},platform:{type:'string',const:'xiaohongshu'},capability:{type:'string',const:'xiaohongshu.note.public_comment_replies.v1'},executionTarget:{type:'string',const:'existing_public_note_overlay'},input:{type:'object',additionalProperties:false,required:['maximumThreads'],properties:{maximumThreads:{type:'integer',const:1}}}}},
         QueuedOperationResponse: {
           type: 'object', additionalProperties: false,
           required: ['schemaVersion', 'result'],

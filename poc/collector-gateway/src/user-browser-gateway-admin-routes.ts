@@ -13,6 +13,7 @@ import type { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-n
 import type { XiaohongshuAccountPublicNotesArtifactStore } from './xiaohongshu-account-public-notes-artifacts';
 import type { XiaohongshuNotePublicDetailArtifactStore } from './xiaohongshu-note-public-detail-artifacts';
 import type { XiaohongshuNotePublicCommentsArtifactStore } from './xiaohongshu-note-public-comments-artifacts';
+import type { XiaohongshuReplyArtifactStore } from './xiaohongshu-note-public-comment-replies-artifacts';
 import type { CollectorServiceAuditLog } from './collector-service-audit';
 import { readJsonBody, requireSameOrigin, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
@@ -24,7 +25,7 @@ import {
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const DIRECT_ARTIFACT = new RegExp(
-  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\\.overview|collection_series\\.detail|danmaku|discussion)|xiaohongshu\\.(?:(?:search|account)\\.public_notes|note\\.public_(?:detail|comments))\\.v1)/(${UUID})$`,
+  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\\.overview|collection_series\\.detail|danmaku|discussion)|xiaohongshu\\.(?:(?:search|account)\\.public_notes|note\\.public_(?:detail|comments|comment_replies))\\.v1)/(${UUID})$`,
   'i'
 );
 
@@ -42,6 +43,7 @@ export interface UserBrowserGatewayAdminRouteContext {
   xiaohongshuAccountPublicNotesArtifacts: XiaohongshuAccountPublicNotesArtifactStore;
   xiaohongshuNotePublicDetailArtifacts: XiaohongshuNotePublicDetailArtifactStore;
   xiaohongshuNotePublicCommentsArtifacts: XiaohongshuNotePublicCommentsArtifactStore;
+  xiaohongshuReplyArtifacts: XiaohongshuReplyArtifactStore;
 }
 
 /**
@@ -94,6 +96,7 @@ export async function handleUserBrowserGatewayAdminRoute(
       | 'xiaohongshu.account.public_notes.v1'
       | 'xiaohongshu.note.public_detail.v1'
       | 'xiaohongshu.note.public_comments.v1'
+      | 'xiaohongshu.note.public_comment_replies.v1'
       | PassiveDirectCapability;
     const artifactId = artifact[2]!;
     if (!access.granted) {
@@ -126,6 +129,8 @@ export async function handleUserBrowserGatewayAdminRoute(
                   ? await context.xiaohongshuNotePublicDetailArtifacts.get(artifactId)
                   : capability === 'xiaohongshu.note.public_comments.v1'
                     ? await context.xiaohongshuNotePublicCommentsArtifacts.get(artifactId)
+                    : capability === 'xiaohongshu.note.public_comment_replies.v1'
+                      ? await context.xiaohongshuReplyArtifacts.get(artifactId)
                   : await context.passiveDirectArtifacts.get(capability, artifactId);
     if (!view) {
       await recordUserBrowserServiceAudit(context, access.principal, 'artifact_read', {

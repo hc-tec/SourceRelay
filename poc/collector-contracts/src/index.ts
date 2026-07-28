@@ -8,6 +8,7 @@ export * from './extension-work-xiaohongshu-public-notes.js';
 export * from './extension-work-xiaohongshu-account-public-notes.js';
 export * from './extension-work-xiaohongshu-note-public-detail.js';
 export * from './extension-work-xiaohongshu-note-public-comments.js';
+export * from './extension-work-xiaohongshu-note-public-comment-replies.js';
 export * from './xiaohongshu-current-page-network.js';
 export * from './xiaohongshu-trusted-search.js';
 export * from './xiaohongshu-public-profile-recon.js';

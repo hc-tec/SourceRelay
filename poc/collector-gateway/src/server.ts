@@ -46,6 +46,7 @@ import { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-
 import { XiaohongshuAccountPublicNotesArtifactStore } from './xiaohongshu-account-public-notes-artifacts';
 import { XiaohongshuNotePublicDetailArtifactStore } from './xiaohongshu-note-public-detail-artifacts';
 import { XiaohongshuNotePublicCommentsArtifactStore } from './xiaohongshu-note-public-comments-artifacts';
+import { XiaohongshuReplyArtifactStore } from './xiaohongshu-note-public-comment-replies-artifacts';
 import { BrowserProfileRegistry } from './profiles';
 
 const config = loadGatewayConfig();
@@ -84,6 +85,7 @@ const xiaohongshuNotePublicDetailArtifacts =
   await XiaohongshuNotePublicDetailArtifactStore.create(config.stateDirectory);
 const xiaohongshuNotePublicCommentsArtifacts =
   await XiaohongshuNotePublicCommentsArtifactStore.create(config.stateDirectory);
+const xiaohongshuReplyArtifacts=await XiaohongshuReplyArtifactStore.create(config.stateDirectory);
 const dynamicRunner = new BilibiliDynamicHostRunner({
   accountSafety,
   browserManager,
@@ -203,6 +205,7 @@ const server = createServer(async (request, response) => {
       xiaohongshuAccountPublicNotesArtifacts,
       xiaohongshuNotePublicDetailArtifacts,
       xiaohongshuNotePublicCommentsArtifacts,
+      xiaohongshuReplyArtifacts,
       accountVideoInventoryRunner,
       dynamicArtifacts,
       dynamicRunner,

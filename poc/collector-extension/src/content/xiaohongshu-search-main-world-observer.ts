@@ -29,7 +29,7 @@ interface PublicComment {
   locationText: string;
 }
 
-interface ArchivedPublicComment extends PublicComment { parentNoteId: string }
+interface ArchivedPublicComment extends PublicComment { parentNoteId: string; parentCommentId: string }
 
 interface ObserverController {
   schemaVersion: 2;
@@ -121,7 +121,9 @@ if (!existing) {
           subCommentCountText: clean(record.sub_comment_count ?? record.subCommentCount, 40),
           createdAtText: clean(record.create_time ?? record.created_at ?? record.createTime, 100),
           locationText: clean(record.ip_location ?? record.ipLocation, 100),
-          parentNoteId: clean(record.note_id ?? record.noteId ?? record.target_note_id ?? record.targetNoteId, 80)
+          parentNoteId: clean(record.note_id ?? record.noteId ?? record.target_note_id ?? record.targetNoteId, 80),
+          parentCommentId: clean(record.parent_comment_id ?? record.parentCommentId ?? record.root_comment_id ??
+            record.rootCommentId ?? record.target_comment_id ?? record.targetCommentId, 100)
         });
       }
       const recordHasMore = record.has_more ?? record.hasMore;

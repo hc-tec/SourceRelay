@@ -309,6 +309,43 @@ export async function readXiaohongshuExistingNoteCommentsNetworkProjection(
   };
 }
 
+export async function readXiaohongshuExistingNoteReplyNetworkProjection(
+  tabId: number,
+  workId: string
+): Promise<{
+  matchedPayloadCount: number; bodyBytesRead: number; cursorObserved: boolean;
+  comments: Array<{ commentId: string; parentCommentId: string; publicText: string; authorNickname: string;
+    likedCountText: string; createdAtText: string; locationText: string }>;
+}> {
+  const record = await loadActiveRecord();
+  if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId ||
+    record.publicSurface !== 'public_note_detail') {
+    throw new Error('xiaohongshu_note_replies_network_projection_binding_mismatch');
+  }
+  const results = await chrome.scripting.executeScript({ target: { tabId, documentIds: [record.documentId] },
+    world: 'MAIN', func: () => { const key='__personalIntelligenceXiaohongshuPublicNotesObserverV2';
+      return (window as typeof window & { [key]?: unknown })[key] ?? null; } });
+  const candidate = results[0]?.result as Record<string, unknown> | null | undefined;
+  const clean=(value:unknown,max:number)=>(typeof value==='string'||typeof value==='number'?String(value):'')
+    .replace(/[\u0000-\u001f\u007f]/g,'').replace(/\s+/g,' ').trim().slice(0,max);
+  const selected=clean(candidate?.selectedNoteId,80);
+  const archive=Date.now()<Number(candidate?.commentArchiveExpiresAt)&&selected&&Array.isArray(candidate?.commentArchive)
+    ? candidate.commentArchive.filter((value)=>value&&typeof value==='object'&&
+      (value as Record<string,unknown>).parentNoteId===selected) : [];
+  return { matchedPayloadCount: archive.length>0&&Number.isSafeInteger(candidate?.commentArchiveMatchedPayloadCount)
+      ? Math.min(8,Number(candidate?.commentArchiveMatchedPayloadCount)):0,
+    bodyBytesRead: archive.length>0&&Number.isSafeInteger(candidate?.commentArchiveBodyBytesRead)
+      ? Math.min(16*1024*1024,Number(candidate?.commentArchiveBodyBytesRead)):0,
+    cursorObserved: Boolean(archive.length>0&&candidate?.commentArchivePagination&&
+      typeof candidate.commentArchivePagination==='object'&&
+      (candidate.commentArchivePagination as Record<string,unknown>).cursorObserved===true),
+    comments: archive.slice(0,40).map((value)=>{const comment=value as Record<string,unknown>;return {
+      commentId:clean(comment.commentId,100),parentCommentId:clean(comment.parentCommentId,100),
+      publicText:clean(comment.publicText,2000),authorNickname:clean(comment.authorNickname,200),
+      likedCountText:clean(comment.likedCountText,40),createdAtText:clean(comment.createdAtText,100),
+      locationText:clean(comment.locationText,100)};}).filter((comment)=>comment.commentId&&comment.publicText) };
+}
+
 async function mutateMainWorldCommentContinuity(
   tabId: number,
   workId: string,

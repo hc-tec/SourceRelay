@@ -138,6 +138,9 @@ export interface UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest
   browserBindingId: string; platform: 'xiaohongshu'; capability: 'xiaohongshu.note.public_comments.v1';
   executionTarget: 'existing_public_note_overlay'; input: { maximumScrolls: 1 | 2 | 3 };
 }
+export interface UserBrowserXiaohongshuReplyCollectorServiceRequest {schemaVersion:typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  browserBindingId:string;platform:'xiaohongshu';capability:'xiaohongshu.note.public_comment_replies.v1';
+  executionTarget:'existing_public_note_overlay';input:{maximumThreads:1};}
 
 export type UserBrowserCollectorServiceRequest =
   | UserBrowserVideoDetailCollectorServiceRequest
@@ -153,7 +156,8 @@ export type UserBrowserCollectorServiceRequest =
   | UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest
   | UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest
   | UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest
-  | UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest;
+  | UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest
+  | UserBrowserXiaohongshuReplyCollectorServiceRequest;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -182,6 +186,12 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
   ) throw new Error('user_browser_collector_service_request_invalid');
   const input = candidate.input as Record<string, unknown>;
   if (candidate.platform === 'xiaohongshu') {
+    if(candidate.capability==='xiaohongshu.note.public_comment_replies.v1'){
+      if(executionTarget!=='existing_public_note_overlay'||Object.keys(input).length!==1||input.maximumThreads!==1)
+        throw new Error('user_browser_collector_service_request_invalid');
+      return{schemaVersion:USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,browserBindingId:candidate.browserBindingId,
+        platform:'xiaohongshu',capability:'xiaohongshu.note.public_comment_replies.v1',
+        executionTarget:'existing_public_note_overlay',input:{maximumThreads:1}};}
     if (candidate.capability === 'xiaohongshu.note.public_comments.v1') {
       if (executionTarget !== 'existing_public_note_overlay' || Object.keys(input).length !== 1 ||
         (input.maximumScrolls !== 1 && input.maximumScrolls !== 2 && input.maximumScrolls !== 3)) {

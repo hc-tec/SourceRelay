@@ -137,7 +137,8 @@ describe('user-owned browser collector service', () => {
       { $ref: '#/components/schemas/UserBrowserXiaohongshuPublicNotesSearchCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserXiaohongshuAccountPublicNotesCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicDetailCollectRequest' },
-      { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicCommentsCollectRequest' }
+      { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicCommentsCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserXiaohongshuReplyCollectRequest' }
     ]);
     expect(document.components.schemas.UserBrowserNativeSearchCollectRequest.properties).toMatchObject({
       capability: { const: 'bilibili.native_search' },
@@ -169,6 +170,10 @@ describe('user-owned browser collector service', () => {
       platform: { const: 'xiaohongshu' }, capability: { const: 'xiaohongshu.note.public_comments.v1' },
       executionTarget: { const: 'existing_public_note_overlay' },
       input: { required: ['maximumScrolls'], additionalProperties: false }
+    });
+    expect(document.components.schemas.UserBrowserXiaohongshuReplyCollectRequest.properties).toMatchObject({
+      platform:{const:'xiaohongshu'},capability:{const:'xiaohongshu.note.public_comment_replies.v1'},
+      executionTarget:{const:'existing_public_note_overlay'},input:{required:['maximumThreads'],additionalProperties:false}
     });
     expect(Object.keys(document.paths)).not.toContain('/v1/profiles');
     const schemaText = JSON.stringify(document.components.schemas);

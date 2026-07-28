@@ -73,18 +73,24 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       dispatchState: 'direct_ready', managedValidationState: 'gateway_extension_real_e2e_passed',
       captureMode: 'network_first_dom_fallback_trusted_scroll',
       budget: expect.objectContaining({ maximumSemanticActions: 3, maximumProjectedItems: 80 })
+    }), expect.objectContaining({capability:'xiaohongshu.note.public_comment_replies.v1',
+      executionTarget:'existing_public_note_overlay',dispatchState:'direct_canary_pending',
+      managedValidationState:'implementation_ready_live_e2e_pending',
+      captureMode:'network_archive_first_dom_hierarchy_fallback_trusted_click',
+      budget:expect.objectContaining({maximumSemanticActions:1,maximumProjectedItems:40})
     })]);
   });
 
   test('keeps the Bilibili catalog and the Xiaohongshu policy visible together', () => {
     const catalog = listUserBrowserCapabilities();
-    expect(catalog).toHaveLength(17);
+    expect(catalog).toHaveLength(18);
     expect(catalog.map((entry) => entry.capability)).toContain('bilibili.discussion');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.current_page.network_metadata');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.search.public_notes.v1');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.account.public_notes.v1');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.note.public_detail.v1');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.note.public_comments.v1');
+    expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.note.public_comment_replies.v1');
   });
 
   test('keeps the catalog-only policy outside the executable collect request union', () => {
