@@ -157,6 +157,11 @@ try {
   let commentRecon = null;
   let replyRecon = null;
   if (validateNoteDetail) {
+    const detailResultRank = validatePublicReplies ? selectReplyCanaryResultRank(artifact) : 1;
+    record('note_detail_target_selected', {
+      resultRank: detailResultRank,
+      selectionPolicy: validatePublicReplies ? 'highest_public_liked_count_signal' : 'fixed_first_result'
+    });
     const detailDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
       method: 'POST',
       headers: serviceHeaders(token),
@@ -166,12 +171,12 @@ try {
         platform: 'xiaohongshu',
         capability: 'xiaohongshu.note.public_detail.v1',
         executionTarget: 'existing_public_search_tab',
-        input: { resultRank: 1 }
+        input: { resultRank: detailResultRank }
       })
     }, 201);
     const detailOperationId = detailDispatch.result?.operationId;
     if (!uuid(detailOperationId)) throw new Error('xiaohongshu_note_detail_e2e_operation_missing');
-    record('note_detail_operation_dispatched', { operationId: detailOperationId, resultRank: 1 });
+    record('note_detail_operation_dispatched', { operationId: detailOperationId, resultRank: detailResultRank });
     const detailOperation = await waitForOperation(gatewayOrigin, token, detailOperationId, 90_000);
     if (detailOperation.state !== 'completed' || detailOperation.terminalReason !== 'note_detail_ready' ||
       !uuid(detailOperation.artifact?.artifactId) || typeof detailOperation.artifact?.retrievalPath !== 'string') {
@@ -494,6 +499,30 @@ function assertArtifact(artifact, operationId) {
   if (/"(?:url|responseUrl|route|query|header|cookie|token|rawPayload|tabId|documentId)"\s*:/i.test(serialized)) {
     throw new Error('xiaohongshu_gateway_e2e_artifact_forbidden_material');
   }
+}
+
+function selectReplyCanaryResultRank(artifact) {
+  const items = artifact?.result?.projection?.items;
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error('xiaohongshu_reply_canary_search_projection_empty');
+  }
+  const candidates = items
+    .filter((item) => Number.isSafeInteger(item?.rank) && item.rank >= 1 && item.rank <= 20)
+    .map((item) => ({ rank: item.rank, score: publicCountSignal(item.likedCountText) }))
+    .sort((left, right) => right.score - left.score || left.rank - right.rank);
+  if (candidates.length === 0) throw new Error('xiaohongshu_reply_canary_result_unavailable');
+  return candidates[0].rank;
+}
+
+function publicCountSignal(value) {
+  if (typeof value !== 'string') return 0;
+  const normalized = value.replace(/,/g, '').trim();
+  const match = normalized.match(/(\d+(?:\.\d+)?)\s*([万千wWkK]?)/);
+  if (!match) return 0;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount < 0) return 0;
+  const unit = match[2].toLowerCase();
+  return amount * (unit === '万' || unit === 'w' ? 10_000 : unit === '千' || unit === 'k' ? 1_000 : 1);
 }
 
 function assertNoteDetailArtifact(artifact, operationId) {
