@@ -4,7 +4,8 @@ import {
   type XiaohongshuAccountPublicNotesTerminalReason,
   type XiaohongshuAccountPublicNotesWorkItem,
   type XiaohongshuAccountPublicNotesWorkResult,
-  type XiaohongshuManagedProfileNotesProjectionResult
+  type XiaohongshuManagedProfileNotesProjectionResult,
+  type XiaohongshuPublicSearchItemProjection
 } from '@intelligence/collector-contracts';
 import {
   armXiaohongshuExistingPublicProfileWorkObserver,
@@ -23,6 +24,16 @@ interface ProfileDocument {
   documentId: string;
 }
 
+type PublicProfileItem = XiaohongshuPublicSearchItemProjection;
+
+interface ProfileDomProbe {
+  renderedCardCount: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  items: PublicProfileItem[];
+  risk: ReturnType<typeof classifyXiaohongshuCurrentPageRisk>;
+}
+
 export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   item: XiaohongshuAccountPublicNotesWorkItem
 ): Promise<XiaohongshuAccountPublicNotesWorkResult> {
@@ -32,6 +43,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   let attemptedCount: 0 | 1 | 2 | 3 = 0;
   let completedCount: 0 | 1 | 2 | 3 = 0;
   let projection: XiaohongshuManagedProfileNotesProjectionResult | null = null;
+  let networkProjection: XiaohongshuManagedProfileNotesProjectionResult | null = null;
   let renderedCardCount = 0;
   let errorCode: string | null = null;
   try {
@@ -43,7 +55,8 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     await armXiaohongshuExistingPublicProfileWorkObserver(document.tabId, item.workId);
     await prepareXiaohongshuProfileScroll(item.workId);
     await delay(1_200);
-    projection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId);
+    networkProjection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId);
+    projection = mergeProfileNotesProjection(networkProjection, baseline.items);
     if (projection.items.length === 0) {
       const debuggee: chrome.debugger.Debuggee = { tabId: document.tabId };
       await chrome.debugger.attach(debuggee, '1.3').catch(() => {
@@ -69,7 +82,8 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
         await requireSameDocument(document);
         const afterScroll = await readPageProbe(document);
         assertRisk(afterScroll.risk);
-        projection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId);
+        networkProjection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId);
+        projection = mergeProfileNotesProjection(networkProjection, afterScroll.items);
         completedCount = index as 1 | 2 | 3;
         if (projection.items.length > 0) break;
       }
@@ -78,6 +92,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     const page = await readPageProbe(document);
     renderedCardCount = page.renderedCardCount;
     assertRisk(page.risk);
+    if (networkProjection) projection = mergeProfileNotesProjection(networkProjection, page.items);
     if (projection.items.length < 1 || renderedCardCount < 1) {
       throw new Error('xiaohongshu_profile_notes_postcondition_unmet');
     }
@@ -154,35 +169,145 @@ async function requireSameDocument(document: ProfileDocument): Promise<void> {
   }
 }
 
-async function readPageProbe(profileDocument: ProfileDocument): Promise<{
-  renderedCardCount: number;
-  viewportWidth: number;
-  viewportHeight: number;
-  risk: ReturnType<typeof classifyXiaohongshuCurrentPageRisk>;
-}> {
+async function readPageProbe(profileDocument: ProfileDocument): Promise<ProfileDomProbe> {
   const results = await chrome.scripting.executeScript({
     target: { tabId: profileDocument.tabId, documentIds: [profileDocument.documentId] },
-    func: () => ({
-      pathname: location.pathname,
-      title: document.title.slice(0, 300),
-      visibleText: (document.body?.innerText ?? '').slice(0, 12_000),
-      renderedCardCount: document.querySelectorAll('section.note-item').length,
-      viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight
-    })
+    func: () => {
+      const clean = (value: unknown, maximum: number): string =>
+        (typeof value === 'string' ? value : '').replace(/[\u0000-\u001f\u007f]/g, '')
+          .replace(/\s+/g, ' ').trim().slice(0, maximum);
+      const visible = (element: Element): boolean => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+          style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+      };
+      const cards = Array.from(document.querySelectorAll('section.note-item')).filter(visible);
+      const items = cards.slice(0, 40).map((section, index) => {
+        const noteAnchor = Array.from(section.querySelectorAll('a[href]')).find((element) => {
+          if (!(element instanceof HTMLAnchorElement)) return false;
+          try {
+            return /^\/explore\/[A-Za-z0-9_-]+\/?$/.test(new URL(element.href).pathname);
+          } catch {
+            return false;
+          }
+        }) as HTMLAnchorElement | undefined;
+        let noteId = '';
+        if (noteAnchor) {
+          try {
+            noteId = new URL(noteAnchor.href).pathname.match(/^\/explore\/([A-Za-z0-9_-]+)\/?$/)?.[1] ?? '';
+          } catch {
+            noteId = '';
+          }
+        }
+        const titleCandidate = Array.from(section.querySelectorAll(
+          '[class*="title"], [data-title], [class*="desc"]'
+        )).find(visible);
+        const title = clean(titleCandidate?.textContent ?? noteAnchor?.textContent ?? '', 500) ||
+          clean((section.textContent ?? '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? '', 500);
+        const author = Array.from(section.querySelectorAll('a[href*="/user/profile/"]')).find(visible);
+        const countCandidate = Array.from(section.querySelectorAll(
+          '[class*="like"], [class*="interact"], [class*="count"]'
+        )).map((element) => clean(element.textContent, 80)).find((value) => /\d/.test(value)) ?? '';
+        const className = typeof section.className === 'string' ? section.className : '';
+        const contentType = section.querySelector('video') || /video/i.test(className) ? 'video' : 'image';
+        return {
+          rank: index + 1,
+          noteId,
+          title,
+          contentType,
+          authorId: '',
+          authorNickname: clean(author?.textContent, 200),
+          likedCountText: countCandidate
+        };
+      }).filter((item) => item.noteId && item.title);
+      return {
+        pathname: location.pathname,
+        title: document.title.slice(0, 300),
+        visibleText: (document.body?.innerText ?? '').slice(0, 12_000),
+        renderedCardCount: document.querySelectorAll('section.note-item').length,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        items
+      };
+    }
   });
-  const value = results[0]?.result;
+  const value = results[0]?.result as {
+    pathname?: unknown;
+    title?: unknown;
+    visibleText?: unknown;
+    renderedCardCount?: unknown;
+    viewportWidth?: unknown;
+    viewportHeight?: unknown;
+    items?: unknown;
+  } | undefined;
   if (!value || typeof value.pathname !== 'string' || typeof value.title !== 'string' ||
-    typeof value.visibleText !== 'string' || !Number.isSafeInteger(value.renderedCardCount) ||
-    !Number.isFinite(value.viewportWidth) || !Number.isFinite(value.viewportHeight) ||
+    typeof value.visibleText !== 'string' || typeof value.renderedCardCount !== 'number' ||
+    !Number.isSafeInteger(value.renderedCardCount) || typeof value.viewportWidth !== 'number' ||
+    typeof value.viewportHeight !== 'number' || !Number.isFinite(value.viewportWidth) ||
+    !Number.isFinite(value.viewportHeight) ||
     value.viewportWidth < 320 || value.viewportHeight < 240) {
     throw new Error('xiaohongshu_public_profile_probe_unavailable');
   }
+  const renderedCardCount = Number(value.renderedCardCount);
+  const viewportWidth = Number(value.viewportWidth);
+  const viewportHeight = Number(value.viewportHeight);
   return {
-    renderedCardCount: Math.min(80, Math.max(0, value.renderedCardCount)),
-    viewportWidth: value.viewportWidth,
-    viewportHeight: value.viewportHeight,
-    risk: classifyXiaohongshuCurrentPageRisk(value)
+    renderedCardCount: Math.min(80, Math.max(0, renderedCardCount)),
+    viewportWidth,
+    viewportHeight,
+    items: normaliseProfileDomItems(value.items),
+    risk: classifyXiaohongshuCurrentPageRisk({
+      pathname: value.pathname,
+      title: value.title,
+      visibleText: value.visibleText
+    })
+  };
+}
+
+function normaliseProfileDomItems(value: unknown): PublicProfileItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 40).map((entry) => {
+    const item = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+    const text = (field: string, maximum: number): string =>
+      (typeof item[field] === 'string' ? item[field] : '').replace(/[\u0000-\u001f\u007f]/g, '')
+        .replace(/\s+/g, ' ').trim().slice(0, maximum);
+    return {
+      rank: Number.isSafeInteger(item.rank) ? Number(item.rank) : 0,
+      noteId: text('noteId', 80),
+      title: text('title', 500),
+      contentType: text('contentType', 40),
+      authorId: text('authorId', 80),
+      authorNickname: text('authorNickname', 200),
+      likedCountText: text('likedCountText', 40)
+    };
+  }).filter((item) => item.noteId && item.title).map((item, index) => ({ ...item, rank: index + 1 }));
+}
+
+export function mergeProfileNotesProjection(
+  network: XiaohongshuManagedProfileNotesProjectionResult,
+  domItems: PublicProfileItem[]
+): XiaohongshuManagedProfileNotesProjectionResult {
+  const merged = new Map<string, PublicProfileItem>();
+  for (const item of network.items) merged.set(item.noteId, { ...item });
+  for (const item of domItems) {
+    const existing = merged.get(item.noteId);
+    if (!existing) {
+      merged.set(item.noteId, { ...item });
+      continue;
+    }
+    merged.set(item.noteId, {
+      ...existing,
+      title: existing.title || item.title,
+      contentType: existing.contentType || item.contentType,
+      authorId: existing.authorId || item.authorId,
+      authorNickname: existing.authorNickname || item.authorNickname,
+      likedCountText: existing.likedCountText || item.likedCountText
+    });
+  }
+  return {
+    ...network,
+    items: [...merged.values()].slice(0, 40).map((item, index) => ({ ...item, rank: index + 1 }))
   };
 }
 
