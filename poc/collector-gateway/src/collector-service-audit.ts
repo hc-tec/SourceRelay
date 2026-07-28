@@ -167,7 +167,8 @@ function auditEvent(value: unknown): CollectorServiceAuditEvent {
     !(candidate.capability === null || isCollectorServiceCapability(candidate.capability) ||
       candidate.capability === 'xiaohongshu.search.public_notes.v1' ||
       candidate.capability === 'xiaohongshu.account.public_notes.v1' ||
-      candidate.capability === 'xiaohongshu.note.public_detail.v1') ||
+      candidate.capability === 'xiaohongshu.note.public_detail.v1' ||
+      candidate.capability === 'xiaohongshu.note.public_comments.v1') ||
     !(candidate.profileIdDigest === null ||
       (typeof candidate.profileIdDigest === 'string' && PROFILE_DIGEST_PATTERN.test(candidate.profileIdDigest))) ||
     !(candidate.artifactId === null ||

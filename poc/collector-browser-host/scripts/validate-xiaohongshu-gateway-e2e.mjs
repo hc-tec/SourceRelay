@@ -14,8 +14,10 @@ const gatewayDirectory = resolve(pocRoot, 'collector-gateway');
 const profileId = 'xiaohongshu_validation';
 const exploreUrl = 'https://www.xiaohongshu.com/explore';
 const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ?? '咖啡豆';
-const validateNoteComments = process.argv.includes('--comment-recon');
-const validateNoteDetail = validateNoteComments || process.argv.includes('--note-detail');
+const validateCommentRecon = process.argv.includes('--comment-recon');
+const validatePublicComments = process.argv.includes('--comments');
+const validateExistingPublicComments = process.argv.includes('--comments-existing');
+const validateNoteDetail = validateCommentRecon || validatePublicComments || process.argv.includes('--note-detail');
 const timeline = [];
 let client = null;
 let gateway = null;
@@ -34,6 +36,10 @@ try {
   client = await BrowserHostClient.connect(endpointPath, 'xiaohongshu-gateway-e2e');
   const profile = profileFrom(await snapshot());
   if (!profile.running || profile.leasedPages !== 0) throw new Error('xiaohongshu_gateway_e2e_profile_not_ready');
+  if (validateExistingPublicComments) {
+    await validateCommentsOnExistingOverlay(gatewayOrigin);
+    process.exitCode = 0;
+  } else {
 
   const runId = randomUUID();
   acquired = await client.command({
@@ -189,7 +195,29 @@ try {
       rawPayloadStored: false,
       responseUrlsStored: false
     });
-    if (validateNoteComments) {
+    if (validatePublicComments) {
+      const commentsDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
+        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
+          browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+          capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
+          input: { maximumScrolls: 1 } })
+      }, 201);
+      const commentsOperationId = commentsDispatch.result?.operationId;
+      if (!uuid(commentsOperationId)) throw new Error('xiaohongshu_note_comments_e2e_operation_missing');
+      record('note_comments_operation_dispatched', { operationId: commentsOperationId, maximumScrolls: 1 });
+      const commentsOperation = await waitForOperation(gatewayOrigin, token, commentsOperationId, 90_000);
+      if (commentsOperation.state !== 'completed' || commentsOperation.terminalReason !== 'note_comments_ready' ||
+        !uuid(commentsOperation.artifact?.artifactId) || typeof commentsOperation.artifact?.retrievalPath !== 'string') {
+        throw new Error(commentsOperation.errorCode ?? 'xiaohongshu_note_comments_e2e_operation_not_completed');
+      }
+      const commentsArtifactPayload = await apiJson(`${gatewayOrigin}${commentsOperation.artifact.retrievalPath}`,
+        { headers: { authorization: `Bearer ${token}` } }, 200);
+      assertNoteCommentsArtifact(commentsArtifactPayload.artifact, commentsOperationId);
+      reportedOperation = commentsOperation;
+      reportedArtifact = commentsArtifactPayload.artifact;
+      record('note_comments_artifact_retrieved', { captureMode: reportedArtifact.summary.captureMode,
+        commentCount: reportedArtifact.summary.commentCount, rawPayloadStored: false, responseUrlsStored: false });
+    } else if (validateCommentRecon) {
       const detailPage = await leasedPage();
       commentRecon = await client.command({
         type: 'recon_xiaohongshu_note_comments',
@@ -229,7 +257,8 @@ try {
     ok: true,
     runId,
     gatewayPath: 'user_browser_api_to_signed_queue_to_production_extension',
-    validatedCapability: validateNoteComments ? 'xiaohongshu.note.comments.recon' :
+    validatedCapability: validatePublicComments ? 'xiaohongshu.note.public_comments.v1' :
+      validateCommentRecon ? 'xiaohongshu.note.comments.recon' :
       validateNoteDetail ? 'xiaohongshu.note.public_detail.v1' : 'xiaohongshu.search.public_notes.v1',
     productPlatformNavigations: reportedArtifact.result.navigation.attemptCount,
     validationBaselineNavigations: 1,
@@ -264,6 +293,7 @@ try {
     finalPageState: retained.state,
     timeline
   });
+  }
 } catch (error) {
   await retainIfLeased().catch(() => undefined);
   writeJson({ ok: false, error: safeErrorCode(error), timeline });
@@ -272,6 +302,51 @@ try {
   client?.close();
   if (gateway) await stopGateway(gateway);
   if (stateDirectory) await rm(stateDirectory, { recursive: true, force: true });
+}
+
+async function validateCommentsOnExistingOverlay(gatewayOrigin) {
+  const pairing = await createPairing(gatewayOrigin);
+  let permissionApproval = approveExactExtensionPermission(extensionSourceDirectory, '127.0.0.1', '127.0.0.1', 8,
+    { allowAbsence: true });
+  let control;
+  try {
+    control = await client.command({ type: 'run_validation_extension_control', request: { schemaVersion: 1,
+      profileId, loopbackOrigin: gatewayOrigin, identityFingerprint: pairing.identityFingerprint,
+      pairingSessionId: pairing.pairingSessionId, pairingCode: pairing.pairingCode, selection: 'pair_only' }
+    }, { timeoutMs: 35_000 });
+    await permissionApproval;
+  } finally { await permissionApproval.catch(() => undefined); permissionApproval = null; }
+  if (control.connectionState !== 'online' || control.controlTargetDisposed !== true) {
+    throw new Error('xiaohongshu_comments_existing_pairing_postcondition_unmet');
+  }
+  record('extension_paired', { browserBindingId: control.browserBindingId, platformSelectionPerformed: false });
+  const token = await issueClientToken(gatewayOrigin);
+  const dispatch = await apiJson(`${gatewayOrigin}/v2/collect`, { method: 'POST', headers: serviceHeaders(token),
+    body: JSON.stringify({ schemaVersion: 2, browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+      capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
+      input: { maximumScrolls: 1 } }) }, 201);
+  const operationId = dispatch.result?.operationId;
+  if (!uuid(operationId)) throw new Error('xiaohongshu_note_comments_e2e_operation_missing');
+  record('note_comments_operation_dispatched', { operationId, maximumScrolls: 1 });
+  const operation = await waitForOperation(gatewayOrigin, token, operationId, 90_000);
+  if (operation.state !== 'completed' || operation.terminalReason !== 'note_comments_ready' ||
+    !uuid(operation.artifact?.artifactId) || typeof operation.artifact?.retrievalPath !== 'string') {
+    throw new Error(operation.errorCode ?? 'xiaohongshu_note_comments_e2e_operation_not_completed');
+  }
+  const payload = await apiJson(`${gatewayOrigin}${operation.artifact.retrievalPath}`,
+    { headers: { authorization: `Bearer ${token}` } }, 200);
+  assertNoteCommentsArtifact(payload.artifact, operationId);
+  record('note_comments_artifact_retrieved', { captureMode: payload.artifact.summary.captureMode,
+    commentCount: payload.artifact.summary.commentCount, rawPayloadStored: false, responseUrlsStored: false });
+  writeJson({ ok: true, runId: randomUUID(), gatewayPath: 'user_browser_api_to_signed_queue_to_production_extension',
+    validatedCapability: 'xiaohongshu.note.public_comments.v1', productPlatformNavigations: 0,
+    validationBaselineNavigations: 0, semanticActions: payload.artifact.result.semanticAction.attemptCount,
+    automaticPlatformRetries: 0, operation: { operationId, state: operation.state,
+      terminalReason: operation.terminalReason, artifactId: operation.artifact.artifactId },
+    artifact: { captureMode: payload.artifact.summary.captureMode, commentCount: payload.artifact.summary.commentCount,
+      rawPayloadStored: payload.artifact.provenance.rawPayloadStored,
+      responseUrlsStored: payload.artifact.provenance.responseUrlsStored,
+      debuggerDetached: payload.artifact.provenance.debuggerDetached }, finalPageState: 'existing_overlay_retained', timeline });
 }
 
 async function createPairing(origin) {
@@ -353,6 +428,22 @@ function assertNoteDetailArtifact(artifact, operationId) {
     .test(serialized)) {
     throw new Error('xiaohongshu_note_detail_e2e_artifact_forbidden_material');
   }
+}
+
+function assertNoteCommentsArtifact(artifact, operationId) {
+  if (!artifact || artifact.summary?.operationId !== operationId ||
+    artifact.summary?.capability !== 'xiaohongshu.note.public_comments.v1' ||
+    artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'note_comments_ready' ||
+    artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
+    artifact.result?.semanticAction?.attempted !== true || artifact.result.semanticAction.attemptCount !== 1 ||
+    artifact.result?.scroll?.requestedCount !== 1 || artifact.result.scroll.completedCount !== 1 ||
+    artifact.result?.page?.publicSurface !== 'note_detail_overlay' ||
+    !Array.isArray(artifact.result?.projection?.comments) || artifact.result.projection.comments.length < 1 ||
+    !['network_projection', 'dom_fallback', 'hybrid'].includes(artifact.result.projection.captureMode) ||
+    artifact.provenance?.rawPayloadStored !== false || artifact.provenance?.responseUrlsStored !== false ||
+    artifact.provenance?.debuggerDetached !== true) throw new Error('xiaohongshu_note_comments_e2e_artifact_invalid');
+  if (/"(?:url|responseUrl|route|query|header|cookie|token|rawPayload|tabId|documentId|selector|script|noteId|profileId)"\s*:/i
+    .test(JSON.stringify(artifact))) throw new Error('xiaohongshu_note_comments_e2e_artifact_forbidden_material');
 }
 
 async function waitForStableDocument(timeoutMs) {

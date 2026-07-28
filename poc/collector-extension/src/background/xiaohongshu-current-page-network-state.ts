@@ -171,7 +171,8 @@ function validManagedRunId(value: string): boolean {
 function validPublicSurface(
   value: unknown
 ): value is XiaohongshuCurrentPageNetworkPublicSurface | null {
-  return value === null || value === 'explore' || value === 'search';
+  return value === null || value === 'explore' || value === 'search' || value === 'public_profile' ||
+    value === 'public_note_detail';
 }
 
 function validStopReason(value: unknown): value is XiaohongshuCurrentPageNetworkRecord['stopReason'] {
