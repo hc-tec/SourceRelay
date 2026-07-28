@@ -146,7 +146,10 @@ export async function executeXiaohongshuNoteOverlayRecon(input: {
     const pageCountBefore = record.page.context().pages().length;
     await withinDeadline(record.page.mouse.click(x, y, { button: 'left' }), remaining(deadline));
     const after = await waitForOverlayPostcondition(record.page, pageCountBefore, before.timeOrigin, deadline);
-    await delay(Math.min(1_200, Math.max(1, remaining(deadline))));
+    // Public comments initialise asynchronously after the overlay itself is
+    // visible. Keep the response observer alive long enough to distinguish
+    // that automatic load from any later scroll-triggered pagination.
+    await delay(Math.min(5_500, Math.max(1, remaining(deadline))));
     const network = (await Promise.all(responsePromises.map((promise) => withinDeadline(
       promise.catch(() => null), Math.min(3_000, remaining(deadline))
     )))).filter((value): value is NetworkShape => value !== null);

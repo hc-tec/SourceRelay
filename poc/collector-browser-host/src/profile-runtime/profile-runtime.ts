@@ -56,6 +56,8 @@ import {
   type XiaohongshuPublicProfileReconResult,
   type XiaohongshuNoteOverlayReconRequest,
   type XiaohongshuNoteOverlayReconResult,
+  type XiaohongshuNoteCommentsReconRequest,
+  type XiaohongshuNoteCommentsReconResult,
   type XiaohongshuValidationPageAdoptionRequest,
   type ValidationExtensionControlRequest,
   type ValidationExtensionControlResult
@@ -439,6 +441,12 @@ export class ProfileRuntime {
     request: XiaohongshuNoteOverlayReconRequest
   ): Promise<XiaohongshuNoteOverlayReconResult> {
     return await this.#ledger.reconXiaohongshuNoteOverlay(request, this.#visualEvidenceDirectory);
+  }
+
+  async reconXiaohongshuNoteComments(
+    request: XiaohongshuNoteCommentsReconRequest
+  ): Promise<XiaohongshuNoteCommentsReconResult> {
+    return await this.#ledger.reconXiaohongshuNoteComments(request, this.#visualEvidenceDirectory);
   }
 
   async adoptXiaohongshuValidationPublicPage(

@@ -11,6 +11,7 @@ export * from './xiaohongshu-current-page-network.js';
 export * from './xiaohongshu-trusted-search.js';
 export * from './xiaohongshu-public-profile-recon.js';
 export * from './xiaohongshu-note-overlay-recon.js';
+export * from './xiaohongshu-note-comments-recon.js';
 export * from './xiaohongshu-validation-page-adoption.js';
 export * from './bilibili-collection-series-detail.js';
 export * from './bilibili-account-profile.js';

@@ -14,7 +14,8 @@ const gatewayDirectory = resolve(pocRoot, 'collector-gateway');
 const profileId = 'xiaohongshu_validation';
 const exploreUrl = 'https://www.xiaohongshu.com/explore';
 const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ?? '咖啡豆';
-const validateNoteDetail = process.argv.includes('--note-detail');
+const validateNoteComments = process.argv.includes('--comment-recon');
+const validateNoteDetail = validateNoteComments || process.argv.includes('--note-detail');
 const timeline = [];
 let client = null;
 let gateway = null;
@@ -145,6 +146,7 @@ try {
 
   let reportedOperation = operation;
   let reportedArtifact = artifact;
+  let commentRecon = null;
   if (validateNoteDetail) {
     const detailDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
       method: 'POST',
@@ -187,6 +189,32 @@ try {
       rawPayloadStored: false,
       responseUrlsStored: false
     });
+    if (validateNoteComments) {
+      const detailPage = await leasedPage();
+      commentRecon = await client.command({
+        type: 'recon_xiaohongshu_note_comments',
+        request: {
+          schemaVersion: 1,
+          profileId,
+          pageAlias: acquired.page.pageAlias,
+          pageLeaseId: acquired.lease.pageLeaseId,
+          runId,
+          expectedRecordVersion: detailPage.recordVersion,
+          expectedDocumentGeneration: detailPage.documentGeneration,
+          actionId: randomUUID(),
+          timeoutMs: 25_000
+        }
+      }, { timeoutMs: 30_000 });
+      record('note_comments_recon_completed', {
+        state: commentRecon.state,
+        semanticActionAttempted: commentRecon.semanticAction.attempted,
+        renderedCommentCountBefore: commentRecon.before.renderedCommentCount,
+        renderedCommentCountAfter: commentRecon.after?.renderedCommentCount ?? null,
+        responseCount: commentRecon.network.responses.length,
+        projectedCommentCount: commentRecon.network.comments.length
+      });
+      if (commentRecon.state !== 'completed') throw new Error('xiaohongshu_note_comments_recon_incomplete');
+    }
   }
 
   const after = await leasedPage();
@@ -201,7 +229,8 @@ try {
     ok: true,
     runId,
     gatewayPath: 'user_browser_api_to_signed_queue_to_production_extension',
-    validatedCapability: validateNoteDetail ? 'xiaohongshu.note.public_detail.v1' : 'xiaohongshu.search.public_notes.v1',
+    validatedCapability: validateNoteComments ? 'xiaohongshu.note.comments.recon' :
+      validateNoteDetail ? 'xiaohongshu.note.public_detail.v1' : 'xiaohongshu.search.public_notes.v1',
     productPlatformNavigations: reportedArtifact.result.navigation.attemptCount,
     validationBaselineNavigations: 1,
     semanticActions: reportedArtifact.result.semanticAction.attemptCount,
@@ -221,6 +250,16 @@ try {
       debuggerDetached: reportedArtifact.provenance.debuggerDetached
     },
     persistedQueryCopies,
+    commentRecon: commentRecon ? {
+      scrollTopBefore: commentRecon.before.scrollContainer?.scrollTop ?? null,
+      scrollTopAfter: commentRecon.after?.scrollTop ?? null,
+      renderedCommentCountBefore: commentRecon.before.renderedCommentCount,
+      renderedCommentCountAfter: commentRecon.after?.renderedCommentCount ?? null,
+      responseBodiesRead: commentRecon.network.responseBodiesRead,
+      temporaryBodyBytesRead: commentRecon.network.temporaryBodyBytesRead,
+      responses: commentRecon.network.responses,
+      projectedCommentCount: commentRecon.network.comments.length
+    } : null,
     visualEvidence: { before: beforeVisual, after: afterVisual },
     finalPageState: retained.state,
     timeline
