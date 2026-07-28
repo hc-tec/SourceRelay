@@ -24,6 +24,7 @@
     "rebuild:xiaohongshu-validation-browser": "node scripts/xiaohongshu-validation-browser.mjs rebuild",
     "status:xiaohongshu-validation-browser": "node scripts/xiaohongshu-validation-browser.mjs status",
     "stop:xiaohongshu-validation-browser": "node scripts/xiaohongshu-validation-browser.mjs stop",
+    "validate:xiaohongshu-trusted-search": "node scripts/validate-xiaohongshu-trusted-search.mjs",
     "validate:extension-control": "node scripts/validate-extension-control.mjs",
     "canary:discussion-user-selected": "node scripts/validate-bilibili-discussion-e2e.mjs"
   },
