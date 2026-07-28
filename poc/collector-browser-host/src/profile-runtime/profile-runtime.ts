@@ -38,10 +38,12 @@ import {
   isXiaohongshuManagedPageNetworkObservationResult,
   isXiaohongshuManagedPageNetworkObserverArmResult,
   isXiaohongshuManagedPageNetworkObserverRequest,
+  isXiaohongshuManagedSearchProjectionResult,
   type XiaohongshuCurrentPageNetworkObservationResult,
   type XiaohongshuManagedPageNetworkObservationResult,
   type XiaohongshuManagedPageNetworkObserverArmResult,
   type XiaohongshuManagedPageNetworkObserverRequest,
+  type XiaohongshuManagedSearchProjectionResult,
   type XiaohongshuTrustedSearchRequest,
   type XiaohongshuTrustedSearchResult,
   type ValidationExtensionControlRequest,
@@ -396,10 +398,29 @@ export class ProfileRuntime {
       expectedRecordVersion: request.expectedRecordVersion,
       runId: request.runId
     });
-    if (arm.permissionState !== 'permission_granted' || arm.selection.state !== 'armed_next_document') {
+    if (arm.permissionState !== 'permission_granted' || arm.selection.state !== 'observing') {
       throw new Error('xiaohongshu_trusted_search_network_observer_not_armed');
     }
     return await this.#ledger.trustedXiaohongshuSearch(request, this.#visualEvidenceDirectory);
+  }
+
+  async readXiaohongshuManagedSearchProjection(
+    request: XiaohongshuManagedPageNetworkObserverRequest
+  ): Promise<XiaohongshuManagedSearchProjectionResult> {
+    if (!isXiaohongshuManagedPageNetworkObserverRequest(request)) {
+      throw new Error('xiaohongshu_managed_page_network_request_invalid');
+    }
+    const context = this.#ledger.extensionCommandContext(request);
+    const result = await this.#nativeBridgeCommands.command(this.profileId, this.browserSessionId, {
+      type: 'collector_read_xiaohongshu_managed_search_projection',
+      tabId: context.extensionTabId,
+      request
+    }, 5_000);
+    if (!isXiaohongshuManagedSearchProjectionResult(result) || result.pageAlias !== request.pageAlias ||
+      result.runId !== request.runId) {
+      throw new Error('xiaohongshu_managed_search_projection_result_invalid');
+    }
+    return result;
   }
 
   async runValidationExtensionControl(

@@ -10,6 +10,7 @@ import {
   isXiaohongshuManagedPageNetworkObservationResult,
   isXiaohongshuManagedPageNetworkObserverArmResult,
   isXiaohongshuManagedPageNetworkObserverRequest,
+  isXiaohongshuManagedSearchProjectionResult,
   xiaohongshuCurrentPageNetworkPublicSurface
 } from '../src/index.js';
 
@@ -240,6 +241,37 @@ describe('Xiaohongshu current-page network policy contract', () => {
     };
     expect(isXiaohongshuManagedPageNetworkObservationResult(observation)).toBe(true);
     expect(isXiaohongshuManagedPageNetworkObservationResult({ ...observation, documentId: 'private' })).toBe(false);
+  });
+
+  test('admits only bounded URL-free public Xiaohongshu search projections', () => {
+    const result = {
+      schemaVersion: 2,
+      type: 'xiaohongshu_managed_search_projection',
+      pageAlias: 'page-1',
+      runId: 'run-123',
+      matchedPayloadCount: 1,
+      bodyBytesRead: 4096,
+      rawPayloadStored: false,
+      responseUrlsStored: false,
+      items: [{
+        rank: 1,
+        noteId: 'public-note-id',
+        title: '公开笔记标题',
+        contentType: 'normal',
+        authorId: 'public-author-id',
+        authorNickname: '公开昵称',
+        likedCountText: '123'
+      }]
+    };
+    expect(isXiaohongshuManagedSearchProjectionResult(result)).toBe(true);
+    expect(isXiaohongshuManagedSearchProjectionResult({
+      ...result,
+      responseUrl: 'https://www.xiaohongshu.com/search_result_ai?keyword=private'
+    })).toBe(false);
+    expect(isXiaohongshuManagedSearchProjectionResult({
+      ...result,
+      items: [{ ...result.items[0], xsecToken: 'private' }]
+    })).toBe(false);
   });
 
 });

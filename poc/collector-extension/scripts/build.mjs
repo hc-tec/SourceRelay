@@ -65,6 +65,11 @@ const bundles = [
     format: 'iife'
   },
   {
+    input: resolve(root, 'src', 'content', 'xiaohongshu-search-main-world-observer.ts'),
+    output: resolve(outputDirectory, 'xiaohongshu-search-main-world-observer.js'),
+    format: 'iife'
+  },
+  {
     input: resolve(root, 'src', 'control', 'index.ts'),
     output: resolve(outputDirectory, 'control.js'),
     format: 'iife'

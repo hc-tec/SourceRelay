@@ -67,16 +67,26 @@ try {
     jsonResponseCount: result.network.jsonResponseCount
   });
   const current = await leasedPage();
+  const projectionRequest = {
+    schemaVersion: 2,
+    profileId,
+    pageAlias: acquired.page.pageAlias,
+    pageLeaseId: acquired.lease.pageLeaseId,
+    expectedRecordVersion: current.recordVersion,
+    runId
+  };
+  const searchProjection = await client.command({
+    type: 'read_xiaohongshu_managed_search_projection',
+    request: projectionRequest
+  });
+  if (searchProjection?.type !== 'xiaohongshu_managed_search_projection' ||
+    searchProjection.items?.length < 1 || searchProjection.rawPayloadStored !== false ||
+    searchProjection.responseUrlsStored !== false) {
+    throw new Error('xiaohongshu_canary_search_projection_unmet');
+  }
   const observation = await client.command({
     type: 'read_xiaohongshu_managed_page_network_observation',
-    request: {
-      schemaVersion: 2,
-      profileId,
-      pageAlias: acquired.page.pageAlias,
-      pageLeaseId: acquired.lease.pageLeaseId,
-      expectedRecordVersion: current.recordVersion,
-      runId
-    }
+    request: projectionRequest
   });
   const retained = await release('retained_for_review');
   if (retained.state !== 'retained_for_review') throw new Error('xiaohongshu_canary_page_not_retained');
@@ -89,6 +99,7 @@ try {
     semanticActions: 1,
     automaticRetries: 0,
     result,
+    searchProjection,
     extensionObservation: observation,
     finalPageState: retained.state,
     timeline

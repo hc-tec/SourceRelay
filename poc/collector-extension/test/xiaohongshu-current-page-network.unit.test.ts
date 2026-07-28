@@ -196,7 +196,7 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
       pageAlias: 'page-1',
       runId: 'run-123',
       permissionState: 'permission_granted',
-      selection: { state: 'armed_next_document' }
+      selection: { state: 'observing', publicSurface: 'explore' }
     });
     expect(chrome.contains).toHaveBeenCalled();
     expect(chrome.request).not.toHaveBeenCalled();

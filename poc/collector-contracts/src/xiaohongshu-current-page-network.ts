@@ -175,6 +175,28 @@ export interface XiaohongshuManagedPageNetworkObservationResult {
   observation: XiaohongshuCurrentPageNetworkMetadataObservation;
 }
 
+export interface XiaohongshuPublicSearchItemProjection {
+  rank: number;
+  noteId: string;
+  title: string;
+  contentType: string;
+  authorId: string;
+  authorNickname: string;
+  likedCountText: string;
+}
+
+export interface XiaohongshuManagedSearchProjectionResult {
+  schemaVersion: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION;
+  type: 'xiaohongshu_managed_search_projection';
+  pageAlias: string;
+  runId: string;
+  matchedPayloadCount: number;
+  bodyBytesRead: number;
+  rawPayloadStored: false;
+  responseUrlsStored: false;
+  items: XiaohongshuPublicSearchItemProjection[];
+}
+
 /**
  * Only public page signals are supplied to this classifier.  It never reads a
  * credential, query value, response body or browser identifier.  A known
@@ -275,6 +297,21 @@ export function isXiaohongshuManagedPageNetworkObservationResult(
     isXiaohongshuCurrentPageNetworkMetadataObservation(value.observation);
 }
 
+export function isXiaohongshuManagedSearchProjectionResult(
+  value: unknown
+): value is XiaohongshuManagedSearchProjectionResult {
+  if (!record(value) || !exactKeys(value, [
+    'schemaVersion', 'type', 'pageAlias', 'runId', 'matchedPayloadCount', 'bodyBytesRead',
+    'rawPayloadStored', 'responseUrlsStored', 'items'
+  ])) return false;
+  return value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION &&
+    value.type === 'xiaohongshu_managed_search_projection' && boundedIdentifier(value.pageAlias) &&
+    boundedIdentifier(value.runId) && boundedProjectionCount(value.matchedPayloadCount, 8) &&
+    boundedProjectionCount(value.bodyBytesRead, 16 * 1024 * 1024) && value.rawPayloadStored === false &&
+    value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 40 &&
+    value.items.every(isPublicSearchItemProjection);
+}
+
 export function isXiaohongshuCurrentPageNetworkSelectionSummary(
   value: unknown
 ): value is XiaohongshuCurrentPageNetworkSelectionSummary {
@@ -349,6 +386,25 @@ function boundedCount(value: unknown): boolean {
 
 function boundedText(value: string, maximumLength: number): string {
   return value.slice(0, maximumLength);
+}
+
+function isPublicSearchItemProjection(value: unknown): value is XiaohongshuPublicSearchItemProjection {
+  if (!record(value) || !exactKeys(value, [
+    'rank', 'noteId', 'title', 'contentType', 'authorId', 'authorNickname', 'likedCountText'
+  ])) return false;
+  return Number.isSafeInteger(value.rank) && Number(value.rank) >= 1 && Number(value.rank) <= 40 &&
+    boundedProjectionText(value.noteId, 80, true) && boundedProjectionText(value.title, 500, true) &&
+    boundedProjectionText(value.contentType, 40) && boundedProjectionText(value.authorId, 80) &&
+    boundedProjectionText(value.authorNickname, 200) && boundedProjectionText(value.likedCountText, 40);
+}
+
+function boundedProjectionText(value: unknown, maximum: number, required = false): value is string {
+  return typeof value === 'string' && value.length <= maximum && (!required || value.length > 0) &&
+    !/[\u0000-\u001f\u007f]/.test(value);
+}
+
+function boundedProjectionCount(value: unknown, maximum: number): boolean {
+  return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= maximum;
 }
 
 function boundedIdentifier(value: unknown): value is string {
