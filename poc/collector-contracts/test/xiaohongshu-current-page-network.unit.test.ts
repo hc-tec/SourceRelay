@@ -10,6 +10,7 @@ import {
   isXiaohongshuManagedPageNetworkObservationResult,
   isXiaohongshuManagedPageNetworkObserverArmResult,
   isXiaohongshuManagedPageNetworkObserverRequest,
+  isXiaohongshuManagedProfileNotesProjectionResult,
   isXiaohongshuManagedSearchProjectionResult,
   xiaohongshuCurrentPageNetworkPublicSurface
 } from '../src/index.js';
@@ -271,6 +272,47 @@ describe('Xiaohongshu current-page network policy contract', () => {
     expect(isXiaohongshuManagedSearchProjectionResult({
       ...result,
       items: [{ ...result.items[0], xsecToken: 'private' }]
+    })).toBe(false);
+  });
+
+  test('keeps profile-link inventory at its larger bounded projection while search stays first-page bounded', () => {
+    const item = {
+      rank: 1,
+      noteId: 'profile-note-1',
+      title: '公开主页笔记',
+      contentType: 'normal',
+      authorId: 'public-author-id',
+      authorNickname: '公开昵称',
+      likedCountText: '123'
+    };
+    const profile = {
+      schemaVersion: 2,
+      type: 'xiaohongshu_managed_profile_notes_projection',
+      pageAlias: 'profile-work',
+      runId: 'profile-work',
+      matchedPayloadCount: 1,
+      bodyBytesRead: 4096,
+      rawPayloadStored: false,
+      responseUrlsStored: false,
+      items: Array.from({ length: 200 }, (_, index) => ({ ...item,
+        rank: index + 1, noteId: `profile-note-${index + 1}` }))
+    };
+    expect(isXiaohongshuManagedProfileNotesProjectionResult(profile)).toBe(true);
+    expect(isXiaohongshuManagedProfileNotesProjectionResult({
+      ...profile,
+      items: [...profile.items, { ...item, rank: 201, noteId: 'profile-note-201' }]
+    })).toBe(false);
+    expect(isXiaohongshuManagedSearchProjectionResult({
+      schemaVersion: 2,
+      type: 'xiaohongshu_managed_search_projection',
+      pageAlias: 'search-work',
+      runId: 'search-work',
+      matchedPayloadCount: 1,
+      bodyBytesRead: 4096,
+      rawPayloadStored: false,
+      responseUrlsStored: false,
+      items: Array.from({ length: 41 }, (_, index) => ({ ...item,
+        rank: index + 1, noteId: `search-note-${index + 1}` }))
     })).toBe(false);
   });
 

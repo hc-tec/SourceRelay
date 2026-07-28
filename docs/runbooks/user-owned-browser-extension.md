@@ -3,6 +3,27 @@
 - 状态：可用的 direct-mode MVP
 - 已有真实 direct canary：`bilibili.video_detail`、`bilibili.native_search`、`bilibili.native_search_batch`、`bilibili.account_profile`、`bilibili.account_inventory`、`bilibili.discussion`
 - 已登记 B站能力：`GET /v2/capabilities` 会列出 12 项已有实现及其 direct-mode 迁移状态；登记不等于自动开放旧 Browser Host fallback。
+- 小红书 direct 能力：公开搜索、公开笔记详情、公开评论和公开评论回复已有真实 Gateway→Extension 闭环；公开博主笔记列表还支持一次性短时主页链接入口，但该入口必须用真实链接单独完成 live canary 后才会改变 `implementation_ready_live_e2e_pending` 状态。
+
+### 小红书临时主页链接入口
+
+上层应用可以在链接仍有效时提交一次公开主页链接，调用 `xiaohongshu.account.public_notes.v1`：
+
+```json
+{
+  "schemaVersion": 2,
+  "browserBindingId": "<paired-browser-binding-id>",
+  "platform": "xiaohongshu",
+  "capability": "xiaohongshu.account.public_notes.v1",
+  "executionTarget": "ephemeral_public_profile_url",
+  "input": {
+    "maximumScrolls": 20,
+    "profileUrl": "https://www.xiaohongshu.com/user/profile/<temporary-id>?<short-lived-signature>"
+  }
+}
+```
+
+该模式只会在一个已有的小红书 tab 内导航一次，不刷新、不创建新 tab、不重试；公开主页响应优先进入受限 Network/XHR 投影，再用可见 DOM 补齐，最多 20 次可信滚动和 200 条笔记。终态 operation summary 和 artifact 不包含完整主页 URL、签名、响应 URL 或原始正文。`maximumScrolls: 1–3` 仍可用于已有主页 tab；`4–20` 只允许和 `ephemeral_public_profile_url` 一起提交。
 - API：`/v2/openapi.json`、`/v2/capabilities`、`/v2/collector-service/browser-bindings`、`/v2/collect`、`/v2/collect/operations/{operationId}`
 - 不属于本 runbook 的旧通道：`profileId`、Browser Host、Playwright persistent context、受管 Collection Profile、`POST /v1/collect`
 

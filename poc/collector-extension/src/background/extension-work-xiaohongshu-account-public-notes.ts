@@ -77,7 +77,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     // its three-action canary bounded).  The link path keeps scrolling until
     // the projection reaches its item cap or two consecutive scrolls produce
     // no new visible/network item.
-    if (ephemeralProfileLink || projection.items.length === 0) {
+    if ((ephemeralProfileLink || projection.items.length === 0) && projection.items.length < maximumItems) {
       const debuggee: chrome.debugger.Debuggee = { tabId: document.tabId };
       await chrome.debugger.attach(debuggee, '1.3').catch(() => {
         throw new Error('debugger_attach_failed');
