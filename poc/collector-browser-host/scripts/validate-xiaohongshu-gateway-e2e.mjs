@@ -507,7 +507,7 @@ function selectReplyCanaryResultRank(artifact) {
     throw new Error('xiaohongshu_reply_canary_search_projection_empty');
   }
   const candidates = items
-    .filter((item) => Number.isSafeInteger(item?.rank) && item.rank >= 1 && item.rank <= 20)
+    .filter((item) => Number.isSafeInteger(item?.rank) && item.rank >= 1 && item.rank <= 5)
     .map((item) => ({ rank: item.rank, score: publicCountSignal(item.likedCountText) }))
     .sort((left, right) => right.score - left.score || left.rank - right.rank);
   if (candidates.length === 0) throw new Error('xiaohongshu_reply_canary_result_unavailable');
