@@ -22,7 +22,7 @@ export interface XiaohongshuPublicProfileReconResult {
   state: 'completed' | 'prerequisite_unmet';
   semanticAction: { attempted: boolean; attemptCount: 0 | 1 };
   before: {
-    publicSurface: 'search';
+    publicSurface: 'search' | 'note_detail_overlay';
     renderedCardCount: number;
     authorTarget: null | {
       targetMode: 'same_tab' | 'new_tab';

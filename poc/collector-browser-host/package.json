@@ -28,6 +28,7 @@
     "validate:xiaohongshu-extension-trusted-input": "node scripts/validate-xiaohongshu-extension-trusted-input.mjs",
     "validate:xiaohongshu-gateway-e2e": "node scripts/validate-xiaohongshu-gateway-e2e.mjs",
     "validate:xiaohongshu-gateway-replies-e2e": "node scripts/validate-xiaohongshu-gateway-e2e.mjs --replies",
+    "validate:xiaohongshu-gateway-account-notes-e2e": "node scripts/validate-xiaohongshu-gateway-e2e.mjs --account-notes",
     "validate:xiaohongshu-gateway-note-detail-e2e": "node scripts/validate-xiaohongshu-gateway-e2e.mjs --note-detail",
     "recon:xiaohongshu-note-comments": "node scripts/validate-xiaohongshu-gateway-e2e.mjs --comment-recon",
     "recon:xiaohongshu-comment-replies": "node scripts/recon-xiaohongshu-comment-replies.mjs",

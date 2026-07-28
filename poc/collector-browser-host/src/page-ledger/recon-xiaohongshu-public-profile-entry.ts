@@ -12,7 +12,7 @@ import { captureManagedPageVisualEvidence } from './page-visual-evidence.js';
 import { ensureManagedPageForeground } from './page-foreground.js';
 
 interface PublicProfileProbe {
-  publicSurface: 'search' | 'public_profile' | 'other';
+  publicSurface: 'search' | 'note_detail_overlay' | 'public_profile' | 'other';
   renderedCardCount: number;
   profileHeaderVisible: boolean;
   authorTarget: null | {
@@ -73,7 +73,8 @@ export async function executeXiaohongshuPublicProfileEntryRecon(input: {
   try {
     await withinDeadline(ensureManagedPageForeground(record.page), remaining(deadline));
     const before = await readProbe(record.page, remaining(deadline));
-    if (before.publicSurface !== 'search' || before.renderedCardCount < 1 ||
+    if ((before.publicSurface !== 'search' && before.publicSurface !== 'note_detail_overlay') ||
+      (before.publicSurface === 'search' && before.renderedCardCount < 1) ||
       before.risk.verificationRequired || before.risk.rateLimited || before.risk.sourceUnavailable) {
       throw hostError({
         code: 'xiaohongshu_public_profile_recon_search_precondition_unmet',
@@ -95,7 +96,7 @@ export async function executeXiaohongshuPublicProfileEntryRecon(input: {
       actionId: request.actionId,
       completedAt: new Date().toISOString(),
       before: {
-        publicSurface: 'search' as const,
+        publicSurface: before.publicSurface,
         renderedCardCount: before.renderedCardCount,
         authorTarget: before.authorTarget ? {
           targetMode: before.authorTarget.targetMode,
@@ -215,12 +216,39 @@ async function readProbe(page: Page, timeoutMs: number): Promise<PublicProfilePr
     };
     const pathname = location.pathname;
     const text = (document.body?.innerText ?? '').slice(0, 16_000);
-    const candidates = Array.from(document.querySelectorAll('section.note-item a[href]'))
+    const surface = pathname === '/search_result' || pathname === '/search_result/' ||
+      pathname === '/search_result_ai' || pathname === '/search_result_ai/'
+      ? 'search' as const
+      : /^\/explore\/[^/]+\/?$/.test(pathname) ? 'note_detail_overlay' as const
+      : pathname.startsWith('/user/profile/') ? 'public_profile' as const : 'other' as const;
+    const commentHeadings = Array.from(document.querySelectorAll('*')).filter((element) => {
+      if (!visible(element)) return false;
+      const ownText = Array.from(element.childNodes)
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent ?? '').join(' ').replace(/\s+/g, ' ').trim();
+      return /^共\s*\d+\s*条评论$/.test(ownText);
+    });
+    const commentTop = commentHeadings.length > 0
+      ? Math.min(...commentHeadings.map((element) => element.getBoundingClientRect().top))
+      : innerHeight * 0.48;
+    const candidates = Array.from(document.querySelectorAll(
+      surface === 'search' ? 'section.note-item a[href]' : 'a[href*="/user/profile/"]'
+    ))
       .filter((element): element is HTMLAnchorElement => element instanceof HTMLAnchorElement &&
         visible(element) && (() => {
           try {
             const target = new URL(element.href);
-            return target.origin === location.origin && target.pathname.startsWith('/user/profile/');
+            if (target.origin !== location.origin || !target.pathname.startsWith('/user/profile/')) return false;
+            if (surface !== 'note_detail_overlay') return true;
+            const rect = element.getBoundingClientRect();
+            if (rect.top >= commentTop) return false;
+            let ancestor = element.parentElement;
+            for (let depth = 0; ancestor && depth < 8; depth += 1, ancestor = ancestor.parentElement) {
+              const bounds = ancestor.getBoundingClientRect();
+              if (bounds.width >= Math.min(520, innerWidth * 0.42) && bounds.height >= 360 &&
+                commentHeadings.some((heading) => ancestor!.contains(heading))) return true;
+            }
+            return false;
           } catch {
             return false;
           }
@@ -232,10 +260,7 @@ async function readProbe(page: Page, timeoutMs: number): Promise<PublicProfilePr
       '[class*="user-info"], [class*="user-page"], [class*="profile"]'
     )).filter(visible);
     return {
-      publicSurface: pathname === '/search_result' || pathname === '/search_result/' ||
-        pathname === '/search_result_ai' || pathname === '/search_result_ai/'
-        ? 'search' as const
-        : pathname.startsWith('/user/profile/') ? 'public_profile' as const : 'other' as const,
+      publicSurface: surface,
       renderedCardCount: document.querySelectorAll('section.note-item').length,
       profileHeaderVisible: profileHeaderCandidates.length > 0,
       authorTarget: anchor && rect ? {

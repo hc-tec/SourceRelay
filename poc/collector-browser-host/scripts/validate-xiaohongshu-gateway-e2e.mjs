@@ -16,12 +16,14 @@ const exploreUrl = 'https://www.xiaohongshu.com/explore';
 const validateCommentRecon = process.argv.includes('--comment-recon');
 const validateReplyRecon = process.argv.includes('--reply-recon');
 const validatePublicReplies = process.argv.includes('--replies');
+const validateAccountNotes = process.argv.includes('--account-notes');
 const replyCanaryQuery = '奉劝各位咖啡爱好者选好一点的咖啡豆';
 const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ??
-  (validatePublicReplies ? replyCanaryQuery : '咖啡豆');
+  (validatePublicReplies || validateAccountNotes ? replyCanaryQuery : '咖啡豆');
 const validatePublicComments = process.argv.includes('--comments') || validateReplyRecon || validatePublicReplies;
 const validateExistingPublicComments = process.argv.includes('--comments-existing');
-const validateNoteDetail = validateCommentRecon || validatePublicComments || process.argv.includes('--note-detail');
+const validateNoteDetail = validateCommentRecon || validatePublicComments || validateAccountNotes ||
+  process.argv.includes('--note-detail');
 const timeline = [];
 let client = null;
 let gateway = null;
@@ -158,6 +160,7 @@ try {
   let reportedArtifact = artifact;
   let commentRecon = null;
   let replyRecon = null;
+  let profileEntryRecon = null;
   if (validateNoteDetail) {
     const detailResultRank = 1;
     record('note_detail_target_selected', {
@@ -205,7 +208,66 @@ try {
       rawPayloadStored: false,
       responseUrlsStored: false
     });
-    if (validatePublicComments) {
+    if (validateAccountNotes) {
+      const detailPage = await leasedPage();
+      profileEntryRecon = await client.command({
+        type: 'recon_xiaohongshu_public_profile_entry',
+        request: {
+          schemaVersion: 1,
+          profileId,
+          pageAlias: acquired.page.pageAlias,
+          pageLeaseId: acquired.lease.pageLeaseId,
+          runId,
+          expectedRecordVersion: detailPage.recordVersion,
+          expectedDocumentGeneration: detailPage.documentGeneration,
+          actionId: randomUUID(),
+          timeoutMs: 25_000
+        }
+      }, { timeoutMs: 30_000 });
+      record('public_profile_entry_recon_completed', {
+        state: profileEntryRecon.state,
+        semanticAction: profileEntryRecon.semanticAction,
+        beforeSurface: profileEntryRecon.before.publicSurface,
+        authorTargetMode: profileEntryRecon.before.authorTarget?.targetMode ?? null,
+        finalSurface: profileEntryRecon.after?.publicSurface ?? null,
+        networkResponseCount: profileEntryRecon.network.responses.length
+      });
+      if (profileEntryRecon.state !== 'completed') {
+        throw new Error('xiaohongshu_account_notes_profile_entry_prerequisite_unmet');
+      }
+      const accountDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
+        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
+          browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+          capability: 'xiaohongshu.account.public_notes.v1', executionTarget: 'existing_public_profile_tab',
+          input: { maximumScrolls: 3 } })
+      }, 201);
+      const accountOperationId = accountDispatch.result?.operationId;
+      if (!uuid(accountOperationId)) throw new Error('xiaohongshu_account_notes_e2e_operation_missing');
+      record('account_notes_operation_dispatched', { operationId: accountOperationId, maximumScrolls: 3 });
+      const accountOperation = await waitForOperation(gatewayOrigin, token, accountOperationId, 90_000);
+      if (accountOperation.state !== 'completed' || accountOperation.terminalReason !== 'profile_notes_ready' ||
+        !uuid(accountOperation.artifact?.artifactId) ||
+        typeof accountOperation.artifact?.retrievalPath !== 'string') {
+        throw new Error(accountOperation.errorCode ?? 'xiaohongshu_account_notes_e2e_operation_not_completed');
+      }
+      const accountArtifactPayload = await apiJson(
+        `${gatewayOrigin}${accountOperation.artifact.retrievalPath}`,
+        { headers: { authorization: `Bearer ${token}` } },
+        200
+      );
+      assertAccountNotesArtifact(accountArtifactPayload.artifact, accountOperationId);
+      reportedOperation = accountOperation;
+      reportedArtifact = accountArtifactPayload.artifact;
+      record('account_notes_artifact_retrieved', {
+        itemCount: reportedArtifact.summary.itemCount,
+        networkMatchedPayloadCount: reportedArtifact.result.projection.matchedPayloadCount,
+        networkBodyBytesRead: reportedArtifact.result.projection.bodyBytesRead,
+        semanticActionCount: reportedArtifact.result.semanticAction.attemptCount,
+        completedScrolls: reportedArtifact.result.scroll.completedCount,
+        rawPayloadStored: false,
+        responseUrlsStored: false
+      });
+    } else if (validatePublicComments) {
       const commentsDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
         method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
           browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
@@ -324,7 +386,8 @@ try {
     ok: true,
     runId,
     gatewayPath: 'user_browser_api_to_signed_queue_to_production_extension',
-    validatedCapability: validatePublicReplies ? 'xiaohongshu.note.public_comment_replies.v1' :
+    validatedCapability: validateAccountNotes ? 'xiaohongshu.account.public_notes.v1' :
+      validatePublicReplies ? 'xiaohongshu.note.public_comment_replies.v1' :
       validateReplyRecon ? 'xiaohongshu.note.public_comment_replies.recon' :
       validatePublicComments ? 'xiaohongshu.note.public_comments.v1' :
       validateCommentRecon ? 'xiaohongshu.note.comments.recon' :
@@ -373,6 +436,13 @@ try {
       temporaryBodyBytesRead: replyRecon.network.temporaryBodyBytesRead,
       responses: replyRecon.network.responses,
       projectedCommentCount: replyRecon.network.comments.length
+    } : null,
+    profileEntryRecon: profileEntryRecon ? {
+      beforeSurface: profileEntryRecon.before.publicSurface,
+      authorTargetMode: profileEntryRecon.before.authorTarget?.targetMode ?? null,
+      semanticAction: profileEntryRecon.semanticAction,
+      finalSurface: profileEntryRecon.after?.publicSurface ?? null,
+      networkResponseCount: profileEntryRecon.network.responses.length
     } : null,
     visualEvidence: { before: beforeVisual, after: afterVisual },
     finalPageState: retained.state,
@@ -565,6 +635,27 @@ function assertNoteRepliesArtifact(artifact, operationId) {
   if (/"(?:url|responseUrl|route|query|header|cookie|token|rawPayload|tabId|documentId|selector|script|noteId|profileId)"\s*:/i
     .test(JSON.stringify(artifact))) {
     throw new Error('xiaohongshu_note_replies_e2e_artifact_forbidden_material');
+  }
+}
+
+function assertAccountNotesArtifact(artifact, operationId) {
+  const actionCount = artifact?.result?.semanticAction?.attemptCount;
+  if (!artifact || artifact.summary?.operationId !== operationId ||
+    artifact.summary?.capability !== 'xiaohongshu.account.public_notes.v1' ||
+    artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'profile_notes_ready' ||
+    artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
+    !Number.isInteger(actionCount) || actionCount < 0 || actionCount > 3 ||
+    artifact.result.semanticAction.attempted !== (actionCount > 0) ||
+    artifact.result?.scroll?.requestedCount !== 3 || artifact.result.scroll.completedCount !== actionCount ||
+    artifact.result?.page?.publicSurface !== 'public_profile' ||
+    !Array.isArray(artifact.result?.projection?.items) || artifact.result.projection.items.length < 1 ||
+    artifact.provenance?.rawPayloadStored !== false || artifact.provenance?.responseUrlsStored !== false ||
+    artifact.provenance?.debuggerDetached !== true) {
+    throw new Error('xiaohongshu_account_notes_e2e_artifact_invalid');
+  }
+  if (/"(?:url|responseUrl|route|query|header|cookie|token|rawPayload|tabId|documentId|profileId|selector|script)"\s*:/i
+    .test(JSON.stringify(artifact))) {
+    throw new Error('xiaohongshu_account_notes_e2e_artifact_forbidden_material');
   }
 }
 
