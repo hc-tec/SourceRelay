@@ -263,6 +263,21 @@ async function markNextNavigationStarted(tabId: number, url: string): Promise<vo
   const record = await loadActiveRecord();
   if (!record || record.tabId !== tabId) return;
   if (record.state === 'observing') {
+    // A single Playwright page.goto on Xiaohongshu can legitimately traverse
+    // several public top-level documents before the search application
+    // settles. Only a managed PageLease run may follow that bounded chain;
+    // popup/user selections remain strict one-document observations.
+    if (record.managedRunId !== null && xiaohongshuCurrentPageNetworkPublicSurface(url)) {
+      await store({
+        ...record,
+        state: 'armed_next_document',
+        publicSurface: null,
+        documentId: null,
+        navigationStarted: true
+      });
+      registerNetworkMetadataListener();
+      return;
+    }
     await store({ ...record, state: 'stopped', stopReason: 'document_changed' });
     unregisterNetworkMetadataListener();
     return;

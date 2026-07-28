@@ -68,10 +68,10 @@ try {
   });
 
   await navigateOnce('xiaohongshu-public-search-once', searchUrl);
-  await waitForStableDocument(12_000);
+  await waitForStableDocument(15_000);
   // Local waiting only: allow already-triggered XHR and lazy rendering to
   // settle. No refresh, second navigation, click, scroll or automatic retry.
-  await delay(3_000);
+  await delay(8_000);
   const current = await leasedPage();
   const observation = await client.command({
     type: 'read_xiaohongshu_managed_page_network_observation',
@@ -80,6 +80,19 @@ try {
   if (observation?.type !== 'xiaohongshu_managed_page_network_observation' ||
     observation.pageAlias !== acquired.page.pageAlias || observation.runId !== runId) {
     throw new Error('xiaohongshu_validation_observation_invalid');
+  }
+  const excluded = observation.observation?.excludedRouteCounts;
+  const observedMetadataCount = excluded
+    ? excluded.authenticationOrIdentity + excluded.securityOrRisk +
+      excluded.configurationOrTelemetry + excluded.other
+    : 0;
+  if (observation.permissionState !== 'permission_granted' ||
+    observation.selection?.state !== 'observing' ||
+    observation.observation?.observerState !== 'armed_same_document' ||
+    observation.observation?.risk?.verificationRequired ||
+    observation.observation?.risk?.rateLimited ||
+    observation.observation?.risk?.sourceUnavailable || observedMetadataCount < 1) {
+    throw new Error('xiaohongshu_validation_observer_postcondition_unmet');
   }
   record('network_postcondition', 'network', {
     permissionState: observation.permissionState,
@@ -115,6 +128,7 @@ try {
     automaticRetryCount: 0,
     responseBodiesRead: observation.observation.responseBodiesRead,
     rawPayloadBytesRead: observation.observation.rawPayloadBytesRead,
+    observedMetadataCount,
     observation,
     visualEvidence: { baseline: baselineVisual, target: targetVisual },
     finalPage: { pageAlias: retained.pageAlias, state: retained.state },
@@ -181,7 +195,7 @@ async function waitForStableDocument(timeoutMs) {
   while (Date.now() < deadline) {
     const page = await leasedPage();
     if (page.documentGeneration > 0 && page.documentGeneration === previousGeneration &&
-      Date.now() - stableSince >= 1_500) return page;
+      Date.now() - stableSince >= 3_000) return page;
     if (page.documentGeneration !== previousGeneration) {
       previousGeneration = page.documentGeneration;
       stableSince = Date.now();

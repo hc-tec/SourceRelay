@@ -225,12 +225,26 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
     await settle();
     chrome.committed[0]?.({ tabId: 11, frameId: 0, documentId: 'document-2', url: 'https://www.xiaohongshu.com/search_result?keyword=public' });
     await settle();
+    // Xiaohongshu may traverse another allowed public top-level document in
+    // the same managed page.goto chain. Managed runs follow it; popup arms do
+    // not gain this relaxation.
+    chrome.beforeNavigate[0]?.({ tabId: 11, frameId: 0, url: 'https://www.xiaohongshu.com/search_result?keyword=public' });
+    await settle();
+    chrome.committed[0]?.({ tabId: 11, frameId: 0, documentId: 'document-3', url: 'https://www.xiaohongshu.com/search_result?keyword=public' });
+    await settle();
+    chrome.completed[0]?.({
+      tabId: 11,
+      type: 'xmlhttprequest',
+      url: 'https://www.xiaohongshu.com/api/sns/web/v1/search/notes'
+    });
+    await settle();
 
     await expect(subject.readXiaohongshuManagedPageNetworkObservation(11, managedRequest)).resolves.toMatchObject({
       type: 'xiaohongshu_managed_page_network_observation',
       pageAlias: 'page-1',
       runId: 'run-123',
-      selection: { state: 'observing', publicSurface: 'search' }
+      selection: { state: 'observing', publicSurface: 'search' },
+      observation: { excludedRouteCounts: { other: 1 } }
     });
     await expect(subject.readXiaohongshuManagedPageNetworkObservation(12, managedRequest))
       .rejects.toThrow('xiaohongshu_managed_page_network_binding_mismatch');
