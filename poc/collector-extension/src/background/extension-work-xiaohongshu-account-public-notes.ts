@@ -49,6 +49,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   let networkProjection: XiaohongshuManagedProfileNotesProjectionResult | null = null;
   let renderedCardCount = 0;
   let navigationAttempted = false;
+  let profileObserverScriptId: string | null = null;
   let errorCode: string | null = null;
   let completionReason: 'profile_notes_ready' | 'profile_notes_budget_exhausted' | null = null;
   try {
@@ -58,6 +59,11 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
       if (!profileUrl || !canonicalXiaohongshuPublicProfileUrl(profileUrl)) {
         throw new Error('xiaohongshu_profile_url_invalid');
       }
+      // Install the short-lived MAIN-world observer before the single allowed
+      // navigation.  Profile pages commonly fetch their first note batch
+      // during document startup; arming only after `tabs.update` would lose
+      // that response and make the supposedly Network-first path DOM-only.
+      profileObserverScriptId = await registerEphemeralProfileObserver(item.workId);
       navigationAttempted = true;
       await navigateToEphemeralProfileUrl(profileUrl, item.expiresAt);
     }
@@ -163,6 +169,16 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
       }
     }
     if (document) await clearXiaohongshuWorkObserver(document.tabId, item.workId).catch(() => undefined);
+    if (profileObserverScriptId) {
+      try {
+        await chrome.scripting.unregisterContentScripts({ ids: [profileObserverScriptId] });
+      } catch {
+        // A registration that cannot be removed is a local safety failure. It
+        // never becomes a platform retry, but the result must not claim a
+        // successful run while a platform script may still be armed.
+        if (!errorCode) errorCode = 'xiaohongshu_profile_observer_cleanup_failed';
+      }
+    }
   }
   const projectionReady = errorCode === null && projection !== null && projection.items.length > 0 &&
     attemptedCount === completedCount && debuggerDetached;
@@ -196,6 +212,25 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     responseUrlsStored: false,
     debuggerDetached
   };
+}
+
+async function registerEphemeralProfileObserver(workId: string): Promise<string> {
+  const contentScriptId = `collector-xhs-profile-${workId.replace(/-/g, '')}`;
+  await chrome.scripting.unregisterContentScripts({ ids: [contentScriptId] }).catch(() => undefined);
+  try {
+    await chrome.scripting.registerContentScripts([{
+      id: contentScriptId,
+      matches: ['https://www.xiaohongshu.com/user/profile/*'],
+      js: ['xiaohongshu-search-main-world-observer.js'],
+      runAt: 'document_start',
+      allFrames: false,
+      persistAcrossSessions: false,
+      world: 'MAIN'
+    }]);
+  } catch {
+    throw new Error('xiaohongshu_profile_observer_registration_failed');
+  }
+  return contentScriptId;
 }
 
 async function findUniquePublicProfileDocument(): Promise<ProfileDocument> {

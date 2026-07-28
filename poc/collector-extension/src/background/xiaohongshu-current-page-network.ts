@@ -193,7 +193,9 @@ export async function armXiaohongshuExistingPublicProfileWorkObserver(
   if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
     throw new Error('xiaohongshu_current_page_network_selection_active');
   }
-  if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'public_profile');
+  if (!current) {
+    await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'public_profile', false, true);
+  }
 }
 
 export async function armXiaohongshuExistingSearchWorkObserver(
@@ -501,7 +503,8 @@ async function armManagedXiaohongshuCurrentDocument(
   managedRunId: string,
   activeRecord: XiaohongshuCurrentPageNetworkRecord | null,
   expectedSurface: 'explore' | 'search' | 'public_profile' | 'public_note_detail' = 'explore',
-  preserveExistingSearchProjection = false
+  preserveExistingSearchProjection = false,
+  preserveExistingProfileProjection = false
 ): Promise<XiaohongshuCurrentPageNetworkRecord> {
   if (activeRecord) throw new Error('xiaohongshu_current_page_network_selection_active');
   const tab = await chrome.tabs.get(tabId).catch(() => null);
@@ -536,7 +539,9 @@ async function armManagedXiaohongshuCurrentDocument(
   await store(record);
   const preserved = expectedSurface === 'search' && preserveExistingSearchProjection &&
     await activateExistingSearchObserver(tabId, frame.documentId);
-  if (!preserved) {
+  const preservedProfile = expectedSurface === 'public_profile' && preserveExistingProfileProjection &&
+    await activateExistingProfileObserver(tabId, frame.documentId);
+  if (!preserved && !preservedProfile) {
     await chrome.scripting.executeScript({
       target: { tabId, documentIds: [frame.documentId] },
       world: 'MAIN',
@@ -545,6 +550,33 @@ async function armManagedXiaohongshuCurrentDocument(
     });
   }
   return record;
+}
+
+/**
+ * A profile-link work item may have installed the observer at document_start,
+ * before the profile's initial JSON response arrived.  Re-bind that existing
+ * controller to the signed work lease without clearing the items it already
+ * projected.  This keeps the initial response available to the Network-first
+ * path while ensuring late callbacks from the previous generation cannot leak
+ * into this work item.
+ */
+async function activateExistingProfileObserver(tabId: number, documentId: string): Promise<boolean> {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, documentIds: [documentId] },
+    world: 'MAIN',
+    func: () => {
+      const key = '__personalIntelligenceXiaohongshuPublicNotesObserverV2';
+      const controller = (window as typeof window & { [key]?: Record<string, unknown> })[key];
+      if (!controller || controller.schemaVersion !== 2 || typeof controller.expiresAt !== 'number' ||
+        Date.now() >= controller.expiresAt || !Array.isArray(controller.items)) return false;
+      const generation = typeof controller.generation === 'number' && Number.isSafeInteger(controller.generation)
+        ? controller.generation : 0;
+      controller.generation = generation + 1;
+      controller.expiresAt = Date.now() + 60_000;
+      return true;
+    }
+  });
+  return results[0]?.result === true;
 }
 
 /**
