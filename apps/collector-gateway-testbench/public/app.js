@@ -22,6 +22,7 @@ element('search-form').addEventListener('submit', (event) => void submitSearch(e
 element('search-batch-form').addEventListener('submit', (event) => void submitSearch(event, 'native_search_batch'));
 element('xiaohongshu-search-form').addEventListener('submit', (event) => void submitSearch(event, 'xiaohongshu_search'));
 element('xiaohongshu-account-notes-form').addEventListener('submit', (event) => void submitXiaohongshuAccountNotes(event));
+element('xiaohongshu-account-notes-form').elements.executionTarget.addEventListener('change', syncXiaohongshuAccountMode);
 element('xiaohongshu-note-detail-form').addEventListener('submit', (event) => void submitXiaohongshuNoteDetail(event));
 element('xiaohongshu-note-comments-form').addEventListener('submit', (event) => void submitXiaohongshuNoteComments(event));
 element('xiaohongshu-comment-replies-form').addEventListener('submit', (event) => void submitXiaohongshuCommentReplies(event));
@@ -142,7 +143,7 @@ function renderBindings() {
   }
   for (const control of document.querySelectorAll(
     '#video-form input, #video-form select, #search-form input, #search-form select, #search-batch-form input, #search-batch-form select, ' +
-    '#xiaohongshu-search-form input, #xiaohongshu-search-form select, #xiaohongshu-account-notes-form select, #xiaohongshu-note-detail-form input, #xiaohongshu-note-detail-form select, #xiaohongshu-note-comments-form select, #xiaohongshu-comment-replies-form input, #xiaohongshu-comment-replies-form select, ' +
+    '#xiaohongshu-search-form input, #xiaohongshu-search-form select, #xiaohongshu-account-notes-form input, #xiaohongshu-account-notes-form select, #xiaohongshu-note-detail-form input, #xiaohongshu-note-detail-form select, #xiaohongshu-note-comments-form select, #xiaohongshu-comment-replies-form input, #xiaohongshu-comment-replies-form select, ' +
     '#profile-form input, #profile-form select, #inventory-form input, #inventory-form select, ' +
     '#discussion-form input, #discussion-form select, ' +
     '#passive-form input, #passive-form select, #video-form button, #search-form button, #search-batch-form button, #xiaohongshu-search-form button, #xiaohongshu-account-notes-form button, #xiaohongshu-note-detail-form button, #xiaohongshu-note-comments-form button, #xiaohongshu-comment-replies-form button, ' +
@@ -150,6 +151,22 @@ function renderBindings() {
   )) {
     control.disabled = !enabled;
   }
+  syncXiaohongshuAccountMode();
+}
+
+function syncXiaohongshuAccountMode() {
+  const form = element('xiaohongshu-account-notes-form');
+  if (!form) return;
+  const linkMode = form.elements.executionTarget.value === 'ephemeral_public_profile_url';
+  const urlField = form.querySelector('[data-xiaohongshu-profile-url-field]');
+  const profileUrl = form.elements.profileUrl;
+  const maximumScrolls = form.elements.maximumScrolls;
+  if (urlField) urlField.hidden = !linkMode;
+  profileUrl.required = linkMode;
+  for (const option of maximumScrolls.options) {
+    option.disabled = !linkMode && Number(option.value) > 3;
+  }
+  if (!linkMode && Number(maximumScrolls.value) > 3) maximumScrolls.value = '3';
 }
 
 async function submitVideo(event) {
@@ -204,14 +221,18 @@ async function submitXiaohongshuAccountNotes(event) {
   const button = form.querySelector('button');
   button.disabled = true;
   try {
+    const executionTarget = form.elements.executionTarget.value;
+    const input = { maximumScrolls: Number(form.elements.maximumScrolls.value) };
+    if (executionTarget === 'ephemeral_public_profile_url') input.profileUrl = form.elements.profileUrl.value;
     const payload = await api('/api/operations', {
       method: 'POST',
       body: {
         browserBindingId: form.elements.browserBindingId.value,
         kind: 'xiaohongshu_account_public_notes',
-        input: { maximumScrolls: Number(form.elements.maximumScrolls.value) }
+        input
       }
     });
+    if (executionTarget === 'ephemeral_public_profile_url') form.elements.profileUrl.value = '';
     acceptOperation(payload.result);
   } catch (error) {
     showOperationError(error);

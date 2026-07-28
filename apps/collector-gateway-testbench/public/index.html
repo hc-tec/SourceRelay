@@ -89,7 +89,7 @@
               <span class="step">X2</span>
               <div>
                 <h3>小红书博主公开笔记</h3>
-                <p>要求浏览器中恰好存在一个已打开的公开主页 tab。零 URL、零账号 ID、零导航、零刷新、零新 tab；只执行 1–3 次有界可信滚动并从 Network 投影公开笔记。</p>
+                <p>可选择已有公开主页 tab，或提交一次短时公开主页链接；链接模式只在已有小红书 tab 内导航一次，Network 优先并在预算内收集公开笔记。</p>
               </div>
             </div>
             <label>
@@ -97,11 +97,39 @@
               <select class="binding-select" name="browserBindingId" required disabled></select>
             </label>
             <label>
+              执行入口
+              <select name="executionTarget" required disabled>
+                <option value="existing_public_profile_tab" selected>已有公开主页 tab（零导航）</option>
+                <option value="ephemeral_public_profile_url">短时主页链接（单次导航）</option>
+              </select>
+            </label>
+            <label data-xiaohongshu-profile-url-field hidden>
+              短时公开主页链接
+              <input name="profileUrl" type="url" autocomplete="off" maxlength="4096" placeholder="https://www.xiaohongshu.com/user/profile/...">
+            </label>
+            <label>
               最大滚动次数
               <select name="maximumScrolls" required disabled>
                 <option value="1" selected>1（首次 canary 推荐）</option>
                 <option value="2">2</option>
                 <option value="3">3</option>
+                <option value="4" disabled>4</option>
+                <option value="5" disabled>5</option>
+                <option value="6" disabled>6</option>
+                <option value="7" disabled>7</option>
+                <option value="8" disabled>8</option>
+                <option value="9" disabled>9</option>
+                <option value="10" disabled>10</option>
+                <option value="11" disabled>11</option>
+                <option value="12" disabled>12</option>
+                <option value="13" disabled>13</option>
+                <option value="14" disabled>14</option>
+                <option value="15" disabled>15</option>
+                <option value="16" disabled>16</option>
+                <option value="17" disabled>17</option>
+                <option value="18" disabled>18</option>
+                <option value="19" disabled>19</option>
+                <option value="20" disabled>20</option>
               </select>
             </label>
             <button type="submit" disabled>提交一次公开笔记测试</button>
@@ -291,7 +319,7 @@
       <section class="card" aria-labelledby="capabilities-heading">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">03 · REGISTERED BILIBILI CAPABILITIES</p>
+            <p class="eyebrow">03 · REGISTERED CAPABILITIES</p>
             <h2 id="capabilities-heading">能力登记册</h2>
           </div>
           <p class="policy">来自 Gateway 的真实 `/v2/capabilities`。已实现 direct work 的项目会进入测试工作流；canary 状态必须由真实结果获得。</p>

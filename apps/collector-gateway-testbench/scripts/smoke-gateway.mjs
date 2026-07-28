@@ -18,7 +18,7 @@ try {
   ];
   if (status?.deploymentMode !== 'user_owned_browser_extension' || status?.browserProcessControl !== 'not_available' ||
     openApi?.openapi !== '3.1.0' || !expected.every((path) => paths.includes(path)) ||
-    !Array.isArray(catalog?.capabilities) || catalog.capabilities.length !== 12) {
+    !Array.isArray(catalog?.capabilities) || catalog.capabilities.length !== 18) {
     throw new Error('testbench_gateway_contract_unexpected');
   }
   process.stdout.write(`${JSON.stringify({

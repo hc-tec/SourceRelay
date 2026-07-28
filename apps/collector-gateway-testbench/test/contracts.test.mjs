@@ -145,6 +145,38 @@ test('maps Xiaohongshu account notes to an existing profile tab with a bounded s
   }), TestbenchInputError);
 });
 
+test('maps a short-lived Xiaohongshu profile link to the single-navigation account target', () => {
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_account_public_notes',
+    input: {
+      maximumScrolls: 20,
+      profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short'
+    }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'xiaohongshu',
+    capability: 'xiaohongshu.account.public_notes.v1',
+    executionTarget: 'ephemeral_public_profile_url',
+    input: {
+      maximumScrolls: 20,
+      profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short'
+    }
+  });
+  for (const input of [
+    { maximumScrolls: 21, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123' },
+    { maximumScrolls: 20, profileUrl: 'https://www.xiaohongshu.com/explore' },
+    { maximumScrolls: 20, profileUrl: 'https://evil.example/user/profile/abc123' },
+    { maximumScrolls: 20, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123#fragment' },
+    { maximumScrolls: 20, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123', selector: '.note-item' }
+  ]) assert.throws(() => parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_account_public_notes',
+    input
+  }), TestbenchInputError);
+});
+
 test('maps Xiaohongshu public detail to one ranked result in the existing search tab', () => {
   assert.deepEqual(parseTestbenchSubmission({
     browserBindingId: bindingId,

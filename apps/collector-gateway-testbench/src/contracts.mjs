@@ -2,6 +2,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const TOKEN_PATTERN = /^cst_[A-Za-z0-9_-]{43}$/;
 const BVID_PATTERN = /^BV[0-9A-Za-z]{10}$/;
 const ACCOUNT_ID_PATTERN = /^[1-9]\d{0,19}$/;
+const XIAOHONGSHU_PROFILE_PATH_PATTERN = /^\/user\/profile\/[A-Za-z0-9_-]+\/?$/;
 const ARTIFACT_PATH_PATTERN = /^\/v1\/collect\/artifacts\/(bilibili\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\.(?:overview|detail)|danmaku|discussion)|xiaohongshu\.(?:(?:search|account)\.public_notes|note\.public_(?:detail|comments|comment_replies))\.v1)\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
 export const TESTBENCH_SCHEMA_VERSION = 1;
@@ -18,9 +19,10 @@ export class TestbenchInputError extends Error {
 
 /**
  * The testbench is deliberately a narrower consumer than the Gateway. It
- * accepts fixed public identifiers (BVID, query or MID) rather than arbitrary
- * URLs, and it never exposes a route for selectors, scripts, tab IDs, Browser
- * Profiles, or network data.
+ * accepts fixed public identifiers (BVID, query or MID) plus one explicitly
+ * constrained short-lived Xiaohongshu public-profile URL. It never exposes a
+ * route for arbitrary URLs, selectors, scripts, tab IDs, Browser Profiles, or
+ * network data.
  */
 export function parseTestbenchSubmission(value) {
   if (!isRecord(value) || !hasExactKeys(value, ['browserBindingId', 'kind', 'input'])) {
@@ -92,11 +94,26 @@ export function parseTestbenchSubmission(value) {
   }
 
   if (value.kind === 'xiaohongshu_account_public_notes') {
-    if (!hasExactKeys(value.input, ['maximumScrolls']) ||
-      !Number.isInteger(value.input.maximumScrolls) ||
-      value.input.maximumScrolls < 1 || value.input.maximumScrolls > 3) {
+    if (!Number.isInteger(value.input.maximumScrolls) || value.input.maximumScrolls < 1 ||
+      (!hasExactKeys(value.input, ['maximumScrolls']) &&
+        !hasExactKeys(value.input, ['maximumScrolls', 'profileUrl']))) {
       throw new TestbenchInputError('testbench_request_invalid');
     }
+    if (hasExactKeys(value.input, ['maximumScrolls', 'profileUrl'])) {
+      const profileUrl = canonicalXiaohongshuProfileUrl(value.input.profileUrl);
+      if (!profileUrl || value.input.maximumScrolls > 20) {
+        throw new TestbenchInputError('testbench_request_invalid');
+      }
+      return {
+        schemaVersion: DIRECT_SCHEMA_VERSION,
+        browserBindingId: value.browserBindingId,
+        platform: 'xiaohongshu',
+        capability: 'xiaohongshu.account.public_notes.v1',
+        executionTarget: 'ephemeral_public_profile_url',
+        input: { maximumScrolls: value.input.maximumScrolls, profileUrl }
+      };
+    }
+    if (value.input.maximumScrolls > 3) throw new TestbenchInputError('testbench_request_invalid');
     return {
       schemaVersion: DIRECT_SCHEMA_VERSION,
       browserBindingId: value.browserBindingId,
@@ -288,6 +305,20 @@ function normaliseAccountId(value) {
   const accountId = value.trim();
   if (!ACCOUNT_ID_PATTERN.test(accountId)) throw new TestbenchInputError('testbench_account_id_invalid');
   return accountId;
+}
+
+function canonicalXiaohongshuProfileUrl(value) {
+  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value) || value.length > 4096) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' || url.port ||
+      url.username || url.password || url.hash || !XIAOHONGSHU_PROFILE_PATH_PATTERN.test(url.pathname)) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function isDirectArtifactCapability(value) {
