@@ -57,7 +57,24 @@ describe('Static strategy registry boundary', () => {
       evidenceObjectives: ['breadth_search'],
       acquisition: ['native_navigation', 'visible_dom']
     });
-    expect(strategiesFor('xiaohongshu', 'breadth_search')).toHaveLength(0);
+    expect(strategiesFor('xiaohongshu', 'breadth_search')).toEqual([
+      expect.objectContaining({
+        strategyId: 'xiaohongshu.search.public_notes.v1',
+        version: '0.1.0',
+        maturity: 'build_ready',
+        surface: 'native_search',
+        acquisition: ['native_navigation', 'visible_dom', 'bounded_interaction'],
+        approvedResponseRouteIds: []
+      })
+    ]);
+    expect(strategiesFor('xiaohongshu', 'account_archive')).toEqual([
+      expect.objectContaining({
+        strategyId: 'xiaohongshu.account.public_notes.v1',
+        surface: 'account_listing',
+        bounds: expect.objectContaining({ maxRecords: 200, maxReadOnlyActions: 20 })
+      })
+    ]);
+    expect(strategiesFor('xiaohongshu', 'discussion_sample')).toHaveLength(2);
     expect(strategiesFor('bilibili', 'account_context')).toEqual([
       expect.objectContaining({
         strategyId: 'bilibili.account.profile.dom.v2',
@@ -83,6 +100,12 @@ describe('Static strategy registry boundary', () => {
     expect(resolveDetailStrategy('bilibili')).toMatchObject({
       strategyId: 'bilibili.video.detail.dom.v2',
       version: '0.4.0',
+      maturity: 'build_ready',
+      approvedResponseRouteIds: []
+    });
+    expect(resolveDetailStrategy('xiaohongshu')).toMatchObject({
+      strategyId: 'xiaohongshu.note.public_detail.v1',
+      version: '0.1.0',
       maturity: 'build_ready',
       approvedResponseRouteIds: []
     });

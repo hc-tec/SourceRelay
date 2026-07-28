@@ -167,6 +167,173 @@ function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStr
   };
 }
 
+function xiaohongshuSearchStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'xiaohongshu.search.public_notes.v1',
+    version: '0.1.0',
+    platform: 'xiaohongshu',
+    evidenceObjectives: ['breadth_search'],
+    acquisition: ['native_navigation', 'visible_dom', 'bounded_interaction'],
+    maturity: 'build_ready',
+    surface: 'native_search',
+    nativeEntry: { kind: 'native_search_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['native_navigation', 'visible_dom', 'bounded_interaction']
+    },
+    bounds: {
+      maxRecords: 40,
+      maxReadOnlyActions: 1,
+      firstRenderedPageOnly: true,
+      allowsDetailNavigation: false,
+      allowsCommentNavigation: false,
+      allowsReadOnlyInteraction: true
+    },
+    output: { kind: 'search_card', partialByDefault: true },
+    browser: {
+      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      domContentMatches: ['https://www.xiaohongshu.com/*'],
+      responseBridgeMatches: ['https://www.xiaohongshu.com/search_result_ai*']
+    },
+    // The current projection is shape-bound and URL-free. No arbitrary or
+    // unreviewed response route is admitted through the static registry.
+    approvedResponseRouteIds: [],
+    validation: { mode: 'local_live_platform_only', liveRecord: null }
+  };
+}
+
+function xiaohongshuAccountPublicNotesStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'xiaohongshu.account.public_notes.v1',
+    version: '0.1.0',
+    platform: 'xiaohongshu',
+    evidenceObjectives: ['account_archive'],
+    acquisition: ['native_navigation', 'visible_dom', 'bounded_interaction'],
+    maturity: 'build_ready',
+    surface: 'account_listing',
+    nativeEntry: { kind: 'profile_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['native_navigation', 'visible_dom', 'bounded_interaction']
+    },
+    bounds: {
+      maxRecords: 200,
+      maxReadOnlyActions: 20,
+      firstRenderedPageOnly: false,
+      allowsDetailNavigation: false,
+      allowsCommentNavigation: false,
+      allowsReadOnlyInteraction: true
+    },
+    output: { kind: 'collection_state', partialByDefault: true },
+    browser: {
+      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      domContentMatches: ['https://www.xiaohongshu.com/user/profile/*'],
+      responseBridgeMatches: ['https://www.xiaohongshu.com/user/profile/*']
+    },
+    approvedResponseRouteIds: [],
+    validation: { mode: 'local_live_platform_only', liveRecord: null }
+  };
+}
+
+function xiaohongshuNoteDetailStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'xiaohongshu.note.public_detail.v1',
+    version: '0.1.0',
+    platform: 'xiaohongshu',
+    evidenceObjectives: ['detail_read'],
+    acquisition: ['visible_dom', 'bounded_interaction'],
+    maturity: 'build_ready',
+    surface: 'content_detail',
+    nativeEntry: { kind: 'canonical_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['visible_dom', 'bounded_interaction']
+    },
+    bounds: {
+      maxRecords: 1,
+      maxReadOnlyActions: 1,
+      firstRenderedPageOnly: true,
+      allowsDetailNavigation: true,
+      allowsCommentNavigation: false,
+      allowsReadOnlyInteraction: true
+    },
+    output: { kind: 'content_detail', partialByDefault: true },
+    browser: {
+      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      domContentMatches: ['https://www.xiaohongshu.com/search_result*'],
+      responseBridgeMatches: ['https://www.xiaohongshu.com/search_result*']
+    },
+    approvedResponseRouteIds: [],
+    validation: { mode: 'local_live_platform_only', liveRecord: null }
+  };
+}
+
+function xiaohongshuCommentsStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'xiaohongshu.note.public_comments.v1',
+    version: '0.1.0',
+    platform: 'xiaohongshu',
+    evidenceObjectives: ['discussion_sample'],
+    acquisition: ['visible_dom', 'bounded_interaction'],
+    maturity: 'build_ready',
+    surface: 'comment_thread',
+    nativeEntry: { kind: 'canonical_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['visible_dom', 'bounded_interaction']
+    },
+    bounds: {
+      maxRecords: 80,
+      maxReadOnlyActions: 3,
+      firstRenderedPageOnly: false,
+      allowsDetailNavigation: false,
+      allowsCommentNavigation: true,
+      allowsReadOnlyInteraction: true
+    },
+    output: { kind: 'comment', partialByDefault: true },
+    browser: {
+      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      domContentMatches: ['https://www.xiaohongshu.com/explore/*'],
+      responseBridgeMatches: ['https://www.xiaohongshu.com/explore/*']
+    },
+    approvedResponseRouteIds: [],
+    validation: { mode: 'local_live_platform_only', liveRecord: null }
+  };
+}
+
+function xiaohongshuCommentRepliesStrategy(): StaticPlatformStrategy {
+  return {
+    strategyId: 'xiaohongshu.note.public_comment_replies.v1',
+    version: '0.1.0',
+    platform: 'xiaohongshu',
+    evidenceObjectives: ['discussion_sample'],
+    acquisition: ['visible_dom', 'bounded_interaction'],
+    maturity: 'build_ready',
+    surface: 'comment_thread',
+    nativeEntry: { kind: 'canonical_url' },
+    preconditions: {
+      authentication: 'may_be_required',
+      requiredConsent: ['visible_dom', 'bounded_interaction']
+    },
+    bounds: {
+      maxRecords: 40,
+      maxReadOnlyActions: 1,
+      firstRenderedPageOnly: true,
+      allowsDetailNavigation: false,
+      allowsCommentNavigation: true,
+      allowsReadOnlyInteraction: true
+    },
+    output: { kind: 'comment', partialByDefault: true },
+    browser: {
+      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      domContentMatches: ['https://www.xiaohongshu.com/explore/*'],
+      responseBridgeMatches: ['https://www.xiaohongshu.com/explore/*']
+    },
+    approvedResponseRouteIds: [],
+    validation: { mode: 'local_live_platform_only', liveRecord: null }
+  };
+}
+
 /**
  * One exact, visible first-screen detail projection. Subtitles, comments,
  * recommendations, playback, and response capture remain separate
@@ -515,6 +682,11 @@ export const STATIC_PLATFORM_STRATEGIES: readonly StaticPlatformStrategy[] = [
   bilibiliVideoTranscriptTrustedResponseStrategy(),
   bilibiliVideoDiscussionDomStrategy(),
   bilibiliVideoDanmakuDomStrategy(),
+  xiaohongshuSearchStrategy(),
+  xiaohongshuAccountPublicNotesStrategy(),
+  xiaohongshuNoteDetailStrategy(),
+  xiaohongshuCommentsStrategy(),
+  xiaohongshuCommentRepliesStrategy(),
   nativeSearchDomStrategy('zhihu'),
   nativeSearchDomStrategy('weibo')
 ];
