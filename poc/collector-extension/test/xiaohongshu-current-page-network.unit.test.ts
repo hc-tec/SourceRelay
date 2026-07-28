@@ -37,7 +37,7 @@ function installChromeMock() {
   const request = vi.fn(async () => true);
   const contains = vi.fn(async () => true);
   const removeNetworkListener = vi.fn();
-  const executeScript = vi.fn(async () => [{
+  const executeScript = vi.fn(async (): Promise<Array<{ frameId: number; result: unknown }>> => [{
     frameId: 0,
     result: { pathname: '/search_result', title: '公开搜索', visibleText: '公开可见的搜索结果' }
   }]);
@@ -250,6 +250,96 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
       .rejects.toThrow('xiaohongshu_managed_page_network_binding_mismatch');
     await expect(subject.readXiaohongshuManagedPageNetworkObservation(11, { ...managedRequest, runId: 'run-456' }))
       .rejects.toThrow('xiaohongshu_managed_page_network_binding_mismatch');
+  });
+
+  test('binds a Network detail projection to the selected note identity', async () => {
+    const chrome = installChromeMock();
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+    subject.initialiseXiaohongshuCurrentPageNetworkObserver();
+    await subject.armXiaohongshuManagedPageNetworkObserver(11, managedRequest);
+    chrome.beforeNavigate[0]?.({
+      tabId: 11,
+      frameId: 0,
+      url: 'https://www.xiaohongshu.com/search_result?keyword=public'
+    });
+    await settle();
+    chrome.committed[0]?.({
+      tabId: 11,
+      frameId: 0,
+      documentId: 'document-2',
+      url: 'https://www.xiaohongshu.com/search_result?keyword=public'
+    });
+    await settle();
+    chrome.executeScript.mockResolvedValueOnce([{
+      frameId: 0,
+      result: {
+        selectedNoteId: 'selected-note',
+        matchedPayloadCount: 2,
+        bodyBytesRead: 4_096,
+        details: [
+          {
+            noteId: 'different-note',
+            publicText: '错误笔记正文',
+            authorNickname: '错误作者',
+            interactionText: '错误互动'
+          },
+          {
+            noteId: 'selected-note',
+            publicText: '目标笔记正文',
+            authorNickname: '目标作者',
+            interactionText: '目标互动'
+          }
+        ]
+      }
+    }]);
+
+    await expect(subject.readXiaohongshuExistingSearchNoteDetailNetworkProjection(11, 'run-123'))
+      .resolves.toEqual({
+        matchedPayloadCount: 2,
+        bodyBytesRead: 4_096,
+        detail: {
+          publicText: '目标笔记正文',
+          authorNickname: '目标作者',
+          interactionText: '目标互动'
+        }
+      });
+  });
+
+  test('does not return another note detail when the selected identity is absent', async () => {
+    const chrome = installChromeMock();
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+    subject.initialiseXiaohongshuCurrentPageNetworkObserver();
+    await subject.armXiaohongshuManagedPageNetworkObserver(11, managedRequest);
+    chrome.beforeNavigate[0]?.({
+      tabId: 11,
+      frameId: 0,
+      url: 'https://www.xiaohongshu.com/search_result?keyword=public'
+    });
+    await settle();
+    chrome.committed[0]?.({
+      tabId: 11,
+      frameId: 0,
+      documentId: 'document-2',
+      url: 'https://www.xiaohongshu.com/search_result?keyword=public'
+    });
+    await settle();
+    chrome.executeScript.mockResolvedValueOnce([{
+      frameId: 0,
+      result: {
+        selectedNoteId: 'selected-note',
+        matchedPayloadCount: 1,
+        bodyBytesRead: 2_048,
+        details: [{
+          noteId: 'different-note',
+          publicText: '不能错配的正文',
+          authorNickname: '其他作者',
+          interactionText: '其他互动'
+        }]
+      }
+    }]);
+
+    await expect(subject.readXiaohongshuExistingSearchNoteDetailNetworkProjection(11, 'run-123'))
+      .resolves.toEqual({ matchedPayloadCount: 1, bodyBytesRead: 2_048, detail: null });
   });
 
   test('does not overwrite or consume a popup-created active selection', async () => {

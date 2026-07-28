@@ -14,6 +14,7 @@ interface PublicItem {
 }
 
 interface PublicDetail {
+  noteId: string;
   publicText: string;
   authorNickname: string;
   interactionText: string;
@@ -146,9 +147,10 @@ if (!existing) {
           });
         }
         const description = clean(card.desc ?? card.description, 11_000);
-        if (description && details.length === 0) {
+        if (noteId && description && details.length < maximumItems) {
           const publicTitle = clean(card.title ?? card.display_title, 500);
           details.push({
+            noteId,
             publicText: clean(`${publicTitle}\n${description}`, 12_000),
             authorNickname: clean(user.nickname ?? user.nick_name, 200),
             interactionText: clean(Object.values(interact).filter((entry) =>
@@ -185,8 +187,13 @@ if (!existing) {
           active.items.push(item);
         }
       }
-      if (active.details.length === 0 && projected.details.length > 0) {
-        active.details.push(projected.details[0]!);
+      const knownDetails = new Set(active.details.map((detail) => detail.noteId));
+      for (const detail of projected.details) {
+        if (active.details.length >= maximumItems) break;
+        if (!knownDetails.has(detail.noteId)) {
+          knownDetails.add(detail.noteId);
+          active.details.push(detail);
+        }
       }
       const knownComments = new Set(active.comments.map((comment) => comment.commentId));
       for (const comment of projected.comments) {

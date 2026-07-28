@@ -399,11 +399,13 @@ export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
     }
   });
   const candidate = results[0]?.result as Record<string, unknown> | null | undefined;
-  const rawDetail = Array.isArray(candidate?.details) && candidate.details.length > 0 &&
-    candidate.details[0] && typeof candidate.details[0] === 'object'
-    ? candidate.details[0] as Record<string, unknown> : null;
   const text = (value: unknown, maximum: number): string => (typeof value === 'string' ? value : '')
     .replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, maximum);
+  const selectedNoteId = text(candidate?.selectedNoteId, 80);
+  const rawDetail = Array.isArray(candidate?.details)
+    ? candidate.details.find((value) => value && typeof value === 'object' &&
+      text((value as Record<string, unknown>).noteId, 80) === selectedNoteId) as Record<string, unknown> | undefined
+    : undefined;
   const publicText = text(rawDetail?.publicText, 12_000);
   return {
     matchedPayloadCount: Number.isSafeInteger(candidate?.matchedPayloadCount)
