@@ -108,8 +108,9 @@ describe('Native bridge runtime guards', () => {
       commandId: 'command-id-is-long-enough',
       ok: true,
       result: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         type: 'xiaohongshu_current_page_network_observation',
+        permissionState: 'permission_required',
         selection: {
           state: 'armed_next_document',
           publicSurface: null,

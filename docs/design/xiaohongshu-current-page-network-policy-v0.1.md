@@ -65,9 +65,9 @@ npm run start:xiaohongshu-validation-browser
 
 当前没有任何 route 会把 `publicContentRouteCount` 提升为非零。未知请求仍然是 `other`，而不是“已发现可用公开接口”。详情页、账号页、评论页与任何账号自身 surface 均不在这个 MVP 内。
 
-2026-07-28 已将 r16 构建精确载入专用验证浏览器：worker 的扩展版本、控制面 revision 与构建指纹一致，Native Bridge 已连接。升级入口仍是 `npm run rebuild:xiaohongshu-validation-browser`；它只会以同一持久 Profile 重启**隔离验证浏览器**一次，不会接管日常浏览器，也不会自动导航到任何平台 URL。
+2026-07-28 曾将 r16 构建精确载入专用验证浏览器：当时 worker 的扩展版本、控制面 revision 与构建指纹一致，Native Bridge 已连接。后续源码构建不会静默替换正在运行的可见扩展；只有下一次真正需要新的平台闭环时，才通过 `npm run rebuild:xiaohongshu-validation-browser` 以同一持久 Profile 进行一次受控更新。该入口不会接管日常浏览器，也不会自动导航到任何平台 URL。
 
-验证浏览器只用于扩展加载/Host 协议、以及真实小红书页面的受限证据闭环；它**不自动化** `control.html`、扩展 popup、Chrome 原生权限提示或任何其他浏览器 UI。可选的 `https://www.xiaohongshu.com/*` 与 `webRequest` 权限是一次性的产品设置前置条件：若尚未由用户在可见扩展控制面中授予，自动化只报告 `permission_required` 并停止，不能以测试路径代替用户界面操作。
+验证浏览器只用于扩展加载/Host 协议、以及真实小红书页面的受限证据闭环；它**不自动化** `control.html`、扩展 popup、Chrome 原生权限提示或任何其他浏览器 UI。可选的 `https://www.xiaohongshu.com/*` 与 `webRequest` 权限是一次性的产品设置前置条件：零输入 Native Bridge 读取只返回 `permissionState: permission_required | permission_granted`，不请求、不扩大、不撤销权限；`permission_required` 时自动化立即停止，不能以测试路径代替用户界面操作。
 
 ## 不可绕过的预算
 

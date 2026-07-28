@@ -97,6 +97,7 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
     expect(chrome.completed).toHaveLength(0);
 
     await expect(subject.readXiaohongshuCurrentPageNetworkObservation()).resolves.toMatchObject({
+      permissionState: 'permission_granted',
       selection: { state: 'armed_next_document', publicSurface: null },
       observation: {
         observerState: 'not_armed',
@@ -125,6 +126,7 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
 
     const result = await subject.readXiaohongshuCurrentPageNetworkObservation();
     expect(result).toMatchObject({
+      permissionState: 'permission_granted',
       selection: { state: 'observing', publicSurface: 'search' },
       observation: {
         observerState: 'armed_same_document',
@@ -138,6 +140,20 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
     expect(serialised).not.toContain('private-query');
     expect(serialised).not.toContain('private-value');
     expect(serialised).not.toContain('website-login');
+  });
+
+  test('reports a missing optional permission without opening a prompt or touching a page', async () => {
+    const chrome = installChromeMock();
+    chrome.contains.mockResolvedValue(false);
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+
+    await expect(subject.readXiaohongshuCurrentPageNetworkObservation()).resolves.toMatchObject({
+      permissionState: 'permission_required',
+      selection: { state: 'not_selected', publicSurface: null }
+    });
+    expect(chrome.request).not.toHaveBeenCalled();
+    expect(chrome.executeScript).not.toHaveBeenCalled();
+    expect(chrome.completed).toHaveLength(0);
   });
 
   test('stops and removes the only network listener when the observed document changes again', async () => {

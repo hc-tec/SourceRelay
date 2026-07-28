@@ -34,7 +34,7 @@ describe('Xiaohongshu current-page network policy contract', () => {
 
   test('accepts no caller-controlled URL, selector, route, tab or action carrier', () => {
     const valid = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       platform: 'xiaohongshu',
       capability: XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY,
       executionTarget: 'user_selected_tab',
@@ -126,8 +126,9 @@ describe('Xiaohongshu current-page network policy contract', () => {
 
   test('admits only a de-sensitised selected-page metadata result', () => {
     const result = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       type: 'xiaohongshu_current_page_network_observation',
+      permissionState: 'permission_granted',
       selection: {
         state: 'observing',
         publicSurface: 'explore',
@@ -157,6 +158,10 @@ describe('Xiaohongshu current-page network policy contract', () => {
     expect(isXiaohongshuCurrentPageNetworkObservationResult({
       ...result,
       tabId: 99
+    })).toBe(false);
+    expect(isXiaohongshuCurrentPageNetworkObservationResult({
+      ...result,
+      permissionState: 'granted'
     })).toBe(false);
     expect(isXiaohongshuCurrentPageNetworkObservationResult({
       ...result,

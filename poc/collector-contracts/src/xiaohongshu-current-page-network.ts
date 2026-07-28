@@ -6,7 +6,7 @@
  * A later response-body capability must use a new capability ID and pass a
  * separate live route-admission run.  It must not loosen this contract.
  */
-export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION = 1 as const;
+export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION = 2 as const;
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY =
   'xiaohongshu.current_page.network_metadata' as const;
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS = 60_000 as const;
@@ -34,6 +34,12 @@ export type XiaohongshuCurrentPageNetworkPublicSurface =
  * eligible for collection.
  */
 export const XIAOHONGSHU_CURRENT_PAGE_ACCOUNT_SCOPED_SURFACES = 'forbidden' as const;
+export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_PERMISSION_STATES = [
+  'permission_granted',
+  'permission_required'
+] as const;
+export type XiaohongshuCurrentPageNetworkPermissionState =
+  (typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_PERMISSION_STATES)[number];
 
 export interface XiaohongshuCurrentPageNetworkBudget {
   maximumPlatformNavigations: 0;
@@ -125,6 +131,12 @@ export interface XiaohongshuCurrentPageNetworkSelectionSummary {
 export interface XiaohongshuCurrentPageNetworkObservationResult {
   schemaVersion: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION;
   type: 'xiaohongshu_current_page_network_observation';
+  /**
+   * This is a fixed, zero-input precondition read. It exposes neither a
+   * permission prompt nor any browser/page identity, and a caller cannot use
+   * it to request, expand or revoke an origin grant.
+   */
+  permissionState: XiaohongshuCurrentPageNetworkPermissionState;
   selection: XiaohongshuCurrentPageNetworkSelectionSummary;
   observation: XiaohongshuCurrentPageNetworkMetadataObservation;
 }
@@ -180,9 +192,12 @@ export function isXiaohongshuCurrentPageNetworkMetadataObservation(
 export function isXiaohongshuCurrentPageNetworkObservationResult(
   value: unknown
 ): value is XiaohongshuCurrentPageNetworkObservationResult {
-  if (!record(value) || !exactKeys(value, ['schemaVersion', 'type', 'selection', 'observation'])) return false;
+  if (!record(value) || !exactKeys(value, ['schemaVersion', 'type', 'permissionState', 'selection', 'observation'])) {
+    return false;
+  }
   return value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION &&
     value.type === 'xiaohongshu_current_page_network_observation' &&
+    (value.permissionState === 'permission_granted' || value.permissionState === 'permission_required') &&
     isXiaohongshuCurrentPageNetworkSelectionSummary(value.selection) &&
     isXiaohongshuCurrentPageNetworkMetadataObservation(value.observation);
 }

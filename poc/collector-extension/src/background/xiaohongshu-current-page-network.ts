@@ -5,6 +5,7 @@ import {
   classifyXiaohongshuCurrentPageRisk,
   xiaohongshuCurrentPageNetworkPublicSurface,
   type XiaohongshuCurrentPageNetworkObservationResult,
+  type XiaohongshuCurrentPageNetworkPermissionState,
   type XiaohongshuCurrentPageNetworkSelectionSummary
 } from '@intelligence/collector-contracts';
 import {
@@ -98,6 +99,7 @@ export async function getXiaohongshuCurrentPageNetworkSelectionSummary(): Promis
 export async function readXiaohongshuCurrentPageNetworkObservation(): Promise<
   XiaohongshuCurrentPageNetworkObservationResult
 > {
+  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
   let record = await loadActiveRecord();
   if (record?.state === 'observing' && record.documentId) {
     await refreshRiskSignals(record).catch(() => undefined);
@@ -107,9 +109,23 @@ export async function readXiaohongshuCurrentPageNetworkObservation(): Promise<
   return {
     schemaVersion: XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION,
     type: 'xiaohongshu_current_page_network_observation',
+    permissionState,
     selection: record ? selectionSummary(record) : noSelectionSummary(),
     observation: observationFor(record)
   };
+}
+
+/**
+ * This can run without a user gesture because it only reads Chrome's existing
+ * optional-permission state. It deliberately never calls `request`, so a
+ * Host/Gateway status read cannot open a browser prompt or broaden access.
+ */
+async function xiaohongshuCurrentPageNetworkPermissionState(): Promise<XiaohongshuCurrentPageNetworkPermissionState> {
+  const granted = await chrome.permissions.contains({
+    permissions: ['webRequest'],
+    origins: [XIAOHONGSHU_ORIGIN]
+  }).catch(() => false);
+  return granted ? 'permission_granted' : 'permission_required';
 }
 
 export function initialiseXiaohongshuCurrentPageNetworkObserver(): void {
