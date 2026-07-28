@@ -217,7 +217,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             inputMode: { type: 'string', const: 'query_only_no_caller_url' },
             executionTarget: { type: 'string', const: 'existing_public_explore_tab' },
             accountScopedSurfaces: { type: 'string', const: 'forbidden' },
-            dispatchState: { type: 'string', const: 'trusted_browser_input_channel_required' },
+            dispatchState: { type: 'string', const: 'direct_canary_pending' },
             managedValidationState: { type: 'string', const: 'real_canary_passed' },
             captureMode: { type: 'string', const: 'current_document_main_world_public_projection' },
             responseBodies: { type: 'string', const: 'temporarily_read_projected_not_stored' },

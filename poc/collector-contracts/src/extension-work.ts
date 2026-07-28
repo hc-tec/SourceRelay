@@ -38,6 +38,15 @@ import {
   type BilibiliVideoDiscussionUserSelectedTabWorkResult,
   type BilibiliVideoDiscussionUserSelectedTabTerminalReason
 } from './extension-work-bilibili-discussion-user-selected-tab.js';
+import {
+  isXiaohongshuPublicNotesSearchWorkItem,
+  isXiaohongshuPublicNotesSearchWorkResult,
+  isXiaohongshuPublicNotesSearchWorkResultForItem,
+  type UnsignedXiaohongshuPublicNotesSearchWorkItem,
+  type XiaohongshuPublicNotesSearchWorkItem,
+  type XiaohongshuPublicNotesSearchWorkResult,
+  type XiaohongshuPublicNotesSearchTerminalReason
+} from './extension-work-xiaohongshu-public-notes.js';
 import { canonicalJson } from './ipc.js';
 
 /**
@@ -62,8 +71,12 @@ export type ExtensionWorkCapability =
   | 'bilibili.account_profile'
   | 'bilibili.account_inventory'
   | 'bilibili.discussion'
-  | BilibiliPassiveExtensionWorkCapability;
-export type ExtensionWorkExecutionTarget = 'collector_work_tab' | 'user_selected_tab';
+  | BilibiliPassiveExtensionWorkCapability
+  | 'xiaohongshu.search.public_notes.v1';
+export type ExtensionWorkExecutionTarget =
+  | 'collector_work_tab'
+  | 'user_selected_tab'
+  | 'existing_public_explore_tab';
 export type ExtensionWorkState = 'queued' | 'claimed' | 'completed' | 'partial' | 'stopped' | 'failed';
 
 interface ExtensionWorkEnvelopeBase {
@@ -215,7 +228,8 @@ export type ExtensionWorkItem =
   | BilibiliAccountInventoryWorkItem
   | BilibiliAccountInventoryUserSelectedTabWorkItem
   | BilibiliVideoDiscussionUserSelectedTabWorkItem
-  | BilibiliPassiveExtensionWorkItem;
+  | BilibiliPassiveExtensionWorkItem
+  | XiaohongshuPublicNotesSearchWorkItem;
 export type UnsignedExtensionWorkItem =
   | Omit<BilibiliVideoDetailWorkItem, 'gatewaySignature'>
   | Omit<BilibiliNativeSearchWorkItem, 'gatewaySignature'>
@@ -224,7 +238,8 @@ export type UnsignedExtensionWorkItem =
   | Omit<BilibiliAccountInventoryWorkItem, 'gatewaySignature'>
   | Omit<BilibiliAccountInventoryUserSelectedTabWorkItem, 'gatewaySignature'>
   | Omit<BilibiliVideoDiscussionUserSelectedTabWorkItem, 'gatewaySignature'>
-  | UnsignedBilibiliPassiveExtensionWorkItem;
+  | UnsignedBilibiliPassiveExtensionWorkItem
+  | UnsignedXiaohongshuPublicNotesSearchWorkItem;
 
 export type SharedExtensionWorkTerminalReason =
   | 'verification_required'
@@ -281,7 +296,8 @@ export type ExtensionWorkTerminalReason =
   | BilibiliAccountInventoryWorkTerminalReason
   | BilibiliAccountInventoryUserSelectedTabWorkTerminalReason
   | BilibiliVideoDiscussionUserSelectedTabTerminalReason
-  | BilibiliPassiveExtensionWorkTerminalReason;
+  | BilibiliPassiveExtensionWorkTerminalReason
+  | XiaohongshuPublicNotesSearchTerminalReason;
 
 export interface BilibiliVideoDetailDomObservation {
   bvid: string;
@@ -504,7 +520,8 @@ export type ExtensionWorkResult =
   | BilibiliAccountInventoryWorkResult
   | BilibiliAccountInventoryUserSelectedTabWorkResult
   | BilibiliVideoDiscussionUserSelectedTabWorkResult
-  | BilibiliPassiveExtensionWorkResult;
+  | BilibiliPassiveExtensionWorkResult
+  | XiaohongshuPublicNotesSearchWorkResult;
 
 export function canonicalBilibiliVideoWorkUrl(value: string): string | null {
   try {
@@ -525,6 +542,9 @@ export function canonicalBilibiliNativeSearchWorkUrl(value: string): string | nu
 
 /** Return only a target derived from a validated registered work capability. */
 export function extensionWorkTargetUrl(item: ExtensionWorkItem): string {
+  if (isXiaohongshuPublicNotesSearchWorkItem(item)) {
+    throw new Error('extension_work_target_navigation_forbidden');
+  }
   switch (item.capability) {
     case 'bilibili.video_detail':
       return item.input.canonicalVideoUrl;
@@ -552,6 +572,7 @@ export function extensionWorkSigningPayload(item: ExtensionWorkItem | UnsignedEx
 }
 
 export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem {
+  if (isXiaohongshuPublicNotesSearchWorkItem(value)) return true;
   if (!isRecord(value) || !hasExactKeys(value, [
     'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
     'executionTarget', 'issuedAt', 'expiresAt', 'input', 'budget', 'gatewaySignature'
@@ -594,6 +615,7 @@ export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem 
 }
 
 export function isExtensionWorkResult(value: unknown): value is ExtensionWorkResult {
+  if (isXiaohongshuPublicNotesSearchWorkResult(value)) return true;
   if (isBilibiliNativeSearchBatchWorkResult(value)) return true;
   if (isBilibiliAccountInventoryUserSelectedTabWorkResult(value)) return true;
   if (isBilibiliVideoDiscussionUserSelectedTabWorkResult(value)) return true;
@@ -633,6 +655,9 @@ export function isExtensionWorkResultForItem(
   value: unknown,
   item: ExtensionWorkItem
 ): value is ExtensionWorkResult {
+  if (isXiaohongshuPublicNotesSearchWorkItem(item)) {
+    return isXiaohongshuPublicNotesSearchWorkResultForItem(value, item);
+  }
   if (isBilibiliVideoDiscussionUserSelectedTabWorkItem(item)) {
     return isBilibiliVideoDiscussionUserSelectedTabWorkResultForItem(value, item);
   }

@@ -16,7 +16,7 @@ const packageMetadata = JSON.parse(await readFile(resolve(root, 'package.json'),
 const runtimeBuild = JSON.parse(await readFile(resolve(outputDirectory, 'runtime-build.json'), 'utf8'));
 
 const approved = {
-  permissions: ['alarms', 'nativeMessaging', 'storage', 'scripting', 'webNavigation'],
+  permissions: ['alarms', 'debugger', 'nativeMessaging', 'storage', 'scripting', 'webNavigation'],
   hostPermissions: [
     'https://space.bilibili.com/*',
     'https://api.bilibili.com/*',
@@ -65,7 +65,6 @@ assert.deepEqual(
 
 const forbiddenPermissions = new Set([
   'cookies',
-  'debugger',
   'downloads',
   'webRequestBlocking'
 ]);
@@ -216,8 +215,18 @@ assert.match(backgroundSource, /x-collector-body-sha256/, 'worker work transport
 assert.match(backgroundSource, /extension_work_signature_invalid/, 'worker must verify the Gateway work-item signature');
 assert.doesNotMatch(
   backgroundSource,
-  /chrome\.debugger|chrome\.cookies|document\.cookie|localStorage|sessionStorage/i,
-  'worker must not gain debugger, credential, or arbitrary web storage access'
+  /chrome\.cookies|document\.cookie|localStorage|sessionStorage/i,
+  'worker must not gain credential or arbitrary web storage access'
+);
+assert.match(backgroundSource, /chrome\.debugger\.attach/, 'trusted input must explicitly attach to one internal tab');
+assert.match(backgroundSource, /chrome\.debugger\.detach/, 'trusted input must detach on every terminal path');
+assert.match(backgroundSource, /Input\.dispatchMouseEvent/, 'trusted input must use the fixed mouse-input command');
+assert.match(backgroundSource, /Input\.dispatchKeyEvent/, 'trusted input must use the fixed key-input command');
+assert.match(backgroundSource, /Input\.insertText/, 'trusted input must use the fixed text-input command');
+assert.doesNotMatch(
+  backgroundSource,
+  /(?:Runtime|Network|Fetch|Page|DOM|Storage|Target)\.[A-Za-z]+/,
+  'worker must not ship arbitrary debugger domains or network/runtime CDP commands'
 );
 
 assert.match(bridgeSource, /armedRouteIds/, 'isolated bridge must revalidate exact armed route IDs');

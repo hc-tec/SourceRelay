@@ -147,6 +147,40 @@ export async function readXiaohongshuManagedSearchProjection(
   return result;
 }
 
+/**
+ * User-browser work binds the same bounded MAIN-world observer to the exact
+ * internally selected Explore document. No tab/document identity crosses the
+ * Gateway contract, and this function never requests a permission prompt.
+ */
+export async function armXiaohongshuExistingExploreWorkObserver(
+  tabId: number,
+  workId: string
+): Promise<void> {
+  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
+  if (permissionState !== 'permission_granted') {
+    throw new Error('xiaohongshu_current_page_network_permission_required');
+  }
+  const current = await loadActiveRecord();
+  if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
+    throw new Error('xiaohongshu_current_page_network_selection_active');
+  }
+  if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null);
+}
+
+export async function readXiaohongshuExistingExploreWorkProjection(
+  tabId: number,
+  workId: string
+): Promise<XiaohongshuManagedSearchProjectionResult> {
+  return await readXiaohongshuManagedSearchProjection(tabId, {
+    schemaVersion: XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION,
+    profileId: 'user-browser',
+    pageAlias: workId,
+    pageLeaseId: workId,
+    expectedRecordVersion: 1,
+    runId: workId
+  });
+}
+
 async function armManagedXiaohongshuCurrentDocument(
   tabId: number,
   managedRunId: string,

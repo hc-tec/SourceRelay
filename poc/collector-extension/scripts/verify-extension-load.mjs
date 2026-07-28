@@ -61,7 +61,8 @@ try {
     'bilibili.native_search_batch',
     'bilibili.account_profile',
     'bilibili.account_inventory',
-    'bilibili.discussion'
+    'bilibili.discussion',
+    'xiaohongshu.search.public_notes.v1'
   ];
   for (const capability of directWorkCapabilities) {
     assert.match(controlText, new RegExp(capability.replace('.', '\\.')),

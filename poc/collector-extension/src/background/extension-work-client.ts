@@ -10,6 +10,7 @@ import {
 } from '@intelligence/collector-contracts';
 import { verifyGatewaySignature } from '../shared/cryptography';
 import { authenticatedGatewayJson } from './user-browser-gateway-client';
+import { USER_BROWSER_DIRECT_WORK_CAPABILITIES } from './user-browser-gateway-types';
 
 /** Fixed, paired Gateway work read.  It does not expose arbitrary fetch. */
 export async function claimNextExtensionWork(record: GatewayPairingRecord): Promise<ExtensionWorkItem | null> {
@@ -20,6 +21,9 @@ export async function claimNextExtensionWork(record: GatewayPairingRecord): Prom
   });
   const item = workItemFromPayload(payload);
   if (item === null) return null;
+  if (!USER_BROWSER_DIRECT_WORK_CAPABILITIES.includes(item.capability as never)) {
+    throw new Error('extension_work_capability_rejected');
+  }
   if (item.browserBindingId !== record.browserBindingId) throw new Error('extension_work_binding_identity_mismatch');
   const verified = await verifyGatewaySignature({
     publicKeyJwk: record.signingPublicKeyJwk,

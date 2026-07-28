@@ -38,7 +38,7 @@ export interface ExtensionWorkOperationSummary {
   schemaVersion: 1;
   operationId: string;
   browserBindingId: string;
-  platform: 'bilibili';
+  platform: 'bilibili' | 'xiaohongshu';
   capability: ExtensionWorkCapability;
   executionTarget: ExtensionWorkExecutionTarget;
   state: ExtensionWorkState;
@@ -935,7 +935,11 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'user_selected_tab_required' || value === 'user_selected_tab_closed' ||
     value === 'user_selected_tab_document_changed' || value === 'user_selected_tab_target_mismatch' ||
     value === 'user_selected_tab_page_not_supported' || value === 'user_selected_tab_worker_interrupted' ||
-    value === 'login_required';
+    value === 'login_required' || value === 'search_ready' || value === 'existing_public_explore_tab_required' ||
+    value === 'existing_public_explore_tab_ambiguous' || value === 'search_target_unavailable' ||
+    value === 'query_not_echoed' || value === 'postcondition_unmet' || value === 'permission_required' ||
+    value === 'debugger_attach_failed' || value === 'debugger_input_failed' || value === 'debugger_detach_failed' ||
+    value === 'extension_worker_interrupted';
 }
 
 function redactTerminalWorkItem(item: StoredExtensionWorkItem): StoredExtensionWorkItem {

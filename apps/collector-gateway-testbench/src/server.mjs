@@ -152,7 +152,7 @@ function safeCapabilityPayload(payload) {
         ![
           'direct_ready', 'direct_canary_pending', 'direct_migration_required',
           'trusted_interaction_migration_required', 'policy_ready_route_admission_required',
-          'trusted_browser_input_channel_required'
+          'direct_canary_pending'
         ].includes(capability.dispatchState) ||
         (capability.platform !== 'bilibili' && capability.platform !== 'xiaohongshu') ||
         (capability.platform === 'bilibili' && capability.legacyImplementationPresent !== true) ||

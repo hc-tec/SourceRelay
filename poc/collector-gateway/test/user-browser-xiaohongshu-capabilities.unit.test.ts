@@ -33,7 +33,7 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       inputMode: 'query_only_no_caller_url',
       executionTarget: 'existing_public_explore_tab',
       accountScopedSurfaces: 'forbidden',
-      dispatchState: 'trusted_browser_input_channel_required',
+      dispatchState: 'direct_canary_pending',
       managedValidationState: 'real_canary_passed',
       captureMode: 'current_document_main_world_public_projection',
       responseBodies: 'temporarily_read_projected_not_stored',

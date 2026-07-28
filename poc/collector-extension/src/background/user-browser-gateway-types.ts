@@ -20,7 +20,8 @@ export const USER_BROWSER_DIRECT_WORK_CAPABILITIES = [
   'bilibili.native_search_batch',
   'bilibili.account_profile',
   'bilibili.account_inventory',
-  'bilibili.discussion'
+  'bilibili.discussion',
+  'xiaohongshu.search.public_notes.v1'
 ] as const;
 
 export type UserBrowserDirectWorkCapability =
@@ -32,7 +33,7 @@ export type UserBrowserGatewayCapabilityDispatchState =
   | 'direct_migration_required'
   | 'trusted_interaction_migration_required';
 
-export interface UserBrowserGatewayCapabilityDescriptor {
+export interface UserBrowserGatewayBilibiliCapabilityDescriptor {
   schemaVersion: 1;
   capability: UserBrowserDirectWorkCapability;
   platform: 'bilibili';
@@ -43,6 +44,21 @@ export interface UserBrowserGatewayCapabilityDescriptor {
   legacyImplementationPresent: true;
   browserHostFallback: 'forbidden';
 }
+
+export interface UserBrowserGatewayXiaohongshuCapabilityDescriptor {
+  schemaVersion: 1;
+  capability: 'xiaohongshu.search.public_notes.v1';
+  platform: 'xiaohongshu';
+  title: string;
+  inputMode: string;
+  dispatchState: 'direct_canary_pending';
+  captureMode: string;
+  browserHostFallback: 'forbidden';
+}
+
+export type UserBrowserGatewayCapabilityDescriptor =
+  | UserBrowserGatewayBilibiliCapabilityDescriptor
+  | UserBrowserGatewayXiaohongshuCapabilityDescriptor;
 
 export interface PairUserBrowserGatewayInput {
   loopbackOrigin: string;

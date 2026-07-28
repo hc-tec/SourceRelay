@@ -213,6 +213,8 @@ function directCapabilityFallbackTitle(capability: UserBrowserDirectWorkCapabili
       return 'UP 主视频首屏';
     case 'bilibili.discussion':
       return '视频评论区（用户已选页面）';
+    case 'xiaohongshu.search.public_notes.v1':
+      return '小红书公开笔记站内搜索';
   }
 }
 

@@ -7,6 +7,8 @@ import { executeBilibiliNativeSearchBatchExtensionWork } from './extension-work-
 import { executeBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
 import { executeBilibiliPassiveExtensionWork } from './extension-work-bilibili-passive';
 import { executeBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
+import { executeXiaohongshuPublicNotesSearchExtensionWork } from './extension-work-xiaohongshu-public-notes';
+import { wasXiaohongshuTrustedInputAttempted } from './xiaohongshu-trusted-input';
 import { claimNextExtensionWork, submitExtensionWorkResult } from './extension-work-client';
 import {
   clearActiveExtensionWork,
@@ -57,7 +59,7 @@ export async function pollForExtensionWork(): Promise<void> {
     if (interrupted) {
       await savePendingExtensionWorkResult({
         schemaVersion: 1,
-        result: interruptedResult(interrupted),
+        result: await interruptedResult(interrupted),
         deliveryAttempts: 0,
         lastErrorCode: null
       });
@@ -110,6 +112,9 @@ async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
       await updateActivePhase(item, 'navigation_intent_recorded', acquisition);
     }
   };
+  if (item.capability === 'xiaohongshu.search.public_notes.v1') {
+    return await executeXiaohongshuPublicNotesSearchExtensionWork(item);
+  }
   if (item.capability === 'bilibili.video_detail') {
     return await executeBilibiliVideoDetailExtensionWork(item, lifecycle);
   }
@@ -177,7 +182,32 @@ async function deliverPendingResult(pending: PendingExtensionWorkResult): Promis
   }
 }
 
-function interruptedResult(active: ActiveExtensionWork): ExtensionWorkResult {
+async function interruptedResult(active: ActiveExtensionWork): Promise<ExtensionWorkResult> {
+  if (active.item.capability === 'xiaohongshu.search.public_notes.v1') {
+    const attempted = await wasXiaohongshuTrustedInputAttempted(active.item.workId);
+    return {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: active.item.workId,
+      operationId: active.item.operationId,
+      browserBindingId: active.item.browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      state: 'stopped',
+      errorCode: 'xiaohongshu_extension_worker_interrupted',
+      terminalReason: 'extension_worker_interrupted',
+      completedAt: new Date().toISOString(),
+      navigation: { attempted: false, attemptCount: 0 },
+      semanticAction: { attempted, attemptCount: attempted ? 1 : 0 },
+      input: { queryEchoed: false, enterAttempted: false },
+      page: null,
+      projection: null,
+      rawPayloadStored: false,
+      responseUrlsStored: false,
+      debuggerDetached: false
+    };
+  }
   if (active.item.capability === 'bilibili.account_inventory' && active.item.executionTarget === 'user_selected_tab') {
     return {
       schemaVersion: 1,

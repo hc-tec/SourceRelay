@@ -13,6 +13,7 @@
   },
   "permissions": [
     "alarms",
+    "debugger",
     "nativeMessaging",
     "storage",
     "scripting",

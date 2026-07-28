@@ -182,7 +182,15 @@ export async function handleUserBrowserCollectorServiceRoute(
       sendJson(response, 404, { schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION, ok: false, error: 'extension_work_not_found' });
       return true;
     }
-    await audit(context, access.principal, 'operation_read', result.capability, result.operationId, outcomeForState(result.state), result.errorCode);
+    await audit(
+      context,
+      access.principal,
+      'operation_read',
+      result.capability === 'xiaohongshu.search.public_notes.v1' ? null : result.capability,
+      result.operationId,
+      outcomeForState(result.state),
+      result.errorCode
+    );
     sendJson(response, 200, { schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION, result });
     return true;
   }
