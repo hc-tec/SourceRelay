@@ -32,4 +32,17 @@ describe('signed Xiaohongshu public reply-thread contract',()=>{
     expect(isExtensionWorkResultForItem(result,item)).toBe(true);
     expect(isExtensionWorkResultForItem({...result,projection:{...result.projection,replies:[]}},item)).toBe(false);
   });
+  test('preserves an at-most-once attempted click whose postcondition was not met',()=>{
+    const stopped={schemaVersion:1,protocolVersion:1,workId:item.workId,operationId:item.operationId,
+      browserBindingId:item.browserBindingId,platform:'xiaohongshu',capability:item.capability,
+      executionTarget:item.executionTarget,state:'stopped',errorCode:'xiaohongshu_comment_replies_postcondition_unmet',
+      terminalReason:'postcondition_unmet',completedAt:'2026-07-28T12:00:20.000Z',
+      navigation:{attempted:false,attemptCount:0},semanticAction:{attempted:true,attemptCount:1},
+      thread:{requestedCount:1,completedCount:0},page:null,projection:null,
+      rawPayloadStored:false,responseUrlsStored:false,debuggerDetached:true};
+    expect(isExtensionWorkResultForItem(stopped,item)).toBe(true);
+    expect(isExtensionWorkResultForItem({...stopped,thread:{requestedCount:1,completedCount:1}},item)).toBe(true);
+    expect(isExtensionWorkResultForItem({...stopped,semanticAction:{attempted:false,attemptCount:0},
+      thread:{requestedCount:1,completedCount:1}},item)).toBe(false);
+  });
 });
