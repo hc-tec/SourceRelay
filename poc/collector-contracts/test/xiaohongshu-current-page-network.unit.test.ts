@@ -3,6 +3,7 @@ import {
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_BUDGET,
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY,
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY,
+  classifyXiaohongshuCurrentPageRisk,
   isXiaohongshuCurrentPageNetworkMetadataObservation,
   isXiaohongshuCurrentPageNetworkRequest
 } from '../src/index.js';
@@ -77,5 +78,28 @@ describe('Xiaohongshu current-page network policy contract', () => {
       ...observation,
       route: '/api/sns/web/v1/anything'
     })).toBe(false);
+  });
+
+  test('stops on the observed verification route without mistaking SMS login copy for a captcha', () => {
+    expect(classifyXiaohongshuCurrentPageRisk({
+      pathname: '/website-login/captcha',
+      title: '安全验证',
+      visibleText: '为保护账号安全，请使用已登录该账号的小红书 APP 扫码验证身份'
+    })).toEqual({
+      loginRequired: false,
+      verificationRequired: true,
+      rateLimited: false,
+      sourceUnavailable: false
+    });
+    expect(classifyXiaohongshuCurrentPageRisk({
+      pathname: '/explore',
+      title: '小红书 - 你的生活兴趣社区',
+      visibleText: '手机号登录 获取验证码 登录后推荐更懂你的笔记'
+    })).toEqual({
+      loginRequired: true,
+      verificationRequired: false,
+      rateLimited: false,
+      sourceUnavailable: false
+    });
   });
 });

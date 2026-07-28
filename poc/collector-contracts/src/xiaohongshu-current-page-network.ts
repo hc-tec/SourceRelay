@@ -78,6 +78,18 @@ export interface XiaohongshuCurrentPageNetworkMetadataObservation {
   };
 }
 
+/**
+ * Only public page signals are supplied to this classifier.  It never reads a
+ * credential, query value, response body or browser identifier.  A known
+ * verification route wins over a generic login phrase so an SMS-login form's
+ * "verification code" cannot be confused with platform risk control.
+ */
+export interface XiaohongshuCurrentPageRiskSignalInput {
+  pathname: string;
+  title: string;
+  visibleText: string;
+}
+
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY: XiaohongshuCurrentPageNetworkPolicy = Object.freeze({
   schemaVersion: XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION,
   platform: 'xiaohongshu',
@@ -113,6 +125,21 @@ export function isXiaohongshuCurrentPageNetworkMetadataObservation(
     value.responseBodiesRead === false && value.rawPayloadBytesRead === 0 && isRisk(value.risk);
 }
 
+export function classifyXiaohongshuCurrentPageRisk(
+  input: XiaohongshuCurrentPageRiskSignalInput
+): XiaohongshuCurrentPageNetworkMetadataObservation['risk'] {
+  const pathname = boundedText(input.pathname, 240);
+  const title = boundedText(input.title, 300);
+  const visibleText = boundedText(input.visibleText, 12_000);
+  const pageText = `${title}\n${visibleText}`;
+  const verificationRequired = pathname === '/website-login/captcha' || pathname.startsWith('/website-login/') ||
+    /\u5b89\u5168\u9a8c\u8bc1|\u9a8c\u8bc1\u8eab\u4efd|\u626b\u7801\u9a8c\u8bc1/.test(pageText);
+  const rateLimited = /\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41|\u8bbf\u95ee\u9891\u7e41|\u64cd\u4f5c\u9891\u7e41|\u7a0d\u540e\u518d\u8bd5|\u98ce\u63a7/.test(pageText);
+  const sourceUnavailable = /\u9875\u9762\u4e0d\u5b58\u5728|\u52a0\u8f7d\u5931\u8d25|\u7f51\u7edc\u9519\u8bef|\u670d\u52a1\u4e0d\u53ef\u7528|\u6682\u65f6\u65e0\u6cd5\u6d4f\u89c8|\b404\b/.test(pageText);
+  const loginRequired = !verificationRequired && /\u767b\u5f55\u540e|\u8bf7\u767b\u5f55|\u626b\u7801\u767b\u5f55|\u767b\u5f55\u5c0f\u7ea2\u4e66/.test(pageText);
+  return { loginRequired, verificationRequired, rateLimited, sourceUnavailable };
+}
+
 function isExcludedRouteCounts(value: unknown): boolean {
   return record(value) && exactKeys(value, [
     'authenticationOrIdentity', 'securityOrRisk', 'configurationOrTelemetry', 'other'
@@ -129,6 +156,10 @@ function isRisk(value: unknown): boolean {
 
 function boundedCount(value: unknown): boolean {
   return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 24;
+}
+
+function boundedText(value: string, maximumLength: number): string {
+  return value.slice(0, maximumLength);
 }
 
 function record(value: unknown): value is Record<string, unknown> {

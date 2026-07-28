@@ -42,6 +42,8 @@
 
 当前没有任何小红书 response body route 获得准入。匿名 `/explore` 实证中，Network 面只有登录、身份、配置、安全与遥测相关请求；可见推荐卡片并不能证明其中任一路由是公开内容数据源。
 
+在随后的初始 document-state 侦察中，唯一 `/explore` 导航被直接重定向到 `/website-login/captcha`，可见标题为“安全验证”。这使得 `website-login` 路径、标题“安全验证”以及“扫码验证身份”等公开页面信号成为硬停止条件；不得为获取 document state 而刷新、换 URL、换 Profile 或再次导航。
+
 未来新建正文能力至少需要独立满足：
 
 1. 在真实可见页面上，route 与目标公开内容具有明确语义；
