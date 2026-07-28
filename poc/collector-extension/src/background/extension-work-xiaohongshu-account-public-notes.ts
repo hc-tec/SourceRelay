@@ -214,8 +214,25 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   };
 }
 
+/**
+ * Best-effort crash recovery for the worker's at-most-once path.  A service
+ * worker can be suspended after registering the short-lived profile observer
+ * but before its normal `finally` block runs.  The next local heartbeat calls
+ * this function while converting the persisted active work into an
+ * `extension_worker_interrupted` result.  It only removes the exact
+ * work-derived registration; it never touches another run's scripts.
+ */
+export async function cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver(
+  workId: string
+): Promise<void> {
+  if (!/^[0-9a-f-]{36}$/i.test(workId)) return;
+  await chrome.scripting.unregisterContentScripts({
+    ids: [profileObserverScriptId(workId)]
+  }).catch(() => undefined);
+}
+
 async function registerEphemeralProfileObserver(workId: string): Promise<string> {
-  const contentScriptId = `collector-xhs-profile-${workId.replace(/-/g, '')}`;
+  const contentScriptId = profileObserverScriptId(workId);
   await chrome.scripting.unregisterContentScripts({ ids: [contentScriptId] }).catch(() => undefined);
   try {
     await chrome.scripting.registerContentScripts([{
@@ -231,6 +248,10 @@ async function registerEphemeralProfileObserver(workId: string): Promise<string>
     throw new Error('xiaohongshu_profile_observer_registration_failed');
   }
   return contentScriptId;
+}
+
+function profileObserverScriptId(workId: string): string {
+  return `collector-xhs-profile-${workId.replace(/-/g, '')}`;
 }
 
 async function findUniquePublicProfileDocument(): Promise<ProfileDocument> {

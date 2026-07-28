@@ -1,6 +1,15 @@
-import { describe, expect, test } from 'vitest';
-import { mergeProfileNotesProjection } from '../src/background/extension-work-xiaohongshu-account-public-notes.js';
+import { afterEach, describe, expect, test, vi } from 'vitest';
+import {
+  cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver,
+  mergeProfileNotesProjection
+} from '../src/background/extension-work-xiaohongshu-account-public-notes.js';
 import type { XiaohongshuManagedProfileNotesProjectionResult } from '@intelligence/collector-contracts';
+
+const originalChrome = globalThis.chrome;
+
+afterEach(() => {
+  Object.defineProperty(globalThis, 'chrome', { configurable: true, value: originalChrome });
+});
 
 const networkProjection: XiaohongshuManagedProfileNotesProjectionResult = {
   schemaVersion: 2,
@@ -23,6 +32,24 @@ const networkProjection: XiaohongshuManagedProfileNotesProjectionResult = {
 };
 
 describe('Xiaohongshu profile note projection merge', () => {
+  test('crash recovery removes only the exact work-derived document-start observer', async () => {
+    const unregisterContentScripts = vi.fn(async () => undefined);
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: { scripting: { unregisterContentScripts } } as unknown as typeof chrome
+    });
+
+    await cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver(
+      '11111111-1111-4111-8111-111111111111'
+    );
+    await cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver('not-a-work-id');
+
+    expect(unregisterContentScripts).toHaveBeenCalledTimes(1);
+    expect(unregisterContentScripts).toHaveBeenCalledWith({
+      ids: ['collector-xhs-profile-11111111111141118111111111111111']
+    });
+  });
+
   test('keeps Network data first and appends visible DOM cards without duplicate identities', () => {
     const result = mergeProfileNotesProjection(networkProjection, [
       {

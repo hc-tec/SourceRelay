@@ -8,7 +8,10 @@ import { executeBilibiliNativeSearchExtensionWork } from './extension-work-bilib
 import { executeBilibiliPassiveExtensionWork } from './extension-work-bilibili-passive';
 import { executeBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
 import { executeXiaohongshuPublicNotesSearchExtensionWork } from './extension-work-xiaohongshu-public-notes';
-import { executeXiaohongshuAccountPublicNotesExtensionWork } from './extension-work-xiaohongshu-account-public-notes';
+import {
+  cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver,
+  executeXiaohongshuAccountPublicNotesExtensionWork
+} from './extension-work-xiaohongshu-account-public-notes';
 import { executeXiaohongshuNotePublicDetailExtensionWork } from './extension-work-xiaohongshu-note-public-detail';
 import { executeXiaohongshuNotePublicCommentsExtensionWork } from './extension-work-xiaohongshu-note-public-comments';
 import { executeXiaohongshuNotePublicCommentRepliesExtensionWork } from './extension-work-xiaohongshu-note-public-comment-replies';
@@ -263,6 +266,9 @@ async function interruptedResult(active: ActiveExtensionWork): Promise<Extension
     };
   }
   if (active.item.capability === 'xiaohongshu.account.public_notes.v1') {
+    if (active.item.executionTarget === 'ephemeral_public_profile_url') {
+      await cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver(active.item.workId);
+    }
     const attemptedCount = await xiaohongshuProfileScrollAttemptCount(active.item.workId);
     return {
       schemaVersion: 1,
