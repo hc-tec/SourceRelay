@@ -124,7 +124,7 @@ function userBrowserGatewayDirectCapabilityDescriptor(
   if (candidate.capability === 'xiaohongshu.search.public_notes.v1') {
     if (candidate.schemaVersion !== 1 || candidate.platform !== 'xiaohongshu' ||
       !safeDisplayText(candidate.title, 100) || !safeDisplayText(candidate.inputMode, 100) ||
-      !safeDisplayText(candidate.captureMode, 100) || candidate.dispatchState !== 'direct_gateway_dispatch_pending' ||
+      !safeDisplayText(candidate.captureMode, 100) || candidate.dispatchState !== 'direct_ready' ||
       candidate.browserHostFallback !== 'forbidden') return null;
     return {
       schemaVersion: 1,
@@ -132,7 +132,7 @@ function userBrowserGatewayDirectCapabilityDescriptor(
       platform: 'xiaohongshu',
       title: candidate.title,
       inputMode: candidate.inputMode,
-      dispatchState: 'direct_gateway_dispatch_pending',
+      dispatchState: 'direct_ready',
       captureMode: candidate.captureMode,
       browserHostFallback: 'forbidden'
     };

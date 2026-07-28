@@ -17,6 +17,10 @@ const request = {
 describe('validation extension control contract', () => {
   test('allows exactly the fixed loopback pairing and current-discussion selection workflow', () => {
     expect(validationExtensionControlRequest(request)).toEqual(request);
+    expect(validationExtensionControlRequest({ ...request, selection: 'pair_only' })).toEqual({
+      ...request,
+      selection: 'pair_only'
+    });
   });
 
   test('rejects broad browser-control fields and non-loopback origins', () => {

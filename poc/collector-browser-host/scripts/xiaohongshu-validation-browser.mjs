@@ -1,12 +1,12 @@
 /**
  * A dedicated, persistent validation browser for Xiaohongshu public-content
  * reconnaissance. It deliberately shares no state directory, endpoint or
- * Chromium user-data directory with the generic validation fixture, and it
- * disables test-only extension-control commands.
+ * Chromium user-data directory with the generic validation fixture. Its
+ * validation control surface remains fixed-contract only: callers cannot
+ * supply arbitrary URLs, selectors, scripts, tabs or browser commands.
  *
  * Keep this as a process boundary rather than importing the generic CLI
- * in-process so the dedicated Profile's generic test-only extension-control
- * path is disabled before the generic CLI module graph is evaluated.
+ * in-process so the dedicated Profile keeps its own runtime and lifecycle.
  */
 import { spawn } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
@@ -21,8 +21,7 @@ const child = spawn(process.execPath, [
   env: {
     ...process.env,
     COLLECTOR_VALIDATION_BROWSER_INSTANCE: 'xiaohongshu-validation',
-    COLLECTOR_VALIDATION_PROFILE_ID: 'xiaohongshu_validation',
-    COLLECTOR_VALIDATION_EXTENSION_CONTROL: 'disabled'
+    COLLECTOR_VALIDATION_PROFILE_ID: 'xiaohongshu_validation'
   },
   stdio: 'inherit',
   windowsHide: true

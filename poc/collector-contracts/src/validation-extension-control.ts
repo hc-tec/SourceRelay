@@ -7,6 +7,7 @@
 export const VALIDATION_EXTENSION_CONTROL_SCHEMA_VERSION = 1 as const;
 
 export const VALIDATION_EXTENSION_CONTROL_SELECTIONS = [
+  'pair_only',
   'bilibili_discussion_current_active_tab'
 ] as const;
 
@@ -28,7 +29,7 @@ export interface ValidationExtensionControlResult {
   profileId: string;
   browserBindingId: string;
   connectionState: 'online';
-  discussionSelection: 'available';
+  discussionSelection: 'available' | 'not_requested';
   controlTargetDisposed: true;
 }
 
@@ -65,7 +66,7 @@ export function validationExtensionControlRequest(value: unknown): ValidationExt
     typeof candidate.identityFingerprint !== 'string' || !FINGERPRINT.test(candidate.identityFingerprint) ||
     typeof candidate.pairingSessionId !== 'string' || !UUID.test(candidate.pairingSessionId) ||
     typeof candidate.pairingCode !== 'string' || !PAIRING_CODE.test(candidate.pairingCode) ||
-    candidate.selection !== 'bilibili_discussion_current_active_tab'
+    !VALIDATION_EXTENSION_CONTROL_SELECTIONS.includes(candidate.selection as ValidationExtensionControlSelection)
   ) {
     throw new Error('validation_extension_control_request_invalid');
   }
@@ -76,7 +77,7 @@ export function validationExtensionControlRequest(value: unknown): ValidationExt
     identityFingerprint: candidate.identityFingerprint,
     pairingSessionId: candidate.pairingSessionId,
     pairingCode: candidate.pairingCode,
-    selection: candidate.selection
+    selection: candidate.selection as ValidationExtensionControlSelection
   };
 }
 

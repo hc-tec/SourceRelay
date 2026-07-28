@@ -52,7 +52,7 @@ export interface UserBrowserGatewayXiaohongshuCapabilityDescriptor {
   platform: 'xiaohongshu';
   title: string;
   inputMode: string;
-  dispatchState: 'direct_gateway_dispatch_pending';
+  dispatchState: 'direct_ready';
   captureMode: string;
   browserHostFallback: 'forbidden';
 }

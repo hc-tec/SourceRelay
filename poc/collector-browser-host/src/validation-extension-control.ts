@@ -95,18 +95,22 @@ export async function runValidationExtensionControl(input: {
       });
     }
 
-    const discussionButton = controlPage.locator('#select-current-bilibili-video-discussion');
-    await discussionButton.click();
-    await controlPage.locator('#user-selected-discussion-tab-state').filter({
-      hasText: '当前已加载评论的视频页已显式选择'
-    }).waitFor({ state: 'visible', timeout: CONTROL_TARGET_TIMEOUT_MS });
+    if (request.selection === 'bilibili_discussion_current_active_tab') {
+      const discussionButton = controlPage.locator('#select-current-bilibili-video-discussion');
+      await discussionButton.click();
+      await controlPage.locator('#user-selected-discussion-tab-state').filter({
+        hasText: '当前已加载评论的视频页已显式选择'
+      }).waitFor({ state: 'visible', timeout: CONTROL_TARGET_TIMEOUT_MS });
+    }
 
     result = {
       schemaVersion: VALIDATION_EXTENSION_CONTROL_SCHEMA_VERSION,
       profileId: input.profileId,
       browserBindingId,
       connectionState: 'online',
-      discussionSelection: 'available'
+      discussionSelection: request.selection === 'bilibili_discussion_current_active_tab'
+        ? 'available'
+        : 'not_requested'
     };
   } catch (error) {
     failure = error instanceof BrowserHostError

@@ -33,7 +33,7 @@ describe('user-browser Gateway direct capability catalog', () => {
           platform: 'xiaohongshu',
           title: '小红书公开笔记站内搜索',
           inputMode: 'query_only_no_caller_url',
-          dispatchState: 'direct_gateway_dispatch_pending',
+          dispatchState: 'direct_ready',
           captureMode: 'current_document_main_world_public_projection',
           browserHostFallback: 'forbidden'
         },
@@ -46,7 +46,7 @@ describe('user-browser Gateway direct capability catalog', () => {
       expect.objectContaining({
         capability: 'xiaohongshu.search.public_notes.v1',
         platform: 'xiaohongshu',
-        dispatchState: 'direct_gateway_dispatch_pending'
+        dispatchState: 'direct_ready'
       })
     ]);
   });

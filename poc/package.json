@@ -32,6 +32,7 @@
     "stop:xiaohongshu-validation-browser": "npm run stop:xiaohongshu-validation-browser --workspace @intelligence/collector-browser-host",
     "validate:xiaohongshu-trusted-search": "npm run validate:xiaohongshu-trusted-search --workspace @intelligence/collector-browser-host",
     "validate:xiaohongshu-extension-trusted-input": "npm run validate:xiaohongshu-extension-trusted-input --workspace @intelligence/collector-browser-host",
+    "validate:xiaohongshu-gateway-e2e": "npm run validate:xiaohongshu-gateway-e2e --workspace @intelligence/collector-browser-host",
     "test:typecheck": "tsc --noEmit -p tsconfig.tests.json",
     "test:unit": "npm run test:typecheck && vitest run --project governance --project contracts --project extension-domain --project browser-host-domain --project gateway-domain",
     "test:unit:coverage": "npm run test:typecheck && vitest run --project governance --project contracts --project extension-domain --project browser-host-domain --project gateway-domain --coverage",
