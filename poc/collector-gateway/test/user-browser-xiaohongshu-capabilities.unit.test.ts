@@ -68,17 +68,23 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       captureMode: 'network_first_dom_fallback_same_document_overlay',
       browserHostFallback: 'forbidden',
       budget: expect.objectContaining({ maximumSemanticActions: 1, maximumNetworkResponseBodies: 4 })
+    }), expect.objectContaining({
+      capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
+      dispatchState: 'direct_canary_pending', managedValidationState: 'implementation_ready_live_e2e_pending',
+      captureMode: 'network_first_dom_fallback_trusted_scroll',
+      budget: expect.objectContaining({ maximumSemanticActions: 3, maximumProjectedItems: 80 })
     })]);
   });
 
   test('keeps the Bilibili catalog and the Xiaohongshu policy visible together', () => {
     const catalog = listUserBrowserCapabilities();
-    expect(catalog).toHaveLength(16);
+    expect(catalog).toHaveLength(17);
     expect(catalog.map((entry) => entry.capability)).toContain('bilibili.discussion');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.current_page.network_metadata');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.search.public_notes.v1');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.account.public_notes.v1');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.note.public_detail.v1');
+    expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.note.public_comments.v1');
   });
 
   test('keeps the catalog-only policy outside the executable collect request union', () => {
@@ -115,6 +121,15 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
     expect(document.components.schemas.UserBrowserCapability.oneOf).toContainEqual({
       $ref: '#/components/schemas/XiaohongshuNotePublicDetailCapability'
     });
+    expect(document.components.schemas.UserBrowserCapability.oneOf).toContainEqual({
+      $ref: '#/components/schemas/XiaohongshuNotePublicCommentsCapability'
+    });
+
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2, browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',
+      capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
+      input: { maximumScrolls: 1 }
+    })).toMatchObject({ input: { maximumScrolls: 1 } });
 
     expect(userBrowserCollectorServiceRequestInput({
       schemaVersion: 2,

@@ -10,9 +10,11 @@ import { executeBilibiliVideoDetailExtensionWork } from './extension-work-bilibi
 import { executeXiaohongshuPublicNotesSearchExtensionWork } from './extension-work-xiaohongshu-public-notes';
 import { executeXiaohongshuAccountPublicNotesExtensionWork } from './extension-work-xiaohongshu-account-public-notes';
 import { executeXiaohongshuNotePublicDetailExtensionWork } from './extension-work-xiaohongshu-note-public-detail';
+import { executeXiaohongshuNotePublicCommentsExtensionWork } from './extension-work-xiaohongshu-note-public-comments';
 import { wasXiaohongshuTrustedInputAttempted } from './xiaohongshu-trusted-input';
 import { xiaohongshuProfileScrollAttemptCount } from './xiaohongshu-profile-scroll-ledger';
 import { xiaohongshuNoteDetailClickAttempted } from './xiaohongshu-note-detail-click-ledger';
+import { xiaohongshuNoteCommentsScrollCounts } from './xiaohongshu-note-comments-scroll-ledger';
 import { claimNextExtensionWork, submitExtensionWorkResult } from './extension-work-client';
 import {
   clearActiveExtensionWork,
@@ -125,6 +127,9 @@ async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
   if (item.capability === 'xiaohongshu.note.public_detail.v1') {
     return await executeXiaohongshuNotePublicDetailExtensionWork(item);
   }
+  if (item.capability === 'xiaohongshu.note.public_comments.v1') {
+    return await executeXiaohongshuNotePublicCommentsExtensionWork(item);
+  }
   if (item.capability === 'bilibili.video_detail') {
     return await executeBilibiliVideoDetailExtensionWork(item, lifecycle);
   }
@@ -193,6 +198,31 @@ async function deliverPendingResult(pending: PendingExtensionWorkResult): Promis
 }
 
 async function interruptedResult(active: ActiveExtensionWork): Promise<ExtensionWorkResult> {
+  if (active.item.capability === 'xiaohongshu.note.public_comments.v1') {
+    const counts = await xiaohongshuNoteCommentsScrollCounts(active.item.workId);
+    return {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: active.item.workId,
+      operationId: active.item.operationId,
+      browserBindingId: active.item.browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.note.public_comments.v1',
+      executionTarget: 'existing_public_note_overlay',
+      state: 'stopped',
+      errorCode: 'xiaohongshu_extension_worker_interrupted',
+      terminalReason: 'extension_worker_interrupted',
+      completedAt: new Date().toISOString(),
+      navigation: { attempted: false, attemptCount: 0 },
+      semanticAction: { attempted: counts.attemptedCount > 0, attemptCount: counts.attemptedCount },
+      scroll: { requestedCount: active.item.input.maximumScrolls, completedCount: counts.completedCount },
+      page: null,
+      projection: null,
+      rawPayloadStored: false,
+      responseUrlsStored: false,
+      debuggerDetached: false
+    };
+  }
   if (active.item.capability === 'xiaohongshu.note.public_detail.v1') {
     const attempted = await xiaohongshuNoteDetailClickAttempted(active.item.workId);
     return {

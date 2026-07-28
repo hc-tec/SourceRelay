@@ -23,6 +23,7 @@ element('search-batch-form').addEventListener('submit', (event) => void submitSe
 element('xiaohongshu-search-form').addEventListener('submit', (event) => void submitSearch(event, 'xiaohongshu_search'));
 element('xiaohongshu-account-notes-form').addEventListener('submit', (event) => void submitXiaohongshuAccountNotes(event));
 element('xiaohongshu-note-detail-form').addEventListener('submit', (event) => void submitXiaohongshuNoteDetail(event));
+element('xiaohongshu-note-comments-form').addEventListener('submit', (event) => void submitXiaohongshuNoteComments(event));
 element('profile-form').addEventListener('submit', (event) => void submitAccount(event, 'account_profile'));
 element('inventory-form').addEventListener('submit', (event) => void submitAccount(event, 'account_inventory'));
 element('discussion-form').addEventListener('submit', (event) => void submitDiscussion(event));
@@ -140,10 +141,10 @@ function renderBindings() {
   }
   for (const control of document.querySelectorAll(
     '#video-form input, #video-form select, #search-form input, #search-form select, #search-batch-form input, #search-batch-form select, ' +
-    '#xiaohongshu-search-form input, #xiaohongshu-search-form select, #xiaohongshu-account-notes-form select, #xiaohongshu-note-detail-form input, #xiaohongshu-note-detail-form select, ' +
+    '#xiaohongshu-search-form input, #xiaohongshu-search-form select, #xiaohongshu-account-notes-form select, #xiaohongshu-note-detail-form input, #xiaohongshu-note-detail-form select, #xiaohongshu-note-comments-form select, ' +
     '#profile-form input, #profile-form select, #inventory-form input, #inventory-form select, ' +
     '#discussion-form input, #discussion-form select, ' +
-    '#passive-form input, #passive-form select, #video-form button, #search-form button, #search-batch-form button, #xiaohongshu-search-form button, #xiaohongshu-account-notes-form button, #xiaohongshu-note-detail-form button, ' +
+    '#passive-form input, #passive-form select, #video-form button, #search-form button, #search-batch-form button, #xiaohongshu-search-form button, #xiaohongshu-account-notes-form button, #xiaohongshu-note-detail-form button, #xiaohongshu-note-comments-form button, ' +
     '#profile-form button, #inventory-form button, #discussion-form button, #passive-form button'
   )) {
     control.disabled = !enabled;
@@ -232,6 +233,25 @@ async function submitXiaohongshuNoteDetail(event) {
         input: { resultRank: Number(form.elements.resultRank.value) }
       }
     });
+    acceptOperation(payload.result);
+  } catch (error) {
+    showOperationError(error);
+  } finally {
+    button.disabled = state.bindings.length === 0;
+  }
+}
+
+async function submitXiaohongshuNoteComments(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  try {
+    const payload = await api('/api/operations', { method: 'POST', body: {
+      browserBindingId: form.elements.browserBindingId.value,
+      kind: 'xiaohongshu_note_public_comments',
+      input: { maximumScrolls: Number(form.elements.maximumScrolls.value) }
+    } });
     acceptOperation(payload.result);
   } catch (error) {
     showOperationError(error);

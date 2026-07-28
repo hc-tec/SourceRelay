@@ -16,6 +16,7 @@ import {
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET,
+  XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
   type ExtensionWorkCapability,
   type ExtensionWorkExecutionTarget,
   type ExtensionWorkItem,
@@ -135,6 +136,10 @@ export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
 export interface EnqueueXiaohongshuNotePublicDetailWorkInput {
   browserBindingId: string;
   resultRank: number;
+}
+export interface EnqueueXiaohongshuNotePublicCommentsWorkInput {
+  browserBindingId: string;
+  maximumScrolls: 1 | 2 | 3;
 }
 
 /**
@@ -769,6 +774,28 @@ export class ExtensionWorkQueue {
       expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
       input: { resultRank: input.resultRank },
       budget: XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET
+    };
+    return await this.#enqueueSigned(unsigned, issuedAt);
+  }
+
+  async enqueueXiaohongshuNotePublicComments(
+    input: EnqueueXiaohongshuNotePublicCommentsWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId) ||
+      (input.maximumScrolls !== 1 && input.maximumScrolls !== 2 && input.maximumScrolls !== 3)) {
+      throw new Error('xiaohongshu_note_public_comments_input_invalid');
+    }
+    const expired = this.#expire(now); if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(input.browserBindingId);
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION, protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(), operationId: randomUUID(), browserBindingId: input.browserBindingId,
+      platform: 'xiaohongshu', capability: 'xiaohongshu.note.public_comments.v1',
+      executionTarget: 'existing_public_note_overlay', issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: { maximumScrolls: input.maximumScrolls }, budget: XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET
     };
     return await this.#enqueueSigned(unsigned, issuedAt);
   }

@@ -20,6 +20,7 @@ import {
   enqueueXiaohongshuPublicNotesSearchWork,
   enqueueXiaohongshuAccountPublicNotesWork,
   enqueueXiaohongshuNotePublicDetailWork,
+  enqueueXiaohongshuNotePublicCommentsWork,
   reconcileExpiredExtensionWork,
   type ExtensionWorkRouteContext
 } from './extension-work-routes';
@@ -89,7 +90,9 @@ export async function handleUserBrowserCollectorServiceRoute(
     let operationId: string | null = null;
     try {
       const collection = userBrowserCollectorServiceRequestInput(await readJsonBody(request));
-      const operation = collection.capability === 'xiaohongshu.note.public_detail.v1'
+      const operation = collection.capability === 'xiaohongshu.note.public_comments.v1'
+        ? await enqueueXiaohongshuNotePublicCommentsWork(context, collection.browserBindingId, collection.input.maximumScrolls)
+        : collection.capability === 'xiaohongshu.note.public_detail.v1'
         ? await enqueueXiaohongshuNotePublicDetailWork(
           context,
           collection.browserBindingId,
@@ -236,6 +239,7 @@ async function audit(
     | 'xiaohongshu.search.public_notes.v1'
     | 'xiaohongshu.account.public_notes.v1'
     | 'xiaohongshu.note.public_detail.v1'
+    | 'xiaohongshu.note.public_comments.v1'
     | null,
   operationId: string | null,
   outcome: CollectorServiceAuditOutcome,

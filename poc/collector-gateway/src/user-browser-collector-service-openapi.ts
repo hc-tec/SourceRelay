@@ -131,7 +131,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             { $ref: '#/components/schemas/XiaohongshuUserBrowserCapability' },
             { $ref: '#/components/schemas/XiaohongshuPublicNotesSearchCapability' },
             { $ref: '#/components/schemas/XiaohongshuAccountPublicNotesCapability' },
-            { $ref: '#/components/schemas/XiaohongshuNotePublicDetailCapability' }
+            { $ref: '#/components/schemas/XiaohongshuNotePublicDetailCapability' },
+            { $ref: '#/components/schemas/XiaohongshuNotePublicCommentsCapability' }
           ]
         },
         BilibiliUserBrowserCapability: {
@@ -336,6 +337,33 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             browserHostFallback: { type: 'string', const: 'forbidden' }
           }
         },
+        XiaohongshuNotePublicCommentsCapability: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'executionTarget',
+            'accountScopedSurfaces', 'dispatchState', 'managedValidationState', 'captureMode', 'responseBodies',
+            'routeAdmission', 'budget', 'browserHostFallback'],
+          properties: {
+            schemaVersion: { type: 'integer', const: 1 },
+            capability: { type: 'string', const: 'xiaohongshu.note.public_comments.v1' },
+            platform: { type: 'string', const: 'xiaohongshu' }, title: { type: 'string' },
+            inputMode: { type: 'string', const: 'scroll_budget_only_no_caller_url' },
+            executionTarget: { type: 'string', const: 'existing_public_note_overlay' },
+            accountScopedSurfaces: { type: 'string', const: 'forbidden' },
+            dispatchState: { type: 'string', const: 'direct_canary_pending' },
+            managedValidationState: { type: 'string', const: 'implementation_ready_live_e2e_pending' },
+            captureMode: { type: 'string', const: 'network_first_dom_fallback_trusted_scroll' },
+            responseBodies: { type: 'string', const: 'temporarily_read_projected_not_stored' },
+            routeAdmission: { type: 'string', const: 'generic_public_comment_shape_no_url_dependency' },
+            budget: { type: 'object', additionalProperties: false,
+              required: ['maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+                'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems', 'maximumRawPayloadBytesStored'],
+              properties: { maximumPlatformNavigations: { type: 'integer', const: 0 }, maximumPageReloads: { type: 'integer', const: 0 },
+                maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 }, maximumSemanticActions: { type: 'integer', const: 3 },
+                maximumNetworkResponseBodies: { type: 'integer', const: 8 }, maximumProjectedItems: { type: 'integer', const: 80 },
+                maximumRawPayloadBytesStored: { type: 'integer', const: 0 } } },
+            browserHostFallback: { type: 'string', const: 'forbidden' }
+          }
+        },
         UserBrowserCollectRequest: {
           oneOf: [
             { $ref: '#/components/schemas/UserBrowserVideoDetailCollectRequest' },
@@ -350,7 +378,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             { $ref: '#/components/schemas/UserBrowserDanmakuCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserXiaohongshuPublicNotesSearchCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserXiaohongshuAccountPublicNotesCollectRequest' },
-            { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicDetailCollectRequest' }
+            { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicDetailCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicCommentsCollectRequest' }
           ]
         },
         UserBrowserVideoDetailCollectRequest: {
@@ -542,6 +571,17 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
               properties: { resultRank: { type: 'integer', minimum: 1, maximum: 20 } }
             }
           }
+        },
+        UserBrowserXiaohongshuNotePublicCommentsCollectRequest: {
+          type: 'object', additionalProperties: false,
+          description: 'Collects public comments from the already-open same-document note overlay with bounded trusted scrolling. No URL, note ID, cursor, tab ID, selector, coordinate, script, refresh, or new tab can be supplied.',
+          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          properties: { schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            browserBindingId: { type: 'string', format: 'uuid' }, platform: { type: 'string', const: 'xiaohongshu' },
+            capability: { type: 'string', const: 'xiaohongshu.note.public_comments.v1' },
+            executionTarget: { type: 'string', const: 'existing_public_note_overlay' },
+            input: { type: 'object', additionalProperties: false, required: ['maximumScrolls'],
+              properties: { maximumScrolls: { type: 'integer', enum: [1, 2, 3] } } } }
         },
         QueuedOperationResponse: {
           type: 'object', additionalProperties: false,

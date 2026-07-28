@@ -37,7 +37,8 @@ export type CollectorServiceAuditCapability =
   | CollectorServiceCapability
   | 'xiaohongshu.search.public_notes.v1'
   | 'xiaohongshu.account.public_notes.v1'
-  | 'xiaohongshu.note.public_detail.v1';
+  | 'xiaohongshu.note.public_detail.v1'
+  | 'xiaohongshu.note.public_comments.v1';
 
 /**
  * Deliberately small, de-identified call history.  In particular it has no

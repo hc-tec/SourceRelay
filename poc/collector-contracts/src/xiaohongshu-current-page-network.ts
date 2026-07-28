@@ -43,7 +43,8 @@ export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS = 60_000 as const
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_PUBLIC_SURFACES = [
   'explore',
   'search',
-  'public_profile'
+  'public_profile',
+  'public_note_detail'
 ] as const;
 export type XiaohongshuCurrentPageNetworkPublicSurface =
   (typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_PUBLIC_SURFACES)[number];

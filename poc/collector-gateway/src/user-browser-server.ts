@@ -16,6 +16,7 @@ import { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-arti
 import { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-artifacts';
 import { XiaohongshuAccountPublicNotesArtifactStore } from './xiaohongshu-account-public-notes-artifacts';
 import { XiaohongshuNotePublicDetailArtifactStore } from './xiaohongshu-note-public-detail-artifacts';
+import { XiaohongshuNotePublicCommentsArtifactStore } from './xiaohongshu-note-public-comments-artifacts';
 import { safeErrorCode, sendJson } from './gateway-http';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker } from './pairing';
@@ -41,6 +42,8 @@ const xiaohongshuAccountPublicNotesArtifacts =
   await XiaohongshuAccountPublicNotesArtifactStore.create(config.stateDirectory);
 const xiaohongshuNotePublicDetailArtifacts =
   await XiaohongshuNotePublicDetailArtifactStore.create(config.stateDirectory);
+const xiaohongshuNotePublicCommentsArtifacts =
+  await XiaohongshuNotePublicCommentsArtifactStore.create(config.stateDirectory);
 const expectedHost = config.host + ':' + config.port;
 
 const server = createServer(async (request, response) => {
@@ -65,7 +68,8 @@ const server = createServer(async (request, response) => {
       passiveDirectArtifacts,
       xiaohongshuPublicNotesArtifacts,
       xiaohongshuAccountPublicNotesArtifacts,
-      xiaohongshuNotePublicDetailArtifacts
+      xiaohongshuNotePublicDetailArtifacts,
+      xiaohongshuNotePublicCommentsArtifacts
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 2, ok: false, error: 'route_not_found' });
   } catch (error) {

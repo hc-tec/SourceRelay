@@ -220,6 +220,8 @@ function directCapabilityFallbackTitle(capability: UserBrowserDirectWorkCapabili
       return '小红书公开博主笔记列表';
     case 'xiaohongshu.note.public_detail.v1':
       return '小红书公开笔记详情';
+    case 'xiaohongshu.note.public_comments.v1':
+      return '小红书公开笔记评论';
   }
 }
 

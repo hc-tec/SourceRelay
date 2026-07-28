@@ -6,6 +6,8 @@ import {
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY,
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_CAPABILITY,
+  XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
+  XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_CAPABILITY,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY
 } from '@intelligence/collector-contracts';
@@ -82,12 +84,22 @@ export interface UserBrowserXiaohongshuNotePublicDetailCapabilityDescriptor {
   budget: typeof XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET;
   browserHostFallback: 'forbidden';
 }
+export interface UserBrowserXiaohongshuNotePublicCommentsCapabilityDescriptor {
+  schemaVersion: 1; capability: typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_CAPABILITY; platform: 'xiaohongshu';
+  title: string; inputMode: 'scroll_budget_only_no_caller_url'; executionTarget: 'existing_public_note_overlay';
+  accountScopedSurfaces: 'forbidden'; dispatchState: 'direct_canary_pending';
+  managedValidationState: 'implementation_ready_live_e2e_pending';
+  captureMode: 'network_first_dom_fallback_trusted_scroll'; responseBodies: 'temporarily_read_projected_not_stored';
+  routeAdmission: 'generic_public_comment_shape_no_url_dependency'; budget: typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET;
+  browserHostFallback: 'forbidden';
+}
 
 export type UserBrowserXiaohongshuCapabilityDescriptor =
   | UserBrowserXiaohongshuNetworkMetadataCapabilityDescriptor
   | UserBrowserXiaohongshuPublicNotesSearchCapabilityDescriptor
   | UserBrowserXiaohongshuAccountPublicNotesCapabilityDescriptor
-  | UserBrowserXiaohongshuNotePublicDetailCapabilityDescriptor;
+  | UserBrowserXiaohongshuNotePublicDetailCapabilityDescriptor
+  | UserBrowserXiaohongshuNotePublicCommentsCapabilityDescriptor;
 
 export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
   {
@@ -151,6 +163,15 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     responseBodies: 'temporarily_read_projected_not_stored',
     routeAdmission: 'public_detail_shape_only_no_url_dependency',
     budget: XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET,
+    browserHostFallback: 'forbidden'
+  },
+  {
+    schemaVersion: 1, capability: XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_CAPABILITY, platform: 'xiaohongshu',
+    title: '小红书公开笔记评论', inputMode: 'scroll_budget_only_no_caller_url',
+    executionTarget: 'existing_public_note_overlay', accountScopedSurfaces: 'forbidden',
+    dispatchState: 'direct_canary_pending', managedValidationState: 'implementation_ready_live_e2e_pending',
+    captureMode: 'network_first_dom_fallback_trusted_scroll', responseBodies: 'temporarily_read_projected_not_stored',
+    routeAdmission: 'generic_public_comment_shape_no_url_dependency', budget: XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
     browserHostFallback: 'forbidden'
   }
 ] as const satisfies readonly UserBrowserXiaohongshuCapabilityDescriptor[];

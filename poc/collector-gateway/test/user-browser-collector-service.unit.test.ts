@@ -136,7 +136,8 @@ describe('user-owned browser collector service', () => {
       { $ref: '#/components/schemas/UserBrowserDanmakuCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserXiaohongshuPublicNotesSearchCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserXiaohongshuAccountPublicNotesCollectRequest' },
-      { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicDetailCollectRequest' }
+      { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicDetailCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicCommentsCollectRequest' }
     ]);
     expect(document.components.schemas.UserBrowserNativeSearchCollectRequest.properties).toMatchObject({
       capability: { const: 'bilibili.native_search' },
@@ -163,6 +164,11 @@ describe('user-owned browser collector service', () => {
       capability: { const: 'xiaohongshu.note.public_detail.v1' },
       executionTarget: { const: 'existing_public_search_tab' },
       input: { required: ['resultRank'], additionalProperties: false }
+    });
+    expect(document.components.schemas.UserBrowserXiaohongshuNotePublicCommentsCollectRequest.properties).toMatchObject({
+      platform: { const: 'xiaohongshu' }, capability: { const: 'xiaohongshu.note.public_comments.v1' },
+      executionTarget: { const: 'existing_public_note_overlay' },
+      input: { required: ['maximumScrolls'], additionalProperties: false }
     });
     expect(Object.keys(document.paths)).not.toContain('/v1/profiles');
     const schemaText = JSON.stringify(document.components.schemas);

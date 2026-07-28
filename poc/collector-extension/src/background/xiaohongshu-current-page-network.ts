@@ -3,7 +3,7 @@ import {
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION,
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS,
   classifyXiaohongshuCurrentPageRisk,
-  xiaohongshuCurrentPageNetworkPublicSurface,
+  xiaohongshuCurrentPageNetworkPublicSurface as baseXiaohongshuCurrentPageNetworkPublicSurface,
   isXiaohongshuManagedSearchProjectionResult,
   isXiaohongshuManagedProfileNotesProjectionResult,
   type XiaohongshuManagedPageNetworkObservationResult,
@@ -27,6 +27,17 @@ import {
   selectionSummary,
   type XiaohongshuCurrentPageNetworkRecord
 } from './xiaohongshu-current-page-network-state';
+
+function xiaohongshuCurrentPageNetworkPublicSurface(value: string) {
+  const base = baseXiaohongshuCurrentPageNetworkPublicSurface(value);
+  if (base) return base;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname === 'www.xiaohongshu.com' && !url.port && !url.username &&
+      !url.password && !url.hash && /^\/explore\/[^/]+\/?$/.test(url.pathname)
+      ? 'public_note_detail' as const : null;
+  } catch { return null; }
+}
 
 const XIAOHONGSHU_ORIGIN = 'https://www.xiaohongshu.com/*';
 const XIAOHONGSHU_CURRENT_PAGE_NETWORK_STORAGE_KEY =
@@ -199,6 +210,81 @@ export async function armXiaohongshuExistingSearchWorkObserver(
   if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'search');
 }
 
+export async function armXiaohongshuExistingNoteOverlayWorkObserver(
+  tabId: number,
+  workId: string
+): Promise<void> {
+  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
+  if (permissionState !== 'permission_granted') {
+    throw new Error('xiaohongshu_current_page_network_permission_required');
+  }
+  const current = await loadActiveRecord();
+  if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
+    throw new Error('xiaohongshu_current_page_network_selection_active');
+  }
+  if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'public_note_detail');
+}
+
+export async function readXiaohongshuExistingNoteCommentsNetworkProjection(
+  tabId: number,
+  workId: string
+): Promise<{
+  matchedPayloadCount: number;
+  bodyBytesRead: number;
+  hasMore: boolean | null;
+  cursorObserved: boolean;
+  comments: Array<{
+    commentId: string;
+    publicText: string;
+    authorNickname: string;
+    likedCountText: string;
+    subCommentCountText: string;
+    createdAtText: string;
+    locationText: string;
+  }>;
+}> {
+  const record = await loadActiveRecord();
+  if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId ||
+    record.publicSurface !== 'public_note_detail') {
+    throw new Error('xiaohongshu_note_comments_network_projection_binding_mismatch');
+  }
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, documentIds: [record.documentId] },
+    world: 'MAIN',
+    func: () => {
+      const key = '__personalIntelligenceXiaohongshuPublicNotesObserverV2';
+      return (window as typeof window & { [key]?: unknown })[key] ?? null;
+    }
+  });
+  const candidate = results[0]?.result as Record<string, unknown> | null | undefined;
+  const clean = (value: unknown, maximum: number): string =>
+    (typeof value === 'string' || typeof value === 'number' ? String(value) : '')
+      .replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, maximum);
+  const comments = (Array.isArray(candidate?.comments) ? candidate.comments : []).slice(0, 80).map((value) => {
+    const comment = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+    return {
+      commentId: clean(comment.commentId, 100),
+      publicText: clean(comment.publicText, 2_000),
+      authorNickname: clean(comment.authorNickname, 200),
+      likedCountText: clean(comment.likedCountText, 40),
+      subCommentCountText: clean(comment.subCommentCountText, 40),
+      createdAtText: clean(comment.createdAtText, 100),
+      locationText: clean(comment.locationText, 100)
+    };
+  }).filter((comment) => comment.commentId && comment.publicText);
+  const pagination = candidate?.commentPagination && typeof candidate.commentPagination === 'object'
+    ? candidate.commentPagination as Record<string, unknown> : {};
+  return {
+    matchedPayloadCount: Number.isSafeInteger(candidate?.matchedPayloadCount)
+      ? Math.min(8, Math.max(0, Number(candidate?.matchedPayloadCount))) : 0,
+    bodyBytesRead: Number.isSafeInteger(candidate?.bodyBytesRead)
+      ? Math.min(16 * 1024 * 1024, Math.max(0, Number(candidate?.bodyBytesRead))) : 0,
+    hasMore: typeof pagination.hasMore === 'boolean' ? pagination.hasMore : null,
+    cursorObserved: pagination.cursorObserved === true,
+    comments
+  };
+}
+
 export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
   tabId: number,
   workId: string
@@ -317,7 +403,7 @@ async function armManagedXiaohongshuCurrentDocument(
   tabId: number,
   managedRunId: string,
   activeRecord: XiaohongshuCurrentPageNetworkRecord | null,
-  expectedSurface: 'explore' | 'search' | 'public_profile' = 'explore'
+  expectedSurface: 'explore' | 'search' | 'public_profile' | 'public_note_detail' = 'explore'
 ): Promise<XiaohongshuCurrentPageNetworkRecord> {
   if (activeRecord) throw new Error('xiaohongshu_current_page_network_selection_active');
   const tab = await chrome.tabs.get(tabId).catch(() => null);

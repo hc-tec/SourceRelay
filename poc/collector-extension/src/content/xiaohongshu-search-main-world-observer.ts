@@ -2,6 +2,7 @@ const stateKey = '__personalIntelligenceXiaohongshuPublicNotesObserverV2';
 const maximumBodyBytes = 2 * 1024 * 1024;
 const maximumPayloads = 8;
 const maximumItems = 40;
+const maximumComments = 80;
 
 interface PublicItem {
   noteId: string;
@@ -18,6 +19,16 @@ interface PublicDetail {
   interactionText: string;
 }
 
+interface PublicComment {
+  commentId: string;
+  publicText: string;
+  authorNickname: string;
+  likedCountText: string;
+  subCommentCountText: string;
+  createdAtText: string;
+  locationText: string;
+}
+
 interface ObserverController {
   schemaVersion: 2;
   generation: number;
@@ -26,6 +37,8 @@ interface ObserverController {
   bodyBytesRead: number;
   items: PublicItem[];
   details: PublicDetail[];
+  comments: PublicComment[];
+  commentPagination: { hasMore: boolean | null; cursorObserved: boolean };
 }
 
 const root = window as typeof window & { [stateKey]?: ObserverController };
@@ -37,7 +50,9 @@ const controller: ObserverController = existing ?? {
   matchedPayloadCount: 0,
   bodyBytesRead: 0,
   items: [],
-  details: []
+  details: [],
+  comments: [],
+  commentPagination: { hasMore: null, cursorObserved: false }
 };
 
 if (!existing) {
@@ -49,9 +64,18 @@ if (!existing) {
   const object = (value: unknown): Record<string, unknown> | null =>
     value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 
-  const project = (value: unknown): { items: PublicItem[]; details: PublicDetail[] } => {
+  const project = (value: unknown): {
+    items: PublicItem[];
+    details: PublicDetail[];
+    comments: PublicComment[];
+    hasMore: boolean | null;
+    cursorObserved: boolean;
+  } => {
     const items: PublicItem[] = [];
     const details: PublicDetail[] = [];
+    const comments: PublicComment[] = [];
+    let hasMore: boolean | null = null;
+    let cursorObserved = false;
     const visit = (node: unknown, depth: number): void => {
       if (depth > 7 || items.length >= maximumItems) return;
       if (Array.isArray(node)) {
@@ -60,6 +84,23 @@ if (!existing) {
       }
       const record = object(node);
       if (!record) return;
+      const commentId = clean(record.comment_id ?? record.commentId ?? record.id, 100);
+      const commentText = clean(record.content ?? record.content_text ?? record.text, 2_000);
+      if (commentId && commentText && comments.length < maximumComments) {
+        const user = object(record.user_info ?? record.userInfo ?? record.user) ?? {};
+        comments.push({
+          commentId,
+          publicText: commentText,
+          authorNickname: clean(user.nickname ?? user.nick_name ?? user.name, 200),
+          likedCountText: clean(record.like_count ?? record.liked_count ?? record.likeCount, 40),
+          subCommentCountText: clean(record.sub_comment_count ?? record.subCommentCount, 40),
+          createdAtText: clean(record.create_time ?? record.created_at ?? record.createTime, 100),
+          locationText: clean(record.ip_location ?? record.ipLocation, 100)
+        });
+      }
+      const recordHasMore = record.has_more ?? record.hasMore;
+      if (typeof recordHasMore === 'boolean') hasMore = recordHasMore;
+      if (clean(record.cursor ?? record.next_cursor ?? record.nextCursor, 200)) cursorObserved = true;
       const card = object(record.note_card ?? record.noteCard);
       if (card) {
         const user = object(card.user) ?? {};
@@ -93,7 +134,7 @@ if (!existing) {
       }
     };
     visit(value, 0);
-    return { items, details };
+    return { items, details, comments, hasMore, cursorObserved };
   };
 
   const observeText = (text: string, generation: number): void => {
@@ -104,7 +145,7 @@ if (!existing) {
     if (bytes > maximumBodyBytes) return;
     try {
       const projected = project(JSON.parse(text));
-      if (projected.items.length === 0 && projected.details.length === 0) return;
+      if (projected.items.length === 0 && projected.details.length === 0 && projected.comments.length === 0) return;
       active.matchedPayloadCount += 1;
       active.bodyBytesRead += bytes;
       const known = new Set(active.items.map((item) => item.noteId));
@@ -118,6 +159,16 @@ if (!existing) {
       if (active.details.length === 0 && projected.details.length > 0) {
         active.details.push(projected.details[0]!);
       }
+      const knownComments = new Set(active.comments.map((comment) => comment.commentId));
+      for (const comment of projected.comments) {
+        if (active.comments.length >= maximumComments) break;
+        if (!knownComments.has(comment.commentId)) {
+          knownComments.add(comment.commentId);
+          active.comments.push(comment);
+        }
+      }
+      if (projected.hasMore !== null) active.commentPagination.hasMore = projected.hasMore;
+      active.commentPagination.cursorObserved ||= projected.cursorObserved;
     } catch {
       // Non-JSON or unreadable bodies are not retained.
     }
@@ -186,3 +237,5 @@ controller.matchedPayloadCount = 0;
 controller.bodyBytesRead = 0;
 controller.items = [];
 controller.details = [];
+controller.comments = [];
+controller.commentPagination = { hasMore: null, cursorObserved: false };
