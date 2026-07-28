@@ -4,8 +4,10 @@ import {
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY,
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY,
   classifyXiaohongshuCurrentPageRisk,
+  isXiaohongshuCurrentPageNetworkObservationResult,
   isXiaohongshuCurrentPageNetworkMetadataObservation,
-  isXiaohongshuCurrentPageNetworkRequest
+  isXiaohongshuCurrentPageNetworkRequest,
+  xiaohongshuCurrentPageNetworkPublicSurface
 } from '../src/index.js';
 
 describe('Xiaohongshu current-page network policy contract', () => {
@@ -79,6 +81,15 @@ describe('Xiaohongshu current-page network policy contract', () => {
       ...observation,
       route: '/api/sns/web/v1/anything'
     })).toBe(false);
+    expect(isXiaohongshuCurrentPageNetworkMetadataObservation({
+      ...observation,
+      excludedRouteCounts: {
+        authenticationOrIdentity: 24,
+        securityOrRisk: 1,
+        configurationOrTelemetry: 0,
+        other: 0
+      }
+    })).toBe(false);
   });
 
   test('stops on the observed verification route without mistaking SMS login copy for a captcha', () => {
@@ -102,5 +113,58 @@ describe('Xiaohongshu current-page network policy contract', () => {
       rateLimited: false,
       sourceUnavailable: false
     });
+  });
+
+  test('recognises only the initial public Explore or search surface without retaining URL data', () => {
+    expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/explore')).toBe('explore');
+    expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/search_result?keyword=%E6%B5%8B%E8%AF%95'))
+      .toBe('search');
+    expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/explore/abc123')).toBeNull();
+    expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/settings')).toBeNull();
+    expect(xiaohongshuCurrentPageNetworkPublicSurface('https://api.xiaohongshu.com/explore')).toBeNull();
+  });
+
+  test('admits only a de-sensitised selected-page metadata result', () => {
+    const result = {
+      schemaVersion: 1,
+      type: 'xiaohongshu_current_page_network_observation',
+      selection: {
+        state: 'observing',
+        publicSurface: 'explore',
+        selectedAt: '2026-07-28T00:00:00.000Z',
+        expiresAt: '2026-07-28T00:01:00.000Z'
+      },
+      observation: {
+        observerState: 'armed_same_document',
+        publicContentRouteCount: 0,
+        excludedRouteCounts: {
+          authenticationOrIdentity: 0,
+          securityOrRisk: 1,
+          configurationOrTelemetry: 0,
+          other: 2
+        },
+        responseBodiesRead: false,
+        rawPayloadBytesRead: 0,
+        risk: {
+          loginRequired: false,
+          verificationRequired: false,
+          rateLimited: false,
+          sourceUnavailable: false
+        }
+      }
+    };
+    expect(isXiaohongshuCurrentPageNetworkObservationResult(result)).toBe(true);
+    expect(isXiaohongshuCurrentPageNetworkObservationResult({
+      ...result,
+      tabId: 99
+    })).toBe(false);
+    expect(isXiaohongshuCurrentPageNetworkObservationResult({
+      ...result,
+      selection: { ...result.selection, canonicalUrl: 'https://www.xiaohongshu.com/explore' }
+    })).toBe(false);
+    expect(isXiaohongshuCurrentPageNetworkObservationResult({
+      ...result,
+      selection: { state: 'not_selected', publicSurface: null, selectedAt: '2026-07-28T00:00:00.000Z', expiresAt: null }
+    })).toBe(false);
   });
 });

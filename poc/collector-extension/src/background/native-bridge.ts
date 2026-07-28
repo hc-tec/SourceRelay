@@ -69,6 +69,7 @@ import {
   bindBilibiliTranscriptObserver,
   readBilibiliTranscriptObservation
 } from './strategies/bilibili-transcript-strategy';
+import { readXiaohongshuCurrentPageNetworkObservation } from './xiaohongshu-current-page-network';
 
 let activePort: chrome.runtime.Port | null = null;
 let activeConfig: CollectorNativeBridgeConfig | null = null;
@@ -166,6 +167,8 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
         .sort((left, right) => left - right);
       return { type: 'collector_extension_tab_inventory', schemaVersion: 1, tabIds };
     }
+    case 'collector_read_xiaohongshu_current_page_network_observation':
+      return await readXiaohongshuCurrentPageNetworkObservation();
     case 'collector_bind_strategy_observer':
       if (command.command.binding.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID) {
         return await bindBilibiliDynamicObserver(command.command);

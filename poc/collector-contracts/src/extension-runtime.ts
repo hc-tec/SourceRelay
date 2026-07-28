@@ -8,7 +8,7 @@
 // implementation work; it changes only for a deliberate release or wire
 // compatibility boundary.
 export const COLLECTOR_EXTENSION_VERSION = '0.7.17' as const;
-export const COLLECTOR_CONTROL_SURFACE_REVISION = 15 as const;
+export const COLLECTOR_CONTROL_SURFACE_REVISION = 16 as const;
 export const COLLECTOR_RUNTIME_BOOTSTRAP_KEY = 'collector.runtime-bootstrap.v1' as const;
 export const COLLECTOR_RUNTIME_BUILD_METADATA_FILENAME = 'runtime-build.json' as const;
 

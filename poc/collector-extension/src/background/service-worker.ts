@@ -7,6 +7,7 @@ import {
 import { COLLECTOR_EXTENSION_BUILD_FINGERPRINT } from '../shared/build-fingerprint';
 import { initialiseNativeBridge } from './native-bridge';
 import { initialiseNetworkObserverController } from './network-observer-controller';
+import { initialiseXiaohongshuCurrentPageNetworkObserver } from './xiaohongshu-current-page-network';
 import { initialiseExtensionWorkRunner } from './extension-work-runner';
 import { cleanupStrategyScriptRegistrations } from './strategy-script-lifecycle';
 import { initialiseBilibiliAccountProfileDocumentBridge } from './strategies/bilibili-account-profile-strategy';
@@ -25,6 +26,7 @@ const runtimeBootstrap: CollectorRuntimeBootstrap = {
 
 void chrome.storage.session.set({ [COLLECTOR_RUNTIME_BOOTSTRAP_KEY]: runtimeBootstrap });
 initialiseNetworkObserverController();
+initialiseXiaohongshuCurrentPageNetworkObserver();
 initialiseBilibiliAccountProfileDocumentBridge();
 initialiseBilibiliAccountVideoInventoryDocumentBridge();
 initialiseBilibiliNativeSearchDocumentBridge();

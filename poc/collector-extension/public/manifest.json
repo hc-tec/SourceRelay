@@ -32,5 +32,8 @@
     "https://weibo.com/*",
     "https://m.weibo.cn/*",
     "https://www.xiaohongshu.com/*"
+  ],
+  "optional_permissions": [
+    "webRequest"
   ]
 }

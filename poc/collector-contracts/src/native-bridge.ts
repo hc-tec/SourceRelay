@@ -21,6 +21,10 @@ import {
   type StrategyObserverBindingRequest,
   type StrategyObserverBindingResult
 } from './strategy-observation.js';
+import {
+  isXiaohongshuCurrentPageNetworkObservationResult,
+  type XiaohongshuCurrentPageNetworkObservationResult
+} from './xiaohongshu-current-page-network.js';
 
 export const NATIVE_BRIDGE_PROTOCOL_VERSION = 4 as const;
 export const NATIVE_BRIDGE_MAX_MESSAGE_BYTES = 256 * 1024;
@@ -58,6 +62,15 @@ export interface CollectorListExtensionTabsCommand {
   type: 'collector_list_extension_tabs';
 }
 
+/**
+ * A host cannot name a tab, URL, selector, route or action here. The
+ * extension can answer only from its own one-time explicit current-page
+ * selection, and returns the contract's body-free metadata projection.
+ */
+export interface CollectorReadXiaohongshuCurrentPageNetworkObservationCommand {
+  type: 'collector_read_xiaohongshu_current_page_network_observation';
+}
+
 export interface CollectorBindStrategyObserverCommand {
   type: 'collector_bind_strategy_observer';
   tabId: number;
@@ -87,6 +100,7 @@ export interface CollectorReadStrategyBindingDiagnosticsCommand {
 
 export type CollectorHostExtensionCommand =
   | CollectorListExtensionTabsCommand
+  | CollectorReadXiaohongshuCurrentPageNetworkObservationCommand
   | CollectorBindStrategyObserverCommand
   | CollectorReadStrategyObservationCommand
   | CollectorReadStrategyBindingDiagnosticsCommand;
@@ -99,6 +113,7 @@ export interface CollectorExtensionTabInventory {
 
 export type CollectorExtensionCommandResult =
   | CollectorExtensionTabInventory
+  | XiaohongshuCurrentPageNetworkObservationResult
   | StrategyObserverBindingResult
   | StrategyObservationResult
   | StrategyBindingDiagnostics;
@@ -294,7 +309,10 @@ function isCollectorHostExtensionCommand(value: unknown): value is CollectorHost
     binding?: unknown;
     request?: unknown;
   };
-  if (candidate.type === 'collector_list_extension_tabs') return true;
+  if (candidate.type === 'collector_list_extension_tabs' ||
+    candidate.type === 'collector_read_xiaohongshu_current_page_network_observation') {
+    return exactKeys(candidate, ['type']);
+  }
   if (!Number.isSafeInteger(candidate.tabId) || Number(candidate.tabId) < 0) return false;
   if (candidate.type === 'collector_bind_strategy_observer') {
     return Number.isSafeInteger(candidate.nextDocumentGeneration) &&
@@ -318,6 +336,9 @@ function isCollectorExtensionCommandResult(value: unknown): value is CollectorEx
     return candidate.schemaVersion === 1 && Array.isArray(candidate.tabIds) && candidate.tabIds.length <= 10_000 &&
       candidate.tabIds.every((tabId) => Number.isSafeInteger(tabId) && Number(tabId) >= 0) &&
       new Set(candidate.tabIds).size === candidate.tabIds.length;
+  }
+  if (type === 'xiaohongshu_current_page_network_observation') {
+    return isXiaohongshuCurrentPageNetworkObservationResult(value);
   }
   if (type === 'collector_strategy_observer_binding') {
     const candidate = value as Partial<StrategyObserverBindingResult>;
@@ -513,4 +534,9 @@ function boundedContextIdentifier(value: unknown): value is string {
 
 function boundedCommandId(value: unknown): value is string {
   return typeof value === 'string' && value.length >= 16 && value.length <= 128;
+}
+
+function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }

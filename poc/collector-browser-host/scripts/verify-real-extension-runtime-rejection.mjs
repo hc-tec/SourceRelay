@@ -26,7 +26,7 @@ const extensionDirectory = resolve(workspaceRoot, 'collector-extension', 'dist')
 const mainModulePath = resolve(root, 'dist', 'main.js');
 const profileId = 'extension-runtime-rejection';
 const expectedVersion = '999.999.999';
-const expectedControlSurfaceRevision = 15;
+const expectedControlSurfaceRevision = 16;
 
 if (relative(runtimeParent, runtimeRoot).startsWith('..')) {
   throw new Error('extension_runtime_rejection_path_rejected');

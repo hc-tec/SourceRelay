@@ -52,7 +52,7 @@ try {
   assert.match(runtimeBuild.buildFingerprint, /^[a-f0-9]{64}$/);
   const extensionRuntime = {
     version: extensionManifest.version,
-    controlSurfaceRevision: 15,
+    controlSurfaceRevision: 16,
     runtimeBootstrapKey: 'collector.runtime-bootstrap.v1',
     buildFingerprint: runtimeBuild.buildFingerprint
   };

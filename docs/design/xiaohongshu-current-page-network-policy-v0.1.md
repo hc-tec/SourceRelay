@@ -45,6 +45,28 @@ npm run start:xiaohongshu-validation-browser
 
 启动后由用户本人在这个窗口中通过地址栏进入小红书并完成必要登录。用户确认“已登录小红书验证浏览器”前，不执行任何小红书平台导航、刷新、搜索、点击或滚动；登录后也只研究用户自然停留的公开页面。
 
+### 已登录会话的安全所有权边界
+
+在 2026-07-28 的首次已登录验证会话中，Browser Host 正确把用户手动使用的窗口 tab 视为 **unmanaged**。这是刻意的保护：当前 Host 不能也不应该附着、读取、截图、关闭或接管一个没有经过扩展显式选择的 tab。运行 Chromium 只提供 Playwright 私有调试 pipe，没有可安全附加的第二个控制器。
+
+因此，本轮不会为了立刻观察登录后的页面而重启浏览器、刷新页面、创建自动化 tab、通过任意 CDP/脚本读取现有 tab，或把已有页面误标为受管页。登录状态会保留在专用验证 Profile 中，待受限的显式选择路径完成一次明确更新后再使用。
+
+### r16 源码中的下一 document 预置 MVP
+
+工作区源码新增了一个尚未升级进当前浏览器的最小观察路径。它不改变这个能力的 catalog-only 状态，也不进入 `/v2/collect`：
+
+1. 用户在扩展 popup 中、已停留于公开 `/explore` 或 `/search_result` 页时，点击“预置下一次手动打开的公开小红书页”。
+2. Chrome 只在这次用户手势中请求可选的 `https://www.xiaohongshu.com/*` 与 `webRequest` 权限；拒绝后没有降级、没有重试、没有其他读取路径。
+3. 扩展只记住私有的一次 tab/document lease，等待用户自己在**同一 tab**发起下一次顶层导航；扩展绝不导航、刷新、搜索、点击、滚动或开新 tab。
+4. 新 document 形成后，至多 60 秒、24 条的 `webRequest` 完成元数据会被归入固定的风险/身份/配置/其他计数；不保存 route、URL、query、header、Cookie、Token、response body 或页面正文。
+5. Browser Host 只能通过一个零输入 Native Bridge 命令读取去敏结果；它仍不能提供 tab、URL、selector、script、route 或任意浏览器控制。
+
+`webRequest` listener 不是常驻监控器：预置本身不会注册它；只有用户已在选中 tab 中真实发起允许的下一次顶层导航时才注册。预置过期、达到 24 条、document 变化、风险停止、网络失败或 tab 关闭都会立即移除它。
+
+当前没有任何 route 会把 `publicContentRouteCount` 提升为非零。未知请求仍然是 `other`，而不是“已发现可用公开接口”。详情页、账号页、评论页与任何账号自身 surface 均不在这个 MVP 内。
+
+当前可见验证浏览器仍运行 r15；为了不打断刚完成的登录，r16 源码没有构建到 `dist/`、没有触发扩展 reload，也没有重启 Chromium。后续只有在用户明确同意一次可见更新时，才构建、精确核验新 worker，并在同一 Profile 中验证该预置动作。
+
 ## 不可绕过的预算
 
 | 项目 | 上限 | 含义 |

@@ -31,7 +31,8 @@ const approved = {
     'https://weibo.com/*',
     'https://m.weibo.cn/*',
     'https://www.xiaohongshu.com/*'
-  ]
+  ],
+  optionalPermissions: ['webRequest']
 };
 
 assert.equal(manifest.manifest_version, 3, 'build artifact must be Manifest V3');
@@ -50,7 +51,11 @@ assert.equal(
 assert.match(runtimeBuild.buildFingerprint, /^[a-f0-9]{64}$/, 'runtime build fingerprint must be a SHA-256 hex digest');
 assert.equal(/\btest\b/i.test(manifest.name), false, 'production artifact must not be test-branded');
 assert.deepEqual(manifest.permissions ?? [], approved.permissions, 'core permissions changed without approval');
-assert.deepEqual(manifest.optional_permissions ?? [], [], 'optional API permissions changed without approval');
+assert.deepEqual(
+  manifest.optional_permissions ?? [],
+  approved.optionalPermissions,
+  'optional API permissions changed without approval'
+);
 assert.deepEqual(manifest.host_permissions ?? [], approved.hostPermissions, 'strategy host permissions changed without approval');
 assert.deepEqual(
   manifest.optional_host_permissions ?? [],
@@ -62,7 +67,6 @@ const forbiddenPermissions = new Set([
   'cookies',
   'debugger',
   'downloads',
-  'webRequest',
   'webRequestBlocking'
 ]);
 for (const permission of [...(manifest.permissions ?? []), ...(manifest.optional_permissions ?? [])]) {
@@ -145,7 +149,12 @@ const controlSource = await readFile(resolve(outputDirectory, 'control.js'), 'ut
 
 assert.match(backgroundSource, /connectNative/, 'Native Messaging bridge connection is required');
   assert.match(backgroundSource, /collector_bind_strategy_observer/, 'exact Strategy bind command is required');
-  assert.match(backgroundSource, /collector_read_strategy_observation/, 'exact Strategy read command is required');
+assert.match(backgroundSource, /collector_read_strategy_observation/, 'exact Strategy read command is required');
+assert.match(
+  backgroundSource,
+  /collector_read_xiaohongshu_current_page_network_observation/,
+  'the fixed Xiaohongshu metadata-only read command is required'
+);
   assert.match(
     backgroundSource,
     /collector_read_strategy_binding_diagnostics/,
@@ -182,9 +191,11 @@ assert.match(backgroundSource, /collector\.native-bridge-config\.v1/, 'Browser H
 assert.match(backgroundSource, /collector\.runtime-bootstrap\.v1/, 'worker runtime marker is required');
 assert.match(
   backgroundSource,
-  /(?:COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*15|controlSurfaceRevision:\s*15)/,
-  'runtime revision must remain the public revision 15'
+  /(?:COLLECTOR_CONTROL_SURFACE_REVISION\s*=\s*16|controlSurfaceRevision:\s*16)/,
+  'runtime revision must remain the public revision 16'
 );
+assert.match(backgroundSource, /webRequest\.onCompleted/, 'Xiaohongshu may observe only completed metadata events');
+assert.match(backgroundSource, /removeListener/, 'Xiaohongshu metadata listener must be removable after its short lease');
 assert.match(backgroundSource, new RegExp(runtimeBuild.buildFingerprint), 'worker must publish the current build fingerprint');
 assert.doesNotMatch(
   backgroundSource,

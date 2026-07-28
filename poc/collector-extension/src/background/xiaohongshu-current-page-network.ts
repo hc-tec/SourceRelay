@@ -1,0 +1,297 @@
+import {
+  XIAOHONGSHU_CURRENT_PAGE_NETWORK_BUDGET,
+  XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION,
+  XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS,
+  classifyXiaohongshuCurrentPageRisk,
+  xiaohongshuCurrentPageNetworkPublicSurface,
+  type XiaohongshuCurrentPageNetworkObservationResult,
+  type XiaohongshuCurrentPageNetworkSelectionSummary
+} from '@intelligence/collector-contracts';
+import {
+  classifyExcludedRouteCategory,
+  emptyExcludedRouteCounts,
+  emptyRisk,
+  isXiaohongshuRiskSignal,
+  noSelectionSummary,
+  observationFor,
+  parseXiaohongshuCurrentPageNetworkRecord,
+  selectionSummary,
+  type XiaohongshuCurrentPageNetworkRecord
+} from './xiaohongshu-current-page-network-state';
+
+const XIAOHONGSHU_ORIGIN = 'https://www.xiaohongshu.com/*';
+const XIAOHONGSHU_CURRENT_PAGE_NETWORK_STORAGE_KEY =
+  'collector.xiaohongshu.current-page-network.v1';
+
+let initialised = false;
+let networkMetadataListenerRegistered = false;
+const networkMetadataListener = (details: chrome.webRequest.OnCompletedDetails): void => {
+  void recordNetworkMetadata(details.tabId, details.url, details.type);
+};
+
+/**
+ * Called only from an extension-popup user gesture. It requests the optional
+ * metadata-only permission, verifies that the selected tab is already a
+ * recognised public Xiaohongshu surface, then waits for the person's next
+ * top-level navigation in that same tab. It never performs that navigation.
+ */
+export async function armNextXiaohongshuCurrentPageNetworkDocument(): Promise<
+  XiaohongshuCurrentPageNetworkSelectionSummary
+> {
+  const permitted = await chrome.permissions.request({
+    permissions: ['webRequest'],
+    origins: [XIAOHONGSHU_ORIGIN]
+  });
+  if (!permitted) throw new Error('xiaohongshu_current_page_network_permission_required');
+
+  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const tab = tabs.length === 1 ? tabs[0] : null;
+  const tabId = tab?.id;
+  const windowId = tab?.windowId;
+  if (!tab || typeof tabId !== 'number' || typeof windowId !== 'number' ||
+    !Number.isSafeInteger(tabId) || !Number.isSafeInteger(windowId) || tab.incognito) {
+    throw new Error('xiaohongshu_current_page_network_current_tab_unavailable');
+  }
+  const tabSurface = xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '');
+  if (!tabSurface) throw new Error('xiaohongshu_current_page_network_public_surface_required');
+
+  const frame = await chrome.webNavigation.getFrame({ tabId, frameId: 0 }).catch(() => null);
+  const frameSurface = frame?.url ? xiaohongshuCurrentPageNetworkPublicSurface(frame.url) : null;
+  if (!frame?.documentId || frameSurface !== tabSurface) {
+    throw new Error('xiaohongshu_current_page_network_document_unavailable');
+  }
+
+  const now = Date.now();
+  const record: XiaohongshuCurrentPageNetworkRecord = {
+    schemaVersion: 1,
+    tabId,
+    windowId,
+    initialDocumentId: frame.documentId,
+    documentId: null,
+    state: 'armed_next_document',
+    publicSurface: null,
+    selectedAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS).toISOString(),
+    navigationStarted: false,
+    stopReason: null,
+    observedRouteCount: 0,
+    excludedRouteCounts: emptyExcludedRouteCounts(),
+    risk: emptyRisk()
+  };
+  await store(record);
+  return selectionSummary(record);
+}
+
+/** A local UI read. It has no browser-control or platform side effect. */
+export async function getXiaohongshuCurrentPageNetworkSelectionSummary(): Promise<
+  XiaohongshuCurrentPageNetworkSelectionSummary
+> {
+  const record = await loadActiveRecord();
+  return record ? selectionSummary(record) : noSelectionSummary();
+}
+
+/**
+ * The result is reachable only through the authenticated Browser Host native
+ * bridge. It contains categorised counts and risk booleans, never a tab ID,
+ * document ID, URL, query, response body, header, cookie or page text.
+ */
+export async function readXiaohongshuCurrentPageNetworkObservation(): Promise<
+  XiaohongshuCurrentPageNetworkObservationResult
+> {
+  let record = await loadActiveRecord();
+  if (record?.state === 'observing' && record.documentId) {
+    await refreshRiskSignals(record).catch(() => undefined);
+    record = await loadActiveRecord();
+  }
+  if (record?.state === 'stopped') unregisterNetworkMetadataListener();
+  return {
+    schemaVersion: XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION,
+    type: 'xiaohongshu_current_page_network_observation',
+    selection: record ? selectionSummary(record) : noSelectionSummary(),
+    observation: observationFor(record)
+  };
+}
+
+export function initialiseXiaohongshuCurrentPageNetworkObserver(): void {
+  if (initialised) return;
+  initialised = true;
+
+  chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+    if (details.frameId !== 0) return;
+    void markNextNavigationStarted(details.tabId, details.url);
+  });
+  chrome.webNavigation.onCommitted.addListener((details) => {
+    if (details.frameId !== 0) return;
+    if (typeof details.documentId !== 'string' || !details.documentId) {
+      void stopForSourceUnavailable(details.tabId);
+      return;
+    }
+    void bindSelectedDocument(details.tabId, details.documentId, details.url);
+  });
+  chrome.webNavigation.onErrorOccurred.addListener((details) => {
+    if (details.frameId !== 0) return;
+    void stopForSourceUnavailable(details.tabId);
+  });
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    void stopForClosedTab(tabId);
+  });
+  void restoreNetworkMetadataListenerForActiveSelection();
+}
+
+async function restoreNetworkMetadataListenerForActiveSelection(): Promise<void> {
+  const record = await loadActiveRecord();
+  if (!record || record.state !== 'observing') return;
+  const permitted = await chrome.permissions.contains({
+    permissions: ['webRequest'],
+    origins: [XIAOHONGSHU_ORIGIN]
+  }).catch(() => false);
+  if (permitted) registerNetworkMetadataListener();
+}
+
+/** Optional API listeners are installed only after the explicit user grant. */
+function registerNetworkMetadataListener(): void {
+  if (networkMetadataListenerRegistered) return;
+  networkMetadataListenerRegistered = true;
+  chrome.webRequest.onCompleted.addListener(
+    networkMetadataListener,
+    { urls: [XIAOHONGSHU_ORIGIN], types: ['xmlhttprequest'] }
+  );
+}
+
+function unregisterNetworkMetadataListener(): void {
+  if (!networkMetadataListenerRegistered) return;
+  chrome.webRequest.onCompleted.removeListener(networkMetadataListener);
+  networkMetadataListenerRegistered = false;
+}
+
+async function markNextNavigationStarted(tabId: number, url: string): Promise<void> {
+  const record = await loadActiveRecord();
+  if (!record || record.tabId !== tabId) return;
+  if (record.state === 'observing') {
+    await store({ ...record, state: 'stopped', stopReason: 'document_changed' });
+    unregisterNetworkMetadataListener();
+    return;
+  }
+  if (record.state !== 'armed_next_document') return;
+  if (!xiaohongshuCurrentPageNetworkPublicSurface(url)) {
+    await store({ ...record, state: 'stopped', stopReason: 'document_changed' });
+    unregisterNetworkMetadataListener();
+    return;
+  }
+  await store({ ...record, navigationStarted: true });
+  // Do not subscribe while merely armed on an existing document. The listener
+  // begins only after the person has actually initiated the allowed next
+  // navigation in the selected tab.
+  registerNetworkMetadataListener();
+}
+
+async function bindSelectedDocument(tabId: number, documentId: string, url: string): Promise<void> {
+  const record = await loadActiveRecord();
+  if (!record || record.tabId !== tabId) return;
+  if (record.state === 'observing') {
+    if (record.documentId !== documentId) {
+      await store({ ...record, state: 'stopped', stopReason: 'document_changed' });
+      unregisterNetworkMetadataListener();
+    }
+    return;
+  }
+  if (record.state !== 'armed_next_document') return;
+  const publicSurface = xiaohongshuCurrentPageNetworkPublicSurface(url);
+  if (!record.navigationStarted || !publicSurface || documentId === record.initialDocumentId) {
+    await store({ ...record, state: 'stopped', stopReason: 'document_changed' });
+    unregisterNetworkMetadataListener();
+    return;
+  }
+  const observing: XiaohongshuCurrentPageNetworkRecord = {
+    ...record,
+    state: 'observing',
+    publicSurface,
+    documentId
+  };
+  await store(observing);
+  await refreshRiskSignals(observing).catch(() => undefined);
+}
+
+async function recordNetworkMetadata(
+  tabId: number,
+  rawUrl: string,
+  resourceType: string
+): Promise<void> {
+  if (resourceType !== 'xmlhttprequest') return;
+  const record = await loadActiveRecord();
+  if (!record || record.state !== 'observing' || record.tabId !== tabId ||
+    record.observedRouteCount >= XIAOHONGSHU_CURRENT_PAGE_NETWORK_BUDGET.maximumNetworkMetadataObservations) return;
+  const category = classifyExcludedRouteCategory(rawUrl);
+  const excludedRouteCounts = { ...record.excludedRouteCounts };
+  excludedRouteCounts[category] += 1;
+  const observedRouteCount = record.observedRouteCount + 1;
+  await store({
+    ...record,
+    observedRouteCount,
+    excludedRouteCounts
+  });
+  if (observedRouteCount >= XIAOHONGSHU_CURRENT_PAGE_NETWORK_BUDGET.maximumNetworkMetadataObservations) {
+    unregisterNetworkMetadataListener();
+  }
+}
+
+async function refreshRiskSignals(record: XiaohongshuCurrentPageNetworkRecord): Promise<void> {
+  if (!record.documentId || record.state !== 'observing') return;
+  const result = await chrome.scripting.executeScript({
+    target: { tabId: record.tabId, documentIds: [record.documentId] },
+    func: () => ({
+      pathname: location.pathname,
+      title: document.title.slice(0, 300),
+      visibleText: (document.body?.innerText ?? '').slice(0, 12_000)
+    })
+  });
+  const candidate = result[0]?.result;
+  if (!isXiaohongshuRiskSignal(candidate)) return;
+  const risk = classifyXiaohongshuCurrentPageRisk(candidate);
+  const current = await loadActiveRecord();
+  if (!current || current.state !== 'observing' || current.documentId !== record.documentId) return;
+  const next = {
+    ...current,
+    risk,
+    ...(risk.verificationRequired || risk.rateLimited || risk.sourceUnavailable
+      ? { state: 'stopped' as const, stopReason: risk.sourceUnavailable ? 'source_unavailable' as const : 'risk' as const }
+      : {})
+  };
+  await store(next);
+  if (next.state === 'stopped') unregisterNetworkMetadataListener();
+}
+
+async function stopForSourceUnavailable(tabId: number): Promise<void> {
+  const record = await loadActiveRecord();
+  if (!record || record.tabId !== tabId || record.state === 'stopped') return;
+  await store({
+    ...record,
+    state: 'stopped',
+    stopReason: 'source_unavailable',
+    risk: { ...record.risk, sourceUnavailable: true }
+  });
+  unregisterNetworkMetadataListener();
+}
+
+async function stopForClosedTab(tabId: number): Promise<void> {
+  const record = await loadActiveRecord();
+  if (!record || record.tabId !== tabId || record.state === 'stopped') return;
+  await store({ ...record, state: 'stopped', stopReason: 'tab_closed' });
+  unregisterNetworkMetadataListener();
+}
+
+async function loadActiveRecord(): Promise<XiaohongshuCurrentPageNetworkRecord | null> {
+  const stored = await chrome.storage.session.get(XIAOHONGSHU_CURRENT_PAGE_NETWORK_STORAGE_KEY);
+  const record = parseXiaohongshuCurrentPageNetworkRecord(stored[XIAOHONGSHU_CURRENT_PAGE_NETWORK_STORAGE_KEY]);
+  if (!record) return null;
+  if (Date.parse(record.expiresAt) > Date.now()) return record;
+  await chrome.storage.session.remove(XIAOHONGSHU_CURRENT_PAGE_NETWORK_STORAGE_KEY);
+  unregisterNetworkMetadataListener();
+  return null;
+}
+
+async function store(record: XiaohongshuCurrentPageNetworkRecord): Promise<void> {
+  await chrome.storage.session.set({
+    [XIAOHONGSHU_CURRENT_PAGE_NETWORK_STORAGE_KEY]: record
+  });
+}

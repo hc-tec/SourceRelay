@@ -82,7 +82,7 @@ try {
       offlineOnly: true,
       extensionRuntime: {
         version: extensionManifest.version,
-        controlSurfaceRevision: 15,
+        controlSurfaceRevision: 16,
         runtimeBootstrapKey: 'collector.runtime-bootstrap.v1',
         buildFingerprint: runtimeBuild.buildFingerprint
       }

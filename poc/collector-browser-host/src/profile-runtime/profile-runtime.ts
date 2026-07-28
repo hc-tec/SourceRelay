@@ -34,6 +34,8 @@ import {
   type StrategyObserverBindingRequest,
   type StrategyObserverBindingResult,
   type PageVisualEvidence,
+  isXiaohongshuCurrentPageNetworkObservationResult,
+  type XiaohongshuCurrentPageNetworkObservationResult,
   type ValidationExtensionControlRequest,
   type ValidationExtensionControlResult
 } from '@intelligence/collector-contracts';
@@ -305,6 +307,24 @@ export class ProfileRuntime {
       result.observerBindingId !== request.observerBindingId ||
       result.strategyId !== request.strategyId) {
       throw new Error('strategy_binding_diagnostics_result_invalid');
+    }
+    return result;
+  }
+
+  /**
+   * This does not receive a tab, URL, route, selector or action. The MV3
+   * extension can answer only from an active, popup-created Xiaohongshu
+   * selection and returns its already de-sensitised metadata projection.
+   */
+  async readXiaohongshuCurrentPageNetworkObservation(): Promise<XiaohongshuCurrentPageNetworkObservationResult> {
+    const result = await this.#nativeBridgeCommands.command(
+      this.profileId,
+      this.browserSessionId,
+      { type: 'collector_read_xiaohongshu_current_page_network_observation' },
+      5_000
+    );
+    if (!isXiaohongshuCurrentPageNetworkObservationResult(result)) {
+      throw new Error('xiaohongshu_current_page_network_observation_result_invalid');
     }
     return result;
   }

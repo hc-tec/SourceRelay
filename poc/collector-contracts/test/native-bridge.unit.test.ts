@@ -7,6 +7,7 @@ import {
   isCollectorHostBridgeCommand,
   isCollectorNativeBridgeConfig,
   isBridgeJsonValue,
+  COLLECTOR_CONTROL_SURFACE_REVISION,
   NATIVE_BRIDGE_PROTOCOL_VERSION
 } from '@intelligence/collector-contracts';
 
@@ -28,7 +29,7 @@ function validHello() {
     browserSessionId: 'browser-session-123',
     extensionId: 'a'.repeat(32),
     collectorVersion: '0.7.17',
-    controlSurfaceRevision: 15,
+    controlSurfaceRevision: COLLECTOR_CONTROL_SURFACE_REVISION,
     nonce: 'nonce-which-is-long-enough'
   };
 }
@@ -85,6 +86,54 @@ describe('Native bridge runtime guards', () => {
         documentBindCount: 0,
         bridgeRegistration: 'registered',
         currentMainFrameState: 'current_document_unbound'
+      }
+    })).toBe(true);
+  });
+
+  test('admits the zero-input Xiaohongshu metadata read but not a hidden tab or URL carrier', () => {
+    const command = {
+      ...validHostCommand(),
+      command: { type: 'collector_read_xiaohongshu_current_page_network_observation' }
+    };
+    expect(isCollectorHostBridgeCommand(command)).toBe(true);
+    expect(isCollectorHostBridgeCommand({
+      ...command,
+      command: { ...command.command, tabId: 17 }
+    })).toBe(false);
+    expect(isCollectorExtensionBridgeCommandResult({
+      type: 'collector_extension_bridge_command_result',
+      protocolVersion: NATIVE_BRIDGE_PROTOCOL_VERSION,
+      profileId: 'profile-123',
+      browserSessionId: 'browser-session-123',
+      commandId: 'command-id-is-long-enough',
+      ok: true,
+      result: {
+        schemaVersion: 1,
+        type: 'xiaohongshu_current_page_network_observation',
+        selection: {
+          state: 'armed_next_document',
+          publicSurface: null,
+          selectedAt: '2026-07-28T00:00:00.000Z',
+          expiresAt: '2026-07-28T00:01:00.000Z'
+        },
+        observation: {
+          observerState: 'not_armed',
+          publicContentRouteCount: 0,
+          excludedRouteCounts: {
+            authenticationOrIdentity: 0,
+            securityOrRisk: 0,
+            configurationOrTelemetry: 0,
+            other: 0
+          },
+          responseBodiesRead: false,
+          rawPayloadBytesRead: 0,
+          risk: {
+            loginRequired: false,
+            verificationRequired: false,
+            rateLimited: false,
+            sourceUnavailable: false
+          }
+        }
       }
     })).toBe(true);
   });

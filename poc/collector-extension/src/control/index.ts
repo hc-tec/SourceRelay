@@ -18,6 +18,10 @@ import {
   selectCurrentBilibiliVideoDiscussionTab
 } from '../background/user-selected-bilibili-video-discussion-tab';
 import {
+  armNextXiaohongshuCurrentPageNetworkDocument,
+  getXiaohongshuCurrentPageNetworkSelectionSummary
+} from '../background/xiaohongshu-current-page-network';
+import {
   USER_BROWSER_DIRECT_WORK_CAPABILITIES,
   type UserBrowserDirectWorkCapability,
   type UserBrowserGatewayCapabilityDescriptor
@@ -40,6 +44,10 @@ const userSelectedInventoryTabState = element<HTMLDivElement>('user-selected-inv
 const selectCurrentInventoryTab = element<HTMLButtonElement>('select-current-bilibili-account-inventory');
 const userSelectedDiscussionTabState = element<HTMLDivElement>('user-selected-discussion-tab-state');
 const selectCurrentDiscussionTab = element<HTMLButtonElement>('select-current-bilibili-video-discussion');
+const xiaohongshuCurrentPageNetworkState = element<HTMLDivElement>('xiaohongshu-current-page-network-state');
+const armNextXiaohongshuCurrentPageNetwork = element<HTMLButtonElement>(
+  'arm-next-xiaohongshu-current-page-network'
+);
 
 async function render(): Promise<void> {
   const [connection, runtime] = await Promise.all([
@@ -53,10 +61,34 @@ async function render(): Promise<void> {
   renderGatewayConnection(connection);
   await Promise.all([
     renderUserSelectedInventoryTab(connection),
-    renderUserSelectedDiscussionTab(connection)
+    renderUserSelectedDiscussionTab(connection),
+    renderXiaohongshuCurrentPageNetwork()
   ]);
   await renderDirectCapabilities(connection);
   document.documentElement.dataset.collectorControlReady = 'true';
+}
+
+async function renderXiaohongshuCurrentPageNetwork(): Promise<void> {
+  const selection = await getXiaohongshuCurrentPageNetworkSelectionSummary();
+  armNextXiaohongshuCurrentPageNetwork.disabled = false;
+  if (selection.state === 'not_selected') {
+    xiaohongshuCurrentPageNetworkState.textContent =
+      '尚未预置。先切到已加载的公开 Explore 或搜索页，再从这里预置它在同一 tab 中下一次由你手动发起的顶层导航。';
+    return;
+  }
+  if (selection.state === 'armed_next_document' && selection.expiresAt) {
+    xiaohongshuCurrentPageNetworkState.textContent =
+      `已预置下一次同 tab 手动导航，短时有效至 ${new Date(selection.expiresAt).toLocaleTimeString('zh-CN')}。` +
+      ' 扩展不会替你触发导航；若不自然发生导航，预置会自动失效。';
+    return;
+  }
+  if (selection.state === 'observing' && selection.expiresAt) {
+    xiaohongshuCurrentPageNetworkState.textContent =
+      `正在对已选择的公开 ${selection.publicSurface === 'search' ? '搜索' : 'Explore'} document 做短时、正文零读取的网络元数据观察，有效至 ${new Date(selection.expiresAt).toLocaleTimeString('zh-CN')}。`;
+    return;
+  }
+  xiaohongshuCurrentPageNetworkState.textContent =
+    '预置已因 document 变化、页面风险、网络不可用或 tab 关闭而停止；不会自动刷新、重试或改用其他页面。';
 }
 
 async function renderUserSelectedInventoryTab(connection: UserBrowserGatewayConnection): Promise<void> {
@@ -261,6 +293,19 @@ selectCurrentDiscussionTab.addEventListener('click', () => {
   }).finally(async () => {
     const connection = await getUserBrowserGatewayConnection();
     selectCurrentDiscussionTab.disabled = connection.state !== 'online';
+  });
+});
+
+armNextXiaohongshuCurrentPageNetwork.addEventListener('click', () => {
+  armNextXiaohongshuCurrentPageNetwork.disabled = true;
+  controlError.hidden = true;
+  void armNextXiaohongshuCurrentPageNetworkDocument().then(async () => {
+    await renderXiaohongshuCurrentPageNetwork();
+  }).catch((error) => {
+    controlError.textContent = error instanceof Error ? error.message : 'xiaohongshu_current_page_network_arm_failed';
+    controlError.hidden = false;
+  }).finally(() => {
+    armNextXiaohongshuCurrentPageNetwork.disabled = false;
   });
 });
 

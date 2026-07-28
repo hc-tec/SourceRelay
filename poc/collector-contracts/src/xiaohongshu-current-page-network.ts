@@ -9,6 +9,21 @@
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION = 1 as const;
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY =
   'xiaohongshu.current_page.network_metadata' as const;
+export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS = 60_000 as const;
+
+/**
+ * This is deliberately smaller than the long-term product boundary.  These
+ * are the only public document shapes that the first local, user-selected
+ * pre-arm can recognise without retaining a URL, query value or account
+ * identity. Detail pages and every account-scoped surface need separate
+ * live admission before they can be added.
+ */
+export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_PUBLIC_SURFACES = [
+  'explore',
+  'search'
+] as const;
+export type XiaohongshuCurrentPageNetworkPublicSurface =
+  (typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_PUBLIC_SURFACES)[number];
 
 /**
  * Authentication in a dedicated validation browser can make public pages
@@ -90,6 +105,31 @@ export interface XiaohongshuCurrentPageNetworkMetadataObservation {
 }
 
 /**
+ * An extension-private user gesture can pre-arm exactly one future document
+ * in the active tab. This summary intentionally exposes no tab/window/
+ * document identifiers, URL, query value, title or visible page text.
+ */
+export interface XiaohongshuCurrentPageNetworkSelectionSummary {
+  state: 'not_selected' | 'armed_next_document' | 'observing' | 'stopped';
+  publicSurface: XiaohongshuCurrentPageNetworkPublicSurface | null;
+  selectedAt: string | null;
+  expiresAt: string | null;
+}
+
+/**
+ * The native Browser Host may read this local, de-sensitised result after an
+ * extension-popup selection. It cannot name a tab, document, URL, route,
+ * selector or action and it does not turn this catalog-only policy into a
+ * Gateway-dispatchable collection request.
+ */
+export interface XiaohongshuCurrentPageNetworkObservationResult {
+  schemaVersion: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION;
+  type: 'xiaohongshu_current_page_network_observation';
+  selection: XiaohongshuCurrentPageNetworkSelectionSummary;
+  observation: XiaohongshuCurrentPageNetworkMetadataObservation;
+}
+
+/**
  * Only public page signals are supplied to this classifier.  It never reads a
  * credential, query value, response body or browser identifier.  A known
  * verification route wins over a generic login phrase so an SMS-login form's
@@ -137,6 +177,52 @@ export function isXiaohongshuCurrentPageNetworkMetadataObservation(
     value.responseBodiesRead === false && value.rawPayloadBytesRead === 0 && isRisk(value.risk);
 }
 
+export function isXiaohongshuCurrentPageNetworkObservationResult(
+  value: unknown
+): value is XiaohongshuCurrentPageNetworkObservationResult {
+  if (!record(value) || !exactKeys(value, ['schemaVersion', 'type', 'selection', 'observation'])) return false;
+  return value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION &&
+    value.type === 'xiaohongshu_current_page_network_observation' &&
+    isXiaohongshuCurrentPageNetworkSelectionSummary(value.selection) &&
+    isXiaohongshuCurrentPageNetworkMetadataObservation(value.observation);
+}
+
+export function isXiaohongshuCurrentPageNetworkSelectionSummary(
+  value: unknown
+): value is XiaohongshuCurrentPageNetworkSelectionSummary {
+  if (!record(value) || !exactKeys(value, ['state', 'publicSurface', 'selectedAt', 'expiresAt'])) return false;
+  const state = value.state;
+  const surface = value.publicSurface;
+  if (state === 'not_selected') {
+    return surface === null && value.selectedAt === null && value.expiresAt === null;
+  }
+  if (state !== 'armed_next_document' && state !== 'observing' && state !== 'stopped') return false;
+  return (surface === null || surface === 'explore' || surface === 'search') &&
+    typeof value.selectedAt === 'string' && typeof value.expiresAt === 'string' &&
+    Number.isFinite(Date.parse(value.selectedAt)) && Number.isFinite(Date.parse(value.expiresAt)) &&
+    Date.parse(value.expiresAt) > Date.parse(value.selectedAt);
+}
+
+/**
+ * This function returns only an enum. Callers must never retain or return the
+ * input URL, path segment, query value or hash. `search_result` is allowed to
+ * contain a user-entered query because this contract does not expose it.
+ */
+export function xiaohongshuCurrentPageNetworkPublicSurface(
+  value: string
+): XiaohongshuCurrentPageNetworkPublicSurface | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' ||
+    url.port || url.username || url.password || url.hash) return null;
+  if ((url.pathname === '/explore' || url.pathname === '/explore/') && !url.search) return 'explore';
+  return url.pathname === '/search_result' || url.pathname === '/search_result/' ? 'search' : null;
+}
+
 export function classifyXiaohongshuCurrentPageRisk(
   input: XiaohongshuCurrentPageRiskSignalInput
 ): XiaohongshuCurrentPageNetworkMetadataObservation['risk'] {
@@ -156,7 +242,9 @@ function isExcludedRouteCounts(value: unknown): boolean {
   return record(value) && exactKeys(value, [
     'authenticationOrIdentity', 'securityOrRisk', 'configurationOrTelemetry', 'other'
   ]) && boundedCount(value.authenticationOrIdentity) && boundedCount(value.securityOrRisk) &&
-    boundedCount(value.configurationOrTelemetry) && boundedCount(value.other);
+    boundedCount(value.configurationOrTelemetry) && boundedCount(value.other) &&
+    Number(value.authenticationOrIdentity) + Number(value.securityOrRisk) +
+      Number(value.configurationOrTelemetry) + Number(value.other) <= 24;
 }
 
 function isRisk(value: unknown): boolean {
