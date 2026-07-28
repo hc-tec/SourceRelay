@@ -102,11 +102,11 @@ value is XiaohongshuNotePublicCommentRepliesWorkResult {
     !(value.projection === null || isXiaohongshuPublicReplyThreadProjection(value.projection)) ||
     value.rawPayloadStored !== false || value.responseUrlsStored !== false || typeof value.debuggerDetached !== 'boolean') return false;
   const candidate = value as unknown as XiaohongshuNotePublicCommentRepliesWorkResult;
-  if (candidate.semanticAction.attempted !== (candidate.semanticAction.attemptCount === 1) ||
-    candidate.thread.completedCount > candidate.semanticAction.attemptCount) return false;
+  if (candidate.semanticAction.attempted !== (candidate.semanticAction.attemptCount === 1)) return false;
+  if (candidate.thread.completedCount === 1 && (candidate.page === null || candidate.projection === null)) return false;
   return candidate.state === 'completed'
     ? candidate.errorCode === null && candidate.terminalReason === 'comment_replies_ready' &&
-      candidate.semanticAction.attemptCount === 1 && candidate.thread.completedCount === 1 &&
+      candidate.thread.completedCount === 1 &&
       candidate.page !== null && candidate.projection !== null && candidate.debuggerDetached
     : candidate.errorCode !== null;
 }

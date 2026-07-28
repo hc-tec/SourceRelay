@@ -41,8 +41,21 @@ describe('signed Xiaohongshu public reply-thread contract',()=>{
       thread:{requestedCount:1,completedCount:0},page:null,projection:null,
       rawPayloadStored:false,responseUrlsStored:false,debuggerDetached:true};
     expect(isExtensionWorkResultForItem(stopped,item)).toBe(true);
-    expect(isExtensionWorkResultForItem({...stopped,thread:{requestedCount:1,completedCount:1}},item)).toBe(true);
+    expect(isExtensionWorkResultForItem({...stopped,thread:{requestedCount:1,completedCount:1}},item)).toBe(false);
     expect(isExtensionWorkResultForItem({...stopped,semanticAction:{attempted:false,attemptCount:0},
       thread:{requestedCount:1,completedCount:1}},item)).toBe(false);
+  });
+  test('accepts a completed Network-only thread without a page action',()=>{
+    const networkOnly={schemaVersion:1,protocolVersion:1,workId:item.workId,operationId:item.operationId,
+      browserBindingId:item.browserBindingId,platform:'xiaohongshu',capability:item.capability,
+      executionTarget:item.executionTarget,state:'completed',errorCode:null,terminalReason:'comment_replies_ready',
+      completedAt:'2026-07-28T12:00:20.000Z',navigation:{attempted:false,attemptCount:0},
+      semanticAction:{attempted:false,attemptCount:0},thread:{requestedCount:1,completedCount:1},
+      page:{publicSurface:'note_detail_overlay',sameDocument:true},projection:{schemaVersion:1,
+        captureMode:'network_projection',network:{matchedPayloadCount:1,bodyBytesRead:8245,cursorObserved:true,
+          actionTriggeredResponseCount:0},expandedLabelText:'network_archive',parentComment:comment(1,'network'),
+        replies:[comment(1,'network')],rawPayloadStored:false,responseUrlsStored:false},
+      rawPayloadStored:false,responseUrlsStored:false,debuggerDetached:true};
+    expect(isExtensionWorkResultForItem(networkOnly,item)).toBe(true);
   });
 });

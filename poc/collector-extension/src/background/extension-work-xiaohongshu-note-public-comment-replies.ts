@@ -58,31 +58,34 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
     await prepareXiaohongshuCommentRepliesClick(item.workId);
     await delay(1_200);
 
-    const target = await findReplyExpansionTarget(page);
     const networkBefore = await readXiaohongshuExistingNoteReplyNetworkProjection(page.tabId, item.workId);
-    const debuggee: chrome.debugger.Debuggee = { tabId: page.tabId };
-    await chrome.debugger.attach(debuggee, '1.3').catch(() => {
-      throw new Error('debugger_attach_failed');
-    });
-    debuggerAttached = true;
-    debuggerDetached = false;
+    projection = projectArchivedReplyThread(networkBefore);
+    if (!projection) {
+      const target = await findReplyExpansionTarget(page);
+      const debuggee: chrome.debugger.Debuggee = { tabId: page.tabId };
+      await chrome.debugger.attach(debuggee, '1.3').catch(() => {
+        throw new Error('debugger_attach_failed');
+      });
+      debuggerAttached = true;
+      debuggerDetached = false;
 
-    const existingChildTabIds = await readChildTabIds(page.tabId);
-    await recordXiaohongshuCommentRepliesClickIntent(item.workId);
-    actionAttempted = true;
-    await dispatchTrustedClick(debuggee, target).catch(() => {
-      throw new Error('debugger_input_failed');
-    });
+      const existingChildTabIds = await readChildTabIds(page.tabId);
+      await recordXiaohongshuCommentRepliesClickIntent(item.workId);
+      actionAttempted = true;
+      await dispatchTrustedClick(debuggee, target).catch(() => {
+        throw new Error('debugger_input_failed');
+      });
 
-    await delay(3_500);
-    await assertSameDocument(page);
-    await assertNoNewChildTab(page.tabId, existingChildTabIds);
-    assertNoPageRisk(await readPageRisk(page));
+      await delay(3_500);
+      await assertSameDocument(page);
+      await assertNoNewChildTab(page.tabId, existingChildTabIds);
+      assertNoPageRisk(await readPageRisk(page));
 
-    const domAfter = await readExpandedReplyThread(page, target.label);
-    await completeXiaohongshuCommentRepliesClick(item.workId);
-    const networkAfter = await readXiaohongshuExistingNoteReplyNetworkProjection(page.tabId, item.workId);
-    projection = mergeReplyEvidence(target, domAfter, networkBefore, networkAfter);
+      const domAfter = await readExpandedReplyThread(page, target.label);
+      await completeXiaohongshuCommentRepliesClick(item.workId);
+      const networkAfter = await readXiaohongshuExistingNoteReplyNetworkProjection(page.tabId, item.workId);
+      projection = mergeReplyEvidence(target, domAfter, networkBefore, networkAfter);
+    }
     pageReady = true;
   } catch (error) {
     errorCode = safeErrorCode(error);
@@ -101,7 +104,7 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
     }
   }
 
-  const completed = errorCode === null && actionAttempted && pageReady && projection !== null && debuggerDetached;
+  const completed = errorCode === null && pageReady && projection !== null && debuggerDetached;
   return {
     schemaVersion: 1,
     protocolVersion: 1,
@@ -123,6 +126,51 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
     rawPayloadStored: false,
     responseUrlsStored: false,
     debuggerDetached
+  };
+}
+
+function projectArchivedReplyThread(
+  network: ReplyNetworkProjection
+): XiaohongshuPublicReplyThreadProjection | null {
+  const firstReply = network.comments.find((comment) => comment.parentCommentId.length > 0);
+  if (!firstReply) return null;
+  const parent = network.comments.find((comment) => comment.commentId === firstReply.parentCommentId);
+  if (!parent) return null;
+  const replies = network.comments
+    .filter((comment) => comment.parentCommentId === parent.commentId)
+    .slice(0, 40)
+    .map((comment, index) => projectArchivedComment(comment, index + 1));
+  if (replies.length === 0) return null;
+  return {
+    schemaVersion: 1,
+    captureMode: 'network_projection',
+    network: {
+      matchedPayloadCount: network.matchedPayloadCount,
+      bodyBytesRead: network.bodyBytesRead,
+      cursorObserved: network.cursorObserved,
+      actionTriggeredResponseCount: 0
+    },
+    expandedLabelText: 'network_archive',
+    parentComment: projectArchivedComment(parent, 1),
+    replies,
+    rawPayloadStored: false,
+    responseUrlsStored: false
+  };
+}
+
+function projectArchivedComment(
+  comment: ReplyNetworkProjection['comments'][number],
+  rank: number
+): XiaohongshuPublicReplyProjection {
+  return {
+    rank,
+    commentId: comment.commentId,
+    publicText: comment.publicText,
+    authorNickname: comment.authorNickname,
+    likedCountText: comment.likedCountText,
+    createdAtText: comment.createdAtText,
+    locationText: comment.locationText,
+    source: 'network'
   };
 }
 
@@ -390,23 +438,9 @@ function mergeReplyEvidence(
   const archivedReplies = parentId
     ? networkAfter.comments.filter((comment) => comment.parentCommentId === parentId)
     : [];
-  const projectNetworkComment = (
-    comment: ReplyNetworkProjection['comments'][number],
-    rank: number
-  ): XiaohongshuPublicReplyProjection => ({
-    rank,
-    commentId: comment.commentId,
-    publicText: comment.publicText,
-    authorNickname: comment.authorNickname,
-    likedCountText: comment.likedCountText,
-    createdAtText: comment.createdAtText,
-    locationText: comment.locationText,
-    source: 'network'
-  });
-
-  const parentComment = archivedParent ? projectNetworkComment(archivedParent, 1) : domAfter.parent;
+  const parentComment = archivedParent ? projectArchivedComment(archivedParent, 1) : domAfter.parent;
   const replies = archivedReplies.length > 0
-    ? archivedReplies.slice(0, 40).map((comment, index) => projectNetworkComment(comment, index + 1))
+    ? archivedReplies.slice(0, 40).map((comment, index) => projectArchivedComment(comment, index + 1))
     : domAfter.replies.map((comment, index) => ({ ...comment, rank: index + 1 }));
   const networkUsed = Boolean(archivedParent || archivedReplies.length);
 
