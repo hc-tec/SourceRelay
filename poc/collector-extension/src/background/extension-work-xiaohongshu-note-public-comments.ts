@@ -52,28 +52,47 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
     await delay(4_500);
     let dom = await readDomProbe(page);
     let network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, item.workId);
-    if (dom.comments.length === 0 && network.comments.length === 0) {
-      if (!dom.scrollTarget) throw new Error('xiaohongshu_comment_scroll_container_unavailable');
-      const debuggee: chrome.debugger.Debuggee = { tabId: page.tabId };
-      await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
-      attached = true;
-      debuggerDetached = false;
-      for (let ordinal = 1; ordinal <= item.input.maximumScrolls; ordinal += 1) {
-        await requireSameDocument(page);
-        assertRisk(await readRisk(page));
-        const scrollTarget = dom.scrollTarget;
-        if (!scrollTarget) throw new Error('xiaohongshu_comment_scroll_container_unavailable');
-        const count = ordinal as 1 | 2 | 3;
-        await recordXiaohongshuNoteCommentsScrollIntent(item.workId, count);
-        attemptedCount = count;
-        await dispatchWheel(debuggee, scrollTarget).catch(() => { throw new Error('debugger_input_failed'); });
-        await delay(3_000);
-        await requireSameDocument(page);
-        await completeXiaohongshuNoteCommentsScroll(item.workId, count);
-        completedCount = count;
-        dom = await readDomProbe(page);
-        network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, item.workId);
-        if (dom.comments.length > 0 || network.comments.length > 0) break;
+    // Keep the Network-first fast path: a complete archive needs no page
+    // action.  If the page only exposed a partial DOM sample, however, the
+    // platform may defer the remaining comments until the panel is scrolled.
+    // Use the caller's small budget rather than treating the first visible
+    // comments as the whole discussion.
+    const shouldScroll = network.comments.length === 0 || network.hasMore === true;
+    if (shouldScroll) {
+      if (!dom.scrollTarget && network.comments.length === 0) {
+        throw new Error('xiaohongshu_comment_scroll_container_unavailable');
+      }
+      if (dom.scrollTarget) {
+        const debuggee: chrome.debugger.Debuggee = { tabId: page.tabId };
+        await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
+        attached = true;
+        debuggerDetached = false;
+        let previousCommentCount = mergeComments(network.comments, dom.comments).length;
+        let noProgressRounds = 0;
+        for (let ordinal = 1; ordinal <= item.input.maximumScrolls; ordinal += 1) {
+          await requireSameDocument(page);
+          assertRisk(await readRisk(page));
+          const scrollTarget = dom.scrollTarget;
+          if (!scrollTarget) throw new Error('xiaohongshu_comment_scroll_container_unavailable');
+          const count = ordinal as 1 | 2 | 3;
+          await recordXiaohongshuNoteCommentsScrollIntent(item.workId, count);
+          attemptedCount = count;
+          await dispatchWheel(debuggee, scrollTarget).catch(() => { throw new Error('debugger_input_failed'); });
+          await delay(3_000);
+          await requireSameDocument(page);
+          await completeXiaohongshuNoteCommentsScroll(item.workId, count);
+          completedCount = count;
+          dom = await readDomProbe(page);
+          network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, item.workId);
+          const currentCommentCount = mergeComments(network.comments, dom.comments).length;
+          if (currentCommentCount > previousCommentCount) {
+            previousCommentCount = currentCommentCount;
+            noProgressRounds = 0;
+          } else {
+            noProgressRounds += 1;
+          }
+          if (noProgressRounds >= 1 || network.hasMore !== true && currentCommentCount >= 80) break;
+        }
       }
     }
     const merged = mergeComments(network.comments, dom.comments);
