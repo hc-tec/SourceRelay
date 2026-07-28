@@ -255,7 +255,10 @@ try {
         operationId: accountOperationId, maximumScrolls: accountMaximumScrolls, executionTarget: accountExecutionTarget
       });
       const accountOperation = await waitForOperation(gatewayOrigin, token, accountOperationId, 90_000);
-      if (accountOperation.state !== 'completed' || accountOperation.terminalReason !== 'profile_notes_ready' ||
+      const accountCompleted = accountOperation.state === 'completed' && accountOperation.terminalReason === 'profile_notes_ready';
+      const accountBudgetPartial = accountOperation.state === 'stopped' &&
+        accountOperation.terminalReason === 'profile_notes_budget_exhausted';
+      if ((!accountCompleted && !accountBudgetPartial) ||
         !uuid(accountOperation.artifact?.artifactId) ||
         typeof accountOperation.artifact?.retrievalPath !== 'string') {
         throw new Error(accountOperation.errorCode ?? 'xiaohongshu_account_notes_e2e_operation_not_completed');
@@ -404,6 +407,8 @@ try {
       validatePublicComments ? 'xiaohongshu.note.public_comments.v1' :
       validateCommentRecon ? 'xiaohongshu.note.comments.recon' :
       validateNoteDetail ? 'xiaohongshu.note.public_detail.v1' : 'xiaohongshu.search.public_notes.v1',
+    validationOutcome: reportedOperation.terminalReason === 'profile_notes_budget_exhausted'
+      ? 'partial_budget' : 'completed',
     productPlatformNavigations: reportedArtifact.result.navigation.attemptCount,
     validationBaselineNavigations: 1,
     semanticActions: reportedArtifact.result.semanticAction.attemptCount,
@@ -652,9 +657,13 @@ function assertNoteRepliesArtifact(artifact, operationId) {
 
 function assertAccountNotesArtifact(artifact, operationId, navigated, maximumScrolls) {
   const actionCount = artifact?.result?.semanticAction?.attemptCount;
+  const completed = artifact?.result?.state === 'completed' && artifact?.result?.terminalReason === 'profile_notes_ready';
+  const budgetPartial = artifact?.result?.state === 'stopped' &&
+    artifact?.result?.terminalReason === 'profile_notes_budget_exhausted' &&
+    artifact?.result?.errorCode === 'xiaohongshu_profile_notes_budget_exhausted';
   if (!artifact || artifact.summary?.operationId !== operationId ||
     artifact.summary?.capability !== 'xiaohongshu.account.public_notes.v1' ||
-    artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'profile_notes_ready' ||
+    (!completed && !budgetPartial) ||
     artifact.result?.navigation?.attempted !== navigated || artifact.result.navigation.attemptCount !== (navigated ? 1 : 0) ||
     !Number.isInteger(actionCount) || actionCount < 0 || actionCount > maximumScrolls ||
     artifact.result.semanticAction.attempted !== (actionCount > 0) ||
