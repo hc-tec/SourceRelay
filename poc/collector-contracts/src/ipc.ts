@@ -63,6 +63,8 @@ import type {
   XiaohongshuTrustedSearchRequest,
   XiaohongshuTrustedSearchResult
 } from './xiaohongshu-trusted-search.js';
+import type { XiaohongshuPublicNotesSearchWorkResult } from './extension-work-xiaohongshu-public-notes.js';
+import type { CollectorXiaohongshuTrustedInputLedgerSummary } from './native-bridge.js';
 
 export const BROWSER_HOST_PROTOCOL_VERSION = 7 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
@@ -123,9 +125,11 @@ export type BrowserHostCommandBody =
   | { type: 'read_strategy_observation'; request: StrategyObservationReadRequest }
   | { type: 'read_strategy_binding_diagnostics'; request: StrategyBindingDiagnosticsRequest }
   | { type: 'read_xiaohongshu_current_page_network_observation'; profileId: string }
+  | { type: 'read_xiaohongshu_trusted_input_ledger'; profileId: string }
   | { type: 'arm_xiaohongshu_managed_page_network_observer'; request: XiaohongshuManagedPageNetworkObserverRequest }
   | { type: 'read_xiaohongshu_managed_page_network_observation'; request: XiaohongshuManagedPageNetworkObserverRequest }
   | { type: 'trusted_xiaohongshu_search'; request: XiaohongshuTrustedSearchRequest }
+  | { type: 'extension_trusted_xiaohongshu_search_canary'; request: XiaohongshuTrustedSearchRequest }
   | { type: 'read_xiaohongshu_managed_search_projection'; request: XiaohongshuManagedPageNetworkObserverRequest }
   | { type: 'reconcile_page'; request: ReconcilePageRequest }
   | { type: 'close_quarantined_page'; request: CloseQuarantinedPageRequest }
@@ -170,6 +174,8 @@ export type BrowserHostCommandResult =
   | XiaohongshuManagedPageNetworkObservationResult
   | XiaohongshuTrustedSearchResult
   | XiaohongshuManagedSearchProjectionResult
+  | XiaohongshuPublicNotesSearchWorkResult
+  | CollectorXiaohongshuTrustedInputLedgerSummary
   | { ok: true; profileId?: string; pageAlias?: string; state?: string }
   | { ok: true; shuttingDown: true };
 

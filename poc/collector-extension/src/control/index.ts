@@ -195,6 +195,7 @@ function renderDirectCapability(
 function dispatchStateLabel(value: UserBrowserGatewayCapabilityDescriptor['dispatchState']): string {
   if (value === 'direct_ready') return '已完成真实 canary';
   if (value === 'direct_canary_pending') return '已编译，待真实 canary';
+  if (value === 'direct_gateway_dispatch_pending') return '真实 canary 已通过，待 Gateway 派发';
   if (value === 'trusted_interaction_migration_required') return '需可信交互迁移';
   return '待迁入 direct work';
 }

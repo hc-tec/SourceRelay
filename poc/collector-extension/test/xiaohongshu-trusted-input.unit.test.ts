@@ -152,7 +152,8 @@ describe('Xiaohongshu extension trusted input boundary', () => {
       runId: 'run-1',
       browserBindingId: 'binding-1',
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      phase: 'semantic_action_intent_recorded'
+      phase: 'semantic_action_intent_recorded',
+      semanticActionAttempted: true
     };
     const chrome = installChromeMock({ persisted });
     const module = await import('../src/background/xiaohongshu-trusted-input.js');
@@ -169,7 +170,8 @@ describe('Xiaohongshu extension trusted input boundary', () => {
       runId: 'run-1',
       browserBindingId: 'binding-1',
       expiresAt: new Date(Date.now() - 60_000).toISOString(),
-      phase: 'terminal'
+      phase: 'terminal',
+      semanticActionAttempted: true
     };
     const chrome = installChromeMock({ persisted: [
       { ...base, actionId: 'action-1' },

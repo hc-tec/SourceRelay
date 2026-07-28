@@ -33,6 +33,7 @@ interface PersistedAction {
   browserBindingId: string;
   expiresAt: string;
   phase: 'claimed' | 'semantic_action_intent_recorded' | 'terminal';
+  semanticActionAttempted: boolean;
 }
 
 interface EligibleDocument {
@@ -197,8 +198,24 @@ export function isXiaohongshuTrustedInputAction(value: unknown): value is Xiaoho
 export async function wasXiaohongshuTrustedInputAttempted(actionId: string): Promise<boolean> {
   if (!identifier(actionId)) return false;
   const action = (await loadPersistedActions()).find((entry) => entry.actionId === actionId);
-  return action !== undefined &&
-    (action.phase === 'semantic_action_intent_recorded' || action.phase === 'terminal');
+  return action?.semanticActionAttempted === true;
+}
+
+export async function readXiaohongshuTrustedInputLedgerSummary(): Promise<{
+  type: 'collector_xiaohongshu_trusted_input_ledger_summary';
+  schemaVersion: 1;
+  entryCount: number;
+  latestPhase: 'none' | PersistedAction['phase'];
+  latestSemanticActionAttempted: boolean;
+}> {
+  const actions = await loadPersistedActions();
+  return {
+    type: 'collector_xiaohongshu_trusted_input_ledger_summary',
+    schemaVersion: 1,
+    entryCount: actions.length,
+    latestPhase: actions.at(-1)?.phase ?? 'none',
+    latestSemanticActionAttempted: actions.at(-1)?.semanticActionAttempted ?? false
+  };
 }
 
 async function findUniqueEligibleExploreDocument(): Promise<EligibleDocument> {
@@ -229,12 +246,20 @@ async function discoverSearchTarget(eligibleDocument: EligibleDocument): Promise
   const results = await chrome.scripting.executeScript({
     target: { tabId: eligibleDocument.tabId, documentIds: [eligibleDocument.documentId] },
     func: () => {
-      const candidates = [...document.querySelectorAll<HTMLInputElement>('input')];
+      const candidates = [
+        document.querySelector('#search-input-in-feeds'),
+        document.querySelector('#search-input'),
+        ...document.querySelectorAll('input, textarea')
+      ].filter((value, index, all): value is HTMLInputElement | HTMLTextAreaElement =>
+        (value instanceof HTMLInputElement || value instanceof HTMLTextAreaElement) && all.indexOf(value) === index
+      );
       for (const input of candidates) {
         const rect = input.getBoundingClientRect();
         const style = getComputedStyle(input);
         const label = `${input.placeholder} ${input.getAttribute('aria-label') ?? ''}`;
-        if (!/搜索|search/i.test(label) || input.disabled || input.readOnly || rect.width < 80 || rect.height < 20 ||
+        const knownSearchIdentity = input.id === 'search-input-in-feeds' || input.id === 'search-input';
+        if ((!knownSearchIdentity && !/搜索|search/i.test(label)) || input.disabled || input.readOnly ||
+          rect.width < 80 || rect.height < 20 ||
           style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) continue;
         const x = rect.left + rect.width / 2;
         const y = rect.top + rect.height / 2;
@@ -254,9 +279,11 @@ async function readQueryEcho(eligibleDocument: EligibleDocument, query: string):
   const results = await chrome.scripting.executeScript({
     target: { tabId: eligibleDocument.tabId, documentIds: [eligibleDocument.documentId] },
     args: [query],
-    func: (expected) => [...document.querySelectorAll<HTMLInputElement>('input')]
-      .some((input) => input.value === expected && /搜索|search/i.test(
-        `${input.placeholder} ${input.getAttribute('aria-label') ?? ''}`
+    func: (expected) => [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')]
+      .some((input) => input.value === expected && (
+        input.id === 'search-input-in-feeds' || input.id === 'search-input' || /搜索|search/i.test(
+          `${input.placeholder} ${input.getAttribute('aria-label') ?? ''}`
+        )
       ))
   });
   return results[0]?.result === true;
@@ -329,7 +356,8 @@ async function readPostcondition(eligibleDocument: EligibleDocument, query: stri
     func: (expected) => {
       const pathname = location.pathname;
       const bodyText = (document.body?.innerText ?? '').slice(0, 12_000);
-      const queryEchoed = [...document.querySelectorAll<HTMLInputElement>('input')].some((input) => input.value === expected);
+      const queryEchoed = [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')]
+        .some((input) => input.value === expected);
       const cards = document.querySelectorAll('[data-v-a264b01a], section.note-item, .note-item, .feeds-page .note-item').length;
       return {
         publicSurface: pathname === '/explore' || pathname === '/explore/' ? 'explore' :
@@ -364,16 +392,19 @@ async function loadPersistedActions(): Promise<PersistedAction[]> {
 
 function parsePersistedAction(candidate: unknown): PersistedAction | null {
   if (!record(candidate) || !exactKeys(candidate, [
-    'schemaVersion', 'actionId', 'workId', 'runId', 'browserBindingId', 'expiresAt', 'phase'
+    'schemaVersion', 'actionId', 'workId', 'runId', 'browserBindingId', 'expiresAt', 'phase',
+    'semanticActionAttempted'
   ])) return null;
   if (candidate.schemaVersion !== 1 || !identifier(candidate.actionId) || !identifier(candidate.workId) ||
     !identifier(candidate.runId) || !identifier(candidate.browserBindingId) || typeof candidate.expiresAt !== 'string' ||
     !Number.isFinite(Date.parse(candidate.expiresAt)) || (candidate.phase !== 'claimed' &&
-      candidate.phase !== 'semantic_action_intent_recorded' && candidate.phase !== 'terminal')) return null;
+      candidate.phase !== 'semantic_action_intent_recorded' && candidate.phase !== 'terminal') ||
+    typeof candidate.semanticActionAttempted !== 'boolean') return null;
   return candidate as unknown as PersistedAction;
 }
 
 async function storeAction(action: XiaohongshuTrustedInputAction, phase: PersistedAction['phase']): Promise<void> {
+  const current = await loadPersistedActions();
   const record: PersistedAction = {
     schemaVersion: 1,
     actionId: action.actionId,
@@ -381,9 +412,10 @@ async function storeAction(action: XiaohongshuTrustedInputAction, phase: Persist
     runId: action.runId,
     browserBindingId: action.browserBindingId,
     expiresAt: action.expiresAt,
-    phase
+    phase,
+    semanticActionAttempted: phase === 'semantic_action_intent_recorded' ||
+      (phase === 'terminal' && current.find((entry) => entry.actionId === action.actionId)?.semanticActionAttempted === true)
   };
-  const current = await loadPersistedActions();
   const next = [...current.filter((entry) => entry.actionId !== action.actionId), record].slice(-100);
   await chrome.storage.local.set({ [ACTION_STORAGE_KEY]: next });
 }

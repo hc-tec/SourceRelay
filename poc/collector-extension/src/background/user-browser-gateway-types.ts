@@ -30,6 +30,7 @@ export type UserBrowserDirectWorkCapability =
 export type UserBrowserGatewayCapabilityDispatchState =
   | 'direct_ready'
   | 'direct_canary_pending'
+  | 'direct_gateway_dispatch_pending'
   | 'direct_migration_required'
   | 'trusted_interaction_migration_required';
 
@@ -51,7 +52,7 @@ export interface UserBrowserGatewayXiaohongshuCapabilityDescriptor {
   platform: 'xiaohongshu';
   title: string;
   inputMode: string;
-  dispatchState: 'direct_canary_pending';
+  dispatchState: 'direct_gateway_dispatch_pending';
   captureMode: string;
   browserHostFallback: 'forbidden';
 }

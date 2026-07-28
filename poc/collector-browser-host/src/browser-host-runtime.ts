@@ -139,6 +139,8 @@ export class BrowserHostRuntime {
         return await this.#profile(body.request.profileId).readStrategyBindingDiagnostics(body.request);
       case 'read_xiaohongshu_current_page_network_observation':
         return await this.#profile(body.profileId).readXiaohongshuCurrentPageNetworkObservation();
+      case 'read_xiaohongshu_trusted_input_ledger':
+        return await this.#profile(body.profileId).readXiaohongshuTrustedInputLedger();
       case 'arm_xiaohongshu_managed_page_network_observer':
         return await this.#profile(body.request.profileId)
           .armXiaohongshuManagedPageNetworkObserver(body.request);
@@ -147,6 +149,9 @@ export class BrowserHostRuntime {
           .readXiaohongshuManagedPageNetworkObservation(body.request);
       case 'trusted_xiaohongshu_search':
         return await this.#profile(body.request.profileId).trustedXiaohongshuSearch(body.request);
+      case 'extension_trusted_xiaohongshu_search_canary':
+        return await this.#profile(body.request.profileId)
+          .extensionTrustedXiaohongshuSearchCanary(body.request);
       case 'read_xiaohongshu_managed_search_projection':
         return await this.#profile(body.request.profileId).readXiaohongshuManagedSearchProjection(body.request);
       case 'reconcile_page':

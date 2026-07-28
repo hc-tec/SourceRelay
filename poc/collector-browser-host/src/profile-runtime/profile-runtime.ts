@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import type { BrowserContext } from 'playwright';
 import {
   type BilibiliAccountVideoPageClickRequest,
   type BilibiliAccountVideoPageClickResult,
+  type CollectorXiaohongshuTrustedInputLedgerSummary,
   type BilibiliCollectionSeriesPageClickRequest,
   type BilibiliCollectionSeriesPageClickResult,
   type BilibiliTranscriptChineseSelectionRequest,
@@ -39,11 +41,15 @@ import {
   isXiaohongshuManagedPageNetworkObserverArmResult,
   isXiaohongshuManagedPageNetworkObserverRequest,
   isXiaohongshuManagedSearchProjectionResult,
+  isXiaohongshuPublicNotesSearchWorkResult,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   type XiaohongshuCurrentPageNetworkObservationResult,
   type XiaohongshuManagedPageNetworkObservationResult,
   type XiaohongshuManagedPageNetworkObserverArmResult,
   type XiaohongshuManagedPageNetworkObserverRequest,
   type XiaohongshuManagedSearchProjectionResult,
+  type XiaohongshuPublicNotesSearchWorkItem,
+  type XiaohongshuPublicNotesSearchWorkResult,
   type XiaohongshuTrustedSearchRequest,
   type XiaohongshuTrustedSearchResult,
   type ValidationExtensionControlRequest,
@@ -52,6 +58,7 @@ import {
 import type { NativeBridgeRegistry } from '../native-bridge/native-bridge-registry.js';
 import type { NativeBridgeServer } from '../native-bridge/native-bridge-server.js';
 import type { NativeMessagingHostRegistration } from '../native-bridge/native-host-installer.js';
+import { hostError } from '../host-errors.js';
 import { PageLedger, type PageLedgerEvent } from '../page-ledger/page-ledger.js';
 import { PageReclamationManager } from '../reclamation/page-reclamation.js';
 import { ExternalRequestCounter } from './external-request-counter.js';
@@ -339,6 +346,19 @@ export class ProfileRuntime {
     return result;
   }
 
+  async readXiaohongshuTrustedInputLedger(): Promise<CollectorXiaohongshuTrustedInputLedgerSummary> {
+    const result = await this.#nativeBridgeCommands.command(
+      this.profileId,
+      this.browserSessionId,
+      { type: 'collector_read_xiaohongshu_trusted_input_ledger' },
+      5_000
+    );
+    if (result.type !== 'collector_xiaohongshu_trusted_input_ledger_summary') {
+      throw new Error('xiaohongshu_trusted_input_ledger_result_invalid');
+    }
+    return result;
+  }
+
   async armXiaohongshuManagedPageNetworkObserver(
     request: XiaohongshuManagedPageNetworkObserverRequest
   ): Promise<XiaohongshuManagedPageNetworkObserverArmResult> {
@@ -402,6 +422,67 @@ export class ProfileRuntime {
       throw new Error('xiaohongshu_trusted_search_network_observer_not_armed');
     }
     return await this.#ledger.trustedXiaohongshuSearch(request, this.#visualEvidenceDirectory);
+  }
+
+  async extensionTrustedXiaohongshuSearchCanary(
+    request: XiaohongshuTrustedSearchRequest
+  ): Promise<XiaohongshuPublicNotesSearchWorkResult> {
+    try {
+      return await this.#extensionTrustedXiaohongshuSearchCanary(request);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      const code = /^[a-z0-9_]{1,100}$/.test(message)
+        ? message
+        : 'xiaohongshu_extension_trusted_input_canary_failed';
+      throw hostError({
+        code,
+        category: 'extension_trusted_input_canary',
+        scope: 'page',
+        platformActionAttempted: true,
+        pageDisposition: 'retained_for_review',
+        profileSafetyDisposition: 'host_blocked'
+      });
+    }
+  }
+
+  async #extensionTrustedXiaohongshuSearchCanary(
+    request: XiaohongshuTrustedSearchRequest
+  ): Promise<XiaohongshuPublicNotesSearchWorkResult> {
+    const bindingRequest: XiaohongshuManagedPageNetworkObserverRequest = {
+      schemaVersion: 2,
+      profileId: request.profileId,
+      pageAlias: request.pageAlias,
+      pageLeaseId: request.pageLeaseId,
+      expectedRecordVersion: request.expectedRecordVersion,
+      runId: request.runId
+    };
+    const context = await this.#ledger.foregroundExtensionCommandContext(bindingRequest);
+    const now = new Date();
+    const item: XiaohongshuPublicNotesSearchWorkItem = {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: randomUUID(),
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      issuedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + request.timeoutMs + 15_000).toISOString(),
+      input: { query: request.query },
+      budget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
+      gatewaySignature: 'v'.repeat(64)
+    };
+    const result = await this.#nativeBridgeCommands.command(this.profileId, this.browserSessionId, {
+      type: 'collector_execute_xiaohongshu_trusted_input_canary',
+      tabId: context.extensionTabId,
+      item
+    }, Math.min(30_000, request.timeoutMs));
+    if (result.type !== 'collector_xiaohongshu_trusted_input_canary_result' ||
+      !isXiaohongshuPublicNotesSearchWorkResult(result.result) || result.result.workId !== item.workId) {
+      throw new Error('xiaohongshu_extension_trusted_input_canary_result_invalid');
+    }
+    return result.result;
   }
 
   async readXiaohongshuManagedSearchProjection(

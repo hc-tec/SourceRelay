@@ -75,6 +75,8 @@ import {
   readXiaohongshuManagedPageNetworkObservation,
   readXiaohongshuManagedSearchProjection
 } from './xiaohongshu-current-page-network';
+import { executeXiaohongshuPublicNotesSearchExtensionWork } from './extension-work-xiaohongshu-public-notes';
+import { readXiaohongshuTrustedInputLedgerSummary } from './xiaohongshu-trusted-input';
 
 let activePort: chrome.runtime.Port | null = null;
 let activeConfig: CollectorNativeBridgeConfig | null = null;
@@ -174,6 +176,8 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
     }
     case 'collector_read_xiaohongshu_current_page_network_observation':
       return await readXiaohongshuCurrentPageNetworkObservation();
+    case 'collector_read_xiaohongshu_trusted_input_ledger':
+      return await readXiaohongshuTrustedInputLedgerSummary();
     case 'collector_arm_xiaohongshu_managed_page_network_observer':
       return await armXiaohongshuManagedPageNetworkObserver(
         command.command.tabId,
@@ -189,6 +193,13 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
         command.command.tabId,
         command.command.request
       );
+    case 'collector_execute_xiaohongshu_trusted_input_canary':
+      return {
+        type: 'collector_xiaohongshu_trusted_input_canary_result',
+        result: await executeXiaohongshuPublicNotesSearchExtensionWork(command.command.item, {
+          expectedTabId: command.command.tabId
+        })
+      };
     case 'collector_bind_strategy_observer':
       if (command.command.binding.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID) {
         return await bindBilibiliDynamicObserver(command.command);

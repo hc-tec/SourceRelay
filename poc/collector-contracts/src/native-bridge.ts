@@ -33,6 +33,12 @@ import {
   type XiaohongshuManagedSearchProjectionResult,
   type XiaohongshuCurrentPageNetworkObservationResult
 } from './xiaohongshu-current-page-network.js';
+import {
+  isXiaohongshuPublicNotesSearchWorkItem,
+  isXiaohongshuPublicNotesSearchWorkResult,
+  type XiaohongshuPublicNotesSearchWorkItem,
+  type XiaohongshuPublicNotesSearchWorkResult
+} from './extension-work-xiaohongshu-public-notes.js';
 
 export const NATIVE_BRIDGE_PROTOCOL_VERSION = 4 as const;
 export const NATIVE_BRIDGE_MAX_MESSAGE_BYTES = 256 * 1024;
@@ -79,6 +85,10 @@ export interface CollectorReadXiaohongshuCurrentPageNetworkObservationCommand {
   type: 'collector_read_xiaohongshu_current_page_network_observation';
 }
 
+export interface CollectorReadXiaohongshuTrustedInputLedgerCommand {
+  type: 'collector_read_xiaohongshu_trusted_input_ledger';
+}
+
 export interface CollectorArmXiaohongshuManagedPageNetworkObserverCommand {
   type: 'collector_arm_xiaohongshu_managed_page_network_observer';
   tabId: number;
@@ -95,6 +105,12 @@ export interface CollectorReadXiaohongshuManagedSearchProjectionCommand {
   type: 'collector_read_xiaohongshu_managed_search_projection';
   tabId: number;
   request: XiaohongshuManagedPageNetworkObserverRequest;
+}
+
+export interface CollectorExecuteXiaohongshuTrustedInputCanaryCommand {
+  type: 'collector_execute_xiaohongshu_trusted_input_canary';
+  tabId: number;
+  item: XiaohongshuPublicNotesSearchWorkItem;
 }
 
 export interface CollectorBindStrategyObserverCommand {
@@ -127,9 +143,11 @@ export interface CollectorReadStrategyBindingDiagnosticsCommand {
 export type CollectorHostExtensionCommand =
   | CollectorListExtensionTabsCommand
   | CollectorReadXiaohongshuCurrentPageNetworkObservationCommand
+  | CollectorReadXiaohongshuTrustedInputLedgerCommand
   | CollectorArmXiaohongshuManagedPageNetworkObserverCommand
   | CollectorReadXiaohongshuManagedPageNetworkObservationCommand
   | CollectorReadXiaohongshuManagedSearchProjectionCommand
+  | CollectorExecuteXiaohongshuTrustedInputCanaryCommand
   | CollectorBindStrategyObserverCommand
   | CollectorReadStrategyObservationCommand
   | CollectorReadStrategyBindingDiagnosticsCommand;
@@ -140,12 +158,27 @@ export interface CollectorExtensionTabInventory {
   tabIds: readonly number[];
 }
 
+export interface CollectorXiaohongshuTrustedInputCanaryResult {
+  type: 'collector_xiaohongshu_trusted_input_canary_result';
+  result: XiaohongshuPublicNotesSearchWorkResult;
+}
+
+export interface CollectorXiaohongshuTrustedInputLedgerSummary {
+  type: 'collector_xiaohongshu_trusted_input_ledger_summary';
+  schemaVersion: 1;
+  entryCount: number;
+  latestPhase: 'none' | 'claimed' | 'semantic_action_intent_recorded' | 'terminal';
+  latestSemanticActionAttempted: boolean;
+}
+
 export type CollectorExtensionCommandResult =
   | CollectorExtensionTabInventory
   | XiaohongshuCurrentPageNetworkObservationResult
   | XiaohongshuManagedPageNetworkObserverArmResult
   | XiaohongshuManagedPageNetworkObservationResult
   | XiaohongshuManagedSearchProjectionResult
+  | CollectorXiaohongshuTrustedInputCanaryResult
+  | CollectorXiaohongshuTrustedInputLedgerSummary
   | StrategyObserverBindingResult
   | StrategyObservationResult
   | StrategyBindingDiagnostics;
@@ -340,12 +373,18 @@ function isCollectorHostExtensionCommand(value: unknown): value is CollectorHost
     strategyId?: unknown;
     binding?: unknown;
     request?: unknown;
+    item?: unknown;
   };
   if (candidate.type === 'collector_list_extension_tabs' ||
-    candidate.type === 'collector_read_xiaohongshu_current_page_network_observation') {
+    candidate.type === 'collector_read_xiaohongshu_current_page_network_observation' ||
+    candidate.type === 'collector_read_xiaohongshu_trusted_input_ledger') {
     return exactKeys(candidate, ['type']);
   }
   if (!Number.isSafeInteger(candidate.tabId) || Number(candidate.tabId) < 0) return false;
+  if (candidate.type === 'collector_execute_xiaohongshu_trusted_input_canary') {
+    return exactKeys(candidate, ['type', 'tabId', 'item']) &&
+      isXiaohongshuPublicNotesSearchWorkItem(candidate.item);
+  }
   if (candidate.type === 'collector_arm_xiaohongshu_managed_page_network_observer' ||
     candidate.type === 'collector_read_xiaohongshu_managed_page_network_observation' ||
     candidate.type === 'collector_read_xiaohongshu_managed_search_projection') {
@@ -369,6 +408,17 @@ function isCollectorHostExtensionCommand(value: unknown): value is CollectorHost
 function isCollectorExtensionCommandResult(value: unknown): value is CollectorExtensionCommandResult {
   if (!value || typeof value !== 'object') return false;
   const type = (value as { type?: unknown }).type;
+  if (type === 'collector_xiaohongshu_trusted_input_canary_result') {
+    return isXiaohongshuPublicNotesSearchWorkResult((value as { result?: unknown }).result);
+  }
+  if (type === 'collector_xiaohongshu_trusted_input_ledger_summary') {
+    const candidate = value as Partial<CollectorXiaohongshuTrustedInputLedgerSummary>;
+    return candidate.schemaVersion === 1 && Number.isSafeInteger(candidate.entryCount) &&
+      Number(candidate.entryCount) >= 0 && Number(candidate.entryCount) <= 100 &&
+      (candidate.latestPhase === 'none' || candidate.latestPhase === 'claimed' ||
+        candidate.latestPhase === 'semantic_action_intent_recorded' || candidate.latestPhase === 'terminal') &&
+      typeof candidate.latestSemanticActionAttempted === 'boolean';
+  }
   if (type === 'collector_extension_tab_inventory') {
     const candidate = value as Partial<CollectorExtensionTabInventory>;
     return candidate.schemaVersion === 1 && Array.isArray(candidate.tabIds) && candidate.tabIds.length <= 10_000 &&

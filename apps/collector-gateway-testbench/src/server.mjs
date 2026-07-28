@@ -150,9 +150,9 @@ function safeCapabilityPayload(payload) {
         typeof capability.capability !== 'string' || typeof capability.title !== 'string' ||
         typeof capability.inputMode !== 'string' || typeof capability.captureMode !== 'string' ||
         ![
-          'direct_ready', 'direct_canary_pending', 'direct_migration_required',
+          'direct_ready', 'direct_canary_pending', 'direct_gateway_dispatch_pending', 'direct_migration_required',
           'trusted_interaction_migration_required', 'policy_ready_route_admission_required',
-          'direct_canary_pending'
+          'direct_gateway_dispatch_pending'
         ].includes(capability.dispatchState) ||
         (capability.platform !== 'bilibili' && capability.platform !== 'xiaohongshu') ||
         (capability.platform === 'bilibili' && capability.legacyImplementationPresent !== true) ||

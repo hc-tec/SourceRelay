@@ -11,7 +11,8 @@ import {
 import { executeXiaohongshuTrustedInputSearch } from './xiaohongshu-trusted-input';
 
 export async function executeXiaohongshuPublicNotesSearchExtensionWork(
-  item: XiaohongshuPublicNotesSearchWorkItem
+  item: XiaohongshuPublicNotesSearchWorkItem,
+  internalBinding: { expectedTabId?: number } = {}
 ): Promise<XiaohongshuPublicNotesSearchWorkResult> {
   const projectionBox: { value: XiaohongshuManagedSearchProjectionResult | null } = { value: null };
   const action = await executeXiaohongshuTrustedInputSearch({
@@ -24,6 +25,9 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
     expiresAt: item.expiresAt
   }, {
     onEligibleDocument: async (document) => {
+      if (internalBinding.expectedTabId !== undefined && document.tabId !== internalBinding.expectedTabId) {
+        throw new Error('xiaohongshu_trusted_input_document_changed');
+      }
       await armXiaohongshuExistingExploreWorkObserver(document.tabId, item.workId);
     },
     onSearchPostcondition: async (document) => {

@@ -155,7 +155,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             dispatchState: {
               type: 'string',
               enum: [
-                'direct_ready', 'direct_canary_pending', 'direct_migration_required',
+                'direct_ready', 'direct_canary_pending', 'direct_gateway_dispatch_pending', 'direct_migration_required',
                 'trusted_interaction_migration_required'
               ]
             },
@@ -217,7 +217,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             inputMode: { type: 'string', const: 'query_only_no_caller_url' },
             executionTarget: { type: 'string', const: 'existing_public_explore_tab' },
             accountScopedSurfaces: { type: 'string', const: 'forbidden' },
-            dispatchState: { type: 'string', const: 'direct_canary_pending' },
+            dispatchState: { type: 'string', const: 'direct_gateway_dispatch_pending' },
             managedValidationState: { type: 'string', const: 'real_canary_passed' },
             captureMode: { type: 'string', const: 'current_document_main_world_public_projection' },
             responseBodies: { type: 'string', const: 'temporarily_read_projected_not_stored' },

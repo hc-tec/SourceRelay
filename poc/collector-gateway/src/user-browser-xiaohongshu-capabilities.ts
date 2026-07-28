@@ -36,7 +36,7 @@ export interface UserBrowserXiaohongshuPublicNotesSearchCapabilityDescriptor {
   inputMode: 'query_only_no_caller_url';
   executionTarget: 'existing_public_explore_tab';
   accountScopedSurfaces: 'forbidden';
-  dispatchState: 'direct_canary_pending';
+  dispatchState: 'direct_gateway_dispatch_pending';
   managedValidationState: 'real_canary_passed';
   captureMode: 'current_document_main_world_public_projection';
   responseBodies: 'temporarily_read_projected_not_stored';
@@ -73,7 +73,7 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     inputMode: 'query_only_no_caller_url',
     executionTarget: 'existing_public_explore_tab',
     accountScopedSurfaces: 'forbidden',
-    dispatchState: 'direct_canary_pending',
+    dispatchState: 'direct_gateway_dispatch_pending',
     managedValidationState: 'real_canary_passed',
     captureMode: 'current_document_main_world_public_projection',
     responseBodies: 'temporarily_read_projected_not_stored',
