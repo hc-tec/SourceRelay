@@ -14,13 +14,14 @@ export const MANAGED_PAGE_STATES = [
 ] as const;
 
 export type ManagedPageState = (typeof MANAGED_PAGE_STATES)[number];
-export type ManagedPageOwnershipSource = 'direct_created' | 'action_created';
+export type ManagedPageOwnershipSource = 'direct_created' | 'action_created' | 'session_restored';
 
 export type ManagedPageSelection =
   | 'reused_exact_target'
   | 'reused_same_role'
   | 'reused_same_profile'
-  | 'created_new_page';
+  | 'created_new_page'
+  | 'adopted_existing_page';
 
 export type PageReleaseDisposition =
   | 'idle_reusable'

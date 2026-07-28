@@ -23,14 +23,18 @@ import {
   type ReleasePageRequest,
   type ScrollPageRequest,
   type XiaohongshuTrustedSearchRequest,
-  type XiaohongshuTrustedSearchResult
+  type XiaohongshuTrustedSearchResult,
+  type XiaohongshuPublicProfileReconRequest,
+  type XiaohongshuPublicProfileReconResult,
+  type XiaohongshuValidationPageAdoptionRequest
 } from '@intelligence/collector-contracts';
 import { hostError } from '../host-errors.js';
 import { attachManagedPageEvents, type PageLedgerEvent } from './page-events.js';
 import {
   createLease,
   digestUrl,
-  recordSummary,
+    recordSummary,
+    targetIdForPage,
   touchRecord,
   transitionRecord,
   type ManagedPageRecord
@@ -44,6 +48,7 @@ import { executeTrustedBilibiliTranscriptChineseSelection } from './trusted-bili
 import { executeTrustedBilibiliVideoDiscussionInteraction } from './trusted-bilibili-video-discussion-interaction.js';
 import { executeTrustedBilibiliDanmakuInteraction } from './trusted-bilibili-danmaku-interaction.js';
 import { executeTrustedXiaohongshuSearch } from './trusted-xiaohongshu-search.js';
+import { executeXiaohongshuPublicProfileEntryRecon } from './recon-xiaohongshu-public-profile-entry.js';
 import { closeQuarantinedPageRecord } from './quarantine-maintenance.js';
 import { assertRetainedPageVisualEvidenceEligible } from './retained-page-visual-evidence.js';
 import { ensureManagedPageForeground } from './page-foreground.js';
@@ -198,6 +203,132 @@ export class PageLedger {
     return { page: recordSummary(record), lease, selection: 'created_new_page' };
   }
 
+  async adoptXiaohongshuValidationPublicPage(
+    request: XiaohongshuValidationPageAdoptionRequest,
+    controllerGeneration: string
+  ): Promise<AcquirePageResult> {
+    if (request.profileId !== this.#profileId) {
+      throw hostError({ code: 'profile_id_mismatch', category: 'protocol', scope: 'profile' });
+    }
+    const managedRecords = [...this.#records.values()].filter((record) => record.state !== 'closed');
+    const managedPages = new Set(managedRecords.map((record) => record.page));
+    if (managedRecords.length === 1) {
+      const existing = managedRecords[0]!;
+      if (existing.platform !== 'xiaohongshu' ||
+        (existing.pageRole !== 'public_search' && existing.pageRole !== 'public_profile') ||
+        existing.activeLease || existing.state !== 'retained_for_review') {
+        throw hostError({
+          code: 'xiaohongshu_validation_page_adoption_managed_page_ineligible',
+          category: 'validation',
+          scope: 'page',
+          retryClass: 'never'
+        });
+      }
+      const lease = createLease({
+        controllerGeneration,
+        profileId: this.#profileId,
+        taskId: request.taskId,
+        runId: request.runId,
+        stageLeaseId: null,
+        platform: 'xiaohongshu',
+        pageRole: existing.pageRole,
+        leaseDurationMs: request.leaseDurationMs
+      });
+      existing.activeLease = lease;
+      existing.expectedIdentity.targetUrlDigest = digestUrl(existing.page.url());
+      transitionRecord(existing, 'leased', null);
+      this.#emit('page_acquired', existing, 'reused_same_role', null);
+      return { page: recordSummary(existing), lease, selection: 'reused_same_role' };
+    }
+    if (managedRecords.length > 1) {
+      throw hostError({
+        code: 'xiaohongshu_validation_page_adoption_managed_page_present',
+        category: 'validation',
+        scope: 'profile',
+        retryClass: 'never'
+      });
+    }
+    const openPages = this.#context.pages().filter((page) => !page.isClosed());
+    const candidates = openPages.filter((page) => {
+      if (managedPages.has(page) || page.isClosed()) return false;
+      try {
+        const url = new URL(page.url());
+        return url.origin === 'https://www.xiaohongshu.com' && (
+          url.pathname === '/explore' || url.pathname === '/explore/' ||
+          url.pathname === '/search_result' || url.pathname === '/search_result/' ||
+          url.pathname === '/search_result_ai' || url.pathname === '/search_result_ai/' ||
+          url.pathname.startsWith('/user/profile/')
+        );
+      } catch {
+        return false;
+      }
+    });
+    if (candidates.length !== 1) {
+      throw hostError({
+        code: candidates.length === 0
+          ? 'xiaohongshu_validation_public_page_missing'
+          : 'xiaohongshu_validation_public_page_ambiguous',
+        category: 'validation',
+        scope: 'profile',
+        retryClass: 'never',
+        safeDetails: { candidateCount: candidates.length }
+      });
+    }
+    // Never close the last visible tab. A failed adoption is a read-only
+    // precondition and must leave the browser lifecycle unchanged.
+    for (const blank of openPages.filter((page) => page.url() === 'about:blank')) {
+      if (this.#context.pages().filter((page) => !page.isClosed()).length <= 1) break;
+      await blank.close().catch(() => undefined);
+    }
+    const page = candidates[0]!;
+    const targetId = await targetIdForPage(page);
+    const pathname = new URL(page.url()).pathname;
+    const pageRole = pathname.startsWith('/user/profile/') ? 'public_profile' : 'public_search';
+    const now = new Date();
+    const pageAlias = `page-${this.#nextPageSequence++}`;
+    const lease = createLease({
+      controllerGeneration,
+      profileId: this.#profileId,
+      taskId: request.taskId,
+      runId: request.runId,
+      stageLeaseId: null,
+      platform: 'xiaohongshu',
+      pageRole,
+      leaseDurationMs: request.leaseDurationMs,
+      now
+    });
+    const record: ManagedPageRecord = {
+      schemaVersion: 1,
+      recordVersion: 1,
+      pageAlias,
+      targetId,
+      targetIdentityDigest: digestUrl(targetId),
+      page,
+      extensionTabId: null,
+      ownershipSource: 'session_restored',
+      platform: 'xiaohongshu',
+      pageRole,
+      state: 'leased',
+      expectedIdentity: { platform: 'xiaohongshu', pageRole, targetUrlDigest: digestUrl(page.url()) },
+      documentGeneration: 0,
+      routeGeneration: 0,
+      extensionGeneration: this.#extensionGeneration,
+      maxIdleTrustMs: DEFAULT_MAX_IDLE_TRUST_MS,
+      activeLease: lease,
+      attemptedActionIds: new Set(),
+      createdAt: now.toISOString(),
+      lastUsedAt: now.toISOString(),
+      lastReconciledAt: now.toISOString(),
+      stateChangedAt: now.toISOString(),
+      quarantineReason: null
+    };
+    this.#records.set(pageAlias, record);
+    this.#targetAliases.set(targetId, pageAlias);
+    attachManagedPageEvents(this.#profileId, record, this.#onEvent);
+    this.#emit('page_adopted', record, 'session_restored', null);
+    return { page: recordSummary(record), lease, selection: 'adopted_existing_page' };
+  }
+
   async navigate(request: NavigatePageRequest): Promise<ManagedPageSummary> {
     const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
     if (record.attemptedActionIds.has(request.actionId)) {
@@ -328,6 +459,20 @@ export class PageLedger {
   ): Promise<XiaohongshuTrustedSearchResult> {
     const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
     return await executeTrustedXiaohongshuSearch({
+      record,
+      request,
+      visualEvidenceDirectory,
+      assertLeasedRunRecord: () => this.#assertLeasedRunRecord(record, request),
+      emit: (eventType, reason, actionId) => this.#emit(eventType, record, reason, actionId)
+    });
+  }
+
+  async reconXiaohongshuPublicProfileEntry(
+    request: XiaohongshuPublicProfileReconRequest,
+    visualEvidenceDirectory: string
+  ): Promise<XiaohongshuPublicProfileReconResult> {
+    const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
+    return await executeXiaohongshuPublicProfileEntryRecon({
       record,
       request,
       visualEvidenceDirectory,

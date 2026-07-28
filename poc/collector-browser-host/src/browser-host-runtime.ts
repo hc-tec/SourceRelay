@@ -5,6 +5,8 @@ import {
   BrowserHostError,
   PAGE_POOL_SCHEMA_VERSION,
   validationExtensionControlRequest,
+  isXiaohongshuPublicProfileReconRequest,
+  isXiaohongshuValidationPageAdoptionRequest,
   type BrowserHostCommandBody,
   type BrowserHostCommandResult,
   type LaunchProfileRequest,
@@ -124,6 +126,40 @@ export class BrowserHostRuntime {
           });
         }
         return await this.#profile(request.profileId).runValidationExtensionControl(request);
+      }
+      case 'recon_xiaohongshu_public_profile_entry': {
+        const request = body.request;
+        if (!isXiaohongshuPublicProfileReconRequest(request)) {
+          throw hostError({
+            code: 'xiaohongshu_public_profile_recon_request_invalid',
+            category: 'protocol',
+            scope: 'action',
+            retryClass: 'never'
+          });
+        }
+        if (!this.#validationAutomationProfileId || request.profileId !== this.#validationAutomationProfileId) {
+          throw hostError({
+            code: 'xiaohongshu_public_profile_recon_not_enabled',
+            category: 'validation',
+            scope: 'profile',
+            retryClass: 'never'
+          });
+        }
+        return await this.#profile(request.profileId).reconXiaohongshuPublicProfileEntry(request);
+      }
+      case 'adopt_xiaohongshu_validation_public_page': {
+        const request = body.request;
+        if (!isXiaohongshuValidationPageAdoptionRequest(request) || !this.#validationAutomationProfileId ||
+          request.profileId !== this.#validationAutomationProfileId) {
+          throw hostError({
+            code: 'xiaohongshu_validation_page_adoption_not_enabled',
+            category: 'validation',
+            scope: 'profile',
+            retryClass: 'never'
+          });
+        }
+        return await this.#profile(request.profileId)
+          .adoptXiaohongshuValidationPublicPage(request, controllerGeneration);
       }
       case 'interact_bilibili_danmaku':
         return await this.#profile(body.request.profileId).interactBilibiliDanmaku(body.request);

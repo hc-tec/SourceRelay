@@ -52,6 +52,9 @@ import {
   type XiaohongshuPublicNotesSearchWorkResult,
   type XiaohongshuTrustedSearchRequest,
   type XiaohongshuTrustedSearchResult,
+  type XiaohongshuPublicProfileReconRequest,
+  type XiaohongshuPublicProfileReconResult,
+  type XiaohongshuValidationPageAdoptionRequest,
   type ValidationExtensionControlRequest,
   type ValidationExtensionControlResult
 } from '@intelligence/collector-contracts';
@@ -422,6 +425,19 @@ export class ProfileRuntime {
       throw new Error('xiaohongshu_trusted_search_network_observer_not_armed');
     }
     return await this.#ledger.trustedXiaohongshuSearch(request, this.#visualEvidenceDirectory);
+  }
+
+  async reconXiaohongshuPublicProfileEntry(
+    request: XiaohongshuPublicProfileReconRequest
+  ): Promise<XiaohongshuPublicProfileReconResult> {
+    return await this.#ledger.reconXiaohongshuPublicProfileEntry(request, this.#visualEvidenceDirectory);
+  }
+
+  async adoptXiaohongshuValidationPublicPage(
+    request: XiaohongshuValidationPageAdoptionRequest,
+    controllerGeneration: string
+  ): Promise<AcquirePageResult> {
+    return await this.#ledger.adoptXiaohongshuValidationPublicPage(request, controllerGeneration);
   }
 
   async extensionTrustedXiaohongshuSearchCanary(

@@ -7,6 +7,8 @@ export * from './extension-work-bilibili-native-search-batch.js';
 export * from './extension-work-xiaohongshu-public-notes.js';
 export * from './xiaohongshu-current-page-network.js';
 export * from './xiaohongshu-trusted-search.js';
+export * from './xiaohongshu-public-profile-recon.js';
+export * from './xiaohongshu-validation-page-adoption.js';
 export * from './bilibili-collection-series-detail.js';
 export * from './bilibili-account-profile.js';
 export * from './bilibili-transcript-interaction.js';
