@@ -11,6 +11,7 @@ export interface XiaohongshuNoteCommentsReconRequest {
   expectedRecordVersion: number;
   expectedDocumentGeneration: number;
   actionId: string;
+  action: 'scroll_comment_panel' | 'expand_first_reply_thread';
   timeoutMs: number;
 }
 
@@ -42,6 +43,11 @@ export interface XiaohongshuNoteCommentsReconResult {
       pointerHitTarget: boolean;
     };
     renderedCommentCount: number;
+    replyTarget: null | {
+      label: string;
+      bounds: { x: number; y: number; width: number; height: number };
+      pointerHitTarget: boolean;
+    };
     visualEvidence: PageVisualEvidence;
   };
   after: null | {
@@ -49,6 +55,7 @@ export interface XiaohongshuNoteCommentsReconResult {
     sameDocument: true;
     scrollTop: number;
     renderedCommentCount: number;
+    replyTargetVisible: boolean;
     renderedCommentTextDigest: string | null;
     visualEvidence: PageVisualEvidence;
   };
@@ -80,11 +87,12 @@ export function isXiaohongshuNoteCommentsReconRequest(
 ): value is XiaohongshuNoteCommentsReconRequest {
   if (!record(value) || !exactKeys(value, [
     'schemaVersion', 'profileId', 'pageAlias', 'pageLeaseId', 'runId',
-    'expectedRecordVersion', 'expectedDocumentGeneration', 'actionId', 'timeoutMs'
+    'expectedRecordVersion', 'expectedDocumentGeneration', 'actionId', 'action', 'timeoutMs'
   ])) return false;
   return value.schemaVersion === XIAOHONGSHU_NOTE_COMMENTS_RECON_SCHEMA_VERSION &&
     identifier(value.profileId) && identifier(value.pageAlias) && identifier(value.pageLeaseId) &&
     identifier(value.runId) && identifier(value.actionId) &&
+    (value.action === 'scroll_comment_panel' || value.action === 'expand_first_reply_thread') &&
     Number.isSafeInteger(value.expectedRecordVersion) && Number(value.expectedRecordVersion) > 0 &&
     Number.isSafeInteger(value.expectedDocumentGeneration) && Number(value.expectedDocumentGeneration) >= 0 &&
     Number.isSafeInteger(value.timeoutMs) && Number(value.timeoutMs) >= 5_000 && Number(value.timeoutMs) <= 30_000;

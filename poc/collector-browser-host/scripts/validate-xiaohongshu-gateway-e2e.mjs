@@ -15,7 +15,8 @@ const profileId = 'xiaohongshu_validation';
 const exploreUrl = 'https://www.xiaohongshu.com/explore';
 const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ?? '咖啡豆';
 const validateCommentRecon = process.argv.includes('--comment-recon');
-const validatePublicComments = process.argv.includes('--comments');
+const validateReplyRecon = process.argv.includes('--reply-recon');
+const validatePublicComments = process.argv.includes('--comments') || validateReplyRecon;
 const validateExistingPublicComments = process.argv.includes('--comments-existing');
 const validateNoteDetail = validateCommentRecon || validatePublicComments || process.argv.includes('--note-detail');
 const timeline = [];
@@ -153,6 +154,7 @@ try {
   let reportedOperation = operation;
   let reportedArtifact = artifact;
   let commentRecon = null;
+  let replyRecon = null;
   if (validateNoteDetail) {
     const detailDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
       method: 'POST',
@@ -222,6 +224,22 @@ try {
         networkBodyBytesRead: reportedArtifact.result.projection.network.bodyBytesRead,
         networkCursorObserved: reportedArtifact.result.projection.network.cursorObserved,
         rawPayloadStored: false, responseUrlsStored: false });
+      if (validateReplyRecon) {
+        const replyPage = await leasedPage();
+        replyRecon = await client.command({ type: 'recon_xiaohongshu_note_comments', request: {
+          schemaVersion: 1, profileId, pageAlias: acquired.page.pageAlias,
+          pageLeaseId: acquired.lease.pageLeaseId, runId,
+          expectedRecordVersion: replyPage.recordVersion,
+          expectedDocumentGeneration: replyPage.documentGeneration,
+          actionId: randomUUID(), action: 'expand_first_reply_thread', timeoutMs: 25_000
+        } }, { timeoutMs: 30_000 });
+        record('comment_replies_recon_completed', { state: replyRecon.state,
+          semanticAction: replyRecon.semanticAction, replyTarget: replyRecon.before.replyTarget?.label ?? null,
+          replyTargetVisibleAfter: replyRecon.after?.replyTargetVisible ?? null,
+          networkResponseCount: replyRecon.network.responses.length,
+          projectedCommentCount: replyRecon.network.comments.length });
+        if (replyRecon.state !== 'completed') throw new Error('xiaohongshu_comment_replies_recon_incomplete');
+      }
     } else if (validateCommentRecon) {
       const detailPage = await leasedPage();
       commentRecon = await client.command({
@@ -235,6 +253,7 @@ try {
           expectedRecordVersion: detailPage.recordVersion,
           expectedDocumentGeneration: detailPage.documentGeneration,
           actionId: randomUUID(),
+          action: 'scroll_comment_panel',
           timeoutMs: 25_000
         }
       }, { timeoutMs: 30_000 });
@@ -262,7 +281,8 @@ try {
     ok: true,
     runId,
     gatewayPath: 'user_browser_api_to_signed_queue_to_production_extension',
-    validatedCapability: validatePublicComments ? 'xiaohongshu.note.public_comments.v1' :
+    validatedCapability: validateReplyRecon ? 'xiaohongshu.note.public_comment_replies.recon' :
+      validatePublicComments ? 'xiaohongshu.note.public_comments.v1' :
       validateCommentRecon ? 'xiaohongshu.note.comments.recon' :
       validateNoteDetail ? 'xiaohongshu.note.public_detail.v1' : 'xiaohongshu.search.public_notes.v1',
     productPlatformNavigations: reportedArtifact.result.navigation.attemptCount,
@@ -297,6 +317,15 @@ try {
       temporaryBodyBytesRead: commentRecon.network.temporaryBodyBytesRead,
       responses: commentRecon.network.responses,
       projectedCommentCount: commentRecon.network.comments.length
+    } : null,
+    replyRecon: replyRecon ? {
+      replyTarget: replyRecon.before.replyTarget?.label ?? null,
+      semanticAction: replyRecon.semanticAction,
+      replyTargetVisibleAfter: replyRecon.after?.replyTargetVisible ?? null,
+      responseBodiesRead: replyRecon.network.responseBodiesRead,
+      temporaryBodyBytesRead: replyRecon.network.temporaryBodyBytesRead,
+      responses: replyRecon.network.responses,
+      projectedCommentCount: replyRecon.network.comments.length
     } : null,
     visualEvidence: { before: beforeVisual, after: afterVisual },
     finalPageState: retained.state,

@@ -29,6 +29,7 @@
     "validate:xiaohongshu-gateway-e2e": "node scripts/validate-xiaohongshu-gateway-e2e.mjs",
     "validate:xiaohongshu-gateway-note-detail-e2e": "node scripts/validate-xiaohongshu-gateway-e2e.mjs --note-detail",
     "recon:xiaohongshu-note-comments": "node scripts/validate-xiaohongshu-gateway-e2e.mjs --comment-recon",
+    "recon:xiaohongshu-comment-replies": "node scripts/recon-xiaohongshu-comment-replies.mjs",
     "recon:xiaohongshu-public-profile-entry": "node scripts/recon-xiaohongshu-public-profile-entry.mjs",
     "recon:xiaohongshu-note-overlay": "node scripts/recon-xiaohongshu-note-overlay.mjs",
     "validate:extension-control": "node scripts/validate-extension-control.mjs",

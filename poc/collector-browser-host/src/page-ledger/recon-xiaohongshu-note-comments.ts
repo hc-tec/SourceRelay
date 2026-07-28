@@ -27,6 +27,11 @@ interface CommentsProbe {
   };
   renderedCommentCount: number;
   renderedCommentText: string;
+  replyTarget: null | {
+    label: string;
+    bounds: { x: number; y: number; width: number; height: number };
+    pointerHitTarget: boolean;
+  };
   risk: Risk;
 }
 
@@ -86,9 +91,53 @@ export async function executeXiaohongshuNoteCommentsRecon(input: {
         publicSurface: 'note_detail_overlay' as const,
         scrollContainer: before.scrollContainer,
         renderedCommentCount: before.renderedCommentCount,
+        replyTarget: before.replyTarget,
         visualEvidence: beforeVisual
       }
     };
+    if (request.action === 'expand_first_reply_thread') {
+      if (!before.replyTarget?.pointerHitTarget) {
+        const passiveParts = await settleNetworkParts(responsePromises, deadline);
+        input.emit('xiaohongshu_comment_replies_recon_prerequisite_unmet', null, request.actionId);
+        return { ...base, state: 'prerequisite_unmet', semanticAction: { attempted: false, attemptCount: 0 },
+          after: null, network: networkResult(passiveParts,
+            deduplicateComments(passiveParts.flatMap((part) => part.comments))), risk: before.risk };
+      }
+      record.attemptedActionIds.add(request.actionId);
+      actionAttempted = true;
+      touchRecord(record);
+      input.emit('action_attempted', null, request.actionId);
+      const bounds = before.replyTarget.bounds;
+      const x = Math.floor(bounds.x + bounds.width / 2);
+      const y = Math.floor(bounds.y + bounds.height / 2);
+      await withinDeadline(record.page.mouse.move(x, y), remaining(deadline));
+      const pageCount = record.page.context().pages().length;
+      await withinDeadline(record.page.mouse.click(x, y), remaining(deadline));
+      await delay(Math.min(3_500, Math.max(1, remaining(deadline))));
+      if (record.page.context().pages().length !== pageCount) throw new Error('xiaohongshu_comment_replies_new_tab_detected');
+      const after = await readProbe(record.page, remaining(deadline));
+      if (after.timeOrigin !== before.timeOrigin) throw new Error('xiaohongshu_comment_replies_document_changed');
+      if (risky(after.risk)) throw new Error('xiaohongshu_comment_replies_risk_stopped');
+      const networkParts = await settleNetworkParts(responsePromises, deadline);
+      const comments = deduplicateComments(networkParts.flatMap((part) => part.comments));
+      const targetChanged = after.replyTarget?.label !== before.replyTarget.label;
+      const publicTextChanged = after.renderedCommentText !== before.renderedCommentText;
+      if (!targetChanged && !publicTextChanged && comments.length === 0) {
+        throw new Error('xiaohongshu_comment_replies_postcondition_unmet');
+      }
+      const afterVisual = await withinDeadline(captureManagedPageVisualEvidence({
+        page: record.page, pageAlias: record.pageAlias, documentGeneration: record.documentGeneration,
+        routeGeneration: record.routeGeneration, directory: input.visualEvidenceDirectory
+      }), remaining(deadline));
+      input.emit('xiaohongshu_comment_replies_recon_completed', null, request.actionId);
+      return { ...base, completedAt: new Date().toISOString(), state: 'completed',
+        semanticAction: { attempted: true, attemptCount: 1 },
+        after: { publicSurface: 'note_detail_overlay', sameDocument: true,
+          scrollTop: after.scrollContainer?.scrollTop ?? before.scrollContainer?.scrollTop ?? 0,
+          renderedCommentCount: after.renderedCommentCount, replyTargetVisible: after.replyTarget !== null,
+          renderedCommentTextDigest: after.renderedCommentText ? sha256(after.renderedCommentText) : null,
+          visualEvidence: afterVisual }, network: networkResult(networkParts, comments), risk: after.risk };
+    }
     if (!before.scrollContainer || !before.scrollContainer.pointerHitTarget ||
       before.scrollContainer.scrollTop >= before.scrollContainer.scrollHeight - before.scrollContainer.clientHeight) {
       const passiveParts = await settleNetworkParts(responsePromises, deadline);
@@ -105,6 +154,7 @@ export async function executeXiaohongshuNoteCommentsRecon(input: {
             sameDocument: true,
             scrollTop: before.scrollContainer?.scrollTop ?? 0,
             renderedCommentCount: before.renderedCommentCount,
+            replyTargetVisible: before.replyTarget !== null,
             renderedCommentTextDigest: before.renderedCommentText ? sha256(before.renderedCommentText) : null,
             visualEvidence: beforeVisual
           },
@@ -159,6 +209,7 @@ export async function executeXiaohongshuNoteCommentsRecon(input: {
         sameDocument: true,
         scrollTop: after.scrollContainer?.scrollTop ?? before.scrollContainer.scrollTop,
         renderedCommentCount: after.renderedCommentCount,
+        replyTargetVisible: after.replyTarget !== null,
         renderedCommentTextDigest: after.renderedCommentText ? sha256(after.renderedCommentText) : null,
         visualEvidence: afterVisual
       },
@@ -242,7 +293,23 @@ async function readProbe(page: Page, timeoutMs: number): Promise<CommentsProbe> 
     const commentNodes = overlay ? Array.from(overlay.querySelectorAll(
       '[class*="comment-item"], [class*="comment-inner"], [data-comment-id]'
     )).filter(visible) : [];
-    const renderedCommentText = commentNodes.map((node) => node.textContent ?? '').join(' ')
+    const replyTargets = overlay ? Array.from(overlay.querySelectorAll('*')).filter((element) => {
+      if (!visible(element)) return false;
+      const ownText = Array.from(element.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent ?? '').join(' ').replace(/\s+/g, ' ').trim();
+      return /^展开\s*\d+\s*条回复$/.test(ownText);
+    }).sort((left, right) => {
+      const l = left.getBoundingClientRect(); const r = right.getBoundingClientRect();
+      return l.width * l.height - r.width * r.height;
+    }) : [];
+    const replyTarget = replyTargets[0] ?? null;
+    const replyRect = replyTarget?.getBoundingClientRect() ?? null;
+    const replyX = replyRect ? replyRect.x + replyRect.width / 2 : 0;
+    const replyY = replyRect ? replyRect.y + replyRect.height / 2 : 0;
+    const replyHit = replyRect ? document.elementFromPoint(replyX, replyY) : null;
+    const renderedCommentText = (commentNodes.length > 0
+      ? commentNodes.map((node) => node.textContent ?? '').join(' ')
+      : overlay?.textContent ?? '')
       .replace(/\s+/g, ' ').trim().slice(0, 8_000);
     return {
       overlayVisible: Boolean(overlay),
@@ -256,6 +323,11 @@ async function readProbe(page: Page, timeoutMs: number): Promise<CommentsProbe> 
       } : null,
       renderedCommentCount: commentNodes.length,
       renderedCommentText,
+      replyTarget: replyTarget && replyRect ? {
+        label: (replyTarget.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80),
+        bounds: { x: replyRect.x, y: replyRect.y, width: replyRect.width, height: replyRect.height },
+        pointerHitTarget: Boolean(replyHit && (replyTarget === replyHit || replyTarget.contains(replyHit)))
+      } : null,
       risk: {
         loginRequired: !pathname.startsWith('/website-login/') && /登录后|请登录|扫码登录|登录小红书/.test(bodyText),
         verificationRequired: pathname.startsWith('/website-login/') || /安全验证|验证身份|扫码验证/.test(bodyText),

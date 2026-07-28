@@ -52,6 +52,23 @@ finalPageState: existing_overlay_retained
 
 生产实现仍然保持 Network 优先：搜索前安装 MAIN-world observer，并在同一 document 内短时保留去敏评论投影；详情点击前绑定内部选中笔记身份；评论能力先消费该笔记的历史与增量 Network projection。只有没有匹配 JSON 时才读取公开 DOM。短时 archive 最长三分钟，不保存原始响应、响应 URL、认证材料，也不向上层暴露内部笔记身份。
 
+后续完整连续 run `cfb443e1-a157-4005-94b5-810dbb1fc69e` 进一步证明这条 Network continuity 会真实命中，而不是只存在于代码设计：
+
+```yaml
+operationId: ded87553-3316-4426-8efd-31682b1da018
+state: completed
+captureMode: hybrid
+commentCount: 6
+networkMatchedPayloadCount: 1
+networkBodyBytesRead: 2368
+networkCursorObserved: true
+semanticActions: 0
+rawPayloadStored: false
+responseUrlsStored: false
+```
+
+该评论 JSON 在较早的搜索/详情观察阶段进入同一 document 的短时去敏 archive，评论 operation 根据内部选中笔记身份消费，并与公开 DOM 合并。结果没有暴露内部 note identity、route 或响应 URL。
+
 ## DOM 与动作事实
 
 只读视觉证据显示详情浮层公开呈现“共 6 条评论”、公开主评论和“展开 3 条回复”。正式 comments-only run 开始时评论已经渲染，因此零滚动完成是最小动作策略的正确结果，而不是漏执行：`semanticAction.attempted=false`、`attemptCount=0`、`completedScrolls=0`。
