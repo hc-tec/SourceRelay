@@ -128,7 +128,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         UserBrowserCapability: {
           oneOf: [
             { $ref: '#/components/schemas/BilibiliUserBrowserCapability' },
-            { $ref: '#/components/schemas/XiaohongshuUserBrowserCapability' }
+            { $ref: '#/components/schemas/XiaohongshuUserBrowserCapability' },
+            { $ref: '#/components/schemas/XiaohongshuPublicNotesSearchCapability' }
           ]
         },
         BilibiliUserBrowserCapability: {
@@ -196,6 +197,46 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 maximumNetworkResponseBodies: { type: 'integer', const: 0 },
                 maximumNetworkMetadataObservations: { type: 'integer', const: 24 },
                 maximumRawPayloadBytes: { type: 'integer', const: 0 }
+              }
+            },
+            browserHostFallback: { type: 'string', const: 'forbidden' }
+          }
+        },
+        XiaohongshuPublicNotesSearchCapability: {
+          type: 'object', additionalProperties: false,
+          required: [
+            'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'executionTarget',
+            'accountScopedSurfaces', 'dispatchState', 'managedValidationState', 'captureMode',
+            'responseBodies', 'routeAdmission', 'budget', 'browserHostFallback'
+          ],
+          properties: {
+            schemaVersion: { type: 'integer', const: 1 },
+            capability: { type: 'string', const: 'xiaohongshu.search.public_notes.v1' },
+            platform: { type: 'string', const: 'xiaohongshu' },
+            title: { type: 'string' },
+            inputMode: { type: 'string', const: 'query_only_no_caller_url' },
+            executionTarget: { type: 'string', const: 'existing_public_explore_tab' },
+            accountScopedSurfaces: { type: 'string', const: 'forbidden' },
+            dispatchState: { type: 'string', const: 'trusted_browser_input_channel_required' },
+            managedValidationState: { type: 'string', const: 'real_canary_passed' },
+            captureMode: { type: 'string', const: 'current_document_main_world_public_projection' },
+            responseBodies: { type: 'string', const: 'temporarily_read_projected_not_stored' },
+            routeAdmission: { type: 'string', const: 'public_payload_shape_verified_no_url_dependency' },
+            budget: {
+              type: 'object', additionalProperties: false,
+              required: [
+                'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+                'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
+                'maximumRawPayloadBytesStored'
+              ],
+              properties: {
+                maximumPlatformNavigations: { type: 'integer', const: 1 },
+                maximumPageReloads: { type: 'integer', const: 0 },
+                maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
+                maximumSemanticActions: { type: 'integer', const: 1 },
+                maximumNetworkResponseBodies: { type: 'integer', const: 8 },
+                maximumProjectedItems: { type: 'integer', const: 40 },
+                maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
               }
             },
             browserHostFallback: { type: 'string', const: 'forbidden' }

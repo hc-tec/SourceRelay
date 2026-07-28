@@ -151,16 +151,19 @@ function safeCapabilityPayload(payload) {
         typeof capability.inputMode !== 'string' || typeof capability.captureMode !== 'string' ||
         ![
           'direct_ready', 'direct_canary_pending', 'direct_migration_required',
-          'trusted_interaction_migration_required'
+          'trusted_interaction_migration_required', 'policy_ready_route_admission_required',
+          'trusted_browser_input_channel_required'
         ].includes(capability.dispatchState) ||
-        capability.platform !== 'bilibili' || capability.legacyImplementationPresent !== true ||
+        (capability.platform !== 'bilibili' && capability.platform !== 'xiaohongshu') ||
+        (capability.platform === 'bilibili' && capability.legacyImplementationPresent !== true) ||
         capability.browserHostFallback !== 'forbidden') return [];
       return [{
         capability: capability.capability,
         title: capability.title,
         inputMode: capability.inputMode,
         dispatchState: capability.dispatchState,
-        captureMode: capability.captureMode
+        captureMode: capability.captureMode,
+        managedValidationState: stringOrNull(capability.managedValidationState)
       }];
     })
     : [];

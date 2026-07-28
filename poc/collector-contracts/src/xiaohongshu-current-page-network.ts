@@ -9,6 +9,17 @@
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION = 2 as const;
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY =
   'xiaohongshu.current_page.network_metadata' as const;
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY =
+  'xiaohongshu.search.public_notes.v1' as const;
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET = Object.freeze({
+  maximumPlatformNavigations: 1,
+  maximumPageReloads: 0,
+  maximumPageInitiatedNewDocuments: 0,
+  maximumSemanticActions: 1,
+  maximumNetworkResponseBodies: 8,
+  maximumProjectedItems: 40,
+  maximumRawPayloadBytesStored: 0
+} as const);
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS = 60_000 as const;
 
 /**
