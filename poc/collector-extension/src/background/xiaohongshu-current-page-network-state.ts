@@ -12,6 +12,8 @@ export interface XiaohongshuCurrentPageNetworkRecord {
   schemaVersion: 1;
   tabId: number;
   windowId: number;
+  /** null for a popup/user selection; exact run identity for managed testing. */
+  managedRunId: string | null;
   initialDocumentId: string;
   documentId: string | null;
   state: Exclude<XiaohongshuCurrentPageNetworkSelectionSummary['state'], 'not_selected'>;
@@ -105,10 +107,12 @@ export function parseXiaohongshuCurrentPageNetworkRecord(
   const state = candidate.state;
   const publicSurface = candidate.publicSurface;
   const documentId = candidate.documentId;
+  const managedRunId = candidate.managedRunId;
   const observedRouteCount = candidate.observedRouteCount;
   if (
     candidate.schemaVersion !== 1 || typeof tabId !== 'number' || !Number.isSafeInteger(tabId) ||
     typeof windowId !== 'number' || !Number.isSafeInteger(windowId) ||
+    (managedRunId !== null && (typeof managedRunId !== 'string' || !validManagedRunId(managedRunId))) ||
     typeof candidate.initialDocumentId !== 'string' || candidate.initialDocumentId.length === 0 ||
     (documentId !== null && (typeof documentId !== 'string' || documentId.length === 0)) ||
     !validRecordState(state) || !validPublicSurface(publicSurface) ||
@@ -124,6 +128,7 @@ export function parseXiaohongshuCurrentPageNetworkRecord(
     schemaVersion: 1,
     tabId,
     windowId,
+    managedRunId,
     initialDocumentId: candidate.initialDocumentId,
     documentId,
     state,
@@ -138,6 +143,14 @@ export function parseXiaohongshuCurrentPageNetworkRecord(
   };
 }
 
+export function recordMatchesManagedPageRun(
+  record: XiaohongshuCurrentPageNetworkRecord | null,
+  tabId: number,
+  runId: string
+): record is XiaohongshuCurrentPageNetworkRecord {
+  return record !== null && record.tabId === tabId && record.managedRunId === runId;
+}
+
 export function isXiaohongshuRiskSignal(value: unknown): value is XiaohongshuRiskSignal {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const candidate = value as Partial<XiaohongshuRiskSignal>;
@@ -149,6 +162,10 @@ function validRecordState(
   value: unknown
 ): value is XiaohongshuCurrentPageNetworkRecord['state'] {
   return value === 'armed_next_document' || value === 'observing' || value === 'stopped';
+}
+
+function validManagedRunId(value: string): boolean {
+  return value.length >= 1 && value.length <= 180 && /^[A-Za-z0-9._:-]+$/.test(value);
 }
 
 function validPublicSurface(

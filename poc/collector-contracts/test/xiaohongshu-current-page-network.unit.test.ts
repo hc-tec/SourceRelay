@@ -7,6 +7,9 @@ import {
   isXiaohongshuCurrentPageNetworkObservationResult,
   isXiaohongshuCurrentPageNetworkMetadataObservation,
   isXiaohongshuCurrentPageNetworkRequest,
+  isXiaohongshuManagedPageNetworkObservationResult,
+  isXiaohongshuManagedPageNetworkObserverArmResult,
+  isXiaohongshuManagedPageNetworkObserverRequest,
   xiaohongshuCurrentPageNetworkPublicSurface
 } from '../src/index.js';
 
@@ -171,6 +174,70 @@ describe('Xiaohongshu current-page network policy contract', () => {
       ...result,
       selection: { state: 'not_selected', publicSurface: null, selectedAt: '2026-07-28T00:00:00.000Z', expiresAt: null }
     })).toBe(false);
+  });
+
+  test('binds managed validation only by exact PageLease identity', () => {
+    const request = {
+      schemaVersion: 2,
+      profileId: 'xiaohongshu_validation',
+      pageAlias: 'page-1',
+      pageLeaseId: 'lease-123',
+      expectedRecordVersion: 1,
+      runId: 'run-123'
+    };
+    expect(isXiaohongshuManagedPageNetworkObserverRequest(request)).toBe(true);
+    for (const hiddenCarrier of [
+      { url: 'https://www.xiaohongshu.com/explore' },
+      { tabId: 11 },
+      { selector: '.note-card' },
+      { script: 'location.reload()' },
+      { route: '/api/sns/web/v1/search/notes' }
+    ]) {
+      expect(isXiaohongshuManagedPageNetworkObserverRequest({ ...request, ...hiddenCarrier })).toBe(false);
+    }
+  });
+
+  test('admits correlated managed arm and observation results without browser identity', () => {
+    const selection = {
+      state: 'armed_next_document',
+      publicSurface: null,
+      selectedAt: '2026-07-28T00:00:00.000Z',
+      expiresAt: '2026-07-28T00:01:00.000Z'
+    };
+    const arm = {
+      schemaVersion: 2,
+      type: 'xiaohongshu_managed_page_network_observer_armed',
+      pageAlias: 'page-1',
+      runId: 'run-123',
+      permissionState: 'permission_granted',
+      selection
+    };
+    expect(isXiaohongshuManagedPageNetworkObserverArmResult(arm)).toBe(true);
+    expect(isXiaohongshuManagedPageNetworkObserverArmResult({ ...arm, tabId: 11 })).toBe(false);
+    const observation = {
+      ...arm,
+      type: 'xiaohongshu_managed_page_network_observation',
+      observation: {
+        observerState: 'not_armed',
+        publicContentRouteCount: 0,
+        excludedRouteCounts: {
+          authenticationOrIdentity: 0,
+          securityOrRisk: 0,
+          configurationOrTelemetry: 0,
+          other: 0
+        },
+        responseBodiesRead: false,
+        rawPayloadBytesRead: 0,
+        risk: {
+          loginRequired: false,
+          verificationRequired: false,
+          rateLimited: false,
+          sourceUnavailable: false
+        }
+      }
+    };
+    expect(isXiaohongshuManagedPageNetworkObservationResult(observation)).toBe(true);
+    expect(isXiaohongshuManagedPageNetworkObservationResult({ ...observation, documentId: 'private' })).toBe(false);
   });
 
 });

@@ -22,7 +22,13 @@ import {
   type StrategyObserverBindingResult
 } from './strategy-observation.js';
 import {
+  isXiaohongshuManagedPageNetworkObservationResult,
+  isXiaohongshuManagedPageNetworkObserverArmResult,
+  isXiaohongshuManagedPageNetworkObserverRequest,
   isXiaohongshuCurrentPageNetworkObservationResult,
+  type XiaohongshuManagedPageNetworkObservationResult,
+  type XiaohongshuManagedPageNetworkObserverArmResult,
+  type XiaohongshuManagedPageNetworkObserverRequest,
   type XiaohongshuCurrentPageNetworkObservationResult
 } from './xiaohongshu-current-page-network.js';
 
@@ -71,6 +77,18 @@ export interface CollectorReadXiaohongshuCurrentPageNetworkObservationCommand {
   type: 'collector_read_xiaohongshu_current_page_network_observation';
 }
 
+export interface CollectorArmXiaohongshuManagedPageNetworkObserverCommand {
+  type: 'collector_arm_xiaohongshu_managed_page_network_observer';
+  tabId: number;
+  request: XiaohongshuManagedPageNetworkObserverRequest;
+}
+
+export interface CollectorReadXiaohongshuManagedPageNetworkObservationCommand {
+  type: 'collector_read_xiaohongshu_managed_page_network_observation';
+  tabId: number;
+  request: XiaohongshuManagedPageNetworkObserverRequest;
+}
+
 export interface CollectorBindStrategyObserverCommand {
   type: 'collector_bind_strategy_observer';
   tabId: number;
@@ -101,6 +119,8 @@ export interface CollectorReadStrategyBindingDiagnosticsCommand {
 export type CollectorHostExtensionCommand =
   | CollectorListExtensionTabsCommand
   | CollectorReadXiaohongshuCurrentPageNetworkObservationCommand
+  | CollectorArmXiaohongshuManagedPageNetworkObserverCommand
+  | CollectorReadXiaohongshuManagedPageNetworkObservationCommand
   | CollectorBindStrategyObserverCommand
   | CollectorReadStrategyObservationCommand
   | CollectorReadStrategyBindingDiagnosticsCommand;
@@ -114,6 +134,8 @@ export interface CollectorExtensionTabInventory {
 export type CollectorExtensionCommandResult =
   | CollectorExtensionTabInventory
   | XiaohongshuCurrentPageNetworkObservationResult
+  | XiaohongshuManagedPageNetworkObserverArmResult
+  | XiaohongshuManagedPageNetworkObservationResult
   | StrategyObserverBindingResult
   | StrategyObservationResult
   | StrategyBindingDiagnostics;
@@ -314,6 +336,11 @@ function isCollectorHostExtensionCommand(value: unknown): value is CollectorHost
     return exactKeys(candidate, ['type']);
   }
   if (!Number.isSafeInteger(candidate.tabId) || Number(candidate.tabId) < 0) return false;
+  if (candidate.type === 'collector_arm_xiaohongshu_managed_page_network_observer' ||
+    candidate.type === 'collector_read_xiaohongshu_managed_page_network_observation') {
+    return exactKeys(candidate, ['type', 'tabId', 'request']) &&
+      isXiaohongshuManagedPageNetworkObserverRequest(candidate.request);
+  }
   if (candidate.type === 'collector_bind_strategy_observer') {
     return Number.isSafeInteger(candidate.nextDocumentGeneration) &&
       Number(candidate.nextDocumentGeneration) > 0 &&
@@ -339,6 +366,12 @@ function isCollectorExtensionCommandResult(value: unknown): value is CollectorEx
   }
   if (type === 'xiaohongshu_current_page_network_observation') {
     return isXiaohongshuCurrentPageNetworkObservationResult(value);
+  }
+  if (type === 'xiaohongshu_managed_page_network_observer_armed') {
+    return isXiaohongshuManagedPageNetworkObserverArmResult(value);
+  }
+  if (type === 'xiaohongshu_managed_page_network_observation') {
+    return isXiaohongshuManagedPageNetworkObservationResult(value);
   }
   if (type === 'collector_strategy_observer_binding') {
     const candidate = value as Partial<StrategyObserverBindingResult>;

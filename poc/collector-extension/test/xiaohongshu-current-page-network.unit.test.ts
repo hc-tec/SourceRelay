@@ -41,15 +41,17 @@ function installChromeMock() {
     frameId: 0,
     result: { pathname: '/search_result', title: '公开搜索', visibleText: '公开可见的搜索结果' }
   }]);
+  const managedTab = {
+    id: 11, windowId: 22, active: true, incognito: false, status: 'complete', url: exploreUrl
+  };
   Object.defineProperty(globalThis, 'chrome', {
     configurable: true,
     value: {
       permissions: { request, contains },
       storage: { session: sessionArea },
       tabs: {
-        query: vi.fn(async () => [{
-          id: 11, windowId: 22, active: true, incognito: false, status: 'complete', url: exploreUrl
-        }]),
+        query: vi.fn(async () => [managedTab]),
+        get: vi.fn(async (tabId: number) => tabId === managedTab.id ? managedTab : undefined),
         onRemoved: { addListener: (listener: (tabId: number) => void) => removed.push(listener) }
       },
       webNavigation: {
@@ -68,9 +70,19 @@ function installChromeMock() {
     } as unknown as typeof chrome
   });
   return {
-    request, contains, executeScript, beforeNavigate, committed, errored, removed, completed, removeNetworkListener
+    request, contains, executeScript, beforeNavigate, committed, errored, removed, completed,
+    removeNetworkListener, managedTab
   };
 }
+
+const managedRequest = {
+  schemaVersion: 2,
+  profileId: 'xiaohongshu_validation',
+  pageAlias: 'page-1',
+  pageLeaseId: 'lease-123',
+  expectedRecordVersion: 1,
+  runId: 'run-123'
+} as const;
 
 async function settle(): Promise<void> {
   await Promise.resolve();
@@ -173,5 +185,66 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
       state: 'stopped', publicSurface: 'search'
     });
     expect(chrome.removeNetworkListener).toHaveBeenCalledTimes(1);
+  });
+
+  test('arms the exact managed tab using existing permission without invoking a prompt', async () => {
+    const chrome = installChromeMock();
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+
+    await expect(subject.armXiaohongshuManagedPageNetworkObserver(11, managedRequest)).resolves.toMatchObject({
+      type: 'xiaohongshu_managed_page_network_observer_armed',
+      pageAlias: 'page-1',
+      runId: 'run-123',
+      permissionState: 'permission_granted',
+      selection: { state: 'armed_next_document' }
+    });
+    expect(chrome.contains).toHaveBeenCalled();
+    expect(chrome.request).not.toHaveBeenCalled();
+    expect(globalThis.chrome.tabs.get).toHaveBeenCalledWith(11);
+  });
+
+  test('managed arm reports missing permission without touching the tab or prompting', async () => {
+    const chrome = installChromeMock();
+    chrome.contains.mockResolvedValue(false);
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+
+    await expect(subject.armXiaohongshuManagedPageNetworkObserver(11, managedRequest)).resolves.toMatchObject({
+      permissionState: 'permission_required',
+      selection: { state: 'not_selected' }
+    });
+    expect(chrome.request).not.toHaveBeenCalled();
+    expect(globalThis.chrome.tabs.get).not.toHaveBeenCalled();
+  });
+
+  test('reads only the exact managed tab and run after the next document binds', async () => {
+    const chrome = installChromeMock();
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+    subject.initialiseXiaohongshuCurrentPageNetworkObserver();
+    await subject.armXiaohongshuManagedPageNetworkObserver(11, managedRequest);
+    chrome.beforeNavigate[0]?.({ tabId: 11, frameId: 0, url: 'https://www.xiaohongshu.com/search_result?keyword=public' });
+    await settle();
+    chrome.committed[0]?.({ tabId: 11, frameId: 0, documentId: 'document-2', url: 'https://www.xiaohongshu.com/search_result?keyword=public' });
+    await settle();
+
+    await expect(subject.readXiaohongshuManagedPageNetworkObservation(11, managedRequest)).resolves.toMatchObject({
+      type: 'xiaohongshu_managed_page_network_observation',
+      pageAlias: 'page-1',
+      runId: 'run-123',
+      selection: { state: 'observing', publicSurface: 'search' }
+    });
+    await expect(subject.readXiaohongshuManagedPageNetworkObservation(12, managedRequest))
+      .rejects.toThrow('xiaohongshu_managed_page_network_binding_mismatch');
+    await expect(subject.readXiaohongshuManagedPageNetworkObservation(11, { ...managedRequest, runId: 'run-456' }))
+      .rejects.toThrow('xiaohongshu_managed_page_network_binding_mismatch');
+  });
+
+  test('does not overwrite or consume a popup-created active selection', async () => {
+    installChromeMock();
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+    await subject.armNextXiaohongshuCurrentPageNetworkDocument();
+    await expect(subject.armXiaohongshuManagedPageNetworkObserver(11, managedRequest))
+      .rejects.toThrow('xiaohongshu_current_page_network_selection_active');
+    await expect(subject.readXiaohongshuManagedPageNetworkObservation(11, managedRequest))
+      .rejects.toThrow('xiaohongshu_managed_page_network_binding_mismatch');
   });
 });

@@ -139,6 +139,12 @@ export class BrowserHostRuntime {
         return await this.#profile(body.request.profileId).readStrategyBindingDiagnostics(body.request);
       case 'read_xiaohongshu_current_page_network_observation':
         return await this.#profile(body.profileId).readXiaohongshuCurrentPageNetworkObservation();
+      case 'arm_xiaohongshu_managed_page_network_observer':
+        return await this.#profile(body.request.profileId)
+          .armXiaohongshuManagedPageNetworkObserver(body.request);
+      case 'read_xiaohongshu_managed_page_network_observation':
+        return await this.#profile(body.request.profileId)
+          .readXiaohongshuManagedPageNetworkObservation(body.request);
       case 'reconcile_page':
         return this.#profile(body.request.profileId).reconcile(body.request);
       case 'create_reclaim_plan':

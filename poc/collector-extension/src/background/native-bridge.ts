@@ -69,7 +69,11 @@ import {
   bindBilibiliTranscriptObserver,
   readBilibiliTranscriptObservation
 } from './strategies/bilibili-transcript-strategy';
-import { readXiaohongshuCurrentPageNetworkObservation } from './xiaohongshu-current-page-network';
+import {
+  armXiaohongshuManagedPageNetworkObserver,
+  readXiaohongshuCurrentPageNetworkObservation,
+  readXiaohongshuManagedPageNetworkObservation
+} from './xiaohongshu-current-page-network';
 
 let activePort: chrome.runtime.Port | null = null;
 let activeConfig: CollectorNativeBridgeConfig | null = null;
@@ -169,6 +173,16 @@ async function executeHostCommand(command: CollectorHostBridgeCommand): Promise<
     }
     case 'collector_read_xiaohongshu_current_page_network_observation':
       return await readXiaohongshuCurrentPageNetworkObservation();
+    case 'collector_arm_xiaohongshu_managed_page_network_observer':
+      return await armXiaohongshuManagedPageNetworkObserver(
+        command.command.tabId,
+        command.command.request
+      );
+    case 'collector_read_xiaohongshu_managed_page_network_observation':
+      return await readXiaohongshuManagedPageNetworkObservation(
+        command.command.tabId,
+        command.command.request
+      );
     case 'collector_bind_strategy_observer':
       if (command.command.binding.strategyId === BILIBILI_DYNAMIC_STRATEGY_ID) {
         return await bindBilibiliDynamicObserver(command.command);

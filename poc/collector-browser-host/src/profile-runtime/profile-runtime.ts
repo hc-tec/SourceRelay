@@ -35,7 +35,13 @@ import {
   type StrategyObserverBindingResult,
   type PageVisualEvidence,
   isXiaohongshuCurrentPageNetworkObservationResult,
+  isXiaohongshuManagedPageNetworkObservationResult,
+  isXiaohongshuManagedPageNetworkObserverArmResult,
+  isXiaohongshuManagedPageNetworkObserverRequest,
   type XiaohongshuCurrentPageNetworkObservationResult,
+  type XiaohongshuManagedPageNetworkObservationResult,
+  type XiaohongshuManagedPageNetworkObserverArmResult,
+  type XiaohongshuManagedPageNetworkObserverRequest,
   type ValidationExtensionControlRequest,
   type ValidationExtensionControlResult
 } from '@intelligence/collector-contracts';
@@ -325,6 +331,54 @@ export class ProfileRuntime {
     );
     if (!isXiaohongshuCurrentPageNetworkObservationResult(result)) {
       throw new Error('xiaohongshu_current_page_network_observation_result_invalid');
+    }
+    return result;
+  }
+
+  async armXiaohongshuManagedPageNetworkObserver(
+    request: XiaohongshuManagedPageNetworkObserverRequest
+  ): Promise<XiaohongshuManagedPageNetworkObserverArmResult> {
+    if (!isXiaohongshuManagedPageNetworkObserverRequest(request)) {
+      throw new Error('xiaohongshu_managed_page_network_request_invalid');
+    }
+    const context = await this.#ledger.foregroundExtensionCommandContext(request);
+    const result = await this.#nativeBridgeCommands.command(
+      this.profileId,
+      this.browserSessionId,
+      {
+        type: 'collector_arm_xiaohongshu_managed_page_network_observer',
+        tabId: context.extensionTabId,
+        request
+      },
+      5_000
+    );
+    if (!isXiaohongshuManagedPageNetworkObserverArmResult(result) ||
+      result.pageAlias !== request.pageAlias || result.runId !== request.runId) {
+      throw new Error('xiaohongshu_managed_page_network_arm_result_invalid');
+    }
+    return result;
+  }
+
+  async readXiaohongshuManagedPageNetworkObservation(
+    request: XiaohongshuManagedPageNetworkObserverRequest
+  ): Promise<XiaohongshuManagedPageNetworkObservationResult> {
+    if (!isXiaohongshuManagedPageNetworkObserverRequest(request)) {
+      throw new Error('xiaohongshu_managed_page_network_request_invalid');
+    }
+    const context = this.#ledger.extensionCommandContext(request);
+    const result = await this.#nativeBridgeCommands.command(
+      this.profileId,
+      this.browserSessionId,
+      {
+        type: 'collector_read_xiaohongshu_managed_page_network_observation',
+        tabId: context.extensionTabId,
+        request
+      },
+      5_000
+    );
+    if (!isXiaohongshuManagedPageNetworkObservationResult(result) ||
+      result.pageAlias !== request.pageAlias || result.runId !== request.runId) {
+      throw new Error('xiaohongshu_managed_page_network_observation_result_invalid');
     }
     return result;
   }

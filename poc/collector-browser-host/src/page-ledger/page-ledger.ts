@@ -342,6 +342,21 @@ export class PageLedger {
     };
   }
 
+  async foregroundExtensionCommandContext(input: {
+    profileId: string;
+    pageAlias: string;
+    pageLeaseId: string;
+    expectedRecordVersion: number;
+    runId: string;
+  }): Promise<LeasedExtensionPageContext> {
+    this.extensionCommandContext(input);
+    const record = this.#record(input.profileId, input.pageAlias);
+    await ensureManagedPageForeground(record.page);
+    // Revalidate after the async browser operation so a lease expiry cannot
+    // race the internal observer binding.
+    return this.extensionCommandContext(input);
+  }
+
   async captureVisualEvidence(
     request: CapturePageVisualEvidenceRequest,
     directory: string

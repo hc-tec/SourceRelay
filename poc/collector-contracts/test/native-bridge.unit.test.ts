@@ -139,6 +139,32 @@ describe('Native bridge runtime guards', () => {
     })).toBe(true);
   });
 
+  test('admits exact managed Xiaohongshu lease commands and rejects extra carriers', () => {
+    const request = {
+      schemaVersion: 2,
+      profileId: 'profile-123',
+      pageAlias: 'page-1',
+      pageLeaseId: 'lease-123',
+      expectedRecordVersion: 1,
+      runId: 'run-123'
+    };
+    for (const type of [
+      'collector_arm_xiaohongshu_managed_page_network_observer',
+      'collector_read_xiaohongshu_managed_page_network_observation'
+    ]) {
+      const command = { ...validHostCommand(), command: { type, tabId: 17, request } };
+      expect(isCollectorHostBridgeCommand(command)).toBe(true);
+      expect(isCollectorHostBridgeCommand({
+        ...command,
+        command: { ...command.command, url: 'https://www.xiaohongshu.com/explore' }
+      })).toBe(false);
+      expect(isCollectorHostBridgeCommand({
+        ...command,
+        command: { ...command.command, request: { ...request, selector: '.note-card' } }
+      })).toBe(false);
+    }
+  });
+
   test('admits the fixed transcript response binding but rejects an arbitrary response budget', () => {
     const transcriptBinding = {
       ...validHostCommand(),

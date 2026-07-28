@@ -142,6 +142,40 @@ export interface XiaohongshuCurrentPageNetworkObservationResult {
 }
 
 /**
+ * Local validation-browser control is bound to an already leased Browser Host
+ * page. The request deliberately carries no URL, tab, document, selector,
+ * script, route, query or action plan. Browser Host resolves the internal tab
+ * identity from this exact PageLease and never exposes it to the caller.
+ */
+export interface XiaohongshuManagedPageNetworkObserverRequest {
+  schemaVersion: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION;
+  profileId: string;
+  pageAlias: string;
+  pageLeaseId: string;
+  expectedRecordVersion: number;
+  runId: string;
+}
+
+export interface XiaohongshuManagedPageNetworkObserverArmResult {
+  schemaVersion: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION;
+  type: 'xiaohongshu_managed_page_network_observer_armed';
+  pageAlias: string;
+  runId: string;
+  permissionState: XiaohongshuCurrentPageNetworkPermissionState;
+  selection: XiaohongshuCurrentPageNetworkSelectionSummary;
+}
+
+export interface XiaohongshuManagedPageNetworkObservationResult {
+  schemaVersion: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION;
+  type: 'xiaohongshu_managed_page_network_observation';
+  pageAlias: string;
+  runId: string;
+  permissionState: XiaohongshuCurrentPageNetworkPermissionState;
+  selection: XiaohongshuCurrentPageNetworkSelectionSummary;
+  observation: XiaohongshuCurrentPageNetworkMetadataObservation;
+}
+
+/**
  * Only public page signals are supplied to this classifier.  It never reads a
  * credential, query value, response body or browser identifier.  A known
  * verification route wins over a generic login phrase so an SMS-login form's
@@ -198,6 +232,45 @@ export function isXiaohongshuCurrentPageNetworkObservationResult(
   return value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION &&
     value.type === 'xiaohongshu_current_page_network_observation' &&
     (value.permissionState === 'permission_granted' || value.permissionState === 'permission_required') &&
+    isXiaohongshuCurrentPageNetworkSelectionSummary(value.selection) &&
+    isXiaohongshuCurrentPageNetworkMetadataObservation(value.observation);
+}
+
+export function isXiaohongshuManagedPageNetworkObserverRequest(
+  value: unknown
+): value is XiaohongshuManagedPageNetworkObserverRequest {
+  if (!record(value) || !exactKeys(value, [
+    'schemaVersion', 'profileId', 'pageAlias', 'pageLeaseId', 'expectedRecordVersion', 'runId'
+  ])) return false;
+  return value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION &&
+    boundedIdentifier(value.profileId) && boundedIdentifier(value.pageAlias) &&
+    boundedIdentifier(value.pageLeaseId) && boundedIdentifier(value.runId) &&
+    Number.isSafeInteger(value.expectedRecordVersion) && Number(value.expectedRecordVersion) > 0;
+}
+
+export function isXiaohongshuManagedPageNetworkObserverArmResult(
+  value: unknown
+): value is XiaohongshuManagedPageNetworkObserverArmResult {
+  if (!record(value) || !exactKeys(value, [
+    'schemaVersion', 'type', 'pageAlias', 'runId', 'permissionState', 'selection'
+  ])) return false;
+  return value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION &&
+    value.type === 'xiaohongshu_managed_page_network_observer_armed' &&
+    boundedIdentifier(value.pageAlias) && boundedIdentifier(value.runId) &&
+    isPermissionState(value.permissionState) &&
+    isXiaohongshuCurrentPageNetworkSelectionSummary(value.selection);
+}
+
+export function isXiaohongshuManagedPageNetworkObservationResult(
+  value: unknown
+): value is XiaohongshuManagedPageNetworkObservationResult {
+  if (!record(value) || !exactKeys(value, [
+    'schemaVersion', 'type', 'pageAlias', 'runId', 'permissionState', 'selection', 'observation'
+  ])) return false;
+  return value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION &&
+    value.type === 'xiaohongshu_managed_page_network_observation' &&
+    boundedIdentifier(value.pageAlias) && boundedIdentifier(value.runId) &&
+    isPermissionState(value.permissionState) &&
     isXiaohongshuCurrentPageNetworkSelectionSummary(value.selection) &&
     isXiaohongshuCurrentPageNetworkMetadataObservation(value.observation);
 }
@@ -275,6 +348,15 @@ function boundedCount(value: unknown): boolean {
 
 function boundedText(value: string, maximumLength: number): string {
   return value.slice(0, maximumLength);
+}
+
+function boundedIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 1 && value.length <= 180 &&
+    /^[A-Za-z0-9._:-]+$/.test(value);
+}
+
+function isPermissionState(value: unknown): value is XiaohongshuCurrentPageNetworkPermissionState {
+  return value === 'permission_granted' || value === 'permission_required';
 }
 
 function record(value: unknown): value is Record<string, unknown> {

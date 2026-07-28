@@ -4,6 +4,9 @@ import {
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS,
   classifyXiaohongshuCurrentPageRisk,
   xiaohongshuCurrentPageNetworkPublicSurface,
+  type XiaohongshuManagedPageNetworkObservationResult,
+  type XiaohongshuManagedPageNetworkObserverArmResult,
+  type XiaohongshuManagedPageNetworkObserverRequest,
   type XiaohongshuCurrentPageNetworkObservationResult,
   type XiaohongshuCurrentPageNetworkPermissionState,
   type XiaohongshuCurrentPageNetworkSelectionSummary
@@ -16,6 +19,7 @@ import {
   noSelectionSummary,
   observationFor,
   parseXiaohongshuCurrentPageNetworkRecord,
+  recordMatchesManagedPageRun,
   selectionSummary,
   type XiaohongshuCurrentPageNetworkRecord
 } from './xiaohongshu-current-page-network-state';
@@ -48,25 +52,100 @@ export async function armNextXiaohongshuCurrentPageNetworkDocument(): Promise<
   const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   const tab = tabs.length === 1 ? tabs[0] : null;
   const tabId = tab?.id;
+  if (!tab || typeof tabId !== 'number' || !Number.isSafeInteger(tabId)) {
+    throw new Error('xiaohongshu_current_page_network_current_tab_unavailable');
+  }
+  const record = await armSpecificXiaohongshuTab(tabId, null);
+  return selectionSummary(record);
+}
+
+/**
+ * Internal managed-validation binding. Browser Host derives tabId from an
+ * exact PageLease. This path never requests permission and never opens or
+ * drives extension UI.
+ */
+export async function armXiaohongshuManagedPageNetworkObserver(
+  tabId: number,
+  request: XiaohongshuManagedPageNetworkObserverRequest
+): Promise<XiaohongshuManagedPageNetworkObserverArmResult> {
+  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
+  if (permissionState === 'permission_required') {
+    return {
+      schemaVersion: XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION,
+      type: 'xiaohongshu_managed_page_network_observer_armed',
+      pageAlias: request.pageAlias,
+      runId: request.runId,
+      permissionState,
+      selection: noSelectionSummary()
+    };
+  }
+  const current = await loadActiveRecord();
+  const record = recordMatchesManagedPageRun(current, tabId, request.runId)
+    ? current
+    : await armSpecificXiaohongshuTab(tabId, request.runId, current);
+  return {
+    schemaVersion: XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION,
+    type: 'xiaohongshu_managed_page_network_observer_armed',
+    pageAlias: request.pageAlias,
+    runId: request.runId,
+    permissionState,
+    selection: selectionSummary(record)
+  };
+}
+
+export async function readXiaohongshuManagedPageNetworkObservation(
+  tabId: number,
+  request: XiaohongshuManagedPageNetworkObserverRequest
+): Promise<XiaohongshuManagedPageNetworkObservationResult> {
+  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
+  let record = await loadActiveRecord();
+  if (!recordMatchesManagedPageRun(record, tabId, request.runId)) {
+    throw new Error('xiaohongshu_managed_page_network_binding_mismatch');
+  }
+  if (record.state === 'observing' && record.documentId) {
+    await refreshRiskSignals(record).catch(() => undefined);
+    record = await loadActiveRecord();
+  }
+  if (!recordMatchesManagedPageRun(record, tabId, request.runId)) {
+    throw new Error('xiaohongshu_managed_page_network_binding_mismatch');
+  }
+  if (record.state === 'stopped') unregisterNetworkMetadataListener();
+  return {
+    schemaVersion: XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION,
+    type: 'xiaohongshu_managed_page_network_observation',
+    pageAlias: request.pageAlias,
+    runId: request.runId,
+    permissionState,
+    selection: selectionSummary(record),
+    observation: observationFor(record)
+  };
+}
+
+async function armSpecificXiaohongshuTab(
+  tabId: number,
+  managedRunId: string | null,
+  activeRecord?: XiaohongshuCurrentPageNetworkRecord | null
+): Promise<XiaohongshuCurrentPageNetworkRecord> {
+  const existing = activeRecord === undefined ? await loadActiveRecord() : activeRecord;
+  if (existing) throw new Error('xiaohongshu_current_page_network_selection_active');
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
   const windowId = tab?.windowId;
-  if (!tab || typeof tabId !== 'number' || typeof windowId !== 'number' ||
-    !Number.isSafeInteger(tabId) || !Number.isSafeInteger(windowId) || tab.incognito) {
+  if (!tab || typeof windowId !== 'number' || !Number.isSafeInteger(windowId) || tab.incognito) {
     throw new Error('xiaohongshu_current_page_network_current_tab_unavailable');
   }
   const tabSurface = xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '');
   if (!tabSurface) throw new Error('xiaohongshu_current_page_network_public_surface_required');
-
   const frame = await chrome.webNavigation.getFrame({ tabId, frameId: 0 }).catch(() => null);
   const frameSurface = frame?.url ? xiaohongshuCurrentPageNetworkPublicSurface(frame.url) : null;
   if (!frame?.documentId || frameSurface !== tabSurface) {
     throw new Error('xiaohongshu_current_page_network_document_unavailable');
   }
-
   const now = Date.now();
   const record: XiaohongshuCurrentPageNetworkRecord = {
     schemaVersion: 1,
     tabId,
     windowId,
+    managedRunId,
     initialDocumentId: frame.documentId,
     documentId: null,
     state: 'armed_next_document',
@@ -80,7 +159,7 @@ export async function armNextXiaohongshuCurrentPageNetworkDocument(): Promise<
     risk: emptyRisk()
   };
   await store(record);
-  return selectionSummary(record);
+  return record;
 }
 
 /** A local UI read. It has no browser-control or platform side effect. */
