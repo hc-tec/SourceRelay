@@ -51,7 +51,8 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
     await prepareXiaohongshuNoteCommentsScroll(item.workId);
     await delay(4_500);
     let dom = await readDomProbe(page);
-    if (dom.comments.length === 0) {
+    let network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, item.workId);
+    if (dom.comments.length === 0 && network.comments.length === 0) {
       if (!dom.scrollTarget) throw new Error('xiaohongshu_comment_scroll_container_unavailable');
       const debuggee: chrome.debugger.Debuggee = { tabId: page.tabId };
       await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
@@ -71,10 +72,10 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
         await completeXiaohongshuNoteCommentsScroll(item.workId, count);
         completedCount = count;
         dom = await readDomProbe(page);
-        if (dom.comments.length > 0) break;
+        network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, item.workId);
+        if (dom.comments.length > 0 || network.comments.length > 0) break;
       }
     }
-    const network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, item.workId);
     const merged = mergeComments(network.comments, dom.comments);
     if (merged.length === 0) throw new Error('xiaohongshu_note_comments_postcondition_unmet');
     const networkCount = merged.filter((comment) => comment.source === 'network').length;
