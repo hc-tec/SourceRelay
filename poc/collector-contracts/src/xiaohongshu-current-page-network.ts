@@ -12,7 +12,7 @@ export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY =
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY =
   'xiaohongshu.search.public_notes.v1' as const;
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET = Object.freeze({
-  maximumPlatformNavigations: 1,
+  maximumPlatformNavigations: 0,
   maximumPageReloads: 0,
   maximumPageInitiatedNewDocuments: 0,
   maximumSemanticActions: 1,

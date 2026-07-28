@@ -230,7 +230,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'maximumRawPayloadBytesStored'
               ],
               properties: {
-                maximumPlatformNavigations: { type: 'integer', const: 1 },
+                maximumPlatformNavigations: { type: 'integer', const: 0 },
                 maximumPageReloads: { type: 'integer', const: 0 },
                 maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
                 maximumSemanticActions: { type: 'integer', const: 1 },
