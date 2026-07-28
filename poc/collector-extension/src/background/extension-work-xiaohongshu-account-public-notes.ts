@@ -42,33 +42,39 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     assertRisk(baseline.risk);
     await armXiaohongshuExistingPublicProfileWorkObserver(document.tabId, item.workId);
     await prepareXiaohongshuProfileScroll(item.workId);
-    const debuggee: chrome.debugger.Debuggee = { tabId: document.tabId };
-    await chrome.debugger.attach(debuggee, '1.3').catch(() => {
-      throw new Error('debugger_attach_failed');
-    });
-    attached = true;
-    debuggerDetached = false;
-    for (let index = 1; index <= item.input.maximumScrolls; index += 1) {
-      await requireSameDocument(document);
-      await recordXiaohongshuProfileScrollIntent(item.workId, index as 1 | 2 | 3);
-      attemptedCount = index as 1 | 2 | 3;
-      const viewport = await readPageProbe(document);
-      await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
-        type: 'mouseWheel',
-        x: Math.floor(viewport.viewportWidth / 2),
-        y: Math.floor(viewport.viewportHeight * 0.8),
-        deltaX: 0,
-        deltaY: Math.max(320, Math.floor(viewport.viewportHeight * 0.75))
-      }).catch(() => {
-        throw new Error('debugger_input_failed');
+    await delay(1_200);
+    projection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId);
+    if (projection.items.length === 0) {
+      const debuggee: chrome.debugger.Debuggee = { tabId: document.tabId };
+      await chrome.debugger.attach(debuggee, '1.3').catch(() => {
+        throw new Error('debugger_attach_failed');
       });
-      completedCount = index as 1 | 2 | 3;
-      await delay(1_400);
-      const afterScroll = await readPageProbe(document);
-      assertRisk(afterScroll.risk);
+      attached = true;
+      debuggerDetached = false;
+      for (let index = 1; index <= item.input.maximumScrolls; index += 1) {
+        await requireSameDocument(document);
+        await recordXiaohongshuProfileScrollIntent(item.workId, index as 1 | 2 | 3);
+        attemptedCount = index as 1 | 2 | 3;
+        const viewport = await readPageProbe(document);
+        await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+          type: 'mouseWheel',
+          x: Math.floor(viewport.viewportWidth / 2),
+          y: Math.floor(viewport.viewportHeight * 0.8),
+          deltaX: 0,
+          deltaY: Math.max(320, Math.floor(viewport.viewportHeight * 0.75))
+        }).catch(() => {
+          throw new Error('debugger_input_failed');
+        });
+        await delay(1_400);
+        await requireSameDocument(document);
+        const afterScroll = await readPageProbe(document);
+        assertRisk(afterScroll.risk);
+        projection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId);
+        completedCount = index as 1 | 2 | 3;
+        if (projection.items.length > 0) break;
+      }
     }
     await completeXiaohongshuProfileScroll(item.workId);
-    projection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId);
     const page = await readPageProbe(document);
     renderedCardCount = page.renderedCardCount;
     assertRisk(page.risk);
@@ -90,7 +96,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     if (document) await clearXiaohongshuWorkObserver(document.tabId, item.workId).catch(() => undefined);
   }
   const completed = errorCode === null && projection !== null && projection.items.length > 0 &&
-    attemptedCount === item.input.maximumScrolls && debuggerDetached;
+    attemptedCount === completedCount && debuggerDetached;
   return {
     schemaVersion: 1,
     protocolVersion: 1,

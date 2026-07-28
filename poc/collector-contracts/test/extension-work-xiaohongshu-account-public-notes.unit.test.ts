@@ -94,7 +94,7 @@ describe('signed Xiaohongshu account public-notes work contract', () => {
     ]) expect(isExtensionWorkItem({ ...item, input: { ...item.input, ...extra } })).toBe(false);
   });
 
-  test('distinguishes attempted and completed scrolls and requires full completion for success', () => {
+  test('distinguishes attempted and completed scrolls while treating maximumScrolls as an upper bound', () => {
     expect(isExtensionWorkResultForItem(completedResult, item)).toBe(true);
     expect(isExtensionWorkResultForItem({
       ...completedResult,
@@ -110,6 +110,16 @@ describe('signed Xiaohongshu account public-notes work contract', () => {
       scroll: { requestedCount: 2, completedCount: 0 },
       page: null,
       projection: null
+    }, item)).toBe(true);
+    expect(isExtensionWorkResultForItem({
+      ...completedResult,
+      semanticAction: { attempted: true, attemptCount: 1 },
+      scroll: { requestedCount: 2, completedCount: 1 }
+    }, item)).toBe(true);
+    expect(isExtensionWorkResultForItem({
+      ...completedResult,
+      semanticAction: { attempted: false, attemptCount: 0 },
+      scroll: { requestedCount: 2, completedCount: 0 }
     }, item)).toBe(true);
   });
 });

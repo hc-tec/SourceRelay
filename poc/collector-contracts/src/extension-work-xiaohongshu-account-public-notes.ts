@@ -108,8 +108,7 @@ export function isXiaohongshuAccountPublicNotesWorkResult(
     candidate.semanticAction.attemptCount > candidate.scroll.requestedCount) return false;
   if (candidate.state === 'completed') {
     return candidate.errorCode === null && candidate.terminalReason === 'profile_notes_ready' &&
-      candidate.debuggerDetached && candidate.semanticAction.attemptCount === candidate.scroll.requestedCount &&
-      candidate.scroll.completedCount === candidate.scroll.requestedCount &&
+      candidate.debuggerDetached && candidate.semanticAction.attemptCount === candidate.scroll.completedCount &&
       candidate.page !== null && candidate.page.renderedCardCount > 0 &&
       candidate.projection !== null && candidate.projection.items.length > 0;
   }
