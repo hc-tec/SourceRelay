@@ -308,7 +308,8 @@ export function xiaohongshuCurrentPageNetworkPublicSurface(
   if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' ||
     url.port || url.username || url.password || url.hash) return null;
   if ((url.pathname === '/explore' || url.pathname === '/explore/') && !url.search) return 'explore';
-  return url.pathname === '/search_result' || url.pathname === '/search_result/' ? 'search' : null;
+  return url.pathname === '/search_result' || url.pathname === '/search_result/' ||
+    url.pathname === '/search_result_ai' || url.pathname === '/search_result_ai/' ? 'search' : null;
 }
 
 export function classifyXiaohongshuCurrentPageRisk(

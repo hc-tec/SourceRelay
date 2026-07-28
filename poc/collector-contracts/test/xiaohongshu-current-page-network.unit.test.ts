@@ -122,6 +122,8 @@ describe('Xiaohongshu current-page network policy contract', () => {
     expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/explore')).toBe('explore');
     expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/search_result?keyword=%E6%B5%8B%E8%AF%95'))
       .toBe('search');
+    expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/search_result_ai?keyword=%E6%B5%8B%E8%AF%95'))
+      .toBe('search');
     expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/explore/abc123')).toBeNull();
     expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/settings')).toBeNull();
     expect(xiaohongshuCurrentPageNetworkPublicSurface('https://api.xiaohongshu.com/explore')).toBeNull();

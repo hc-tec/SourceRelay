@@ -10,11 +10,12 @@ const endpointPath = resolve(pocRoot, 'runtime', 'xiaohongshu-validation', 'host
 const evidencePath = resolve(pocRoot, 'runtime', 'xiaohongshu-validation', 'managed-network-last.json');
 const profileId = 'xiaohongshu_validation';
 const exploreUrl = 'https://www.xiaohongshu.com/explore';
-const searchUrl = 'https://www.xiaohongshu.com/search_result?keyword=%E5%92%96%E5%95%A1';
+const searchUrl = 'https://www.xiaohongshu.com/search_result_ai?keyword=%E5%92%96%E5%95%A1&source=web_explore_feed';
 
 let client = null;
 let acquired = null;
 let released = false;
+let lastObservation = null;
 const timeline = [];
 
 try {
@@ -77,6 +78,7 @@ try {
     type: 'read_xiaohongshu_managed_page_network_observation',
     request: managedRequest(acquired, current, runId)
   });
+  lastObservation = observation;
   if (observation?.type !== 'xiaohongshu_managed_page_network_observation' ||
     observation.pageAlias !== acquired.page.pageAlias || observation.runId !== runId) {
     throw new Error('xiaohongshu_validation_observation_invalid');
@@ -139,7 +141,13 @@ try {
 } catch (error) {
   const errorCode = safeErrorCode(error);
   await retainIfStillLeased(errorCode).catch(() => undefined);
-  const evidence = { ok: false, schemaVersion: 1, error: errorCode, timeline };
+  const evidence = {
+    ok: false,
+    schemaVersion: 1,
+    error: errorCode,
+    observation: lastObservation,
+    timeline
+  };
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8').catch(() => undefined);
   process.stdout.write(`${JSON.stringify({ ...evidence, evidencePath })}\n`);
   process.exitCode = 1;
