@@ -16,7 +16,8 @@ const exploreUrl = 'https://www.xiaohongshu.com/explore';
 const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ?? '咖啡豆';
 const validateCommentRecon = process.argv.includes('--comment-recon');
 const validateReplyRecon = process.argv.includes('--reply-recon');
-const validatePublicComments = process.argv.includes('--comments') || validateReplyRecon;
+const validatePublicReplies = process.argv.includes('--replies');
+const validatePublicComments = process.argv.includes('--comments') || validateReplyRecon || validatePublicReplies;
 const validateExistingPublicComments = process.argv.includes('--comments-existing');
 const validateNoteDetail = validateCommentRecon || validatePublicComments || process.argv.includes('--note-detail');
 const timeline = [];
@@ -224,7 +225,42 @@ try {
         networkBodyBytesRead: reportedArtifact.result.projection.network.bodyBytesRead,
         networkCursorObserved: reportedArtifact.result.projection.network.cursorObserved,
         rawPayloadStored: false, responseUrlsStored: false });
-      if (validateReplyRecon) {
+      if (validatePublicReplies) {
+        const repliesDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
+          method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
+            browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+            capability: 'xiaohongshu.note.public_comment_replies.v1',
+            executionTarget: 'existing_public_note_overlay', input: { maximumThreads: 1 } })
+        }, 201);
+        const repliesOperationId = repliesDispatch.result?.operationId;
+        if (!uuid(repliesOperationId)) throw new Error('xiaohongshu_note_replies_e2e_operation_missing');
+        record('note_replies_operation_dispatched', { operationId: repliesOperationId, maximumThreads: 1 });
+        const repliesOperation = await waitForOperation(gatewayOrigin, token, repliesOperationId, 90_000);
+        if (repliesOperation.state !== 'completed' || repliesOperation.terminalReason !== 'comment_replies_ready' ||
+          !uuid(repliesOperation.artifact?.artifactId) ||
+          typeof repliesOperation.artifact?.retrievalPath !== 'string') {
+          throw new Error(repliesOperation.errorCode ?? 'xiaohongshu_note_replies_e2e_operation_not_completed');
+        }
+        const repliesArtifactPayload = await apiJson(
+          `${gatewayOrigin}${repliesOperation.artifact.retrievalPath}`,
+          { headers: { authorization: `Bearer ${token}` } },
+          200
+        );
+        record('note_replies_artifact_diagnostics', noteRepliesDiagnostics(repliesArtifactPayload.artifact));
+        assertNoteRepliesArtifact(repliesArtifactPayload.artifact, repliesOperationId);
+        reportedOperation = repliesOperation;
+        reportedArtifact = repliesArtifactPayload.artifact;
+        record('note_replies_artifact_retrieved', {
+          captureMode: reportedArtifact.summary.captureMode,
+          replyCount: reportedArtifact.summary.replyCount,
+          networkMatchedPayloadCount: reportedArtifact.result.projection.network.matchedPayloadCount,
+          networkBodyBytesRead: reportedArtifact.result.projection.network.bodyBytesRead,
+          networkCursorObserved: reportedArtifact.result.projection.network.cursorObserved,
+          actionTriggeredResponseCount: reportedArtifact.result.projection.network.actionTriggeredResponseCount,
+          rawPayloadStored: false,
+          responseUrlsStored: false
+        });
+      } else if (validateReplyRecon) {
         const replyPage = await leasedPage();
         replyRecon = await client.command({ type: 'recon_xiaohongshu_note_comments', request: {
           schemaVersion: 1, profileId, pageAlias: acquired.page.pageAlias,
@@ -281,7 +317,8 @@ try {
     ok: true,
     runId,
     gatewayPath: 'user_browser_api_to_signed_queue_to_production_extension',
-    validatedCapability: validateReplyRecon ? 'xiaohongshu.note.public_comment_replies.recon' :
+    validatedCapability: validatePublicReplies ? 'xiaohongshu.note.public_comment_replies.v1' :
+      validateReplyRecon ? 'xiaohongshu.note.public_comment_replies.recon' :
       validatePublicComments ? 'xiaohongshu.note.public_comments.v1' :
       validateCommentRecon ? 'xiaohongshu.note.comments.recon' :
       validateNoteDetail ? 'xiaohongshu.note.public_detail.v1' : 'xiaohongshu.search.public_notes.v1',
@@ -300,9 +337,12 @@ try {
       itemCount: reportedArtifact.summary.itemCount ?? null,
       queryDigest: reportedArtifact.queryDigest ?? null,
       commentCount: reportedArtifact.summary.commentCount ?? null,
+      replyCount: reportedArtifact.summary.replyCount ?? null,
       networkMatchedPayloadCount: reportedArtifact.result.projection?.network?.matchedPayloadCount ?? null,
       networkBodyBytesRead: reportedArtifact.result.projection?.network?.bodyBytesRead ?? null,
       networkCursorObserved: reportedArtifact.result.projection?.network?.cursorObserved ?? null,
+      actionTriggeredResponseCount:
+        reportedArtifact.result.projection?.network?.actionTriggeredResponseCount ?? null,
       rawPayloadStored: reportedArtifact.provenance.rawPayloadStored,
       responseUrlsStored: reportedArtifact.provenance.responseUrlsStored,
       debuggerDetached: reportedArtifact.provenance.debuggerDetached
@@ -494,6 +534,26 @@ function assertNoteCommentsArtifact(artifact, operationId) {
     .test(JSON.stringify(artifact))) throw new Error('xiaohongshu_note_comments_e2e_artifact_forbidden_material');
 }
 
+function assertNoteRepliesArtifact(artifact, operationId) {
+  if (!artifact || artifact.summary?.operationId !== operationId ||
+    artifact.summary?.capability !== 'xiaohongshu.note.public_comment_replies.v1' ||
+    artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'comment_replies_ready' ||
+    artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
+    artifact.result?.semanticAction?.attempted !== true || artifact.result.semanticAction.attemptCount !== 1 ||
+    artifact.result?.thread?.requestedCount !== 1 || artifact.result.thread.completedCount !== 1 ||
+    artifact.result?.page?.publicSurface !== 'note_detail_overlay' ||
+    !Array.isArray(artifact.result?.projection?.replies) || artifact.result.projection.replies.length < 1 ||
+    !['network_projection', 'dom_fallback', 'hybrid'].includes(artifact.result.projection.captureMode) ||
+    artifact.provenance?.rawPayloadStored !== false || artifact.provenance?.responseUrlsStored !== false ||
+    artifact.provenance?.debuggerDetached !== true) {
+    throw new Error('xiaohongshu_note_replies_e2e_artifact_invalid');
+  }
+  if (/"(?:url|responseUrl|route|query|header|cookie|token|rawPayload|tabId|documentId|selector|script|noteId|profileId)"\s*:/i
+    .test(JSON.stringify(artifact))) {
+    throw new Error('xiaohongshu_note_replies_e2e_artifact_forbidden_material');
+  }
+}
+
 function noteCommentsDiagnostics(artifact) {
   return {
     state: artifact?.result?.state ?? null,
@@ -507,6 +567,25 @@ function noteCommentsDiagnostics(artifact) {
     networkMatchedPayloadCount: artifact?.result?.projection?.network?.matchedPayloadCount ?? null,
     networkBodyBytesRead: artifact?.result?.projection?.network?.bodyBytesRead ?? null,
     networkCursorObserved: artifact?.result?.projection?.network?.cursorObserved ?? null,
+    debuggerDetached: artifact?.provenance?.debuggerDetached ?? null
+  };
+}
+
+function noteRepliesDiagnostics(artifact) {
+  return {
+    state: artifact?.result?.state ?? null,
+    terminalReason: artifact?.result?.terminalReason ?? null,
+    captureMode: artifact?.result?.projection?.captureMode ?? null,
+    replyCount: artifact?.result?.projection?.replies?.length ?? 0,
+    semanticActionAttempted: artifact?.result?.semanticAction?.attempted ?? null,
+    semanticActionCount: artifact?.result?.semanticAction?.attemptCount ?? null,
+    requestedThreads: artifact?.result?.thread?.requestedCount ?? null,
+    completedThreads: artifact?.result?.thread?.completedCount ?? null,
+    networkMatchedPayloadCount: artifact?.result?.projection?.network?.matchedPayloadCount ?? null,
+    networkBodyBytesRead: artifact?.result?.projection?.network?.bodyBytesRead ?? null,
+    networkCursorObserved: artifact?.result?.projection?.network?.cursorObserved ?? null,
+    actionTriggeredResponseCount:
+      artifact?.result?.projection?.network?.actionTriggeredResponseCount ?? null,
     debuggerDetached: artifact?.provenance?.debuggerDetached ?? null
   };
 }
