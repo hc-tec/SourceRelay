@@ -21,6 +21,7 @@
     "status:validation-browser": "node scripts/validation-browser.mjs status",
     "stop:validation-browser": "node scripts/validation-browser.mjs stop",
     "start:xiaohongshu-validation-browser": "node scripts/xiaohongshu-validation-browser.mjs start",
+    "rebuild:xiaohongshu-validation-browser": "node scripts/xiaohongshu-validation-browser.mjs rebuild",
     "status:xiaohongshu-validation-browser": "node scripts/xiaohongshu-validation-browser.mjs status",
     "stop:xiaohongshu-validation-browser": "node scripts/xiaohongshu-validation-browser.mjs stop",
     "validate:xiaohongshu-current-page-network": "node scripts/validate-xiaohongshu-current-page-network.mjs",

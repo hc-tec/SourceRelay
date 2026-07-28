@@ -27,6 +27,7 @@
     "status:validation-browser": "npm run validation-browser --workspace @intelligence/collector-browser-host -- status",
     "stop:validation-browser": "npm run validation-browser --workspace @intelligence/collector-browser-host -- stop",
     "start:xiaohongshu-validation-browser": "npm run start:xiaohongshu-validation-browser --workspace @intelligence/collector-browser-host",
+    "rebuild:xiaohongshu-validation-browser": "npm run rebuild:xiaohongshu-validation-browser --workspace @intelligence/collector-browser-host",
     "status:xiaohongshu-validation-browser": "npm run status:xiaohongshu-validation-browser --workspace @intelligence/collector-browser-host",
     "stop:xiaohongshu-validation-browser": "npm run stop:xiaohongshu-validation-browser --workspace @intelligence/collector-browser-host",
     "validate:xiaohongshu-current-page-network": "npm run validate:xiaohongshu-current-page-network --workspace @intelligence/collector-browser-host",

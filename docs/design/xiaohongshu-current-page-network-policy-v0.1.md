@@ -67,6 +67,8 @@ npm run start:xiaohongshu-validation-browser
 
 当前可见验证浏览器仍运行 r15；为了不打断刚完成的登录，r16 源码没有构建到 `dist/`、没有触发扩展 reload，也没有重启 Chromium。后续只有在用户明确同意一次可见更新时，才构建、精确核验新 worker，并在同一 Profile 中验证该预置动作。
 
+这次唯一的显式更新入口是 `npm run rebuild:xiaohongshu-validation-browser`。它会关闭并重新打开**隔离验证浏览器**一次，以同一持久 Profile 重载扩展；不会接管日常浏览器，也不会自动导航到任何平台 URL。
+
 为避免把验证退回成“请用户手动加载扩展、手动点测试按钮”，r16 还提供了固定的本地验证入口：
 
 ```powershell
