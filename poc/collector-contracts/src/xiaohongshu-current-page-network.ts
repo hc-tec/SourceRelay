@@ -359,8 +359,8 @@ export function isXiaohongshuManagedSearchProjectionResult(
     value.type === 'xiaohongshu_managed_search_projection' && boundedIdentifier(value.pageAlias) &&
     boundedIdentifier(value.runId) && boundedProjectionCount(value.matchedPayloadCount, 8) &&
     boundedProjectionCount(value.bodyBytesRead, 16 * 1024 * 1024) && value.rawPayloadStored === false &&
-    value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 200 &&
-    value.items.every(isPublicSearchItemProjection);
+    value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 40 &&
+    value.items.every((item) => isPublicSearchItemProjection(item, 40));
 }
 
 export function isXiaohongshuManagedProfileNotesProjectionResult(
@@ -375,7 +375,7 @@ export function isXiaohongshuManagedProfileNotesProjectionResult(
     boundedIdentifier(value.runId) && boundedProjectionCount(value.matchedPayloadCount, 8) &&
     boundedProjectionCount(value.bodyBytesRead, 16 * 1024 * 1024) && value.rawPayloadStored === false &&
     value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 200 &&
-    value.items.every(isPublicSearchItemProjection);
+    value.items.every((item) => isPublicSearchItemProjection(item, 200));
 }
 
 export function isXiaohongshuCurrentPageNetworkSelectionSummary(
@@ -474,11 +474,14 @@ function boundedText(value: string, maximumLength: number): string {
   return value.slice(0, maximumLength);
 }
 
-function isPublicSearchItemProjection(value: unknown): value is XiaohongshuPublicSearchItemProjection {
+function isPublicSearchItemProjection(
+  value: unknown,
+  maximumRank: 40 | 200
+): value is XiaohongshuPublicSearchItemProjection {
   if (!record(value) || !exactKeys(value, [
     'rank', 'noteId', 'title', 'contentType', 'authorId', 'authorNickname', 'likedCountText'
   ])) return false;
-  return Number.isSafeInteger(value.rank) && Number(value.rank) >= 1 && Number(value.rank) <= 200 &&
+  return Number.isSafeInteger(value.rank) && Number(value.rank) >= 1 && Number(value.rank) <= maximumRank &&
     boundedProjectionText(value.noteId, 80, true) && boundedProjectionText(value.title, 500, true) &&
     boundedProjectionText(value.contentType, 40) && boundedProjectionText(value.authorId, 80) &&
     boundedProjectionText(value.authorNickname, 200) && boundedProjectionText(value.likedCountText, 40);
