@@ -44,6 +44,7 @@ function installChromeMock() {
   const managedTab = {
     id: 11, windowId: 22, active: true, incognito: false, status: 'complete', url: exploreUrl
   };
+  const getFrame = vi.fn(async () => ({ documentId: 'document-1', url: managedTab.url }));
   Object.defineProperty(globalThis, 'chrome', {
     configurable: true,
     value: {
@@ -55,7 +56,7 @@ function installChromeMock() {
         onRemoved: { addListener: (listener: (tabId: number) => void) => removed.push(listener) }
       },
       webNavigation: {
-        getFrame: vi.fn(async () => ({ documentId: 'document-1', url: exploreUrl })),
+        getFrame,
         onBeforeNavigate: { addListener: (listener: (details: unknown) => void) => beforeNavigate.push(listener) },
         onCommitted: { addListener: (listener: (details: unknown) => void) => committed.push(listener) },
         onErrorOccurred: { addListener: (listener: (details: unknown) => void) => errored.push(listener) }
@@ -70,7 +71,7 @@ function installChromeMock() {
     } as unknown as typeof chrome
   });
   return {
-    request, contains, executeScript, beforeNavigate, committed, errored, removed, completed,
+    request, contains, executeScript, getFrame, beforeNavigate, committed, errored, removed, completed,
     removeNetworkListener, managedTab
   };
 }
@@ -340,6 +341,24 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
 
     await expect(subject.readXiaohongshuExistingSearchNoteDetailNetworkProjection(11, 'run-123'))
       .resolves.toEqual({ matchedPayloadCount: 1, bodyBytesRead: 2_048, detail: null });
+  });
+
+  test('reuses the same-document search observer so prefetched details survive the detail work', async () => {
+    const chrome = installChromeMock();
+    chrome.managedTab.url = 'https://www.xiaohongshu.com/search_result';
+    chrome.executeScript.mockResolvedValueOnce([{ frameId: 0, result: true }]);
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+
+    await expect(subject.armXiaohongshuExistingSearchWorkObserver(11, 'detail-work'))
+      .resolves.toBeUndefined();
+    expect(chrome.getFrame).toHaveBeenCalledWith({ tabId: 11, frameId: 0 });
+    expect(chrome.executeScript).toHaveBeenCalledTimes(1);
+    const firstCall = (chrome.executeScript.mock.calls as unknown as Array<[Record<string, unknown>]>)[0]?.[0];
+    expect(firstCall).toMatchObject({
+      target: { tabId: 11, documentIds: ['document-1'] },
+      world: 'MAIN'
+    });
+    expect(firstCall).not.toHaveProperty('files');
   });
 
   test('does not overwrite or consume a popup-created active selection', async () => {

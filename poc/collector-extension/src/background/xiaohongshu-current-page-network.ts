@@ -208,7 +208,7 @@ export async function armXiaohongshuExistingSearchWorkObserver(
   if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
     throw new Error('xiaohongshu_current_page_network_selection_active');
   }
-  if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'search');
+  if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'search', true);
 }
 
 export async function bindXiaohongshuObserverSelectedNote(
@@ -498,7 +498,8 @@ async function armManagedXiaohongshuCurrentDocument(
   tabId: number,
   managedRunId: string,
   activeRecord: XiaohongshuCurrentPageNetworkRecord | null,
-  expectedSurface: 'explore' | 'search' | 'public_profile' | 'public_note_detail' = 'explore'
+  expectedSurface: 'explore' | 'search' | 'public_profile' | 'public_note_detail' = 'explore',
+  preserveExistingSearchProjection = false
 ): Promise<XiaohongshuCurrentPageNetworkRecord> {
   if (activeRecord) throw new Error('xiaohongshu_current_page_network_selection_active');
   const tab = await chrome.tabs.get(tabId).catch(() => null);
@@ -531,13 +532,52 @@ async function armManagedXiaohongshuCurrentDocument(
     risk: emptyRisk()
   };
   await store(record);
-  await chrome.scripting.executeScript({
-    target: { tabId, documentIds: [frame.documentId] },
-    world: 'MAIN',
-    files: ['xiaohongshu-search-main-world-observer.js'],
-    injectImmediately: true
-  });
+  const preserved = expectedSurface === 'search' && preserveExistingSearchProjection &&
+    await activateExistingSearchObserver(tabId, frame.documentId);
+  if (!preserved) {
+    await chrome.scripting.executeScript({
+      target: { tabId, documentIds: [frame.documentId] },
+      world: 'MAIN',
+      files: ['xiaohongshu-search-main-world-observer.js'],
+      injectImmediately: true
+    });
+  }
   return record;
+}
+
+/**
+ * Search and detail are intentionally one same-document continuity chain.
+ * The search work has already paid for a bounded public response projection;
+ * re-injecting the observer here would erase that projection before the
+ * detail click can consume it. Keep item/detail identities, but begin a new
+ * observation generation so only responses from this detail work are added.
+ */
+async function activateExistingSearchObserver(tabId: number, documentId: string): Promise<boolean> {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, documentIds: [documentId] },
+    world: 'MAIN',
+    func: () => {
+      const key = '__personalIntelligenceXiaohongshuPublicNotesObserverV2';
+      const controller = (window as typeof window & { [key]?: Record<string, unknown> })[key];
+      if (!controller || controller.schemaVersion !== 2 || typeof controller.expiresAt !== 'number' ||
+        Date.now() >= controller.expiresAt || !Array.isArray(controller.items) ||
+        !Array.isArray(controller.details)) return false;
+      const generation = typeof controller.generation === 'number' && Number.isSafeInteger(controller.generation)
+        ? controller.generation : 0;
+      controller.generation = generation + 1;
+      controller.expiresAt = Date.now() + 60_000;
+      controller.selectedNoteId = '';
+      controller.comments = [];
+      controller.commentPagination = { hasMore: null, cursorObserved: false };
+      controller.commentArchiveExpiresAt = 0;
+      controller.commentArchiveMatchedPayloadCount = 0;
+      controller.commentArchiveBodyBytesRead = 0;
+      controller.commentArchive = [];
+      controller.commentArchivePagination = { hasMore: null, cursorObserved: false };
+      return true;
+    }
+  });
+  return results[0]?.result === true;
 }
 
 export async function readXiaohongshuManagedPageNetworkObservation(
