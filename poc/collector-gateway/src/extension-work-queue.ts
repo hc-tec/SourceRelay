@@ -26,6 +26,7 @@ import {
   type ExtensionWorkResult,
   type ExtensionWorkState,
   type ExtensionWorkTerminalReason,
+  type XiaohongshuProfileScrollCount,
   type UnsignedExtensionWorkItem
 } from '@intelligence/collector-contracts';
 import type { LoadedGatewayIdentity } from './identity';
@@ -133,7 +134,7 @@ export interface EnqueueXiaohongshuPublicNotesSearchWorkInput {
 
 export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
   browserBindingId: string;
-  maximumScrolls: 1 | 2 | 3;
+  maximumScrolls: XiaohongshuProfileScrollCount;
   profileUrl?: string;
 }
 
@@ -186,7 +187,7 @@ interface RedactedXiaohongshuAccountPublicNotesWorkItem {
   executionTarget: 'ephemeral_public_profile_url';
   issuedAt: string;
   expiresAt: string;
-  input: { maximumScrolls: 1 | 2 | 3 };
+  input: { maximumScrolls: XiaohongshuProfileScrollCount };
   budget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET;
 }
 
@@ -745,8 +746,8 @@ export class ExtensionWorkQueue {
     input: EnqueueXiaohongshuAccountPublicNotesWorkInput,
     now = new Date()
   ): Promise<ExtensionWorkOperationSummary> {
-    if (!isUuid(input.browserBindingId) ||
-      (input.maximumScrolls !== 1 && input.maximumScrolls !== 2 && input.maximumScrolls !== 3)) {
+    if (!isUuid(input.browserBindingId) || !Number.isSafeInteger(input.maximumScrolls) ||
+      input.maximumScrolls < 1 || input.maximumScrolls > 20) {
       throw new Error('xiaohongshu_account_public_notes_input_invalid');
     }
     const profileUrl = input.profileUrl === undefined
@@ -754,6 +755,9 @@ export class ExtensionWorkQueue {
       : canonicalXiaohongshuPublicProfileUrl(input.profileUrl);
     if (input.profileUrl !== undefined && !profileUrl) {
       throw new Error('xiaohongshu_account_public_profile_url_invalid');
+    }
+    if (input.profileUrl === undefined && input.maximumScrolls > 3) {
+      throw new Error('xiaohongshu_account_public_notes_input_invalid');
     }
     const expired = this.#expire(now);
     if (expired.length > 0) await this.#save();
@@ -1092,7 +1096,8 @@ function isRedactedXiaohongshuAccountPublicNotesWorkItem(
     value.executionTarget === 'ephemeral_public_profile_url' && isTimestamp(value.issuedAt) &&
     isTimestamp(value.expiresAt) && Date.parse(value.expiresAt) > Date.parse(value.issuedAt) &&
     isRecord(value.input) && hasExactKeys(value.input, ['maximumScrolls']) &&
-    (value.input.maximumScrolls === 1 || value.input.maximumScrolls === 2 || value.input.maximumScrolls === 3) &&
+    typeof value.input.maximumScrolls === 'number' && Number.isSafeInteger(value.input.maximumScrolls) &&
+    value.input.maximumScrolls >= 1 && value.input.maximumScrolls <= 20 &&
     JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET);
 }
 

@@ -36,11 +36,16 @@ export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET = Object.freeze({
   maximumPlatformNavigations: 1,
   maximumPageReloads: 0,
   maximumPageInitiatedNewDocuments: 0,
-  maximumSemanticActions: 3,
+  maximumSemanticActions: 20,
   maximumNetworkResponseBodies: 8,
-  maximumProjectedItems: 40,
+  maximumProjectedItems: 200,
   maximumRawPayloadBytesStored: 0
 } as const);
+export type XiaohongshuProfileScrollCount =
+  1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
+export type XiaohongshuProfileScrollCompletedCount = 0 | XiaohongshuProfileScrollCount;
+export const XIAOHONGSHU_PROFILE_LINK_MAX_SCROLLS = 20 as const;
+export const XIAOHONGSHU_PROFILE_LINK_MAX_PROJECTED_ITEMS = 200 as const;
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS = 60_000 as const;
 
 /**
@@ -354,7 +359,7 @@ export function isXiaohongshuManagedSearchProjectionResult(
     value.type === 'xiaohongshu_managed_search_projection' && boundedIdentifier(value.pageAlias) &&
     boundedIdentifier(value.runId) && boundedProjectionCount(value.matchedPayloadCount, 8) &&
     boundedProjectionCount(value.bodyBytesRead, 16 * 1024 * 1024) && value.rawPayloadStored === false &&
-    value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 40 &&
+    value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 200 &&
     value.items.every(isPublicSearchItemProjection);
 }
 
@@ -369,7 +374,7 @@ export function isXiaohongshuManagedProfileNotesProjectionResult(
     value.type === 'xiaohongshu_managed_profile_notes_projection' && boundedIdentifier(value.pageAlias) &&
     boundedIdentifier(value.runId) && boundedProjectionCount(value.matchedPayloadCount, 8) &&
     boundedProjectionCount(value.bodyBytesRead, 16 * 1024 * 1024) && value.rawPayloadStored === false &&
-    value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 40 &&
+    value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 200 &&
     value.items.every(isPublicSearchItemProjection);
 }
 
@@ -473,7 +478,7 @@ function isPublicSearchItemProjection(value: unknown): value is XiaohongshuPubli
   if (!record(value) || !exactKeys(value, [
     'rank', 'noteId', 'title', 'contentType', 'authorId', 'authorNickname', 'likedCountText'
   ])) return false;
-  return Number.isSafeInteger(value.rank) && Number(value.rank) >= 1 && Number(value.rank) <= 40 &&
+  return Number.isSafeInteger(value.rank) && Number(value.rank) >= 1 && Number(value.rank) <= 200 &&
     boundedProjectionText(value.noteId, 80, true) && boundedProjectionText(value.title, 500, true) &&
     boundedProjectionText(value.contentType, 40) && boundedProjectionText(value.authorId, 80) &&
     boundedProjectionText(value.authorNickname, 200) && boundedProjectionText(value.likedCountText, 40);

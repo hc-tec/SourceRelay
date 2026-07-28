@@ -57,7 +57,8 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       captureMode: 'current_document_network_projection_plus_trusted_scroll',
       responseBodies: 'temporarily_read_projected_not_stored',
       browserHostFallback: 'forbidden',
-      budget: expect.objectContaining({ maximumSemanticActions: 3, maximumProjectedItems: 40 })
+      budget: expect.objectContaining({ maximumSemanticActions: 3, maximumProjectedItems: 40 }),
+      ephemeralProfileLinkBudget: expect.objectContaining({ maximumSemanticActions: 20, maximumProjectedItems: 200 })
     }), expect.objectContaining({
       capability: 'xiaohongshu.note.public_detail.v1',
       platform: 'xiaohongshu',
@@ -124,6 +125,14 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
     expect(document.components.schemas.UserBrowserCapability.oneOf).toContainEqual({
       $ref: '#/components/schemas/XiaohongshuAccountPublicNotesCapability'
     });
+    expect(document.components.schemas.XiaohongshuAccountPublicNotesCapability.required)
+      .toContain('ephemeralProfileLinkBudget');
+    expect(document.components.schemas.XiaohongshuAccountPublicNotesCapability.properties.ephemeralProfileLinkBudget)
+      .toMatchObject({ properties: {
+        maximumPlatformNavigations: { const: 1 },
+        maximumSemanticActions: { const: 20 },
+        maximumProjectedItems: { const: 200 }
+      } });
     expect(document.components.schemas.UserBrowserCapability.oneOf).toContainEqual({
       $ref: '#/components/schemas/XiaohongshuNotePublicDetailCapability'
     });
@@ -140,10 +149,10 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
     expect(userBrowserCollectorServiceRequestInput({
       schemaVersion: 2, browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1', executionTarget: 'ephemeral_public_profile_url',
-      input: { maximumScrolls: 3, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short' }
+      input: { maximumScrolls: 20, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short' }
     })).toMatchObject({
       executionTarget: 'ephemeral_public_profile_url',
-      input: { maximumScrolls: 3, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short' }
+      input: { maximumScrolls: 20, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short' }
     });
     expect(() => userBrowserCollectorServiceRequestInput({
       schemaVersion: 2, browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',

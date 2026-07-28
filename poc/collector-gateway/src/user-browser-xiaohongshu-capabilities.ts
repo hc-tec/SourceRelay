@@ -3,6 +3,7 @@ import {
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY,
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
+  XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY,
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_CAPABILITY,
@@ -67,6 +68,7 @@ export interface UserBrowserXiaohongshuAccountPublicNotesCapabilityDescriptor {
   responseBodies: 'temporarily_read_projected_not_stored';
   routeAdmission: 'generic_public_note_card_projection_no_url_dependency';
   budget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET;
+  ephemeralProfileLinkBudget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET;
   browserHostFallback: 'forbidden';
 }
 
@@ -155,6 +157,7 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     responseBodies: 'temporarily_read_projected_not_stored',
     routeAdmission: 'generic_public_note_card_projection_no_url_dependency',
     budget: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
+    ephemeralProfileLinkBudget: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET,
     browserHostFallback: 'forbidden'
   },
   {

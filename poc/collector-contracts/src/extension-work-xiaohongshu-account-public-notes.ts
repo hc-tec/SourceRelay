@@ -4,6 +4,8 @@ import {
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY,
   canonicalXiaohongshuPublicProfileUrl,
   isXiaohongshuManagedProfileNotesProjectionResult,
+  type XiaohongshuProfileScrollCompletedCount,
+  type XiaohongshuProfileScrollCount,
   type XiaohongshuManagedProfileNotesProjectionResult
 } from './xiaohongshu-current-page-network.js';
 
@@ -22,7 +24,7 @@ export interface XiaohongshuAccountPublicNotesWorkItem {
   executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
   issuedAt: string;
   expiresAt: string;
-  input: { maximumScrolls: 1 | 2 | 3; profileUrl?: string };
+  input: { maximumScrolls: XiaohongshuProfileScrollCount; profileUrl?: string };
   budget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET | typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET;
   gatewaySignature: string;
 }
@@ -64,8 +66,8 @@ export interface XiaohongshuAccountPublicNotesWorkResult {
   terminalReason: XiaohongshuAccountPublicNotesTerminalReason;
   completedAt: string;
   navigation: { attempted: boolean; attemptCount: 0 | 1 };
-  semanticAction: { attempted: boolean; attemptCount: 0 | 1 | 2 | 3 };
-  scroll: { requestedCount: 1 | 2 | 3; completedCount: 0 | 1 | 2 | 3 };
+  semanticAction: { attempted: boolean; attemptCount: XiaohongshuProfileScrollCompletedCount };
+  scroll: { requestedCount: XiaohongshuProfileScrollCount; completedCount: XiaohongshuProfileScrollCompletedCount };
   page: { publicSurface: 'public_profile'; renderedCardCount: number } | null;
   projection: XiaohongshuManagedProfileNotesProjectionResult | null;
   rawPayloadStored: false;
@@ -135,7 +137,7 @@ export function isXiaohongshuAccountPublicNotesWorkResultForItem(
 function validInput(value: unknown, executionTarget: unknown): boolean {
   if (!record(value) || !scrollCount(value.maximumScrolls)) return false;
   if (executionTarget === 'existing_public_profile_tab') {
-    return exactKeys(value, ['maximumScrolls']);
+    return exactKeys(value, ['maximumScrolls']) && Number(value.maximumScrolls) <= 3;
   }
   return exactKeys(value, ['maximumScrolls', 'profileUrl']) &&
     typeof value.profileUrl === 'string' && canonicalXiaohongshuPublicProfileUrl(value.profileUrl) !== null;
@@ -164,14 +166,15 @@ function isLinkBudget(value: unknown): value is typeof XIAOHONGSHU_ACCOUNT_PUBLI
     'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
     'maximumRawPayloadBytesStored'
   ]) && value.maximumPlatformNavigations === 1 && value.maximumPageReloads === 0 &&
-    value.maximumPageInitiatedNewDocuments === 0 && value.maximumSemanticActions === 3 &&
-    value.maximumNetworkResponseBodies === 8 && value.maximumProjectedItems === 40 &&
+    value.maximumPageInitiatedNewDocuments === 0 && value.maximumSemanticActions === 20 &&
+    value.maximumNetworkResponseBodies === 8 && value.maximumProjectedItems === 200 &&
     value.maximumRawPayloadBytesStored === 0;
 }
 
 function terminalReason(value: unknown): value is XiaohongshuAccountPublicNotesTerminalReason {
   return typeof value === 'string' && [
     'profile_notes_ready', 'existing_public_profile_tab_required', 'existing_public_profile_tab_ambiguous',
+    'profile_url_invalid', 'profile_url_expired', 'profile_url_navigation_failed', 'profile_url_context_changed',
     'document_context_changed', 'postcondition_unmet', 'permission_required', 'login_required',
     'verification_required', 'rate_limited', 'source_unavailable', 'debugger_attach_failed',
     'debugger_input_failed', 'debugger_detach_failed', 'extension_worker_interrupted'
@@ -200,12 +203,12 @@ function pageResult(value: unknown): boolean {
     Number(value.renderedCardCount) >= 0 && Number(value.renderedCardCount) <= 80);
 }
 
-function scrollCount(value: unknown): value is 1 | 2 | 3 {
-  return value === 1 || value === 2 || value === 3;
+function scrollCount(value: unknown): value is XiaohongshuProfileScrollCount {
+  return Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= 20;
 }
 
-function scrollCompletedCount(value: unknown): value is 0 | 1 | 2 | 3 {
-  return value === 0 || value === 1 || value === 2 || value === 3;
+function scrollCompletedCount(value: unknown): value is XiaohongshuProfileScrollCompletedCount {
+  return value === 0 || scrollCount(value);
 }
 
 function uuid(value: unknown): value is string {

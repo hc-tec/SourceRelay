@@ -1,7 +1,7 @@
 const stateKey = '__personalIntelligenceXiaohongshuPublicNotesObserverV2';
 const maximumBodyBytes = 2 * 1024 * 1024;
 const maximumPayloads = 8;
-const maximumItems = 40;
+const maximumItems = 200;
 const maximumComments = 80;
 
 interface PublicItem {

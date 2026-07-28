@@ -73,7 +73,7 @@ const completedResult = {
 } as const;
 
 describe('signed Xiaohongshu account public-notes work contract', () => {
-  test('admits only a fixed existing-profile target and a 1-3 scroll budget', () => {
+  test('admits only a fixed existing-profile target and its 1-3 scroll budget', () => {
     expect(isExtensionWorkItem(item)).toBe(true);
     expect(() => extensionWorkTargetUrl(item)).toThrow('extension_work_target_navigation_forbidden');
     expect(extensionWorkSigningPayload(item)).not.toContain('gatewaySignature');
@@ -128,20 +128,21 @@ describe('signed Xiaohongshu account public-notes work contract', () => {
       ...item,
       executionTarget: 'ephemeral_public_profile_url',
       input: {
-        maximumScrolls: 3,
+        maximumScrolls: 20,
         profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short'
       },
       budget: {
         maximumPlatformNavigations: 1,
         maximumPageReloads: 0,
         maximumPageInitiatedNewDocuments: 0,
-        maximumSemanticActions: 3,
+        maximumSemanticActions: 20,
         maximumNetworkResponseBodies: 8,
-        maximumProjectedItems: 40,
+        maximumProjectedItems: 200,
         maximumRawPayloadBytesStored: 0
       }
     };
     expect(isExtensionWorkItem(linkItem)).toBe(true);
+    expect(isExtensionWorkItem({ ...linkItem, input: { ...linkItem.input, maximumScrolls: 21 } })).toBe(false);
     expect(extensionWorkSigningPayload(linkItem)).toContain('profileUrl');
     expect(extensionWorkSigningPayload(linkItem)).not.toContain('gatewaySignature');
     expect(isExtensionWorkItem({

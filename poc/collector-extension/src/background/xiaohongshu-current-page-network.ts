@@ -422,7 +422,8 @@ export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
 
 export async function readXiaohongshuExistingPublicProfileWorkProjection(
   tabId: number,
-  workId: string
+  workId: string,
+  maximumItems = 40
 ): Promise<XiaohongshuManagedProfileNotesProjectionResult> {
   const record = await loadActiveRecord();
   if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId ||
@@ -438,7 +439,8 @@ export async function readXiaohongshuExistingPublicProfileWorkProjection(
     }
   });
   const candidate = results[0]?.result as Record<string, unknown> | null | undefined;
-  const rawItems = Array.isArray(candidate?.items) ? candidate.items.slice(0, 40) : [];
+  const boundedMaximumItems = Math.min(200, Math.max(1, Math.floor(maximumItems)));
+  const rawItems = Array.isArray(candidate?.items) ? candidate.items.slice(0, boundedMaximumItems) : [];
   const items = rawItems.map((value, index) => {
     const item = value && typeof value === 'object' ? value as Record<string, unknown> : {};
     const text = (field: string, maximum: number): string =>

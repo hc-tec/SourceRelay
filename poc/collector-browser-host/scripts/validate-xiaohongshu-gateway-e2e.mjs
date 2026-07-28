@@ -240,16 +240,19 @@ try {
       }
       const accountExecutionTarget = suppliedProfileUrl
         ? 'ephemeral_public_profile_url' : 'existing_public_profile_tab';
+      const accountMaximumScrolls = suppliedProfileUrl ? 20 : 3;
       const accountDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
         method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
           browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
           capability: 'xiaohongshu.account.public_notes.v1', executionTarget: accountExecutionTarget,
-          input: suppliedProfileUrl ? { maximumScrolls: 3, profileUrl: suppliedProfileUrl } : { maximumScrolls: 3 } })
+          input: suppliedProfileUrl
+            ? { maximumScrolls: accountMaximumScrolls, profileUrl: suppliedProfileUrl }
+            : { maximumScrolls: accountMaximumScrolls } })
       }, 201);
       const accountOperationId = accountDispatch.result?.operationId;
       if (!uuid(accountOperationId)) throw new Error('xiaohongshu_account_notes_e2e_operation_missing');
       record('account_notes_operation_dispatched', {
-        operationId: accountOperationId, maximumScrolls: 3, executionTarget: accountExecutionTarget
+        operationId: accountOperationId, maximumScrolls: accountMaximumScrolls, executionTarget: accountExecutionTarget
       });
       const accountOperation = await waitForOperation(gatewayOrigin, token, accountOperationId, 90_000);
       if (accountOperation.state !== 'completed' || accountOperation.terminalReason !== 'profile_notes_ready' ||
@@ -262,7 +265,9 @@ try {
         { headers: { authorization: `Bearer ${token}` } },
         200
       );
-      assertAccountNotesArtifact(accountArtifactPayload.artifact, accountOperationId, Boolean(suppliedProfileUrl));
+      assertAccountNotesArtifact(
+        accountArtifactPayload.artifact, accountOperationId, Boolean(suppliedProfileUrl), accountMaximumScrolls
+      );
       reportedOperation = accountOperation;
       reportedArtifact = accountArtifactPayload.artifact;
       record('account_notes_artifact_retrieved', {
@@ -645,15 +650,15 @@ function assertNoteRepliesArtifact(artifact, operationId) {
   }
 }
 
-function assertAccountNotesArtifact(artifact, operationId, navigated) {
+function assertAccountNotesArtifact(artifact, operationId, navigated, maximumScrolls) {
   const actionCount = artifact?.result?.semanticAction?.attemptCount;
   if (!artifact || artifact.summary?.operationId !== operationId ||
     artifact.summary?.capability !== 'xiaohongshu.account.public_notes.v1' ||
     artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'profile_notes_ready' ||
     artifact.result?.navigation?.attempted !== navigated || artifact.result.navigation.attemptCount !== (navigated ? 1 : 0) ||
-    !Number.isInteger(actionCount) || actionCount < 0 || actionCount > 3 ||
+    !Number.isInteger(actionCount) || actionCount < 0 || actionCount > maximumScrolls ||
     artifact.result.semanticAction.attempted !== (actionCount > 0) ||
-    artifact.result?.scroll?.requestedCount !== 3 || artifact.result.scroll.completedCount !== actionCount ||
+    artifact.result?.scroll?.requestedCount !== maximumScrolls || artifact.result.scroll.completedCount !== actionCount ||
     artifact.result?.page?.publicSurface !== 'public_profile' ||
     !Array.isArray(artifact.result?.projection?.items) || artifact.result.projection.items.length < 1 ||
     artifact.provenance?.rawPayloadStored !== false || artifact.provenance?.responseUrlsStored !== false ||

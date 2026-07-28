@@ -6,6 +6,8 @@ import {
   type XiaohongshuAccountPublicNotesWorkItem,
   type XiaohongshuAccountPublicNotesWorkResult,
   type XiaohongshuManagedProfileNotesProjectionResult,
+  type XiaohongshuProfileScrollCompletedCount,
+  type XiaohongshuProfileScrollCount,
   type XiaohongshuPublicSearchItemProjection
 } from '@intelligence/collector-contracts';
 import {
@@ -41,8 +43,8 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   let document: ProfileDocument | null = null;
   let attached = false;
   let debuggerDetached = true;
-  let attemptedCount: 0 | 1 | 2 | 3 = 0;
-  let completedCount: 0 | 1 | 2 | 3 = 0;
+  let attemptedCount: XiaohongshuProfileScrollCompletedCount = 0;
+  let completedCount: XiaohongshuProfileScrollCompletedCount = 0;
   let projection: XiaohongshuManagedProfileNotesProjectionResult | null = null;
   let networkProjection: XiaohongshuManagedProfileNotesProjectionResult | null = null;
   let renderedCardCount = 0;
@@ -60,25 +62,36 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     document = await findUniquePublicProfileDocument();
     await foreground(document);
     await requireSameDocument(document);
-    const baseline = await readPageProbe(document);
+    const maximumItems = item.executionTarget === 'ephemeral_public_profile_url' ? 200 : 40;
+    const baseline = await readPageProbe(document, maximumItems);
     assertRisk(baseline.risk);
     await armXiaohongshuExistingPublicProfileWorkObserver(document.tabId, item.workId);
     await prepareXiaohongshuProfileScroll(item.workId);
     await delay(1_200);
-    networkProjection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId);
-    projection = mergeProfileNotesProjection(networkProjection, baseline.items);
-    if (projection.items.length === 0) {
+    networkProjection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId, maximumItems);
+    projection = mergeProfileNotesProjection(networkProjection, baseline.items, maximumItems);
+    const ephemeralProfileLink = item.executionTarget === 'ephemeral_public_profile_url';
+    // A temporary profile link is supplied precisely so the caller can drain
+    // the public profile in this short-lived window.  Do not stop after the
+    // first payload (the old existing-tab path intentionally did that to keep
+    // its three-action canary bounded).  The link path keeps scrolling until
+    // the projection reaches its item cap or two consecutive scrolls produce
+    // no new visible/network item.
+    if (ephemeralProfileLink || projection.items.length === 0) {
       const debuggee: chrome.debugger.Debuggee = { tabId: document.tabId };
       await chrome.debugger.attach(debuggee, '1.3').catch(() => {
         throw new Error('debugger_attach_failed');
       });
       attached = true;
       debuggerDetached = false;
+      let previousItemCount = projection.items.length;
+      let previousRenderedCardCount = baseline.renderedCardCount;
+      let noProgressRounds = 0;
       for (let index = 1; index <= item.input.maximumScrolls; index += 1) {
         await requireSameDocument(document);
-        await recordXiaohongshuProfileScrollIntent(item.workId, index as 1 | 2 | 3);
-        attemptedCount = index as 1 | 2 | 3;
-        const viewport = await readPageProbe(document);
+        await recordXiaohongshuProfileScrollIntent(item.workId, index as XiaohongshuProfileScrollCount);
+        attemptedCount = index as XiaohongshuProfileScrollCount;
+        const viewport = await readPageProbe(document, maximumItems);
         await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
           type: 'mouseWheel',
           x: Math.floor(viewport.viewportWidth / 2),
@@ -90,19 +103,28 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
         });
         await delay(1_400);
         await requireSameDocument(document);
-        const afterScroll = await readPageProbe(document);
+        const afterScroll = await readPageProbe(document, maximumItems);
         assertRisk(afterScroll.risk);
-        networkProjection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId);
-        projection = mergeProfileNotesProjection(networkProjection, afterScroll.items);
-        completedCount = index as 1 | 2 | 3;
-        if (projection.items.length > 0) break;
+        networkProjection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId, maximumItems);
+        projection = mergeProfileNotesProjection(networkProjection, afterScroll.items, maximumItems);
+        completedCount = index as XiaohongshuProfileScrollCount;
+        if (!ephemeralProfileLink && projection.items.length > 0) break;
+        if (projection.items.length >= maximumItems) break;
+        const madeProgress = projection.items.length > previousItemCount ||
+          afterScroll.renderedCardCount > previousRenderedCardCount;
+        if (ephemeralProfileLink) {
+          noProgressRounds = madeProgress ? 0 : noProgressRounds + 1;
+          if (noProgressRounds >= 2) break;
+        }
+        previousItemCount = projection.items.length;
+        previousRenderedCardCount = afterScroll.renderedCardCount;
       }
     }
     await completeXiaohongshuProfileScroll(item.workId);
-    const page = await readPageProbe(document);
+    const page = await readPageProbe(document, maximumItems);
     renderedCardCount = page.renderedCardCount;
     assertRisk(page.risk);
-    if (networkProjection) projection = mergeProfileNotesProjection(networkProjection, page.items);
+    if (networkProjection) projection = mergeProfileNotesProjection(networkProjection, page.items, maximumItems);
     if (projection.items.length < 1 || renderedCardCount < 1) {
       throw new Error('xiaohongshu_profile_notes_postcondition_unmet');
     }
@@ -220,10 +242,11 @@ async function requireSameDocument(document: ProfileDocument): Promise<void> {
   }
 }
 
-async function readPageProbe(profileDocument: ProfileDocument): Promise<ProfileDomProbe> {
+async function readPageProbe(profileDocument: ProfileDocument, maximumItems = 40): Promise<ProfileDomProbe> {
   const results = await chrome.scripting.executeScript({
     target: { tabId: profileDocument.tabId, documentIds: [profileDocument.documentId] },
-    func: () => {
+    args: [Math.min(200, Math.max(1, maximumItems))],
+    func: (requestedMaximumItems) => {
       const clean = (value: unknown, maximum: number): string =>
         (typeof value === 'string' ? value : '').replace(/[\u0000-\u001f\u007f]/g, '')
           .replace(/\s+/g, ' ').trim().slice(0, maximum);
@@ -234,7 +257,7 @@ async function readPageProbe(profileDocument: ProfileDocument): Promise<ProfileD
           style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
       };
       const cards = Array.from(document.querySelectorAll('section.note-item')).filter(visible);
-      const items = cards.slice(0, 40).map((section, index) => {
+      const items = cards.slice(0, requestedMaximumItems).map((section, index) => {
         const noteAnchor = Array.from(section.querySelectorAll('a[href]')).find((element) => {
           if (!(element instanceof HTMLAnchorElement)) return false;
           try {
@@ -307,7 +330,7 @@ async function readPageProbe(profileDocument: ProfileDocument): Promise<ProfileD
     renderedCardCount: Math.min(80, Math.max(0, renderedCardCount)),
     viewportWidth,
     viewportHeight,
-    items: normaliseProfileDomItems(value.items),
+    items: normaliseProfileDomItems(value.items, maximumItems),
     risk: classifyXiaohongshuCurrentPageRisk({
       pathname: value.pathname,
       title: value.title,
@@ -316,9 +339,9 @@ async function readPageProbe(profileDocument: ProfileDocument): Promise<ProfileD
   };
 }
 
-function normaliseProfileDomItems(value: unknown): PublicProfileItem[] {
+function normaliseProfileDomItems(value: unknown, maximumItems = 40): PublicProfileItem[] {
   if (!Array.isArray(value)) return [];
-  return value.slice(0, 40).map((entry) => {
+  return value.slice(0, Math.min(200, Math.max(1, Math.floor(maximumItems)))).map((entry) => {
     const item = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
     const text = (field: string, maximum: number): string =>
       (typeof item[field] === 'string' ? item[field] : '').replace(/[\u0000-\u001f\u007f]/g, '')
@@ -337,7 +360,8 @@ function normaliseProfileDomItems(value: unknown): PublicProfileItem[] {
 
 export function mergeProfileNotesProjection(
   network: XiaohongshuManagedProfileNotesProjectionResult,
-  domItems: PublicProfileItem[]
+  domItems: PublicProfileItem[],
+  maximumItems = 40
 ): XiaohongshuManagedProfileNotesProjectionResult {
   const merged = new Map<string, PublicProfileItem>();
   for (const item of network.items) merged.set(item.noteId, { ...item });
@@ -358,7 +382,8 @@ export function mergeProfileNotesProjection(
   }
   return {
     ...network,
-    items: [...merged.values()].slice(0, 40).map((item, index) => ({ ...item, rank: index + 1 }))
+    items: [...merged.values()].slice(0, Math.min(200, Math.max(1, maximumItems)))
+      .map((item, index) => ({ ...item, rank: index + 1 }))
   };
 }
 

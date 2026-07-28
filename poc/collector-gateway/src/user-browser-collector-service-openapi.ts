@@ -251,7 +251,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           required: [
             'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'executionTarget',
             'accountScopedSurfaces', 'dispatchState', 'managedValidationState', 'captureMode',
-            'responseBodies', 'routeAdmission', 'budget', 'browserHostFallback'
+            'responseBodies', 'routeAdmission', 'budget', 'ephemeralProfileLinkBudget', 'browserHostFallback'
           ],
           properties: {
             schemaVersion: { type: 'integer', const: 1 },
@@ -280,6 +280,23 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 maximumSemanticActions: { type: 'integer', const: 3 },
                 maximumNetworkResponseBodies: { type: 'integer', const: 8 },
                 maximumProjectedItems: { type: 'integer', const: 40 },
+                maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
+              }
+            },
+            ephemeralProfileLinkBudget: {
+              type: 'object', additionalProperties: false,
+              required: [
+                'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+                'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
+                'maximumRawPayloadBytesStored'
+              ],
+              properties: {
+                maximumPlatformNavigations: { type: 'integer', const: 1 },
+                maximumPageReloads: { type: 'integer', const: 0 },
+                maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
+                maximumSemanticActions: { type: 'integer', const: 20 },
+                maximumNetworkResponseBodies: { type: 'integer', const: 8 },
+                maximumProjectedItems: { type: 'integer', const: 200 },
                 maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
               }
             },
@@ -555,12 +572,21 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
               type: 'object', additionalProperties: false,
               required: ['maximumScrolls'],
               properties: {
-                maximumScrolls: { type: 'integer', enum: [1, 2, 3] },
+                maximumScrolls: { type: 'integer', enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] },
                 profileUrl: { type: 'string', minLength: 1, maxLength: 4096, format: 'uri' }
               },
-              anyOf: [
-                { required: ['maximumScrolls'] },
-                { required: ['maximumScrolls', 'profileUrl'] }
+              oneOf: [
+                {
+                  required: ['maximumScrolls'],
+                  properties: { maximumScrolls: { type: 'integer', enum: [1, 2, 3] } },
+                  not: { required: ['profileUrl'] }
+                },
+                {
+                  required: ['maximumScrolls', 'profileUrl'],
+                  properties: {
+                    maximumScrolls: { type: 'integer', enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] }
+                  }
+                }
               ]
             }
           }

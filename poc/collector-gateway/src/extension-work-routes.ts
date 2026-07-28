@@ -20,6 +20,7 @@ import {
   isXiaohongshuNotePublicCommentsWorkResult,
   isXiaohongshuNotePublicCommentRepliesWorkItem,
   isXiaohongshuNotePublicCommentRepliesWorkResult,
+  type XiaohongshuProfileScrollCount,
   type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
 import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
@@ -374,7 +375,7 @@ export async function enqueueXiaohongshuPublicNotesSearchWork(
 export async function enqueueXiaohongshuAccountPublicNotesWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  maximumScrolls: 1 | 2 | 3,
+  maximumScrolls: XiaohongshuProfileScrollCount,
   profileUrl?: string
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');

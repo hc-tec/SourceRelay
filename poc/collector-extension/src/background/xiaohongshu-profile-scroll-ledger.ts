@@ -4,7 +4,7 @@ const MAX_ENTRIES = 100;
 interface Entry {
   schemaVersion: 1;
   workId: string;
-  attemptedCount: 0 | 1 | 2 | 3;
+  attemptedCount: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
   phase: 'prepared' | 'intent_recorded' | 'completed';
   updatedAt: string;
 }
@@ -25,7 +25,7 @@ export async function prepareXiaohongshuProfileScroll(workId: string): Promise<v
 
 export async function recordXiaohongshuProfileScrollIntent(
   workId: string,
-  attemptedCount: 1 | 2 | 3
+  attemptedCount: Exclude<Entry['attemptedCount'], 0>
 ): Promise<void> {
   const entries = await load();
   const entry = entries.find((candidate) => candidate.workId === workId);
@@ -47,7 +47,7 @@ export async function completeXiaohongshuProfileScroll(workId: string): Promise<
   await save(entries);
 }
 
-export async function xiaohongshuProfileScrollAttemptCount(workId: string): Promise<0 | 1 | 2 | 3> {
+export async function xiaohongshuProfileScrollAttemptCount(workId: string): Promise<Entry['attemptedCount']> {
   return (await load()).find((entry) => entry.workId === workId)?.attemptedCount ?? 0;
 }
 
@@ -65,10 +65,10 @@ async function save(entries: Entry[]): Promise<void> {
 function isEntry(value: unknown): value is Entry {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const entry = value as Partial<Entry>;
+  const attemptedCount = entry.attemptedCount;
   return entry.schemaVersion === 1 && typeof entry.workId === 'string' &&
     /^[0-9a-f-]{36}$/i.test(entry.workId) &&
-    (entry.attemptedCount === 0 || entry.attemptedCount === 1 || entry.attemptedCount === 2 ||
-      entry.attemptedCount === 3) &&
+    Number.isSafeInteger(attemptedCount) && Number(attemptedCount) >= 0 && Number(attemptedCount) <= 20 &&
     (entry.phase === 'prepared' || entry.phase === 'intent_recorded' || entry.phase === 'completed') &&
     typeof entry.updatedAt === 'string' && Number.isFinite(Date.parse(entry.updatedAt));
 }

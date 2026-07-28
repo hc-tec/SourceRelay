@@ -1,5 +1,6 @@
 import {
   canonicalXiaohongshuPublicProfileUrl,
+  type XiaohongshuProfileScrollCount,
   canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliPassiveVideoWorkUrl,
   canonicalBilibiliVideoWorkUrl,
@@ -123,7 +124,7 @@ export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.account.public_notes.v1';
   executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
-  input: { maximumScrolls: 1 | 2 | 3; profileUrl?: string };
+  input: { maximumScrolls: XiaohongshuProfileScrollCount; profileUrl?: string };
 }
 
 export interface UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest {
@@ -225,10 +226,13 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
         ? canonicalXiaohongshuPublicProfileUrl(input.profileUrl) : null;
       const ephemeralProfileUrl = executionTarget === 'ephemeral_public_profile_url' &&
         Object.keys(input).length === 2 && canonicalProfileUrl !== null;
+      const maximumScrolls = typeof input.maximumScrolls === 'number' ? input.maximumScrolls : null;
       if ((!existingProfileTab && !ephemeralProfileUrl) ||
-        (input.maximumScrolls !== 1 && input.maximumScrolls !== 2 && input.maximumScrolls !== 3)) {
+        maximumScrolls === null || !Number.isSafeInteger(maximumScrolls) || maximumScrolls < 1 ||
+        maximumScrolls > (ephemeralProfileUrl ? 20 : 3)) {
         throw new Error('user_browser_collector_service_request_invalid');
       }
+      const boundedMaximumScrolls = maximumScrolls as XiaohongshuProfileScrollCount;
       return {
         schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
         browserBindingId: candidate.browserBindingId,
@@ -236,8 +240,8 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
         capability: 'xiaohongshu.account.public_notes.v1',
         executionTarget: ephemeralProfileUrl ? 'ephemeral_public_profile_url' : 'existing_public_profile_tab',
         input: ephemeralProfileUrl
-          ? { maximumScrolls: input.maximumScrolls, profileUrl: canonicalProfileUrl! }
-          : { maximumScrolls: input.maximumScrolls }
+          ? { maximumScrolls: boundedMaximumScrolls, profileUrl: canonicalProfileUrl! }
+          : { maximumScrolls: boundedMaximumScrolls }
       };
     }
     if (candidate.capability !== 'xiaohongshu.search.public_notes.v1' ||

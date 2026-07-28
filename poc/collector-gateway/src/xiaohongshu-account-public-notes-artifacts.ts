@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
   isXiaohongshuManagedProfileNotesProjectionResult,
+  type XiaohongshuProfileScrollCompletedCount,
   type XiaohongshuAccountPublicNotesWorkItem,
   type XiaohongshuAccountPublicNotesWorkResult
 } from '@intelligence/collector-contracts';
@@ -32,7 +33,7 @@ export interface XiaohongshuAccountPublicNotesArtifactView {
     platformNavigations: 0 | 1;
     pageReloads: 0;
     pageInitiatedNewTabs: 0;
-    semanticActions: 0 | 1 | 2 | 3;
+    semanticActions: XiaohongshuProfileScrollCompletedCount;
     responseBodies: 'temporarily_read_projected_not_stored';
     rawPayloadStored: false;
     responseUrlsStored: false;
@@ -176,7 +177,7 @@ function isSummary(value: unknown): value is XiaohongshuAccountPublicNotesArtifa
   ]) && value.schemaVersion === 1 && uuid(value.artifactId) && uuid(value.operationId) &&
     value.capability === 'xiaohongshu.account.public_notes.v1' &&
     (value.state === 'completed' || value.state === 'stopped') && timestamp(value.capturedAt) &&
-    Number.isSafeInteger(value.itemCount) && Number(value.itemCount) >= 0 && Number(value.itemCount) <= 40 &&
+    Number.isSafeInteger(value.itemCount) && Number(value.itemCount) >= 0 && Number(value.itemCount) <= 200 &&
     typeof value.sha256 === 'string' && SHA256.test(value.sha256);
 }
 
