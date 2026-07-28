@@ -69,6 +69,8 @@ npm run start:xiaohongshu-validation-browser
 
 验证浏览器只用于扩展加载/Host 协议、以及真实小红书页面的受限证据闭环；它**不自动化** `control.html`、扩展 popup、Chrome 原生权限提示或任何其他浏览器 UI。可选的 `https://www.xiaohongshu.com/*` 与 `webRequest` 权限是一次性的产品设置前置条件：零输入 Native Bridge 读取只返回 `permissionState: permission_required | permission_granted`，不请求、不扩大、不撤销权限；`permission_required` 时自动化立即停止，不能以测试路径代替用户界面操作。
 
+2026-07-28 的一次零输入真实协议读取已验证当前专用 Profile 为 `permission_granted`、`selectionState=not_selected`、`observerState=not_armed`、`publicContentRouteCount=0`、`responseBodiesRead=false`、`rawPayloadBytesRead=0`。本轮没有打开平台页、扩展页或权限提示，也没有产生平台请求；它只证明权限与 Host → Native Bridge 去敏读取链路可用，不等同于页面观察或 route admission 已通过。
+
 ## 不可绕过的预算
 
 | 项目 | 上限 | 含义 |
