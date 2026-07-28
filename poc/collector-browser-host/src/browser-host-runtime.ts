@@ -5,6 +5,7 @@ import {
   BrowserHostError,
   PAGE_POOL_SCHEMA_VERSION,
   validationExtensionControlRequest,
+  isXiaohongshuNoteOverlayReconRequest,
   isXiaohongshuPublicProfileReconRequest,
   isXiaohongshuValidationPageAdoptionRequest,
   type BrowserHostCommandBody,
@@ -146,6 +147,26 @@ export class BrowserHostRuntime {
           });
         }
         return await this.#profile(request.profileId).reconXiaohongshuPublicProfileEntry(request);
+      }
+      case 'recon_xiaohongshu_note_overlay': {
+        const request = body.request;
+        if (!isXiaohongshuNoteOverlayReconRequest(request)) {
+          throw hostError({
+            code: 'xiaohongshu_note_overlay_recon_request_invalid',
+            category: 'protocol',
+            scope: 'action',
+            retryClass: 'never'
+          });
+        }
+        if (!this.#validationAutomationProfileId || request.profileId !== this.#validationAutomationProfileId) {
+          throw hostError({
+            code: 'xiaohongshu_note_overlay_recon_not_enabled',
+            category: 'validation',
+            scope: 'profile',
+            retryClass: 'never'
+          });
+        }
+        return await this.#profile(request.profileId).reconXiaohongshuNoteOverlay(request);
       }
       case 'adopt_xiaohongshu_validation_public_page': {
         const request = body.request;

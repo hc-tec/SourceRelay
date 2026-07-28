@@ -68,6 +68,10 @@ import type {
   XiaohongshuPublicProfileReconRequest,
   XiaohongshuPublicProfileReconResult
 } from './xiaohongshu-public-profile-recon.js';
+import type {
+  XiaohongshuNoteOverlayReconRequest,
+  XiaohongshuNoteOverlayReconResult
+} from './xiaohongshu-note-overlay-recon.js';
 import type { XiaohongshuValidationPageAdoptionRequest } from './xiaohongshu-validation-page-adoption.js';
 import type { CollectorXiaohongshuTrustedInputLedgerSummary } from './native-bridge.js';
 
@@ -136,6 +140,7 @@ export type BrowserHostCommandBody =
   | { type: 'trusted_xiaohongshu_search'; request: XiaohongshuTrustedSearchRequest }
   | { type: 'extension_trusted_xiaohongshu_search_canary'; request: XiaohongshuTrustedSearchRequest }
   | { type: 'recon_xiaohongshu_public_profile_entry'; request: XiaohongshuPublicProfileReconRequest }
+  | { type: 'recon_xiaohongshu_note_overlay'; request: XiaohongshuNoteOverlayReconRequest }
   | { type: 'adopt_xiaohongshu_validation_public_page'; request: XiaohongshuValidationPageAdoptionRequest }
   | { type: 'read_xiaohongshu_managed_search_projection'; request: XiaohongshuManagedPageNetworkObserverRequest }
   | { type: 'reconcile_page'; request: ReconcilePageRequest }
@@ -183,6 +188,7 @@ export type BrowserHostCommandResult =
   | XiaohongshuManagedSearchProjectionResult
   | XiaohongshuPublicNotesSearchWorkResult
   | XiaohongshuPublicProfileReconResult
+  | XiaohongshuNoteOverlayReconResult
   | CollectorXiaohongshuTrustedInputLedgerSummary
   | { ok: true; profileId?: string; pageAlias?: string; state?: string }
   | { ok: true; shuttingDown: true };

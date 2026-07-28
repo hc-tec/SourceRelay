@@ -26,6 +26,8 @@ import {
   type XiaohongshuTrustedSearchResult,
   type XiaohongshuPublicProfileReconRequest,
   type XiaohongshuPublicProfileReconResult,
+  type XiaohongshuNoteOverlayReconRequest,
+  type XiaohongshuNoteOverlayReconResult,
   type XiaohongshuValidationPageAdoptionRequest
 } from '@intelligence/collector-contracts';
 import { hostError } from '../host-errors.js';
@@ -49,6 +51,7 @@ import { executeTrustedBilibiliVideoDiscussionInteraction } from './trusted-bili
 import { executeTrustedBilibiliDanmakuInteraction } from './trusted-bilibili-danmaku-interaction.js';
 import { executeTrustedXiaohongshuSearch } from './trusted-xiaohongshu-search.js';
 import { executeXiaohongshuPublicProfileEntryRecon } from './recon-xiaohongshu-public-profile-entry.js';
+import { executeXiaohongshuNoteOverlayRecon } from './recon-xiaohongshu-note-overlay.js';
 import { closeQuarantinedPageRecord } from './quarantine-maintenance.js';
 import { assertRetainedPageVisualEvidenceEligible } from './retained-page-visual-evidence.js';
 import { ensureManagedPageForeground } from './page-foreground.js';
@@ -473,6 +476,20 @@ export class PageLedger {
   ): Promise<XiaohongshuPublicProfileReconResult> {
     const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
     return await executeXiaohongshuPublicProfileEntryRecon({
+      record,
+      request,
+      visualEvidenceDirectory,
+      assertLeasedRunRecord: () => this.#assertLeasedRunRecord(record, request),
+      emit: (eventType, reason, actionId) => this.#emit(eventType, record, reason, actionId)
+    });
+  }
+
+  async reconXiaohongshuNoteOverlay(
+    request: XiaohongshuNoteOverlayReconRequest,
+    visualEvidenceDirectory: string
+  ): Promise<XiaohongshuNoteOverlayReconResult> {
+    const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
+    return await executeXiaohongshuNoteOverlayRecon({
       record,
       request,
       visualEvidenceDirectory,
