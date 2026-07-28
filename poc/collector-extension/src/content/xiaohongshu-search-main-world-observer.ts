@@ -97,10 +97,10 @@ if (!existing) {
     const comments: ArchivedPublicComment[] = [];
     let hasMore: boolean | null = null;
     let cursorObserved = false;
-    const visit = (node: unknown, depth: number): void => {
+    const visit = (node: unknown, depth: number, inheritedParentCommentId = ''): void => {
       if (depth > 7 || (items.length >= maximumItems && comments.length >= maximumComments)) return;
       if (Array.isArray(node)) {
-        for (const entry of node.slice(0, 80)) visit(entry, depth + 1);
+        for (const entry of node.slice(0, 80)) visit(entry, depth + 1, inheritedParentCommentId);
         return;
       }
       const record = object(node);
@@ -123,7 +123,7 @@ if (!existing) {
           locationText: clean(record.ip_location ?? record.ipLocation, 100),
           parentNoteId: clean(record.note_id ?? record.noteId ?? record.target_note_id ?? record.targetNoteId, 80),
           parentCommentId: clean(record.parent_comment_id ?? record.parentCommentId ?? record.root_comment_id ??
-            record.rootCommentId ?? record.target_comment_id ?? record.targetCommentId, 100)
+            record.rootCommentId ?? record.target_comment_id ?? record.targetCommentId ?? inheritedParentCommentId, 100)
         });
       }
       const recordHasMore = record.has_more ?? record.hasMore;
@@ -158,7 +158,8 @@ if (!existing) {
       }
       for (const [key, child] of Object.entries(record).slice(0, 80)) {
         if (/token|cookie|session|captcha|verify|phone|email|xsec|secret|password/i.test(key)) continue;
-        visit(child, depth + 1);
+        const nestedReplyCollection = /^(?:sub_?comments?|subComments?|repl(?:y|ies)|reply_?list)$/i.test(key);
+        visit(child, depth + 1, nestedReplyCollection && commentId ? commentId : inheritedParentCommentId);
       }
     };
     visit(value, 0);
