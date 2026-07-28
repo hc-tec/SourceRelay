@@ -5,10 +5,8 @@
  * disables test-only extension-control commands.
  *
  * Keep this as a process boundary rather than importing the generic CLI
- * in-process.  The Browser Host's fixed validation-control allow-list is
- * calculated while the generic CLI module graph loads.  Supplying its
- * configuration in the child environment guarantees that the dedicated
- * Xiaohongshu control flag is present before that graph is evaluated.
+ * in-process so the dedicated Profile's generic test-only extension-control
+ * path is disabled before the generic CLI module graph is evaluated.
  */
 import { spawn } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
@@ -24,8 +22,7 @@ const child = spawn(process.execPath, [
     ...process.env,
     COLLECTOR_VALIDATION_BROWSER_INSTANCE: 'xiaohongshu-validation',
     COLLECTOR_VALIDATION_PROFILE_ID: 'xiaohongshu_validation',
-    COLLECTOR_VALIDATION_EXTENSION_CONTROL: 'disabled',
-    COLLECTOR_XIAOHONGSHU_VALIDATION_EXTENSION_CONTROL: 'enabled'
+    COLLECTOR_VALIDATION_EXTENSION_CONTROL: 'disabled'
   },
   stdio: 'inherit',
   windowsHide: true

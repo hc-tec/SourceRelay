@@ -5,10 +5,8 @@ import {
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY,
   classifyXiaohongshuCurrentPageRisk,
   isXiaohongshuCurrentPageNetworkObservationResult,
-  isXiaohongshuCurrentPageNetworkValidationControlResult,
   isXiaohongshuCurrentPageNetworkMetadataObservation,
   isXiaohongshuCurrentPageNetworkRequest,
-  xiaohongshuCurrentPageNetworkValidationControlRequest,
   xiaohongshuCurrentPageNetworkPublicSurface
 } from '../src/index.js';
 
@@ -170,27 +168,4 @@ describe('Xiaohongshu current-page network policy contract', () => {
     })).toBe(false);
   });
 
-  test('keeps the validation control fixed to a profile and one extension action', () => {
-    const request = {
-      schemaVersion: 1,
-      profileId: 'xiaohongshu_validation'
-    };
-    expect(xiaohongshuCurrentPageNetworkValidationControlRequest(request)).toEqual(request);
-    expect(() => xiaohongshuCurrentPageNetworkValidationControlRequest({
-      ...request,
-      tabId: 1
-    })).toThrow('xiaohongshu_current_page_network_validation_control_request_invalid');
-    expect(isXiaohongshuCurrentPageNetworkValidationControlResult({
-      schemaVersion: 1,
-      profileId: 'xiaohongshu_validation',
-      selectionState: 'armed_next_document',
-      controlTargetDisposed: true
-    })).toBe(true);
-    expect(isXiaohongshuCurrentPageNetworkValidationControlResult({
-      schemaVersion: 1,
-      profileId: 'xiaohongshu_validation',
-      selectionState: 'armed_next_document',
-      controlTargetDisposed: false
-    })).toBe(false);
-  });
 });

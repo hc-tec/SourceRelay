@@ -19,7 +19,6 @@ interface MainOptions {
   profileRoot: string;
   extensionDirectory: string | null;
   validationAutomationProfileId: string | null;
-  xiaohongshuValidationAutomationProfileId: string | null;
   endpointPath: string;
 }
 
@@ -52,8 +51,7 @@ async function main(): Promise<void> {
     visualEvidenceDirectory: resolve(options.stateDirectory, 'visual-evidence'),
     nativeBridgeRegistry,
     nativeBridgeCommands: nativeBridgeServer,
-    validationAutomationProfileId: options.validationAutomationProfileId,
-    xiaohongshuValidationAutomationProfileId: options.xiaohongshuValidationAutomationProfileId
+    validationAutomationProfileId: options.validationAutomationProfileId
   });
   await runtime.initialise();
 
@@ -126,7 +124,6 @@ function parseOptions(args: readonly string[]): MainOptions {
   const endpointPath = absolutePath(values.get('--endpoint-path'), 'endpoint_path');
   const extensionValue = values.get('--extension-dir');
   const validationAutomationProfileId = values.get('--validation-automation-profile-id');
-  const xiaohongshuValidationAutomationProfileId = values.get('--xiaohongshu-validation-automation-profile-id');
   return {
     stateDirectory,
     profileRoot,
@@ -134,9 +131,6 @@ function parseOptions(args: readonly string[]): MainOptions {
     extensionDirectory: extensionValue ? absolutePath(extensionValue, 'extension_directory') : null,
     validationAutomationProfileId: validationAutomationProfileId
       ? boundedIdentifier(validationAutomationProfileId, 'validation_automation_profile_id')
-      : null,
-    xiaohongshuValidationAutomationProfileId: xiaohongshuValidationAutomationProfileId
-      ? boundedIdentifier(xiaohongshuValidationAutomationProfileId, 'xiaohongshu_validation_automation_profile_id')
       : null
   };
 }
