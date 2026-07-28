@@ -74,8 +74,8 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       captureMode: 'network_first_dom_fallback_trusted_scroll',
       budget: expect.objectContaining({ maximumSemanticActions: 3, maximumProjectedItems: 80 })
     }), expect.objectContaining({capability:'xiaohongshu.note.public_comment_replies.v1',
-      executionTarget:'existing_public_note_overlay',dispatchState:'direct_canary_pending',
-      managedValidationState:'implementation_ready_live_e2e_pending',
+      executionTarget:'existing_public_note_overlay',dispatchState:'direct_ready',
+      managedValidationState:'gateway_extension_real_e2e_passed',
       captureMode:'network_archive_first_dom_hierarchy_fallback_trusted_click',
       budget:expect.objectContaining({maximumSemanticActions:1,maximumProjectedItems:40})
     })]);

@@ -542,15 +542,22 @@ function assertNoteCommentsArtifact(artifact, operationId) {
 }
 
 function assertNoteRepliesArtifact(artifact, operationId) {
+  const actionCount = artifact?.result?.semanticAction?.attemptCount;
+  const captureMode = artifact?.result?.projection?.captureMode;
+  const actionTriggeredResponseCount = artifact?.result?.projection?.network?.actionTriggeredResponseCount;
   if (!artifact || artifact.summary?.operationId !== operationId ||
     artifact.summary?.capability !== 'xiaohongshu.note.public_comment_replies.v1' ||
     artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'comment_replies_ready' ||
     artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
-    artifact.result?.semanticAction?.attempted !== true || artifact.result.semanticAction.attemptCount !== 1 ||
+    !Number.isInteger(actionCount) || actionCount < 0 || actionCount > 1 ||
+    artifact.result.semanticAction.attempted !== (actionCount === 1) ||
+    (actionCount === 0 && captureMode !== 'network_projection') ||
     artifact.result?.thread?.requestedCount !== 1 || artifact.result.thread.completedCount !== 1 ||
     artifact.result?.page?.publicSurface !== 'note_detail_overlay' ||
     !Array.isArray(artifact.result?.projection?.replies) || artifact.result.projection.replies.length < 1 ||
     !['network_projection', 'dom_fallback', 'hybrid'].includes(artifact.result.projection.captureMode) ||
+    !Number.isInteger(actionTriggeredResponseCount) || actionTriggeredResponseCount < 0 ||
+    actionTriggeredResponseCount > 8 || (actionCount === 0 && actionTriggeredResponseCount !== 0) ||
     artifact.provenance?.rawPayloadStored !== false || artifact.provenance?.responseUrlsStored !== false ||
     artifact.provenance?.debuggerDetached !== true) {
     throw new Error('xiaohongshu_note_replies_e2e_artifact_invalid');

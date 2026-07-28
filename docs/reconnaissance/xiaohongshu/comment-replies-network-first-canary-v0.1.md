@@ -2,8 +2,46 @@
 
 - 日期：2026-07-28
 - 环境：真实小红书、可见持久 Validation Profile、生产 Gateway 与扩展闭环
-- 当前结论：`partial`；正式能力已实现，评论 Network-first 已真实通过，回复正式 E2E 尚缺稳定的“含公开回复线程”canary 笔记。
-- Catalog 必须继续保持：`direct_canary_pending / implementation_ready_live_e2e_pending`。
+- 当前结论：`proved`；正式能力已通过真实 Gateway、签名队列、生产扩展、真实详情浮层和 artifact 回读闭环。
+- Catalog：`direct_ready / gateway_extension_real_e2e_passed`。
+
+## 正式回复闭环
+
+稳定公开标题 canary 的真实运行结果：
+
+```yaml
+search:
+  state: completed
+  itemCount: 18
+detail:
+  state: completed
+  publicTextLength: 632
+comments:
+  state: completed
+  captureMode: hybrid
+  commentCount: 6
+  semanticActions: 0
+  networkMatchedPayloadCount: 1
+  networkBodyBytesRead: 2368
+  networkCursorObserved: true
+replies:
+  state: completed
+  terminalReason: comment_replies_ready
+  captureMode: network_projection
+  replyCount: 1
+  requestedThreads: 1
+  completedThreads: 1
+  semanticActions: 0
+  networkMatchedPayloadCount: 1
+  networkBodyBytesRead: 2368
+  networkCursorObserved: true
+  actionTriggeredResponseCount: 0
+  rawPayloadStored: false
+  responseUrlsStored: false
+  debuggerDetached: true
+```
+
+验收器成功读取并记录完整 artifact 后，曾因旧断言强制要求回复 `semanticAction=1` 而报告 `xiaohongshu_note_replies_e2e_artifact_invalid`。这不是平台或能力失败：实际 operation 已为 `completed / comment_replies_ready`，artifact 已通过 Gateway digest 与结构校验。断言现已修正为允许且要求 Network-only 路径 `semanticAction=0 / captureMode=network_projection / actionTriggeredResponseCount=0`，未因此重放任何平台动作。
 
 ## 已真实证明
 

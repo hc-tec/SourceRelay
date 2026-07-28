@@ -47,6 +47,16 @@ describe('user-browser Gateway direct capability catalog', () => {
           captureMode: 'current_document_network_projection_plus_trusted_scroll',
           browserHostFallback: 'forbidden'
         },
+        {
+          schemaVersion: 1,
+          capability: 'xiaohongshu.note.public_comment_replies.v1',
+          platform: 'xiaohongshu',
+          title: '小红书公开评论回复',
+          inputMode: 'single_thread_budget_only_no_caller_identity',
+          dispatchState: 'direct_ready',
+          captureMode: 'network_archive_first_dom_hierarchy_fallback_trusted_click',
+          browserHostFallback: 'forbidden'
+        },
         descriptor({ capability: 'bilibili.dynamic', dispatchState: 'direct_migration_required' })
       ]
     })).toEqual([
@@ -62,6 +72,11 @@ describe('user-browser Gateway direct capability catalog', () => {
         capability: 'xiaohongshu.account.public_notes.v1',
         platform: 'xiaohongshu',
         dispatchState: 'direct_canary_pending'
+      }),
+      expect.objectContaining({
+        capability: 'xiaohongshu.note.public_comment_replies.v1',
+        platform: 'xiaohongshu',
+        dispatchState: 'direct_ready'
       })
     ]);
   });

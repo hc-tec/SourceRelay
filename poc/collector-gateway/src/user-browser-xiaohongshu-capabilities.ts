@@ -97,7 +97,7 @@ export interface UserBrowserXiaohongshuNotePublicCommentsCapabilityDescriptor {
 }
 export interface UserBrowserXiaohongshuReplyCapabilityDescriptor{schemaVersion:1;capability:typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_CAPABILITY;
   platform:'xiaohongshu';title:string;inputMode:'single_thread_budget_only_no_caller_identity';executionTarget:'existing_public_note_overlay';
-  accountScopedSurfaces:'forbidden';dispatchState:'direct_canary_pending';managedValidationState:'implementation_ready_live_e2e_pending';
+  accountScopedSurfaces:'forbidden';dispatchState:'direct_ready';managedValidationState:'gateway_extension_real_e2e_passed';
   captureMode:'network_archive_first_dom_hierarchy_fallback_trusted_click';responseBodies:'temporarily_read_projected_not_stored';
   routeAdmission:'preloaded_public_reply_shape_no_url_dependency';budget:typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET;browserHostFallback:'forbidden'}
 
@@ -184,7 +184,7 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
   },
   {schemaVersion:1,capability:XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_CAPABILITY,platform:'xiaohongshu',
     title:'小红书公开评论回复',inputMode:'single_thread_budget_only_no_caller_identity',executionTarget:'existing_public_note_overlay',
-    accountScopedSurfaces:'forbidden',dispatchState:'direct_canary_pending',managedValidationState:'implementation_ready_live_e2e_pending',
+    accountScopedSurfaces:'forbidden',dispatchState:'direct_ready',managedValidationState:'gateway_extension_real_e2e_passed',
     captureMode:'network_archive_first_dom_hierarchy_fallback_trusted_click',responseBodies:'temporarily_read_projected_not_stored',
     routeAdmission:'preloaded_public_reply_shape_no_url_dependency',budget:XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
     browserHostFallback:'forbidden'
