@@ -10,7 +10,11 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA256 = /^[a-f0-9]{64}$/;
-const MAX_ARTIFACT_BYTES = 128 * 1024;
+// The profile-link capability can return up to 200 bounded note-card
+// projections.  This is still only the sanitised projection (never a raw
+// response), but the generic 128 KiB limit could reject a valid result near
+// the declared item ceiling.
+const MAX_ARTIFACT_BYTES = 512 * 1024;
 
 export interface XiaohongshuAccountPublicNotesArtifactSummary {
   schemaVersion: 1;
