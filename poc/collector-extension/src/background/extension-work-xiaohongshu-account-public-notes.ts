@@ -52,17 +52,20 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   let errorCode: string | null = null;
   let completionReason: 'profile_notes_ready' | 'profile_notes_budget_exhausted' | null = null;
   try {
+    assertWorkDeadline(item);
     if (item.executionTarget === 'ephemeral_public_profile_url') {
       const profileUrl = item.input.profileUrl;
       if (!profileUrl || !canonicalXiaohongshuPublicProfileUrl(profileUrl)) {
         throw new Error('xiaohongshu_profile_url_invalid');
       }
       navigationAttempted = true;
-      await navigateToEphemeralProfileUrl(profileUrl);
+      await navigateToEphemeralProfileUrl(profileUrl, item.expiresAt);
     }
+    assertWorkDeadline(item);
     document = await findUniquePublicProfileDocument();
     await foreground(document);
     await requireSameDocument(document);
+    assertWorkDeadline(item);
     const maximumItems = item.executionTarget === 'ephemeral_public_profile_url' ? 200 : 40;
     const baseline = await readPageProbe(document, maximumItems);
     assertRisk(baseline.risk);
@@ -83,6 +86,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     // the projection reaches its item cap or two consecutive scrolls produce
     // no new visible/network item.
     if ((ephemeralProfileLink || projection.items.length === 0) && projection.items.length < maximumItems) {
+      assertWorkDeadline(item);
       const debuggee: chrome.debugger.Debuggee = { tabId: document.tabId };
       await chrome.debugger.attach(debuggee, '1.3').catch(() => {
         throw new Error('debugger_attach_failed');
@@ -93,6 +97,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
       let previousRenderedCardCount = baseline.renderedCardCount;
       let noProgressRounds = 0;
       for (let index = 1; index <= item.input.maximumScrolls; index += 1) {
+        assertWorkDeadline(item);
         await requireSameDocument(document);
         await recordXiaohongshuProfileScrollIntent(item.workId, index as XiaohongshuProfileScrollCount);
         attemptedCount = index as XiaohongshuProfileScrollCount;
@@ -107,6 +112,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
           throw new Error('debugger_input_failed');
         });
         await delay(1_400);
+        assertWorkDeadline(item);
         await requireSameDocument(document);
         const afterScroll = await readPageProbe(document, maximumItems);
         assertRisk(afterScroll.risk);
@@ -134,7 +140,9 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
         completionReason = 'profile_notes_budget_exhausted';
       }
     }
+    assertWorkDeadline(item);
     await completeXiaohongshuProfileScroll(item.workId);
+    assertWorkDeadline(item);
     const page = await readPageProbe(document, maximumItems);
     renderedCardCount = page.renderedCardCount;
     assertRisk(page.risk);
@@ -205,7 +213,7 @@ async function findUniquePublicProfileDocument(): Promise<ProfileDocument> {
   return { tabId: tab.id!, windowId: tab.windowId!, documentId: frame.documentId };
 }
 
-async function navigateToEphemeralProfileUrl(profileUrl: string): Promise<void> {
+async function navigateToEphemeralProfileUrl(profileUrl: string, expiresAt: string): Promise<void> {
   const tabs = await chrome.tabs.query({});
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && !tab.incognito && tab.status === 'complete' &&
     isXiaohongshuPublicEntryTab(tab.url ?? ''));
@@ -214,14 +222,17 @@ async function navigateToEphemeralProfileUrl(profileUrl: string): Promise<void> 
   const tab = eligible[0]!;
   const baselinePageCount = tabs.length;
   await chrome.windows.update(tab.windowId!, { focused: true }).catch(() => undefined);
+  if (Date.parse(expiresAt) <= Date.now()) throw new Error('xiaohongshu_profile_work_expired');
   await chrome.tabs.update(tab.id!, { url: profileUrl });
-  const deadline = Date.now() + 20_000;
+  const deadline = Math.min(Date.now() + 20_000, Date.parse(expiresAt));
   while (Date.now() < deadline) {
+    if (Date.now() >= Date.parse(expiresAt)) throw new Error('xiaohongshu_profile_work_expired');
     const currentTabs = await chrome.tabs.query({});
     if (currentTabs.length !== baselinePageCount) throw new Error('xiaohongshu_profile_url_new_tab_detected');
     const current = await chrome.tabs.get(tab.id!).catch(() => null);
     const frame = await chrome.webNavigation.getFrame({ tabId: tab.id!, frameId: 0 }).catch(() => null);
     if (current?.status === 'complete' && frame?.documentId) {
+      if (Date.now() >= Date.parse(expiresAt)) throw new Error('xiaohongshu_profile_work_expired');
       const surface = xiaohongshuCurrentPageNetworkPublicSurface(frame.url);
       if (surface === 'public_profile') return;
       if (surface !== null) throw new Error('xiaohongshu_profile_url_expired');
@@ -229,6 +240,10 @@ async function navigateToEphemeralProfileUrl(profileUrl: string): Promise<void> 
     await delay(250);
   }
   throw new Error('xiaohongshu_profile_url_navigation_failed');
+}
+
+function assertWorkDeadline(item: XiaohongshuAccountPublicNotesWorkItem): void {
+  if (Date.parse(item.expiresAt) <= Date.now()) throw new Error('xiaohongshu_profile_work_expired');
 }
 
 function isXiaohongshuPublicEntryTab(value: string): boolean {
@@ -435,6 +450,7 @@ function terminalReason(errorCode: string | null): XiaohongshuAccountPublicNotes
     case 'xiaohongshu_profile_url_expired': return 'profile_url_expired';
     case 'xiaohongshu_profile_url_navigation_failed': return 'profile_url_navigation_failed';
     case 'xiaohongshu_profile_url_new_tab_detected': return 'profile_url_context_changed';
+    case 'xiaohongshu_profile_work_expired': return 'run_deadline_exceeded';
     case 'xiaohongshu_profile_notes_budget_exhausted': return 'profile_notes_budget_exhausted';
     default: return 'postcondition_unmet';
   }

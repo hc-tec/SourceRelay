@@ -41,6 +41,7 @@ export type XiaohongshuAccountPublicNotesTerminalReason =
   | 'profile_url_expired'
   | 'profile_url_navigation_failed'
   | 'profile_url_context_changed'
+  | 'run_deadline_exceeded'
   | 'document_context_changed'
   | 'postcondition_unmet'
   | 'permission_required'
@@ -176,7 +177,7 @@ function terminalReason(value: unknown): value is XiaohongshuAccountPublicNotesT
   return typeof value === 'string' && [
     'profile_notes_ready', 'profile_notes_budget_exhausted', 'existing_public_profile_tab_required', 'existing_public_profile_tab_ambiguous',
     'profile_url_invalid', 'profile_url_expired', 'profile_url_navigation_failed', 'profile_url_context_changed',
-    'document_context_changed', 'postcondition_unmet', 'permission_required', 'login_required',
+    'run_deadline_exceeded', 'document_context_changed', 'postcondition_unmet', 'permission_required', 'login_required',
     'verification_required', 'rate_limited', 'source_unavailable', 'debugger_attach_failed',
     'debugger_input_failed', 'debugger_detach_failed', 'extension_worker_interrupted'
   ].includes(value);

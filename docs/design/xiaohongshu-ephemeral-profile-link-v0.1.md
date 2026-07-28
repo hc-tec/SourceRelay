@@ -39,6 +39,7 @@
 - `profile_url_expired`：导航后没有形成公开 profile 页面；
 - `profile_url_navigation_failed`：一次导航失败；
 - `profile_url_context_changed`：出现新 tab、非目标 document 或平台身份变化；
+- `run_deadline_exceeded`：任务在短链任务 TTL 内未能完成；停止后不再导航、刷新或重放；
 - `login_required`、`verification_required`、`rate_limited`、`source_unavailable`；
 - `profile_notes_ready`：连续两次可信滚动没有新增条目，取得 Network/DOM 合并结果并在当前可遍历范围内自然停止；
 - `profile_notes_budget_exhausted`：仍有投影结果，但达到滚动或投影上限；artifact 保留部分结果，不能解释为已到达平台终点。
