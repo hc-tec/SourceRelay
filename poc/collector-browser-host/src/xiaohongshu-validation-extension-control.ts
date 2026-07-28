@@ -8,7 +8,19 @@ import {
 import type { BrowserContext, Page } from 'playwright';
 import { hostError } from './host-errors.js';
 
-const CONTROL_TARGET_TIMEOUT_MS = 90_000;
+// Creating an extension page is local and should be immediate.  Keep this
+// much shorter than the optional-permission result window so a CDP target
+// visibility fault is diagnosed without holding a controller connection for
+// ninety seconds.
+const CONTROL_TARGET_TIMEOUT_MS = 15_000;
+const CONTROL_RESULT_TIMEOUT_MS = 90_000;
+
+type ControlPhase =
+  | 'create_target'
+  | 'await_target'
+  | 'await_ready'
+  | 'click_arm'
+  | 'await_armed';
 
 /**
  * Exercise one fixed button in the real extension control page. This is not
@@ -67,19 +79,23 @@ export async function runXiaohongshuCurrentPageNetworkValidationControl(input: {
   let controlPage: Page | null = null;
   let failure: unknown = null;
   let result: XiaohongshuCurrentPageNetworkValidationControlResult | null = null;
+  let phase: ControlPhase = 'create_target';
   try {
-    const controlPagePromise = input.context.waitForEvent('page', { timeout: CONTROL_TARGET_TIMEOUT_MS });
     await browserSession.send('Target.createTarget', { url: controlUrl, background: true });
-    controlPage = await controlPagePromise;
+    phase = 'await_target';
+    controlPage = await waitForControlPage(input.context, controlUrl);
+    phase = 'await_ready';
     await controlPage.waitForURL(controlUrl, { timeout: CONTROL_TARGET_TIMEOUT_MS });
     await controlPage.locator('html[data-collector-control-ready="true"]').waitFor({
       state: 'attached',
       timeout: CONTROL_TARGET_TIMEOUT_MS
     });
+    phase = 'click_arm';
     await controlPage.locator('#arm-next-xiaohongshu-current-page-network').click();
+    phase = 'await_armed';
     await controlPage.locator('#xiaohongshu-current-page-network-state').filter({
       hasText: '已预置下一次同 tab 手动导航'
-    }).waitFor({ state: 'visible', timeout: CONTROL_TARGET_TIMEOUT_MS });
+    }).waitFor({ state: 'visible', timeout: CONTROL_RESULT_TIMEOUT_MS });
     result = {
       schemaVersion: 1,
       profileId: request.profileId,
@@ -89,7 +105,7 @@ export async function runXiaohongshuCurrentPageNetworkValidationControl(input: {
   } catch (error) {
     failure = error instanceof BrowserHostError
       ? error
-      : await controlFailure(controlPage, input.profileId);
+      : await controlFailure(controlPage, input.profileId, phase);
   }
 
   const disposed = await disposeControlTarget(input.context, controlPage, controlUrl);
@@ -114,13 +130,28 @@ export async function runXiaohongshuCurrentPageNetworkValidationControl(input: {
   return result;
 }
 
-async function controlFailure(page: Page | null, profileId: string): Promise<BrowserHostError> {
+async function waitForControlPage(context: BrowserContext, controlUrl: string): Promise<Page> {
+  const deadline = Date.now() + CONTROL_TARGET_TIMEOUT_MS;
+  do {
+    const page = context.pages().find((candidate) => candidate.url() === controlUrl && !candidate.isClosed());
+    if (page) return page;
+    await delay(100);
+  } while (Date.now() < deadline);
+  throw hostError({
+    code: 'xiaohongshu_validation_extension_control_target_not_observed',
+    category: 'extension_runtime',
+    scope: 'browser_session',
+    retryClass: 'local_query_only'
+  });
+}
+
+async function controlFailure(page: Page | null, profileId: string, phase: ControlPhase): Promise<BrowserHostError> {
   const visibleError = page
     ? await page.locator('#control-error').textContent().catch(() => null)
     : null;
   const code = typeof visibleError === 'string' && /^[a-z0-9_.-]{1,120}$/i.test(visibleError)
     ? visibleError
-    : 'xiaohongshu_validation_extension_control_execution_failed';
+    : failureCodeFor(phase);
   return hostError({
     code,
     category: 'extension_runtime',
@@ -128,6 +159,16 @@ async function controlFailure(page: Page | null, profileId: string): Promise<Bro
     retryClass: 'local_query_only',
     safeDetails: { profileId, controlTarget: 'background_extension_page' }
   });
+}
+
+function failureCodeFor(phase: ControlPhase): string {
+  switch (phase) {
+    case 'create_target': return 'xiaohongshu_validation_extension_control_target_create_failed';
+    case 'await_target': return 'xiaohongshu_validation_extension_control_target_not_observed';
+    case 'await_ready': return 'xiaohongshu_validation_extension_control_not_ready';
+    case 'click_arm': return 'xiaohongshu_validation_extension_control_arm_click_failed';
+    case 'await_armed': return 'xiaohongshu_validation_extension_control_arm_result_not_observed';
+  }
 }
 
 async function disposeControlTarget(context: BrowserContext, opened: Page | null, controlUrl: string): Promise<boolean> {
@@ -143,4 +184,8 @@ async function disposeControlTarget(context: BrowserContext, opened: Page | null
   } catch {
     return false;
   }
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
