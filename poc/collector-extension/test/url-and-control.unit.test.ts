@@ -57,7 +57,7 @@ describe('Static strategy registry boundary', () => {
       evidenceObjectives: ['breadth_search'],
       acquisition: ['native_navigation', 'visible_dom']
     });
-    expect(strategiesFor('xiaohongshu', 'breadth_search')).toHaveLength(1);
+    expect(strategiesFor('xiaohongshu', 'breadth_search')).toHaveLength(0);
     expect(strategiesFor('bilibili', 'account_context')).toEqual([
       expect.objectContaining({
         strategyId: 'bilibili.account.profile.dom.v2',

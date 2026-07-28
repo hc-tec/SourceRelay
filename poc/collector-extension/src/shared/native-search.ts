@@ -22,10 +22,9 @@ export function buildNativeSearchUrl(platform: SupportedPlatform, query: string)
       return url;
     }
     case 'xiaohongshu': {
-      const url = new URL('https://www.xiaohongshu.com/search_result_ai');
-      url.searchParams.set('keyword', normalizedQuery);
-      url.searchParams.set('source', 'web_explore_feed');
-      return url;
+      // Search-result routes are observed outcomes, not safe replay targets.
+      // Start from an already-open Explore page and use trusted browser input.
+      throw new Error('xiaohongshu_search_requires_trusted_page_input');
     }
   }
 }

@@ -516,8 +516,7 @@ export const STATIC_PLATFORM_STRATEGIES: readonly StaticPlatformStrategy[] = [
   bilibiliVideoDiscussionDomStrategy(),
   bilibiliVideoDanmakuDomStrategy(),
   nativeSearchDomStrategy('zhihu'),
-  nativeSearchDomStrategy('weibo'),
-  nativeSearchDomStrategy('xiaohongshu')
+  nativeSearchDomStrategy('weibo')
 ];
 
 export function strategiesFor(
