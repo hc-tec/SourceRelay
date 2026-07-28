@@ -200,11 +200,11 @@ try {
         method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
           browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
           capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
-          input: { maximumScrolls: 1 } })
+          input: { maximumScrolls: 3 } })
       }, 201);
       const commentsOperationId = commentsDispatch.result?.operationId;
       if (!uuid(commentsOperationId)) throw new Error('xiaohongshu_note_comments_e2e_operation_missing');
-      record('note_comments_operation_dispatched', { operationId: commentsOperationId, maximumScrolls: 1 });
+      record('note_comments_operation_dispatched', { operationId: commentsOperationId, maximumScrolls: 3 });
       const commentsOperation = await waitForOperation(gatewayOrigin, token, commentsOperationId, 90_000);
       if (commentsOperation.state !== 'completed' || commentsOperation.terminalReason !== 'note_comments_ready' ||
         !uuid(commentsOperation.artifact?.artifactId) || typeof commentsOperation.artifact?.retrievalPath !== 'string') {
@@ -324,10 +324,10 @@ async function validateCommentsOnExistingOverlay(gatewayOrigin) {
   const dispatch = await apiJson(`${gatewayOrigin}/v2/collect`, { method: 'POST', headers: serviceHeaders(token),
     body: JSON.stringify({ schemaVersion: 2, browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
       capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
-      input: { maximumScrolls: 1 } }) }, 201);
+      input: { maximumScrolls: 3 } }) }, 201);
   const operationId = dispatch.result?.operationId;
   if (!uuid(operationId)) throw new Error('xiaohongshu_note_comments_e2e_operation_missing');
-  record('note_comments_operation_dispatched', { operationId, maximumScrolls: 1 });
+  record('note_comments_operation_dispatched', { operationId, maximumScrolls: 3 });
   const operation = await waitForOperation(gatewayOrigin, token, operationId, 90_000);
   if (operation.state !== 'completed' || operation.terminalReason !== 'note_comments_ready' ||
     !uuid(operation.artifact?.artifactId) || typeof operation.artifact?.retrievalPath !== 'string') {
@@ -435,8 +435,9 @@ function assertNoteCommentsArtifact(artifact, operationId) {
     artifact.summary?.capability !== 'xiaohongshu.note.public_comments.v1' ||
     artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'note_comments_ready' ||
     artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
-    artifact.result?.semanticAction?.attempted !== true || artifact.result.semanticAction.attemptCount !== 1 ||
-    artifact.result?.scroll?.requestedCount !== 1 || artifact.result.scroll.completedCount !== 1 ||
+    artifact.result?.semanticAction?.attempted !== true || artifact.result.semanticAction.attemptCount < 1 ||
+    artifact.result.semanticAction.attemptCount > 3 || artifact.result?.scroll?.requestedCount !== 3 ||
+    artifact.result.scroll.completedCount !== artifact.result.semanticAction.attemptCount ||
     artifact.result?.page?.publicSurface !== 'note_detail_overlay' ||
     !Array.isArray(artifact.result?.projection?.comments) || artifact.result.projection.comments.length < 1 ||
     !['network_projection', 'dom_fallback', 'hybrid'].includes(artifact.result.projection.captureMode) ||

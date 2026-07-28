@@ -51,25 +51,28 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
     await prepareXiaohongshuNoteCommentsScroll(item.workId);
     await delay(4_500);
     let dom = await readDomProbe(page);
-    if (!dom.scrollTarget) throw new Error('xiaohongshu_comment_scroll_container_unavailable');
-    const debuggee: chrome.debugger.Debuggee = { tabId: page.tabId };
-    await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
-    attached = true;
-    debuggerDetached = false;
-    for (let ordinal = 1; ordinal <= item.input.maximumScrolls; ordinal += 1) {
-      await requireSameDocument(page);
-      assertRisk(await readRisk(page));
-      const scrollTarget = dom.scrollTarget;
-      if (!scrollTarget) throw new Error('xiaohongshu_comment_scroll_container_unavailable');
-      const count = ordinal as 1 | 2 | 3;
-      await recordXiaohongshuNoteCommentsScrollIntent(item.workId, count);
-      attemptedCount = count;
-      await dispatchWheel(debuggee, scrollTarget).catch(() => { throw new Error('debugger_input_failed'); });
-      await delay(2_200);
-      await requireSameDocument(page);
-      await completeXiaohongshuNoteCommentsScroll(item.workId, count);
-      completedCount = count;
-      dom = await readDomProbe(page);
+    if (dom.comments.length === 0) {
+      if (!dom.scrollTarget) throw new Error('xiaohongshu_comment_scroll_container_unavailable');
+      const debuggee: chrome.debugger.Debuggee = { tabId: page.tabId };
+      await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
+      attached = true;
+      debuggerDetached = false;
+      for (let ordinal = 1; ordinal <= item.input.maximumScrolls; ordinal += 1) {
+        await requireSameDocument(page);
+        assertRisk(await readRisk(page));
+        const scrollTarget = dom.scrollTarget;
+        if (!scrollTarget) throw new Error('xiaohongshu_comment_scroll_container_unavailable');
+        const count = ordinal as 1 | 2 | 3;
+        await recordXiaohongshuNoteCommentsScrollIntent(item.workId, count);
+        attemptedCount = count;
+        await dispatchWheel(debuggee, scrollTarget).catch(() => { throw new Error('debugger_input_failed'); });
+        await delay(3_000);
+        await requireSameDocument(page);
+        await completeXiaohongshuNoteCommentsScroll(item.workId, count);
+        completedCount = count;
+        dom = await readDomProbe(page);
+        if (dom.comments.length > 0) break;
+      }
     }
     const network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, item.workId);
     const merged = mergeComments(network.comments, dom.comments);
