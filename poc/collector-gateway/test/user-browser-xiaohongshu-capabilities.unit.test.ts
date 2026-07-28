@@ -70,7 +70,7 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       budget: expect.objectContaining({ maximumSemanticActions: 1, maximumNetworkResponseBodies: 4 })
     }), expect.objectContaining({
       capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
-      dispatchState: 'direct_canary_pending', managedValidationState: 'implementation_ready_live_e2e_pending',
+      dispatchState: 'direct_ready', managedValidationState: 'gateway_extension_real_e2e_passed',
       captureMode: 'network_first_dom_fallback_trusted_scroll',
       budget: expect.objectContaining({ maximumSemanticActions: 3, maximumProjectedItems: 80 })
     })]);

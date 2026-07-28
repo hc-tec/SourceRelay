@@ -87,8 +87,8 @@ export interface UserBrowserXiaohongshuNotePublicDetailCapabilityDescriptor {
 export interface UserBrowserXiaohongshuNotePublicCommentsCapabilityDescriptor {
   schemaVersion: 1; capability: typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_CAPABILITY; platform: 'xiaohongshu';
   title: string; inputMode: 'scroll_budget_only_no_caller_url'; executionTarget: 'existing_public_note_overlay';
-  accountScopedSurfaces: 'forbidden'; dispatchState: 'direct_canary_pending';
-  managedValidationState: 'implementation_ready_live_e2e_pending';
+  accountScopedSurfaces: 'forbidden'; dispatchState: 'direct_ready';
+  managedValidationState: 'gateway_extension_real_e2e_passed';
   captureMode: 'network_first_dom_fallback_trusted_scroll'; responseBodies: 'temporarily_read_projected_not_stored';
   routeAdmission: 'generic_public_comment_shape_no_url_dependency'; budget: typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET;
   browserHostFallback: 'forbidden';
@@ -169,7 +169,7 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     schemaVersion: 1, capability: XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_CAPABILITY, platform: 'xiaohongshu',
     title: '小红书公开笔记评论', inputMode: 'scroll_budget_only_no_caller_url',
     executionTarget: 'existing_public_note_overlay', accountScopedSurfaces: 'forbidden',
-    dispatchState: 'direct_canary_pending', managedValidationState: 'implementation_ready_live_e2e_pending',
+    dispatchState: 'direct_ready', managedValidationState: 'gateway_extension_real_e2e_passed',
     captureMode: 'network_first_dom_fallback_trusted_scroll', responseBodies: 'temporarily_read_projected_not_stored',
     routeAdmission: 'generic_public_comment_shape_no_url_dependency', budget: XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
     browserHostFallback: 'forbidden'

@@ -212,6 +212,7 @@ try {
       }
       const commentsArtifactPayload = await apiJson(`${gatewayOrigin}${commentsOperation.artifact.retrievalPath}`,
         { headers: { authorization: `Bearer ${token}` } }, 200);
+      record('note_comments_artifact_diagnostics', noteCommentsDiagnostics(commentsArtifactPayload.artifact));
       assertNoteCommentsArtifact(commentsArtifactPayload.artifact, commentsOperationId);
       reportedOperation = commentsOperation;
       reportedArtifact = commentsArtifactPayload.artifact;
@@ -343,6 +344,7 @@ async function validateCommentsOnExistingOverlay(gatewayOrigin) {
   }
   const payload = await apiJson(`${gatewayOrigin}${operation.artifact.retrievalPath}`,
     { headers: { authorization: `Bearer ${token}` } }, 200);
+  record('note_comments_artifact_diagnostics', noteCommentsDiagnostics(payload.artifact));
   assertNoteCommentsArtifact(payload.artifact, operationId);
   record('note_comments_artifact_retrieved', { captureMode: payload.artifact.summary.captureMode,
     commentCount: payload.artifact.summary.commentCount,
@@ -446,13 +448,14 @@ function assertNoteDetailArtifact(artifact, operationId) {
 }
 
 function assertNoteCommentsArtifact(artifact, operationId) {
+  const actionCount = artifact?.result?.semanticAction?.attemptCount;
   if (!artifact || artifact.summary?.operationId !== operationId ||
     artifact.summary?.capability !== 'xiaohongshu.note.public_comments.v1' ||
     artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'note_comments_ready' ||
     artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
-    artifact.result?.semanticAction?.attempted !== true || artifact.result.semanticAction.attemptCount < 1 ||
-    artifact.result.semanticAction.attemptCount > 3 || artifact.result?.scroll?.requestedCount !== 3 ||
-    artifact.result.scroll.completedCount !== artifact.result.semanticAction.attemptCount ||
+    !Number.isInteger(actionCount) || actionCount < 0 || actionCount > 3 ||
+    artifact.result.semanticAction.attempted !== (actionCount > 0) ||
+    artifact.result?.scroll?.requestedCount !== 3 || artifact.result.scroll.completedCount !== actionCount ||
     artifact.result?.page?.publicSurface !== 'note_detail_overlay' ||
     !Array.isArray(artifact.result?.projection?.comments) || artifact.result.projection.comments.length < 1 ||
     !['network_projection', 'dom_fallback', 'hybrid'].includes(artifact.result.projection.captureMode) ||
@@ -460,6 +463,23 @@ function assertNoteCommentsArtifact(artifact, operationId) {
     artifact.provenance?.debuggerDetached !== true) throw new Error('xiaohongshu_note_comments_e2e_artifact_invalid');
   if (/"(?:url|responseUrl|route|query|header|cookie|token|rawPayload|tabId|documentId|selector|script|noteId|profileId)"\s*:/i
     .test(JSON.stringify(artifact))) throw new Error('xiaohongshu_note_comments_e2e_artifact_forbidden_material');
+}
+
+function noteCommentsDiagnostics(artifact) {
+  return {
+    state: artifact?.result?.state ?? null,
+    terminalReason: artifact?.result?.terminalReason ?? null,
+    captureMode: artifact?.result?.projection?.captureMode ?? null,
+    commentCount: artifact?.result?.projection?.comments?.length ?? 0,
+    semanticActionAttempted: artifact?.result?.semanticAction?.attempted ?? null,
+    semanticActionCount: artifact?.result?.semanticAction?.attemptCount ?? null,
+    requestedScrolls: artifact?.result?.scroll?.requestedCount ?? null,
+    completedScrolls: artifact?.result?.scroll?.completedCount ?? null,
+    networkMatchedPayloadCount: artifact?.result?.projection?.network?.matchedPayloadCount ?? null,
+    networkBodyBytesRead: artifact?.result?.projection?.network?.bodyBytesRead ?? null,
+    networkCursorObserved: artifact?.result?.projection?.network?.cursorObserved ?? null,
+    debuggerDetached: artifact?.provenance?.debuggerDetached ?? null
+  };
 }
 
 async function waitForStableDocument(timeoutMs) {
