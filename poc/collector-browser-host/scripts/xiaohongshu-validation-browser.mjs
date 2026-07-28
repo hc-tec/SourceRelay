@@ -7,5 +7,6 @@
 process.env.COLLECTOR_VALIDATION_BROWSER_INSTANCE = 'xiaohongshu-validation';
 process.env.COLLECTOR_VALIDATION_PROFILE_ID = 'xiaohongshu_validation';
 process.env.COLLECTOR_VALIDATION_EXTENSION_CONTROL = 'disabled';
+process.env.COLLECTOR_XIAOHONGSHU_VALIDATION_EXTENSION_CONTROL = 'enabled';
 
 await import('./validation-browser.mjs');

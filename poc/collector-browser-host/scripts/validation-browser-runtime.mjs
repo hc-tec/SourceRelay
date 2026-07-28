@@ -13,6 +13,7 @@ import {
   readExtensionRuntimeExpectation,
   runtimeMatches,
   validationAutomationProfileId,
+  xiaohongshuValidationAutomationProfileId,
   validationBrowserPaths,
   validationProfileId
 } from './validation-browser-config.mjs';
@@ -32,6 +33,7 @@ export async function startValidationBrowser() {
     profileRoot: browserProfileRoot,
     extensionDirectory,
     validationAutomationProfileId,
+    xiaohongshuValidationAutomationProfileId,
     endpointPath: browserHostEndpointPath,
     timeoutMs: 30_000
   });

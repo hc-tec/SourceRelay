@@ -23,6 +23,7 @@
     "start:xiaohongshu-validation-browser": "node scripts/xiaohongshu-validation-browser.mjs start",
     "status:xiaohongshu-validation-browser": "node scripts/xiaohongshu-validation-browser.mjs status",
     "stop:xiaohongshu-validation-browser": "node scripts/xiaohongshu-validation-browser.mjs stop",
+    "validate:xiaohongshu-current-page-network": "node scripts/validate-xiaohongshu-current-page-network.mjs",
     "validate:extension-control": "node scripts/validate-extension-control.mjs",
     "canary:discussion-user-selected": "node scripts/validate-bilibili-discussion-e2e.mjs"
   },

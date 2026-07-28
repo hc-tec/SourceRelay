@@ -67,6 +67,15 @@ npm run start:xiaohongshu-validation-browser
 
 当前可见验证浏览器仍运行 r15；为了不打断刚完成的登录，r16 源码没有构建到 `dist/`、没有触发扩展 reload，也没有重启 Chromium。后续只有在用户明确同意一次可见更新时，才构建、精确核验新 worker，并在同一 Profile 中验证该预置动作。
 
+为避免把验证退回成“请用户手动加载扩展、手动点测试按钮”，r16 还提供了固定的本地验证入口：
+
+```powershell
+Set-Location D:\AIProject\inteligence\poc
+npm run validate:xiaohongshu-current-page-network
+```
+
+它只能在专用 `xiaohongshu_validation` Profile 无活跃 page lease 时，后台打开一次扩展 `control.html`、以可信浏览器输入点击唯一的预置按钮、等待固定的 `armed_next_document` 后置条件并关闭这个临时 extension page。它不能填写 URL、选择 tab、执行 selector/script、点击平台页面或进行任何导航。若 Chrome 在这一步显示可选权限的原生提示，必须先核对提示属于 `Personal Intelligence Collector` 和小红书精确 scope；验证脚本不会把未知或不唯一的原生提示当作成功。
+
 ## 不可绕过的预算
 
 | 项目 | 上限 | 含义 |

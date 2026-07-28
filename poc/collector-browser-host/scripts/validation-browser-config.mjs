@@ -26,6 +26,11 @@ export const validationProfileId = boundedRuntimeIdentifier(
  */
 export const validationAutomationProfileId =
   process.env.COLLECTOR_VALIDATION_EXTENSION_CONTROL === 'disabled' ? null : validationProfileId;
+/** A separate fixed control path for Xiaohongshu's pre-arm, never Bilibili's pairing fixture. */
+export const xiaohongshuValidationAutomationProfileId =
+  process.env.COLLECTOR_XIAOHONGSHU_VALIDATION_EXTENSION_CONTROL === 'enabled'
+    ? validationProfileId
+    : null;
 
 export function validationBrowserPaths() {
   return {

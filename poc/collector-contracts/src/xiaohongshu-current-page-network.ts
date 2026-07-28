@@ -10,6 +10,7 @@ export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION = 1 as const;
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY =
   'xiaohongshu.current_page.network_metadata' as const;
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS = 60_000 as const;
+export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_VALIDATION_CONTROL_SCHEMA_VERSION = 1 as const;
 
 /**
  * This is deliberately smaller than the long-term product boundary.  These
@@ -130,6 +131,23 @@ export interface XiaohongshuCurrentPageNetworkObservationResult {
 }
 
 /**
+ * Validation-only local control for the fixed extension popup action. It
+ * deliberately has no platform URL, tab, document, selector, script,
+ * credential, Gateway pairing field or permission scope supplied by a caller.
+ */
+export interface XiaohongshuCurrentPageNetworkValidationControlRequest {
+  schemaVersion: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_VALIDATION_CONTROL_SCHEMA_VERSION;
+  profileId: string;
+}
+
+export interface XiaohongshuCurrentPageNetworkValidationControlResult {
+  schemaVersion: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_VALIDATION_CONTROL_SCHEMA_VERSION;
+  profileId: string;
+  selectionState: 'armed_next_document';
+  controlTargetDisposed: true;
+}
+
+/**
  * Only public page signals are supplied to this classifier.  It never reads a
  * credential, query value, response body or browser identifier.  A known
  * verification route wins over a generic login phrase so an SMS-login form's
@@ -201,6 +219,30 @@ export function isXiaohongshuCurrentPageNetworkSelectionSummary(
     typeof value.selectedAt === 'string' && typeof value.expiresAt === 'string' &&
     Number.isFinite(Date.parse(value.selectedAt)) && Number.isFinite(Date.parse(value.expiresAt)) &&
     Date.parse(value.expiresAt) > Date.parse(value.selectedAt);
+}
+
+export function xiaohongshuCurrentPageNetworkValidationControlRequest(
+  value: unknown
+): XiaohongshuCurrentPageNetworkValidationControlRequest {
+  if (!record(value) || !exactKeys(value, ['schemaVersion', 'profileId']) ||
+    value.schemaVersion !== XIAOHONGSHU_CURRENT_PAGE_NETWORK_VALIDATION_CONTROL_SCHEMA_VERSION ||
+    typeof value.profileId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.profileId)) {
+    throw new Error('xiaohongshu_current_page_network_validation_control_request_invalid');
+  }
+  return {
+    schemaVersion: XIAOHONGSHU_CURRENT_PAGE_NETWORK_VALIDATION_CONTROL_SCHEMA_VERSION,
+    profileId: value.profileId
+  };
+}
+
+export function isXiaohongshuCurrentPageNetworkValidationControlResult(
+  value: unknown
+): value is XiaohongshuCurrentPageNetworkValidationControlResult {
+  return record(value) && exactKeys(value, [
+    'schemaVersion', 'profileId', 'selectionState', 'controlTargetDisposed'
+  ]) && value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_VALIDATION_CONTROL_SCHEMA_VERSION &&
+    typeof value.profileId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.profileId) &&
+    value.selectionState === 'armed_next_document' && value.controlTargetDisposed === true;
 }
 
 /**

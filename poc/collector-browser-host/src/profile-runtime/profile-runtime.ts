@@ -36,6 +36,8 @@ import {
   type PageVisualEvidence,
   isXiaohongshuCurrentPageNetworkObservationResult,
   type XiaohongshuCurrentPageNetworkObservationResult,
+  type XiaohongshuCurrentPageNetworkValidationControlRequest,
+  type XiaohongshuCurrentPageNetworkValidationControlResult,
   type ValidationExtensionControlRequest,
   type ValidationExtensionControlResult
 } from '@intelligence/collector-contracts';
@@ -47,6 +49,7 @@ import { PageReclamationManager } from '../reclamation/page-reclamation.js';
 import { ExternalRequestCounter } from './external-request-counter.js';
 import { launchProfileBrowser } from './profile-browser-launcher.js';
 import { runValidationExtensionControl } from '../validation-extension-control.js';
+import { runXiaohongshuCurrentPageNetworkValidationControl } from '../xiaohongshu-validation-extension-control.js';
 
 export class ProfileRuntime {
   readonly profileId: string;
@@ -337,6 +340,21 @@ export class ProfileRuntime {
       throw new Error('validation_extension_control_extension_runtime_unavailable');
     }
     return await runValidationExtensionControl({
+      context: this.#context,
+      profileId: this.profileId,
+      extensionId,
+      request
+    });
+  }
+
+  async runXiaohongshuCurrentPageNetworkValidationControl(
+    request: XiaohongshuCurrentPageNetworkValidationControlRequest
+  ): Promise<XiaohongshuCurrentPageNetworkValidationControlResult> {
+    const extensionId = this.#extensionRuntime?.extensionId;
+    if (!extensionId) {
+      throw new Error('xiaohongshu_validation_extension_control_extension_runtime_unavailable');
+    }
+    return await runXiaohongshuCurrentPageNetworkValidationControl({
       context: this.#context,
       profileId: this.profileId,
       extensionId,

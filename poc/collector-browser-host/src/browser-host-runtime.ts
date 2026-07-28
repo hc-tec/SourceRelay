@@ -5,6 +5,7 @@ import {
   BrowserHostError,
   PAGE_POOL_SCHEMA_VERSION,
   validationExtensionControlRequest,
+  xiaohongshuCurrentPageNetworkValidationControlRequest,
   type BrowserHostCommandBody,
   type BrowserHostCommandResult,
   type LaunchProfileRequest,
@@ -30,6 +31,7 @@ export interface BrowserHostRuntimeConfig {
   nativeBridgeRegistry: NativeBridgeRegistry;
   nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
   validationAutomationProfileId?: string | null;
+  xiaohongshuValidationAutomationProfileId?: string | null;
 }
 
 export class BrowserHostRuntime {
@@ -44,6 +46,7 @@ export class BrowserHostRuntime {
   readonly #nativeBridgeRegistry: NativeBridgeRegistry;
   readonly #nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
   readonly #validationAutomationProfileId: string | null;
+  readonly #xiaohongshuValidationAutomationProfileId: string | null;
   readonly #profiles = new Map<string, ProfileRuntime>();
   #controllerGeneration: string | null = null;
   #snapshotRevision = 0;
@@ -61,6 +64,9 @@ export class BrowserHostRuntime {
     this.#nativeBridgeCommands = config.nativeBridgeCommands;
     this.#validationAutomationProfileId = config.validationAutomationProfileId
       ? boundedIdentifier(config.validationAutomationProfileId, 'validation_automation_profile_id')
+      : null;
+    this.#xiaohongshuValidationAutomationProfileId = config.xiaohongshuValidationAutomationProfileId
+      ? boundedIdentifier(config.xiaohongshuValidationAutomationProfileId, 'xiaohongshu_validation_automation_profile_id')
       : null;
   }
 
@@ -124,6 +130,19 @@ export class BrowserHostRuntime {
           });
         }
         return await this.#profile(request.profileId).runValidationExtensionControl(request);
+      }
+      case 'run_xiaohongshu_validation_extension_control': {
+        const request = xiaohongshuCurrentPageNetworkValidationControlRequest(body.request);
+        if (!this.#xiaohongshuValidationAutomationProfileId ||
+          request.profileId !== this.#xiaohongshuValidationAutomationProfileId) {
+          throw hostError({
+            code: 'xiaohongshu_validation_extension_control_not_enabled',
+            category: 'validation',
+            scope: 'profile',
+            retryClass: 'never'
+          });
+        }
+        return await this.#profile(request.profileId).runXiaohongshuCurrentPageNetworkValidationControl(request);
       }
       case 'interact_bilibili_danmaku':
         return await this.#profile(body.request.profileId).interactBilibiliDanmaku(body.request);

@@ -52,7 +52,11 @@ import type {
   ValidationExtensionControlRequest,
   ValidationExtensionControlResult
 } from './validation-extension-control.js';
-import type { XiaohongshuCurrentPageNetworkObservationResult } from './xiaohongshu-current-page-network.js';
+import type {
+  XiaohongshuCurrentPageNetworkObservationResult,
+  XiaohongshuCurrentPageNetworkValidationControlRequest,
+  XiaohongshuCurrentPageNetworkValidationControlResult
+} from './xiaohongshu-current-page-network.js';
 
 export const BROWSER_HOST_PROTOCOL_VERSION = 7 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
@@ -113,6 +117,7 @@ export type BrowserHostCommandBody =
   | { type: 'read_strategy_observation'; request: StrategyObservationReadRequest }
   | { type: 'read_strategy_binding_diagnostics'; request: StrategyBindingDiagnosticsRequest }
   | { type: 'read_xiaohongshu_current_page_network_observation'; profileId: string }
+  | { type: 'run_xiaohongshu_validation_extension_control'; request: XiaohongshuCurrentPageNetworkValidationControlRequest }
   | { type: 'reconcile_page'; request: ReconcilePageRequest }
   | { type: 'close_quarantined_page'; request: CloseQuarantinedPageRequest }
   | { type: 'create_reclaim_plan'; request: CreateReclaimPlanRequest }
@@ -152,6 +157,7 @@ export type BrowserHostCommandResult =
   | StrategyObservationResult
   | StrategyBindingDiagnostics
   | XiaohongshuCurrentPageNetworkObservationResult
+  | XiaohongshuCurrentPageNetworkValidationControlResult
   | { ok: true; profileId?: string; pageAlias?: string; state?: string }
   | { ok: true; shuttingDown: true };
 

@@ -11,6 +11,7 @@ export interface LaunchBrowserHostOptions {
   profileRoot: string;
   extensionDirectory?: string | null;
   validationAutomationProfileId?: string | null;
+  xiaohongshuValidationAutomationProfileId?: string | null;
   endpointPath: string;
   timeoutMs?: number;
 }
@@ -28,6 +29,9 @@ export async function launchBrowserHost(options: LaunchBrowserHostOptions): Prom
   if (options.extensionDirectory) args.push('--extension-dir', options.extensionDirectory);
   if (options.validationAutomationProfileId) {
     args.push('--validation-automation-profile-id', options.validationAutomationProfileId);
+  }
+  if (options.xiaohongshuValidationAutomationProfileId) {
+    args.push('--xiaohongshu-validation-automation-profile-id', options.xiaohongshuValidationAutomationProfileId);
   }
   const child = spawn(process.execPath, args, {
     detached: true,
