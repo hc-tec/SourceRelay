@@ -21,7 +21,9 @@ import {
   type PageVisualEvidence,
   type ReconcilePageRequest,
   type ReleasePageRequest,
-  type ScrollPageRequest
+  type ScrollPageRequest,
+  type XiaohongshuTrustedSearchRequest,
+  type XiaohongshuTrustedSearchResult
 } from '@intelligence/collector-contracts';
 import { hostError } from '../host-errors.js';
 import { attachManagedPageEvents, type PageLedgerEvent } from './page-events.js';
@@ -41,6 +43,7 @@ import { executeTrustedBilibiliSeriesPageClick } from './trusted-bilibili-series
 import { executeTrustedBilibiliTranscriptChineseSelection } from './trusted-bilibili-transcript-chinese-selection.js';
 import { executeTrustedBilibiliVideoDiscussionInteraction } from './trusted-bilibili-video-discussion-interaction.js';
 import { executeTrustedBilibiliDanmakuInteraction } from './trusted-bilibili-danmaku-interaction.js';
+import { executeTrustedXiaohongshuSearch } from './trusted-xiaohongshu-search.js';
 import { closeQuarantinedPageRecord } from './quarantine-maintenance.js';
 import { assertRetainedPageVisualEvidenceEligible } from './retained-page-visual-evidence.js';
 import { ensureManagedPageForeground } from './page-foreground.js';
@@ -311,6 +314,20 @@ export class PageLedger {
   ): Promise<BilibiliDanmakuInteractionResult> {
     const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
     return await executeTrustedBilibiliDanmakuInteraction({
+      record,
+      request,
+      visualEvidenceDirectory,
+      assertLeasedRunRecord: () => this.#assertLeasedRunRecord(record, request),
+      emit: (eventType, reason, actionId) => this.#emit(eventType, record, reason, actionId)
+    });
+  }
+
+  async trustedXiaohongshuSearch(
+    request: XiaohongshuTrustedSearchRequest,
+    visualEvidenceDirectory: string
+  ): Promise<XiaohongshuTrustedSearchResult> {
+    const record = this.#leasedRecord(request.profileId, request.pageAlias, request.pageLeaseId);
+    return await executeTrustedXiaohongshuSearch({
       record,
       request,
       visualEvidenceDirectory,

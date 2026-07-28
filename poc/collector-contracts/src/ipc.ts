@@ -58,6 +58,10 @@ import type {
   XiaohongshuManagedPageNetworkObserverArmResult,
   XiaohongshuManagedPageNetworkObserverRequest
 } from './xiaohongshu-current-page-network.js';
+import type {
+  XiaohongshuTrustedSearchRequest,
+  XiaohongshuTrustedSearchResult
+} from './xiaohongshu-trusted-search.js';
 
 export const BROWSER_HOST_PROTOCOL_VERSION = 7 as const;
 export const BROWSER_HOST_MAX_MESSAGE_BYTES = 256 * 1024;
@@ -120,6 +124,7 @@ export type BrowserHostCommandBody =
   | { type: 'read_xiaohongshu_current_page_network_observation'; profileId: string }
   | { type: 'arm_xiaohongshu_managed_page_network_observer'; request: XiaohongshuManagedPageNetworkObserverRequest }
   | { type: 'read_xiaohongshu_managed_page_network_observation'; request: XiaohongshuManagedPageNetworkObserverRequest }
+  | { type: 'trusted_xiaohongshu_search'; request: XiaohongshuTrustedSearchRequest }
   | { type: 'reconcile_page'; request: ReconcilePageRequest }
   | { type: 'close_quarantined_page'; request: CloseQuarantinedPageRequest }
   | { type: 'create_reclaim_plan'; request: CreateReclaimPlanRequest }
@@ -161,6 +166,7 @@ export type BrowserHostCommandResult =
   | XiaohongshuCurrentPageNetworkObservationResult
   | XiaohongshuManagedPageNetworkObserverArmResult
   | XiaohongshuManagedPageNetworkObservationResult
+  | XiaohongshuTrustedSearchResult
   | { ok: true; profileId?: string; pageAlias?: string; state?: string }
   | { ok: true; shuttingDown: true };
 

@@ -145,6 +145,8 @@ export class BrowserHostRuntime {
       case 'read_xiaohongshu_managed_page_network_observation':
         return await this.#profile(body.request.profileId)
           .readXiaohongshuManagedPageNetworkObservation(body.request);
+      case 'trusted_xiaohongshu_search':
+        return await this.#profile(body.request.profileId).trustedXiaohongshuSearch(body.request);
       case 'reconcile_page':
         return this.#profile(body.request.profileId).reconcile(body.request);
       case 'create_reclaim_plan':

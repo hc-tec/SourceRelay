@@ -42,6 +42,8 @@ import {
   type XiaohongshuManagedPageNetworkObservationResult,
   type XiaohongshuManagedPageNetworkObserverArmResult,
   type XiaohongshuManagedPageNetworkObserverRequest,
+  type XiaohongshuTrustedSearchRequest,
+  type XiaohongshuTrustedSearchResult,
   type ValidationExtensionControlRequest,
   type ValidationExtensionControlResult
 } from '@intelligence/collector-contracts';
@@ -381,6 +383,23 @@ export class ProfileRuntime {
       throw new Error('xiaohongshu_managed_page_network_observation_result_invalid');
     }
     return result;
+  }
+
+  async trustedXiaohongshuSearch(
+    request: XiaohongshuTrustedSearchRequest
+  ): Promise<XiaohongshuTrustedSearchResult> {
+    const arm = await this.armXiaohongshuManagedPageNetworkObserver({
+      schemaVersion: 2,
+      profileId: request.profileId,
+      pageAlias: request.pageAlias,
+      pageLeaseId: request.pageLeaseId,
+      expectedRecordVersion: request.expectedRecordVersion,
+      runId: request.runId
+    });
+    if (arm.permissionState !== 'permission_granted' || arm.selection.state !== 'armed_next_document') {
+      throw new Error('xiaohongshu_trusted_search_network_observer_not_armed');
+    }
+    return await this.#ledger.trustedXiaohongshuSearch(request, this.#visualEvidenceDirectory);
   }
 
   async runValidationExtensionControl(
