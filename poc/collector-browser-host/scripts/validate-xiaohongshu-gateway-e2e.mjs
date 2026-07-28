@@ -85,7 +85,11 @@ try {
       }
     });
   }
-  record('page_acquired', { pageAlias: acquired.page.pageAlias });
+  record('page_acquired', {
+    pageAlias: acquired.page.pageAlias,
+    selection: acquired.selection,
+    reusedRetainedPage: retainedPublicPage.length === 1
+  });
   await client.command({
     type: 'navigate_page',
     request: {
