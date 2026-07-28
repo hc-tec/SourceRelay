@@ -8,6 +8,7 @@ import {
 } from '@intelligence/collector-contracts';
 import {
   armXiaohongshuExistingSearchWorkObserver,
+  bindXiaohongshuObserverSelectedNote,
   clearXiaohongshuWorkObserver,
   readXiaohongshuExistingSearchNoteDetailNetworkProjection
 } from './xiaohongshu-current-page-network';
@@ -18,7 +19,7 @@ import {
 } from './xiaohongshu-note-detail-click-ledger';
 
 interface SearchDocument { tabId: number; windowId: number; documentId: string }
-interface Target { x: number; y: number }
+interface Target { x: number; y: number; noteId: string }
 interface DomProjection {
   publicText: string;
   authorNickname: string;
@@ -45,6 +46,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     assertRisk(baseline);
     const target = await findRankedDetailTarget(pageDocument, item.input.resultRank);
     await armXiaohongshuExistingSearchWorkObserver(pageDocument.tabId, item.workId);
+    await bindXiaohongshuObserverSelectedNote(pageDocument.tabId, item.workId, target.noteId);
     await prepareXiaohongshuNoteDetailClick(item.workId);
     const debuggee: chrome.debugger.Debuggee = { tabId: pageDocument.tabId };
     await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
@@ -196,19 +198,29 @@ async function findRankedDetailTarget(pageDocument: SearchDocument, rank: number
       const y = rect.top + rect.height / 2;
       const hit = document.elementFromPoint(x, y);
       const anchor = hit?.closest('a[href]');
+      const noteAnchor = Array.from(section.querySelectorAll('a[href]')).find((element) => {
+        if (!(element instanceof HTMLAnchorElement)) return false;
+        try { return /^\/explore\/[A-Za-z0-9_-]+\/?$/.test(new URL(element.href).pathname); } catch { return false; }
+      }) as HTMLAnchorElement | undefined;
+      let noteId = '';
+      if (noteAnchor) {
+        try { noteId = new URL(noteAnchor.href).pathname.match(/^\/explore\/([A-Za-z0-9_-]+)\/?$/)?.[1] ?? ''; }
+        catch { noteId = ''; }
+      }
       if (!hit || !section.contains(hit)) return null;
       if (anchor instanceof HTMLAnchorElement && anchor.target && anchor.target !== '_self') {
-        return { newTab: true, x, y };
+        return { newTab: true, x, y, noteId };
       }
-      return { newTab: false, x, y };
+      return { newTab: false, x, y, noteId };
     }
   });
   const value = results[0]?.result;
-  if (!value || !Number.isFinite(value.x) || !Number.isFinite(value.y)) {
+  if (!value || !Number.isFinite(value.x) || !Number.isFinite(value.y) ||
+    typeof value.noteId !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(value.noteId)) {
     throw new Error('xiaohongshu_search_result_rank_unavailable');
   }
   if (value.newTab) throw new Error('xiaohongshu_note_detail_target_new_tab');
-  return { x: value.x, y: value.y };
+  return { x: value.x, y: value.y, noteId: value.noteId };
 }
 
 async function dispatchClick(debuggee: chrome.debugger.Debuggee, target: Target): Promise<void> {

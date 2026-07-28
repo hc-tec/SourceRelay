@@ -178,6 +178,7 @@ export async function armXiaohongshuExistingExploreWorkObserver(
     throw new Error('xiaohongshu_current_page_network_selection_active');
   }
   if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'explore');
+  await mutateMainWorldCommentContinuity(tabId, workId, 'reset');
 }
 
 export async function armXiaohongshuExistingPublicProfileWorkObserver(
@@ -208,6 +209,15 @@ export async function armXiaohongshuExistingSearchWorkObserver(
     throw new Error('xiaohongshu_current_page_network_selection_active');
   }
   if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'search');
+}
+
+export async function bindXiaohongshuObserverSelectedNote(
+  tabId: number,
+  workId: string,
+  noteId: string
+): Promise<void> {
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(noteId)) throw new Error('xiaohongshu_selected_note_identity_invalid');
+  await mutateMainWorldCommentContinuity(tabId, workId, 'select', noteId);
 }
 
 export async function armXiaohongshuExistingNoteOverlayWorkObserver(
@@ -260,7 +270,14 @@ export async function readXiaohongshuExistingNoteCommentsNetworkProjection(
   const clean = (value: unknown, maximum: number): string =>
     (typeof value === 'string' || typeof value === 'number' ? String(value) : '')
       .replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, maximum);
-  const comments = (Array.isArray(candidate?.comments) ? candidate.comments : []).slice(0, 80).map((value) => {
+  const selectedNoteId = typeof candidate?.selectedNoteId === 'string' ? candidate.selectedNoteId : '';
+  const currentComments = Array.isArray(candidate?.comments) ? candidate.comments : [];
+  const archivedComments = Date.now() < Number(candidate?.commentArchiveExpiresAt) && selectedNoteId &&
+    Array.isArray(candidate?.commentArchive)
+    ? candidate.commentArchive.filter((value) => value && typeof value === 'object' &&
+      (value as Record<string, unknown>).parentNoteId === selectedNoteId) : [];
+  const rawComments = [...archivedComments, ...currentComments];
+  const comments = rawComments.slice(0, 80).map((value) => {
     const comment = value && typeof value === 'object' ? value as Record<string, unknown> : {};
     return {
       commentId: clean(comment.commentId, 100),
@@ -272,17 +289,56 @@ export async function readXiaohongshuExistingNoteCommentsNetworkProjection(
       locationText: clean(comment.locationText, 100)
     };
   }).filter((comment) => comment.commentId && comment.publicText);
-  const pagination = candidate?.commentPagination && typeof candidate.commentPagination === 'object'
-    ? candidate.commentPagination as Record<string, unknown> : {};
+  const paginationSource = archivedComments.length > 0 && candidate?.commentArchivePagination &&
+    typeof candidate.commentArchivePagination === 'object'
+    ? candidate.commentArchivePagination : candidate?.commentPagination;
+  const pagination = paginationSource && typeof paginationSource === 'object'
+    ? paginationSource as Record<string, unknown> : {};
+  const archiveMatchedPayloadCount = archivedComments.length > 0 && Number.isSafeInteger(candidate?.commentArchiveMatchedPayloadCount)
+    ? Number(candidate?.commentArchiveMatchedPayloadCount) : 0;
+  const archiveBodyBytesRead = archivedComments.length > 0 && Number.isSafeInteger(candidate?.commentArchiveBodyBytesRead)
+    ? Number(candidate?.commentArchiveBodyBytesRead) : 0;
   return {
-    matchedPayloadCount: Number.isSafeInteger(candidate?.matchedPayloadCount)
-      ? Math.min(8, Math.max(0, Number(candidate?.matchedPayloadCount))) : 0,
-    bodyBytesRead: Number.isSafeInteger(candidate?.bodyBytesRead)
-      ? Math.min(16 * 1024 * 1024, Math.max(0, Number(candidate?.bodyBytesRead))) : 0,
+    matchedPayloadCount: Math.min(8, Math.max(archiveMatchedPayloadCount,
+      Number.isSafeInteger(candidate?.matchedPayloadCount) ? Number(candidate?.matchedPayloadCount) : 0)),
+    bodyBytesRead: Math.min(16 * 1024 * 1024, Math.max(archiveBodyBytesRead,
+      Number.isSafeInteger(candidate?.bodyBytesRead) ? Number(candidate?.bodyBytesRead) : 0)),
     hasMore: typeof pagination.hasMore === 'boolean' ? pagination.hasMore : null,
     cursorObserved: pagination.cursorObserved === true,
     comments
   };
+}
+
+async function mutateMainWorldCommentContinuity(
+  tabId: number,
+  workId: string,
+  mode: 'reset' | 'select',
+  noteId = ''
+): Promise<void> {
+  const record = await loadActiveRecord();
+  if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId) {
+    throw new Error('xiaohongshu_comment_continuity_binding_mismatch');
+  }
+  await chrome.scripting.executeScript({
+    target: { tabId, documentIds: [record.documentId] },
+    world: 'MAIN',
+    args: [mode, noteId],
+    func: (requestedMode, selectedNoteId) => {
+      const key = '__personalIntelligenceXiaohongshuPublicNotesObserverV2';
+      const controller = (window as typeof window & { [key]?: Record<string, unknown> })[key];
+      if (!controller) return;
+      if (requestedMode === 'reset') {
+        controller.selectedNoteId = '';
+        controller.commentArchiveExpiresAt = 0;
+        controller.commentArchiveMatchedPayloadCount = 0;
+        controller.commentArchiveBodyBytesRead = 0;
+        controller.commentArchive = [];
+        controller.commentArchivePagination = { hasMore: null, cursorObserved: false };
+        return;
+      }
+      controller.selectedNoteId = selectedNoteId;
+    }
+  });
 }
 
 export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(

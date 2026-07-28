@@ -192,8 +192,38 @@ async function readDomProbe(page: NoteDocument): Promise<DomProbe> {
           html.scrollHeight > html.clientHeight + 80 && ['auto', 'scroll', 'overlay'].includes(overflow);
       }) as HTMLElement[];
       const scroll = scrollables.sort((a, b) => (b.scrollHeight - b.clientHeight) - (a.scrollHeight - a.clientHeight))[0] ?? null;
-      const nodes = Array.from(overlay.querySelectorAll('[class*="comment-item"], [class*="comment-inner"], [data-comment-id]'))
-        .filter(visible).filter((node, index, all) => !all.some((other, otherIndex) => otherIndex !== index && other.contains(node)));
+      const heading = Array.from(overlay.querySelectorAll('*')).filter((element) => {
+        if (!visible(element)) return false;
+        const own = Array.from(element.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE)
+          .map((node) => node.textContent ?? '').join(' ').replace(/\s+/g, ' ').trim();
+        return /共\s*\d+\s*条评论|\d+\s*条评论/.test(own);
+      }).sort((left, right) => {
+        const l = left.getBoundingClientRect(); const r = right.getBoundingClientRect();
+        return l.width * l.height - r.width * r.height;
+      })[0] ?? null;
+      const headingBottom = heading?.getBoundingClientRect().bottom ?? overlay.getBoundingClientRect().top + 240;
+      const classCandidates = Array.from(overlay.querySelectorAll(
+        '[class*="comment-item"], [class*="comment-inner"], [data-comment-id]'
+      )).filter(visible);
+      const semanticCandidates = Array.from(overlay.querySelectorAll('a[href*="/user/profile/"]')).filter((anchor) =>
+        visible(anchor) && anchor.getBoundingClientRect().top >= headingBottom - 4
+      ).map((anchor) => {
+        const authorText = clean((anchor as HTMLElement).innerText ?? '', 200);
+        let current = anchor.parentElement;
+        for (let depth = 0; current && depth < 7; depth += 1, current = current.parentElement) {
+          const rect = current.getBoundingClientRect();
+          const text = clean(current.textContent ?? '', 2_000);
+          if (visible(current) && rect.top >= headingBottom - 8 && rect.width >= 220 && rect.height >= 38 &&
+            rect.height <= 560 && text.length >= authorText.length + 3) return current;
+        }
+        return null;
+      }).filter((value): value is HTMLElement => value !== null);
+      const candidates = [...classCandidates, ...semanticCandidates].filter((node, index, all) =>
+        all.indexOf(node) === index && node.getBoundingClientRect().top >= headingBottom - 8
+      );
+      const nodes = candidates.filter((node, index, all) => !all.some((other, otherIndex) =>
+        otherIndex !== index && node.contains(other)
+      )).sort((left, right) => left.getBoundingClientRect().top - right.getBoundingClientRect().top);
       const digest = (value: string): string => { let hash = 2166136261; for (const char of value) {
         hash ^= char.charCodeAt(0); hash = Math.imul(hash, 16777619); } return (hash >>> 0).toString(16).padStart(8, '0'); };
       const comments = nodes.slice(0, 80).map((node) => {

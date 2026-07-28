@@ -29,6 +29,8 @@ interface PublicComment {
   locationText: string;
 }
 
+interface ArchivedPublicComment extends PublicComment { parentNoteId: string }
+
 interface ObserverController {
   schemaVersion: 2;
   generation: number;
@@ -39,6 +41,12 @@ interface ObserverController {
   details: PublicDetail[];
   comments: PublicComment[];
   commentPagination: { hasMore: boolean | null; cursorObserved: boolean };
+  selectedNoteId: string;
+  commentArchiveExpiresAt: number;
+  commentArchiveMatchedPayloadCount: number;
+  commentArchiveBodyBytesRead: number;
+  commentArchive: ArchivedPublicComment[];
+  commentArchivePagination: { hasMore: boolean | null; cursorObserved: boolean };
 }
 
 const root = window as typeof window & { [stateKey]?: ObserverController };
@@ -52,8 +60,21 @@ const controller: ObserverController = existing ?? {
   items: [],
   details: [],
   comments: [],
-  commentPagination: { hasMore: null, cursorObserved: false }
+  commentPagination: { hasMore: null, cursorObserved: false },
+  selectedNoteId: '',
+  commentArchiveExpiresAt: 0,
+  commentArchiveMatchedPayloadCount: 0,
+  commentArchiveBodyBytesRead: 0,
+  commentArchive: [],
+  commentArchivePagination: { hasMore: null, cursorObserved: false }
 };
+
+controller.selectedNoteId ??= '';
+controller.commentArchiveExpiresAt ??= 0;
+controller.commentArchiveMatchedPayloadCount ??= 0;
+controller.commentArchiveBodyBytesRead ??= 0;
+controller.commentArchive ??= [];
+controller.commentArchivePagination ??= { hasMore: null, cursorObserved: false };
 
 if (!existing) {
   Object.defineProperty(root, stateKey, { value: controller, configurable: true });
@@ -67,17 +88,17 @@ if (!existing) {
   const project = (value: unknown): {
     items: PublicItem[];
     details: PublicDetail[];
-    comments: PublicComment[];
+    comments: ArchivedPublicComment[];
     hasMore: boolean | null;
     cursorObserved: boolean;
   } => {
     const items: PublicItem[] = [];
     const details: PublicDetail[] = [];
-    const comments: PublicComment[] = [];
+    const comments: ArchivedPublicComment[] = [];
     let hasMore: boolean | null = null;
     let cursorObserved = false;
     const visit = (node: unknown, depth: number): void => {
-      if (depth > 7 || items.length >= maximumItems) return;
+      if (depth > 7 || (items.length >= maximumItems && comments.length >= maximumComments)) return;
       if (Array.isArray(node)) {
         for (const entry of node.slice(0, 80)) visit(entry, depth + 1);
         return;
@@ -86,7 +107,11 @@ if (!existing) {
       if (!record) return;
       const commentId = clean(record.comment_id ?? record.commentId ?? record.id, 100);
       const commentText = clean(record.content ?? record.content_text ?? record.text, 2_000);
-      if (commentId && commentText && comments.length < maximumComments) {
+      const commentShape = Object.hasOwn(record, 'comment_id') || Object.hasOwn(record, 'commentId') ||
+        Object.hasOwn(record, 'sub_comment_count') || Object.hasOwn(record, 'subCommentCount') ||
+        (Object.hasOwn(record, 'user_info') &&
+          (Object.hasOwn(record, 'create_time') || Object.hasOwn(record, 'ip_location')));
+      if (commentShape && commentId && commentText && comments.length < maximumComments) {
         const user = object(record.user_info ?? record.userInfo ?? record.user) ?? {};
         comments.push({
           commentId,
@@ -95,7 +120,8 @@ if (!existing) {
           likedCountText: clean(record.like_count ?? record.liked_count ?? record.likeCount, 40),
           subCommentCountText: clean(record.sub_comment_count ?? record.subCommentCount, 40),
           createdAtText: clean(record.create_time ?? record.created_at ?? record.createTime, 100),
-          locationText: clean(record.ip_location ?? record.ipLocation, 100)
+          locationText: clean(record.ip_location ?? record.ipLocation, 100),
+          parentNoteId: clean(record.note_id ?? record.noteId ?? record.target_note_id ?? record.targetNoteId, 80)
         });
       }
       const recordHasMore = record.has_more ?? record.hasMore;
@@ -169,6 +195,27 @@ if (!existing) {
       }
       if (projected.hasMore !== null) active.commentPagination.hasMore = projected.hasMore;
       active.commentPagination.cursorObserved ||= projected.cursorObserved;
+      const archiveKnown = new Set(active.commentArchive.map((comment) => `${comment.parentNoteId}:${comment.commentId}`));
+      let archivedFromPayload = false;
+      for (const comment of projected.comments) {
+        const parentNoteId = comment.parentNoteId || active.selectedNoteId;
+        if (!parentNoteId || active.commentArchive.length >= maximumComments) continue;
+        const key = `${parentNoteId}:${comment.commentId}`;
+        if (!archiveKnown.has(key)) {
+          archiveKnown.add(key);
+          active.commentArchive.push({ ...comment, parentNoteId });
+          archivedFromPayload = true;
+        }
+      }
+      if (archivedFromPayload) {
+        active.commentArchiveExpiresAt = Date.now() + 3 * 60_000;
+        active.commentArchiveMatchedPayloadCount = Math.min(maximumPayloads,
+          active.commentArchiveMatchedPayloadCount + 1);
+        active.commentArchiveBodyBytesRead = Math.min(16 * 1024 * 1024,
+          active.commentArchiveBodyBytesRead + bytes);
+        if (projected.hasMore !== null) active.commentArchivePagination.hasMore = projected.hasMore;
+        active.commentArchivePagination.cursorObserved ||= projected.cursorObserved;
+      }
     } catch {
       // Non-JSON or unreadable bodies are not retained.
     }
@@ -239,3 +286,10 @@ controller.items = [];
 controller.details = [];
 controller.comments = [];
 controller.commentPagination = { hasMore: null, cursorObserved: false };
+if (Date.now() >= controller.commentArchiveExpiresAt) {
+  controller.selectedNoteId = '';
+  controller.commentArchiveMatchedPayloadCount = 0;
+  controller.commentArchiveBodyBytesRead = 0;
+  controller.commentArchive = [];
+  controller.commentArchivePagination = { hasMore: null, cursorObserved: false };
+}
