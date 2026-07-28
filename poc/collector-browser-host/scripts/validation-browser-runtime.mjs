@@ -12,6 +12,7 @@ import {
   publicRuntime,
   readExtensionRuntimeExpectation,
   runtimeMatches,
+  validationAutomationProfileId,
   validationBrowserPaths,
   validationProfileId
 } from './validation-browser-config.mjs';
@@ -30,7 +31,7 @@ export async function startValidationBrowser() {
     stateDirectory: browserHostStateDirectory,
     profileRoot: browserProfileRoot,
     extensionDirectory,
-    validationAutomationProfileId: validationProfileId,
+    validationAutomationProfileId,
     endpointPath: browserHostEndpointPath,
     timeoutMs: 30_000
   });

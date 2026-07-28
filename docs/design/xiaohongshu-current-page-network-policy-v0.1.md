@@ -32,6 +32,19 @@
 
 因此，未来即使验证账号只能访问公开浏览与搜索，也不会触发上述页面、读取其 DOM 或 Network 面、保存其数据，或尝试绕过该账号的封禁限制。
 
+### 专用验证浏览器
+
+使用下面的本地入口准备验证环境：
+
+```powershell
+Set-Location D:\AIProject\inteligence\poc
+npm run start:xiaohongshu-validation-browser
+```
+
+它只会启动一个可见、持久的 Chromium 和本地扩展控制面，初始不导航任何平台页面。运行材料固定在 Git 忽略的 `poc/runtime/xiaohongshu-validation/`，Profile ID 为 `xiaohongshu_validation`；它不读取、复制或管理用户日常浏览器的 Profile。该环境还显式关闭 B 站验证所用的 test-only extension-control 命令。
+
+启动后由用户本人在这个窗口中通过地址栏进入小红书并完成必要登录。用户确认“已登录小红书验证浏览器”前，不执行任何小红书平台导航、刷新、搜索、点击或滚动；登录后也只研究用户自然停留的公开页面。
+
 ## 不可绕过的预算
 
 | 项目 | 上限 | 含义 |

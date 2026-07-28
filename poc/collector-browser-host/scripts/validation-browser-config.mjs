@@ -4,17 +4,32 @@ import { fileURLToPath } from 'node:url';
 
 const hostRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const pocRoot = resolve(hostRoot, '..');
-const runtimeRoot = resolve(pocRoot, 'runtime', 'validation-browser', 'host');
+const validationBrowserInstanceId = boundedRuntimeIdentifier(
+  process.env.COLLECTOR_VALIDATION_BROWSER_INSTANCE ?? 'validation-browser',
+  'validation_browser_instance'
+);
+const runtimeRoot = resolve(pocRoot, 'runtime', validationBrowserInstanceId, 'host');
 
 export const browserHostMainModulePath = resolve(hostRoot, 'dist', 'main.js');
 export const browserHostEndpointPath = resolve(runtimeRoot, 'endpoint.json');
 export const browserHostStateDirectory = resolve(runtimeRoot, 'state');
 export const browserProfileRoot = resolve(runtimeRoot, 'profiles');
 export const extensionDirectory = resolve(pocRoot, 'collector-extension', 'dist');
-export const validationProfileId = 'validation';
+export const validationProfileId = boundedRuntimeIdentifier(
+  process.env.COLLECTOR_VALIDATION_PROFILE_ID ?? 'validation',
+  'validation_profile_id'
+);
+/**
+ * The default test fixture retains its explicit extension-control path. A
+ * platform-specific validation browser can opt out so it cannot accidentally
+ * be used by test-only extension-control commands.
+ */
+export const validationAutomationProfileId =
+  process.env.COLLECTOR_VALIDATION_EXTENSION_CONTROL === 'disabled' ? null : validationProfileId;
 
 export function validationBrowserPaths() {
   return {
+    validationBrowserInstanceId,
     runtimeRoot,
     browserHostStateDirectory,
     browserHostEndpointPath,
@@ -76,4 +91,11 @@ export function publicRuntime(expected, observed) {
         }
       : null
   };
+}
+
+function boundedRuntimeIdentifier(value, field) {
+  if (typeof value !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/.test(value)) {
+    throw new Error(`${field}_invalid`);
+  }
+  return value;
 }
