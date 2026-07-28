@@ -27,6 +27,7 @@
     "validate:xiaohongshu-trusted-search": "node scripts/validate-xiaohongshu-trusted-search.mjs",
     "validate:xiaohongshu-extension-trusted-input": "node scripts/validate-xiaohongshu-extension-trusted-input.mjs",
     "validate:xiaohongshu-gateway-e2e": "node scripts/validate-xiaohongshu-gateway-e2e.mjs",
+    "validate:xiaohongshu-gateway-note-detail-e2e": "node scripts/validate-xiaohongshu-gateway-e2e.mjs --note-detail",
     "recon:xiaohongshu-public-profile-entry": "node scripts/recon-xiaohongshu-public-profile-entry.mjs",
     "recon:xiaohongshu-note-overlay": "node scripts/recon-xiaohongshu-note-overlay.mjs",
     "validate:extension-control": "node scripts/validate-extension-control.mjs",

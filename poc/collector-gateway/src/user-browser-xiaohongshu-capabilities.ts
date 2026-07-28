@@ -74,8 +74,8 @@ export interface UserBrowserXiaohongshuNotePublicDetailCapabilityDescriptor {
   inputMode: 'result_rank_only_no_caller_url';
   executionTarget: 'existing_public_search_tab';
   accountScopedSurfaces: 'forbidden';
-  dispatchState: 'direct_canary_pending';
-  managedValidationState: 'human_workflow_proved_extension_e2e_pending';
+  dispatchState: 'direct_ready';
+  managedValidationState: 'gateway_extension_real_e2e_passed';
   captureMode: 'network_first_dom_fallback_same_document_overlay';
   responseBodies: 'temporarily_read_projected_not_stored';
   routeAdmission: 'public_detail_shape_only_no_url_dependency';
@@ -145,8 +145,8 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     inputMode: 'result_rank_only_no_caller_url',
     executionTarget: 'existing_public_search_tab',
     accountScopedSurfaces: 'forbidden',
-    dispatchState: 'direct_canary_pending',
-    managedValidationState: 'human_workflow_proved_extension_e2e_pending',
+    dispatchState: 'direct_ready',
+    managedValidationState: 'gateway_extension_real_e2e_passed',
     captureMode: 'network_first_dom_fallback_same_document_overlay',
     responseBodies: 'temporarily_read_projected_not_stored',
     routeAdmission: 'public_detail_shape_only_no_url_dependency',

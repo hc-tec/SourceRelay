@@ -124,7 +124,8 @@ function userBrowserGatewayDirectCapabilityDescriptor(
   if (candidate.capability === 'xiaohongshu.search.public_notes.v1' ||
     candidate.capability === 'xiaohongshu.account.public_notes.v1' ||
     candidate.capability === 'xiaohongshu.note.public_detail.v1') {
-    const expectedDispatch = candidate.capability === 'xiaohongshu.search.public_notes.v1'
+    const expectedDispatch = candidate.capability === 'xiaohongshu.search.public_notes.v1' ||
+      candidate.capability === 'xiaohongshu.note.public_detail.v1'
       ? 'direct_ready'
       : 'direct_canary_pending';
     if (candidate.schemaVersion !== 1 || candidate.platform !== 'xiaohongshu' ||

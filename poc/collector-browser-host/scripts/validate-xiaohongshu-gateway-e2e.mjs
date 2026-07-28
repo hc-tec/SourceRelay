@@ -14,6 +14,7 @@ const gatewayDirectory = resolve(pocRoot, 'collector-gateway');
 const profileId = 'xiaohongshu_validation';
 const exploreUrl = 'https://www.xiaohongshu.com/explore';
 const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ?? '咖啡豆';
+const validateNoteDetail = process.argv.includes('--note-detail');
 const timeline = [];
 let client = null;
 let gateway = null;
@@ -142,6 +143,52 @@ try {
     responseUrlsStored: false
   });
 
+  let reportedOperation = operation;
+  let reportedArtifact = artifact;
+  if (validateNoteDetail) {
+    const detailDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
+      method: 'POST',
+      headers: serviceHeaders(token),
+      body: JSON.stringify({
+        schemaVersion: 2,
+        browserBindingId: control.browserBindingId,
+        platform: 'xiaohongshu',
+        capability: 'xiaohongshu.note.public_detail.v1',
+        executionTarget: 'existing_public_search_tab',
+        input: { resultRank: 1 }
+      })
+    }, 201);
+    const detailOperationId = detailDispatch.result?.operationId;
+    if (!uuid(detailOperationId)) throw new Error('xiaohongshu_note_detail_e2e_operation_missing');
+    record('note_detail_operation_dispatched', { operationId: detailOperationId, resultRank: 1 });
+    const detailOperation = await waitForOperation(gatewayOrigin, token, detailOperationId, 90_000);
+    if (detailOperation.state !== 'completed' || detailOperation.terminalReason !== 'note_detail_ready' ||
+      !uuid(detailOperation.artifact?.artifactId) || typeof detailOperation.artifact?.retrievalPath !== 'string') {
+      throw new Error(detailOperation.errorCode ?? 'xiaohongshu_note_detail_e2e_operation_not_completed');
+    }
+    const detailArtifactPayload = await apiJson(`${gatewayOrigin}${detailOperation.artifact.retrievalPath}`, {
+      headers: { authorization: `Bearer ${token}` }
+    }, 200);
+    record('note_detail_artifact_diagnostics', {
+      state: detailArtifactPayload.artifact?.result?.state ?? null,
+      terminalReason: detailArtifactPayload.artifact?.result?.terminalReason ?? null,
+      publicSurface: detailArtifactPayload.artifact?.result?.page?.publicSurface ?? null,
+      captureMode: detailArtifactPayload.artifact?.result?.projection?.captureMode ?? null,
+      publicTextLength: detailArtifactPayload.artifact?.result?.projection?.publicText?.length ?? 0,
+      semanticActionCount: detailArtifactPayload.artifact?.result?.semanticAction?.attemptCount ?? null,
+      debuggerDetached: detailArtifactPayload.artifact?.provenance?.debuggerDetached ?? null
+    });
+    assertNoteDetailArtifact(detailArtifactPayload.artifact, detailOperationId);
+    reportedOperation = detailOperation;
+    reportedArtifact = detailArtifactPayload.artifact;
+    record('note_detail_artifact_retrieved', {
+      captureMode: reportedArtifact.summary.captureMode,
+      publicTextLength: reportedArtifact.result.projection.publicText.length,
+      rawPayloadStored: false,
+      responseUrlsStored: false
+    });
+  }
+
   const after = await leasedPage();
   const afterVisual = await capture(after, runId);
   record('visual_postcondition', { visualEvidenceId: afterVisual.evidenceId });
@@ -154,22 +201,24 @@ try {
     ok: true,
     runId,
     gatewayPath: 'user_browser_api_to_signed_queue_to_production_extension',
-    productPlatformNavigations: artifact.result.navigation.attemptCount,
+    validatedCapability: validateNoteDetail ? 'xiaohongshu.note.public_detail.v1' : 'xiaohongshu.search.public_notes.v1',
+    productPlatformNavigations: reportedArtifact.result.navigation.attemptCount,
     validationBaselineNavigations: 1,
-    semanticActions: artifact.result.semanticAction.attemptCount,
+    semanticActions: reportedArtifact.result.semanticAction.attemptCount,
     automaticPlatformRetries: 0,
     operation: {
-      operationId,
-      state: operation.state,
-      terminalReason: operation.terminalReason,
-      artifactId: operation.artifact.artifactId
+      operationId: reportedOperation.operationId,
+      state: reportedOperation.state,
+      terminalReason: reportedOperation.terminalReason,
+      artifactId: reportedOperation.artifact.artifactId
     },
     artifact: {
-      itemCount: artifact.summary.itemCount,
-      queryDigest: artifact.queryDigest,
-      rawPayloadStored: artifact.provenance.rawPayloadStored,
-      responseUrlsStored: artifact.provenance.responseUrlsStored,
-      debuggerDetached: artifact.provenance.debuggerDetached
+      captureMode: reportedArtifact.summary.captureMode ?? 'search_projection',
+      itemCount: reportedArtifact.summary.itemCount ?? null,
+      queryDigest: reportedArtifact.queryDigest ?? null,
+      rawPayloadStored: reportedArtifact.provenance.rawPayloadStored,
+      responseUrlsStored: reportedArtifact.provenance.responseUrlsStored,
+      debuggerDetached: reportedArtifact.provenance.debuggerDetached
     },
     persistedQueryCopies,
     visualEvidence: { before: beforeVisual, after: afterVisual },
@@ -244,6 +293,26 @@ function assertArtifact(artifact, operationId) {
   const serialized = JSON.stringify(artifact);
   if (/"(?:url|responseUrl|route|query|header|cookie|token|rawPayload|tabId|documentId)"\s*:/i.test(serialized)) {
     throw new Error('xiaohongshu_gateway_e2e_artifact_forbidden_material');
+  }
+}
+
+function assertNoteDetailArtifact(artifact, operationId) {
+  if (!artifact || artifact.summary?.operationId !== operationId ||
+    artifact.summary?.capability !== 'xiaohongshu.note.public_detail.v1' ||
+    artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'note_detail_ready' ||
+    artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
+    artifact.result?.semanticAction?.attempted !== true || artifact.result.semanticAction.attemptCount !== 1 ||
+    artifact.result?.page?.publicSurface !== 'note_detail_overlay' ||
+    typeof artifact.result?.projection?.publicText !== 'string' || artifact.result.projection.publicText.length < 120 ||
+    !['network_projection', 'dom_fallback'].includes(artifact.result.projection.captureMode) ||
+    artifact.provenance?.rawPayloadStored !== false || artifact.provenance?.responseUrlsStored !== false ||
+    artifact.provenance?.debuggerDetached !== true) {
+    throw new Error('xiaohongshu_note_detail_e2e_artifact_invalid');
+  }
+  const serialized = JSON.stringify(artifact);
+  if (/"(?:url|responseUrl|route|query|header|cookie|token|rawPayload|tabId|documentId|selector|script)"\s*:/i
+    .test(serialized)) {
+    throw new Error('xiaohongshu_note_detail_e2e_artifact_forbidden_material');
   }
 }
 

@@ -63,8 +63,8 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       platform: 'xiaohongshu',
       inputMode: 'result_rank_only_no_caller_url',
       executionTarget: 'existing_public_search_tab',
-      dispatchState: 'direct_canary_pending',
-      managedValidationState: 'human_workflow_proved_extension_e2e_pending',
+      dispatchState: 'direct_ready',
+      managedValidationState: 'gateway_extension_real_e2e_passed',
       captureMode: 'network_first_dom_fallback_same_document_overlay',
       browserHostFallback: 'forbidden',
       budget: expect.objectContaining({ maximumSemanticActions: 1, maximumNetworkResponseBodies: 4 })

@@ -298,12 +298,28 @@ async function readOverlayProbe(page: Page, timeoutMs: number): Promise<OverlayP
     const bodyText = (document.body?.innerText ?? '').slice(0, 16_000);
     const roots = Array.from(document.querySelectorAll(
       '[role="dialog"], [aria-modal="true"], [class*="note-detail"], [class*="note-container"], [class*="modal"]'
-    )).filter(visible).sort((left, right) => {
+    )).filter(visible);
+    const visibleAuthors = Array.from(document.querySelectorAll('a[href*="/user/profile/"]')).filter(visible);
+    const authorAncestors = visibleAuthors.flatMap((author) => {
+      const ancestors: Element[] = [];
+      let current = author.parentElement;
+      for (let depth = 0; current && depth < 8; depth += 1, current = current.parentElement) {
+        const rect = current.getBoundingClientRect();
+        if (current !== document.body && current !== document.documentElement && visible(current) &&
+          rect.width >= 400 && rect.width <= window.innerWidth * 0.92 && rect.height >= 300) ancestors.push(current);
+      }
+      return ancestors;
+    });
+    for (const ancestor of authorAncestors) if (!roots.includes(ancestor)) roots.push(ancestor);
+    const withAuthor = roots.filter((root) => root.querySelector('a[href*="/user/profile/"]'));
+    const overlay = (withAuthor.length > 0 ? withAuthor : roots).sort((left, right) => {
+      const leftText = (left.textContent ?? '').replace(/\s+/g, ' ').trim().length;
+      const rightText = (right.textContent ?? '').replace(/\s+/g, ' ').trim().length;
+      if (rightText !== leftText) return rightText - leftText;
       const l = left.getBoundingClientRect();
       const r = right.getBoundingClientRect();
       return (r.width * r.height) - (l.width * l.height);
-    });
-    const overlay = roots.find((root) => root.querySelector('a[href*="/user/profile/"]')) ?? roots[0] ?? null;
+    })[0] ?? null;
     const author = overlay ? Array.from(overlay.querySelectorAll('a[href]')).find((element) => {
       if (!(element instanceof HTMLAnchorElement) || !visible(element)) return false;
       try {
