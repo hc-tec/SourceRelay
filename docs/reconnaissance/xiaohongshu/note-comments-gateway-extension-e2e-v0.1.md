@@ -69,6 +69,33 @@ responseUrlsStored: false
 
 该评论 JSON 在较早的搜索/详情观察阶段进入同一 document 的短时去敏 archive，评论 operation 根据内部选中笔记身份消费，并与公开 DOM 合并。结果没有暴露内部 note identity、route 或响应 URL。
 
+## 2026-07-29：当前构建的 Network-first 回归
+
+在修正评论懒加载判断、主页签名保留和验证命令参数透传后，使用当前生产构建重新执行了一次真实 Gateway→Extension 闭环。该 run 仍然没有使用 fake 页面、fake XHR 或旧 Browser Host fallback：
+
+```yaml
+runId: 3e57c393-4f1c-4fb3-b2ba-47ad4dc16d33
+operationId: 98e32f10-ed3b-4d1d-b32d-ffff40022a86
+artifactId: dba781d7-5f56-4a4c-b120-18caba98a077
+state: completed
+terminalReason: note_comments_ready
+productPlatformNavigations: 0
+validationBaselineNavigations: 1
+semanticActions: 0
+automaticPlatformRetries: 0
+captureMode: network_projection
+commentCount: 12
+networkMatchedPayloadCount: 1
+networkBodyBytesRead: 8191
+networkCursorObserved: true
+rawPayloadStored: false
+responseUrlsStored: false
+debuggerDetached: true
+finalPageState: retained_for_review
+```
+
+这条回归证据证明：当同一详情 document 的短时 Network archive 已经包含可关联的公开评论时，生产评论能力不会为了“看起来像加载”而额外滚动；它直接返回 Network projection。只有 Network 不足且 DOM 仍可能懒加载更多评论时，才会进入声明的 1–3 次可信滚动预算。
+
 ## DOM 与动作事实
 
 只读视觉证据显示详情浮层公开呈现“共 6 条评论”、公开主评论和“展开 3 条回复”。正式 comments-only run 开始时评论已经渲染，因此零滚动完成是最小动作策略的正确结果，而不是漏执行：`semanticAction.attempted=false`、`attemptCount=0`、`completedScrolls=0`。
