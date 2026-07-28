@@ -42,6 +42,7 @@ import { PairingBroker } from './pairing';
 import { ExtensionWorkQueue } from './extension-work-queue';
 import { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-native-search-batch-artifacts';
 import { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
+import { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-artifacts';
 import { BrowserProfileRegistry } from './profiles';
 
 const config = loadGatewayConfig();
@@ -73,6 +74,7 @@ const transcriptArtifacts = await BilibiliTranscriptArtifactStore.create(config.
 const danmakuArtifacts = await BilibiliDanmakuArtifactStore.create(config.stateDirectory);
 const nativeSearchBatchDirectArtifacts = await ExtensionWorkNativeSearchBatchArtifactStore.create(config.stateDirectory);
 const passiveDirectArtifacts = await ExtensionWorkPassiveArtifactStore.create(config.stateDirectory);
+const xiaohongshuPublicNotesArtifacts = await XiaohongshuPublicNotesArtifactStore.create(config.stateDirectory);
 const dynamicRunner = new BilibiliDynamicHostRunner({
   accountSafety,
   browserManager,
@@ -188,6 +190,7 @@ const server = createServer(async (request, response) => {
       accountVideoInventoryArtifacts,
       nativeSearchBatchDirectArtifacts,
       passiveDirectArtifacts,
+      xiaohongshuPublicNotesArtifacts,
       accountVideoInventoryRunner,
       dynamicArtifacts,
       dynamicRunner,

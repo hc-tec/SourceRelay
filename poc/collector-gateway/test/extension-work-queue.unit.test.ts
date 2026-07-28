@@ -337,4 +337,86 @@ describe('extension work queue state machine', () => {
       await rm(stateDirectory, { recursive: true, force: true });
     }
   });
+
+  test('signs query-only Xiaohongshu work and redacts the phrase at terminal state', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-xiaohongshu-'));
+    const query = '不应长期保存的小红书查询';
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const queued = await queue.enqueueXiaohongshuPublicNotesSearch({ browserBindingId: bindingId, query }, base);
+      expect(await queue.claimNext(bindingId, new Date(base.getTime() + 1), ['bilibili'])).toBeNull();
+      const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
+      expect(claimed).toMatchObject({
+        operationId: queued.operationId,
+        platform: 'xiaohongshu',
+        capability: 'xiaohongshu.search.public_notes.v1',
+        executionTarget: 'existing_public_explore_tab',
+        input: { query },
+        budget: {
+          maximumPlatformNavigations: 0,
+          maximumPageReloads: 0,
+          maximumPageInitiatedNewDocuments: 0,
+          maximumSemanticActions: 1
+        }
+      });
+      if (!claimed || claimed.capability !== 'xiaohongshu.search.public_notes.v1') {
+        throw new Error('test_claim_missing');
+      }
+      await queue.complete(bindingId, {
+        schemaVersion: 1,
+        protocolVersion: 1,
+        workId: claimed.workId,
+        operationId: claimed.operationId,
+        browserBindingId: claimed.browserBindingId,
+        platform: 'xiaohongshu',
+        capability: 'xiaohongshu.search.public_notes.v1',
+        executionTarget: 'existing_public_explore_tab',
+        state: 'completed',
+        errorCode: null,
+        terminalReason: 'search_ready',
+        completedAt: new Date(base.getTime() + 2).toISOString(),
+        navigation: { attempted: false, attemptCount: 0 },
+        semanticAction: { attempted: true, attemptCount: 1 },
+        input: { queryEchoed: true, enterAttempted: true },
+        page: { publicSurface: 'search', renderedCardCount: 1 },
+        projection: {
+          schemaVersion: 2,
+          type: 'xiaohongshu_managed_search_projection',
+          pageAlias: claimed.workId,
+          runId: claimed.workId,
+          matchedPayloadCount: 1,
+          bodyBytesRead: 100,
+          rawPayloadStored: false,
+          responseUrlsStored: false,
+          items: [{
+            rank: 1,
+            noteId: 'note-1',
+            title: '公开笔记',
+            contentType: 'normal',
+            authorId: 'author-1',
+            authorNickname: '公开作者',
+            likedCountText: '1'
+          }]
+        },
+        rawPayloadStored: false,
+        responseUrlsStored: false,
+        debuggerDetached: true
+      }, {
+        artifactId: '44444444-4444-4444-8444-444444444444',
+        retrievalPath: '/v1/collect/artifacts/xiaohongshu.search.public_notes.v1/44444444-4444-4444-8444-444444444444',
+        summary: {}
+      });
+      const persisted = await readFile(join(stateDirectory, 'extension-work-operations.json'), 'utf8');
+      expect(persisted).not.toContain(query);
+      expect(persisted).toMatch(/"queryDigest": "[a-f0-9]{64}"/);
+      expect(persisted).not.toContain('search_result');
+      const restored = await ExtensionWorkQueue.create(identity(), stateDirectory, new Date(base.getTime() + 3));
+      await expect(restored.get(queued.operationId)).resolves.toMatchObject({
+        platform: 'xiaohongshu',
+        state: 'completed'
+      });
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
 });

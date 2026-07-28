@@ -13,6 +13,7 @@ import {
 import { ExtensionWorkQueue } from './extension-work-queue';
 import { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-native-search-batch-artifacts';
 import { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
+import { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-artifacts';
 import { safeErrorCode, sendJson } from './gateway-http';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker } from './pairing';
@@ -33,6 +34,7 @@ const nativeSearchBatchDirectArtifacts = await ExtensionWorkNativeSearchBatchArt
 const accountProfileArtifacts = await BilibiliAccountProfileArtifactStore.create(config.stateDirectory);
 const accountVideoInventoryArtifacts = await BilibiliAccountVideoInventoryArtifactStore.create(config.stateDirectory);
 const passiveDirectArtifacts = await ExtensionWorkPassiveArtifactStore.create(config.stateDirectory);
+const xiaohongshuPublicNotesArtifacts = await XiaohongshuPublicNotesArtifactStore.create(config.stateDirectory);
 const expectedHost = config.host + ':' + config.port;
 
 const server = createServer(async (request, response) => {
@@ -54,7 +56,8 @@ const server = createServer(async (request, response) => {
       nativeSearchBatchDirectArtifacts,
       accountProfileArtifacts,
       accountVideoInventoryArtifacts,
-      passiveDirectArtifacts
+      passiveDirectArtifacts,
+      xiaohongshuPublicNotesArtifacts
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 2, ok: false, error: 'route_not_found' });
   } catch (error) {

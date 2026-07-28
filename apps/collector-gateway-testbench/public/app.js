@@ -20,6 +20,7 @@ readArtifact.addEventListener('click', () => void readCurrentArtifact());
 element('video-form').addEventListener('submit', (event) => void submitVideo(event));
 element('search-form').addEventListener('submit', (event) => void submitSearch(event, 'native_search'));
 element('search-batch-form').addEventListener('submit', (event) => void submitSearch(event, 'native_search_batch'));
+element('xiaohongshu-search-form').addEventListener('submit', (event) => void submitSearch(event, 'xiaohongshu_search'));
 element('profile-form').addEventListener('submit', (event) => void submitAccount(event, 'account_profile'));
 element('inventory-form').addEventListener('submit', (event) => void submitAccount(event, 'account_inventory'));
 element('discussion-form').addEventListener('submit', (event) => void submitDiscussion(event));
@@ -63,7 +64,8 @@ async function refreshCapabilityCatalog() {
     const capabilities = payload.capabilities;
     const directReady = capabilities.filter((capability) => capability.dispatchState === 'direct_ready').length;
     const canaryPending = capabilities.filter((capability) => capability.dispatchState === 'direct_canary_pending').length;
-    note.textContent = `已登记 ${capabilities.length} 项 B站能力；${directReady} 项已有真实 direct canary，${canaryPending} 项已实现 direct work、等待本轮真实 canary。其余项目保留迁移状态，不会走旧 Browser Host fallback。`;
+    const gatewayPending = capabilities.filter((capability) => capability.dispatchState === 'direct_gateway_dispatch_pending').length;
+    note.textContent = `已登记 ${capabilities.length} 项浏览器采集能力；${directReady} 项可 direct dispatch，${canaryPending} 项等待真实 canary，${gatewayPending} 项扩展 canary 已通过、正在接通 Gateway。所有项目禁止旧 Browser Host fallback。`;
     list.replaceChildren(...capabilities.map(renderCapability));
   } catch (error) {
     note.textContent = `无法读取能力登记册：${error.code ?? 'testbench_request_failed'}`;
@@ -76,6 +78,8 @@ function renderCapability(capability) {
   const category = capability.dispatchState === 'direct_ready'
     ? 'ready'
     : capability.dispatchState === 'direct_canary_pending'
+      ? 'pending'
+    : capability.dispatchState === 'direct_gateway_dispatch_pending'
       ? 'pending'
     : capability.dispatchState === 'trusted_interaction_migration_required'
       ? 'trusted'
@@ -97,6 +101,7 @@ function renderCapability(capability) {
 function capabilityStatusLabel(value) {
   if (value === 'direct_ready') return '可 direct dispatch';
   if (value === 'direct_canary_pending') return 'direct 已实现，待真实 canary';
+  if (value === 'direct_gateway_dispatch_pending') return '扩展 canary 已通过，待 Gateway 派发';
   if (value === 'trusted_interaction_migration_required') return '需可信交互迁移';
   return '待 direct 迁移';
 }
@@ -133,9 +138,10 @@ function renderBindings() {
   }
   for (const control of document.querySelectorAll(
     '#video-form input, #video-form select, #search-form input, #search-form select, #search-batch-form input, #search-batch-form select, ' +
+    '#xiaohongshu-search-form input, #xiaohongshu-search-form select, ' +
     '#profile-form input, #profile-form select, #inventory-form input, #inventory-form select, ' +
     '#discussion-form input, #discussion-form select, ' +
-    '#passive-form input, #passive-form select, #video-form button, #search-form button, #search-batch-form button, ' +
+    '#passive-form input, #passive-form select, #video-form button, #search-form button, #search-batch-form button, #xiaohongshu-search-form button, ' +
     '#profile-form button, #inventory-form button, #discussion-form button, #passive-form button'
   )) {
     control.disabled = !enabled;

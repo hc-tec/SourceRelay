@@ -10,6 +10,8 @@ import {
   isExtensionWorkResult,
   isBilibiliPassiveExtensionWorkItem,
   isBilibiliPassiveExtensionWorkResult,
+  isXiaohongshuPublicNotesSearchWorkItem,
+  isXiaohongshuPublicNotesSearchWorkResult,
   type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
 import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
@@ -24,8 +26,10 @@ import { recordBilibiliNativeSearchBatchExtensionWork } from './extension-work-b
 import { recordBilibiliDiscussionUserSelectedTabExtensionWork } from './extension-work-bilibili-discussion-user-selected-tab';
 import { recordBilibiliVideoDetailExtensionWork } from './extension-work-bilibili-video-detail';
 import { recordBilibiliPassiveExtensionWork } from './extension-work-bilibili-passive';
+import { recordXiaohongshuPublicNotesExtensionWork } from './extension-work-xiaohongshu-public-notes';
 import type { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
 import type { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-native-search-batch-artifacts';
+import type { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-artifacts';
 import type { ExtensionWorkArtifactReference, ExtensionWorkQueue } from './extension-work-queue';
 import { readJsonBody, readJsonBodyWithRaw, requireSameOrigin, safeErrorCode, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
@@ -56,6 +60,7 @@ export interface ExtensionWorkRouteContext {
   accountProfileArtifacts: BilibiliAccountProfileArtifactStore;
   accountVideoInventoryArtifacts: BilibiliAccountVideoInventoryArtifactStore;
   passiveDirectArtifacts: ExtensionWorkPassiveArtifactStore;
+  xiaohongshuPublicNotesArtifacts: XiaohongshuPublicNotesArtifactStore;
 }
 
 /**
@@ -337,6 +342,15 @@ export async function enqueueBilibiliDanmakuWork(
   return await context.workQueue.enqueueBilibiliDanmaku({ browserBindingId, canonicalVideoUrl });
 }
 
+export async function enqueueXiaohongshuPublicNotesSearchWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  query: string
+) {
+  await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
+  return await context.workQueue.enqueueXiaohongshuPublicNotesSearch({ browserBindingId, query });
+}
+
 async function handleExtensionWorkNext(
   request: IncomingMessage,
   response: ServerResponse,
@@ -351,20 +365,25 @@ async function handleExtensionWorkNext(
   try {
     const authorised = await authoriseExtensionRequest(request, context, WORK_NEXT_PATH, '');
     await reconcileExpiredExtensionWork(context);
-    const safety = context.browserBindingSafety.get(authorised.browserBindingId, 'bilibili');
-    if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
-    if (safety.state === 'running') {
+    const safetyRecords = [
+      context.browserBindingSafety.get(authorised.browserBindingId, 'bilibili'),
+      context.browserBindingSafety.get(authorised.browserBindingId, 'xiaohongshu')
+    ];
+    if (safetyRecords.some((safety) => safety.state === 'running')) {
       sendJson(response, 200, { schemaVersion: 1, workItem: null });
       return;
     }
-    const item = await context.workQueue.claimNext(authorised.browserBindingId);
+    const allowedPlatforms = safetyRecords
+      .filter((safety) => safety.state === 'ready')
+      .map((safety) => safety.platform);
+    const item = await context.workQueue.claimNext(authorised.browserBindingId, new Date(), allowedPlatforms);
     if (!item) {
       sendJson(response, 200, { schemaVersion: 1, workItem: null });
       return;
     }
+    await context.browserBindingSafety.begin(authorised.browserBindingId, item.platform, item.operationId);
     if (item.executionTarget === 'collector_work_tab') {
-      await context.browserBindingSafety.begin(authorised.browserBindingId, 'bilibili', item.operationId);
-      await context.browserBindingSafety.recordNavigationIntent(authorised.browserBindingId, 'bilibili', item.operationId);
+      await context.browserBindingSafety.recordNavigationIntent(authorised.browserBindingId, item.platform, item.operationId);
     }
     sendJson(response, 200, { schemaVersion: 1, workItem: item });
   } catch (error) {
@@ -438,18 +457,23 @@ async function handleExtensionWorkResult(
         result,
         artifacts: context.passiveDirectArtifacts
       });
+    } else if (isXiaohongshuPublicNotesSearchWorkItem(item) &&
+      isXiaohongshuPublicNotesSearchWorkResult(result)) {
+      artifact = await recordXiaohongshuPublicNotesExtensionWork({
+        item,
+        result,
+        artifacts: context.xiaohongshuPublicNotesArtifacts
+      });
     } else {
       throw new Error('extension_work_result_capability_mismatch');
     }
     const operation = await context.workQueue.complete(authorised.browserBindingId, result, artifact);
-    if (item.executionTarget === 'collector_work_tab') {
-      await context.browserBindingSafety.finish(
-        authorised.browserBindingId,
-        'bilibili',
-        result.operationId,
-        result
-      );
-    }
+    await context.browserBindingSafety.finish(
+      authorised.browserBindingId,
+      item.platform,
+      result.operationId,
+      result
+    );
     sendJson(response, 200, { schemaVersion: 1, operation });
   } catch (error) {
     sendJson(response, extensionWorkStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
@@ -458,12 +482,13 @@ async function handleExtensionWorkResult(
 
 async function assertBindingCanAcceptWork(
   context: ExtensionWorkRouteContext,
-  browserBindingId: string
+  browserBindingId: string,
+  platform: 'bilibili' | 'xiaohongshu' = 'bilibili'
 ): Promise<void> {
   await reconcileExpiredExtensionWork(context);
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
   if (binding.state !== 'online') throw new Error('browser_binding_offline');
-  const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
+  const safety = context.browserBindingSafety.get(binding.browserBindingId, platform);
   if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
 }
@@ -491,8 +516,7 @@ async function authoriseExtensionRequest(
 export async function reconcileExpiredExtensionWork(context: ExtensionWorkRouteContext): Promise<void> {
   const expired = await context.workQueue.expire();
   for (const operation of expired) {
-    if (operation.executionTarget === 'user_selected_tab') continue;
-    await context.browserBindingSafety.expire(operation.browserBindingId, 'bilibili', operation.operationId);
+    await context.browserBindingSafety.expire(operation.browserBindingId, operation.platform, operation.operationId);
   }
 }
 

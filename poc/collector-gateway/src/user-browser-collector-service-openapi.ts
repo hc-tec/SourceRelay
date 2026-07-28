@@ -265,7 +265,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             { $ref: '#/components/schemas/UserBrowserDynamicCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserCollectionSeriesOverviewCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserCollectionSeriesDetailCollectRequest' },
-            { $ref: '#/components/schemas/UserBrowserDanmakuCollectRequest' }
+            { $ref: '#/components/schemas/UserBrowserDanmakuCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserXiaohongshuPublicNotesSearchCollectRequest' }
           ]
         },
         UserBrowserVideoDetailCollectRequest: {
@@ -407,6 +408,23 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             }
           }
         },
+        UserBrowserXiaohongshuPublicNotesSearchCollectRequest: {
+          type: 'object', additionalProperties: false,
+          description: 'Runs one fixed trusted in-page search in the unique existing public Explore tab. No URL, tab ID, selector, coordinate, script, debugger command, refresh, new tab, or Browser Host fallback can be supplied.',
+          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            browserBindingId: { type: 'string', format: 'uuid' },
+            platform: { type: 'string', const: 'xiaohongshu' },
+            capability: { type: 'string', const: 'xiaohongshu.search.public_notes.v1' },
+            executionTarget: { type: 'string', const: 'existing_public_explore_tab' },
+            input: {
+              type: 'object', additionalProperties: false,
+              required: ['query'],
+              properties: { query: { type: 'string', minLength: 1, maxLength: 80 } }
+            }
+          }
+        },
         QueuedOperationResponse: {
           type: 'object', additionalProperties: false,
           required: ['schemaVersion', 'result'],
@@ -425,17 +443,21 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             schemaVersion: { type: 'integer', const: 1 },
             operationId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
-            platform: { type: 'string', const: 'bilibili' },
+            platform: { type: 'string', enum: ['bilibili', 'xiaohongshu'] },
             capability: {
               type: 'string',
               enum: [
                 'bilibili.video_detail', 'bilibili.native_search',
                 'bilibili.account_profile', 'bilibili.account_inventory',
                 'bilibili.dynamic', 'bilibili.collection_series.overview',
-                'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion'
+                'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion',
+                'xiaohongshu.search.public_notes.v1'
               ]
             },
-            executionTarget: { type: 'string', enum: ['collector_work_tab', 'user_selected_tab'] },
+            executionTarget: {
+              type: 'string',
+              enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab']
+            },
             state: { type: 'string', enum: ['queued', 'claimed', 'completed', 'partial', 'stopped', 'failed'] },
             queuedAt: { type: 'string', format: 'date-time' },
             claimedAt: { type: ['string', 'null'], format: 'date-time' },

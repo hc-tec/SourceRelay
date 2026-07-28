@@ -93,6 +93,31 @@ test('maps batch search into the fixed two-page direct-mode Gateway contract wit
   }), TestbenchInputError);
 });
 
+test('maps Xiaohongshu search to query-only existing-Explore trusted input', () => {
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_search',
+    input: { query: '  咖啡豆  ' }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'xiaohongshu',
+    capability: 'xiaohongshu.search.public_notes.v1',
+    executionTarget: 'existing_public_explore_tab',
+    input: { query: '咖啡豆' }
+  });
+  for (const extra of [
+    { url: 'https://www.xiaohongshu.com/search_result?keyword=x' },
+    { tabId: 7 },
+    { selector: 'textarea' },
+    { debuggerCommand: 'Runtime.evaluate' }
+  ]) assert.throws(() => parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_search',
+    input: { query: '咖啡豆', ...extra }
+  }), TestbenchInputError);
+});
+
 test('maps a MID-only account request into the two fixed direct-mode account capabilities', () => {
   assert.deepEqual(parseTestbenchSubmission({
     browserBindingId: bindingId,
@@ -249,6 +274,13 @@ test('only accepts an artifact path derived from the matching direct operation c
       retrievalPath: `/v1/collect/artifacts/bilibili.discussion/${artifactId}`
     }
   }), `/v1/collect/artifacts/bilibili.discussion/${artifactId}`);
+  assert.equal(artifactPathFromOperation({
+    operationId,
+    capability: 'xiaohongshu.search.public_notes.v1',
+    artifact: {
+      retrievalPath: `/v1/collect/artifacts/xiaohongshu.search.public_notes.v1/${artifactId}`
+    }
+  }), `/v1/collect/artifacts/xiaohongshu.search.public_notes.v1/${artifactId}`);
 });
 
 test('keeps Gateway and testbench listener configuration on explicit loopback origins', () => {

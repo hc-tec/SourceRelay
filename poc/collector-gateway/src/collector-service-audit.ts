@@ -33,6 +33,10 @@ export type CollectorServiceAuditOutcome =
   | 'not_found'
   | 'denied';
 
+export type CollectorServiceAuditCapability =
+  | CollectorServiceCapability
+  | 'xiaohongshu.search.public_notes.v1';
+
 /**
  * Deliberately small, de-identified call history.  In particular it has no
  * request input, URL, query, raw response, token, header, Cookie, Profile
@@ -44,7 +48,7 @@ export interface CollectorServiceAuditEvent {
   occurredAt: string;
   actor: CollectorServiceAuditActor;
   action: CollectorServiceAuditAction;
-  capability: CollectorServiceCapability | null;
+  capability: CollectorServiceAuditCapability | null;
   profileIdDigest: string | null;
   artifactId: string | null;
   operationId: string | null;
@@ -56,7 +60,7 @@ export interface CollectorServiceAuditEvent {
 export interface CollectorServiceAuditInput {
   actor: CollectorServiceAuditActor;
   action: CollectorServiceAuditAction;
-  capability: CollectorServiceCapability | null;
+  capability: CollectorServiceAuditCapability | null;
   profileIdDigest: string | null;
   artifactId: string | null;
   operationId: string | null;
@@ -157,7 +161,8 @@ function auditEvent(value: unknown): CollectorServiceAuditEvent {
     !isTimestamp(candidate.occurredAt) ||
     !isAuditActor(candidate.actor) ||
     !isAuditAction(candidate.action) ||
-    !(candidate.capability === null || isCollectorServiceCapability(candidate.capability)) ||
+    !(candidate.capability === null || isCollectorServiceCapability(candidate.capability) ||
+      candidate.capability === 'xiaohongshu.search.public_notes.v1') ||
     !(candidate.profileIdDigest === null ||
       (typeof candidate.profileIdDigest === 'string' && PROFILE_DIGEST_PATTERN.test(candidate.profileIdDigest))) ||
     !(candidate.artifactId === null ||

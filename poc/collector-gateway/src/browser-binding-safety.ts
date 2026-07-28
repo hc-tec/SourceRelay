@@ -1,17 +1,23 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import type { ExtensionWorkResult, ExtensionWorkTerminalReason } from '@intelligence/collector-contracts';
+import type { ExtensionWorkResult } from '@intelligence/collector-contracts';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_ERROR_CODE = /^[a-z0-9_]{1,100}$/;
 
 export type BrowserBindingSafetyState = 'ready' | 'running' | 'locked';
+export type BrowserBindingPlatform = 'bilibili' | 'xiaohongshu';
+type BrowserBindingSafetyFinishResult = Pick<ExtensionWorkResult, 'terminalReason' | 'errorCode' | 'navigation'> & {
+  platform?: 'bilibili' | 'xiaohongshu';
+  state?: ExtensionWorkResult['state'];
+  semanticAction?: { attempted: boolean; attemptCount: number };
+};
 
 export interface BrowserBindingSafetyRecord {
   schemaVersion: 1;
   browserBindingId: string;
-  platform: 'bilibili';
+  platform: BrowserBindingPlatform;
   state: BrowserBindingSafetyState;
   reasonCode: string | null;
   manualUnlockRequired: boolean;
@@ -66,13 +72,13 @@ export class BrowserBindingSafetyRegistry {
     return registry;
   }
 
-  get(browserBindingId: string, platform: 'bilibili', now = new Date()): BrowserBindingSafetyRecord {
+  get(browserBindingId: string, platform: BrowserBindingPlatform, now = new Date()): BrowserBindingSafetyRecord {
     return structuredClone(this.#getOrCreate(browserBindingId, platform, now));
   }
 
   async begin(
     browserBindingId: string,
-    platform: 'bilibili',
+    platform: BrowserBindingPlatform,
     operationId: string,
     now = new Date()
   ): Promise<BrowserBindingSafetyRecord> {
@@ -96,7 +102,7 @@ export class BrowserBindingSafetyRegistry {
   /** Reserve the one navigation before a work item can leave the Gateway. */
   async recordNavigationIntent(
     browserBindingId: string,
-    platform: 'bilibili',
+    platform: BrowserBindingPlatform,
     operationId: string,
     now = new Date()
   ): Promise<BrowserBindingSafetyRecord> {
@@ -116,9 +122,9 @@ export class BrowserBindingSafetyRegistry {
 
   async finish(
     browserBindingId: string,
-    platform: 'bilibili',
+    platform: BrowserBindingPlatform,
     operationId: string,
-    result: Pick<ExtensionWorkResult, 'terminalReason' | 'errorCode' | 'navigation'>,
+    result: BrowserBindingSafetyFinishResult,
     now = new Date()
   ): Promise<BrowserBindingSafetyRecord> {
     const record = this.#getOrCreate(browserBindingId, platform, now);
@@ -126,7 +132,7 @@ export class BrowserBindingSafetyRegistry {
       throw new Error('browser_binding_safety_operation_not_active');
     }
     const reasonCode = result.errorCode ?? result.terminalReason;
-    const mustLock = requiresManualReview(result.terminalReason, result.errorCode, result.navigation.attempted);
+    const mustLock = requiresManualReview(result);
     record.state = mustLock ? 'locked' : 'ready';
     record.reasonCode = reasonCode;
     record.manualUnlockRequired = mustLock;
@@ -139,7 +145,7 @@ export class BrowserBindingSafetyRegistry {
 
   async stopBeforeDelivery(
     browserBindingId: string,
-    platform: 'bilibili',
+    platform: BrowserBindingPlatform,
     operationId: string,
     reasonCode: string,
     now = new Date()
@@ -162,7 +168,7 @@ export class BrowserBindingSafetyRegistry {
   /** A claimed item that reaches its deadline has an unknown page outcome. */
   async expire(
     browserBindingId: string,
-    platform: 'bilibili',
+    platform: BrowserBindingPlatform,
     operationId: string,
     now = new Date()
   ): Promise<BrowserBindingSafetyRecord> {
@@ -178,7 +184,7 @@ export class BrowserBindingSafetyRegistry {
     return structuredClone(record);
   }
 
-  async unlock(browserBindingId: string, platform: 'bilibili', now = new Date()): Promise<BrowserBindingSafetyRecord> {
+  async unlock(browserBindingId: string, platform: BrowserBindingPlatform, now = new Date()): Promise<BrowserBindingSafetyRecord> {
     const record = this.#getOrCreate(browserBindingId, platform, now);
     if (record.state === 'running' || record.activeOperation) throw new Error('browser_binding_safety_operation_active');
     record.state = 'ready';
@@ -189,7 +195,7 @@ export class BrowserBindingSafetyRegistry {
     return structuredClone(record);
   }
 
-  #getOrCreate(browserBindingId: string, platform: 'bilibili', now: Date): BrowserBindingSafetyRecord {
+  #getOrCreate(browserBindingId: string, platform: BrowserBindingPlatform, now: Date): BrowserBindingSafetyRecord {
     if (!isUuid(browserBindingId)) throw new Error('browser_binding_safety_binding_invalid');
     const existing = this.#records.get(key(browserBindingId, platform));
     if (existing) return existing;
@@ -222,28 +228,32 @@ export class BrowserBindingSafetyRegistry {
   }
 }
 
-function requiresManualReview(
-  terminalReason: ExtensionWorkTerminalReason,
-  errorCode: string | null,
-  navigationAttempted: boolean
-): boolean {
-  if (/verification_required|rate_limited|captcha|risk_control|authentication_lost/.test(errorCode ?? terminalReason)) {
+function requiresManualReview(result: BrowserBindingSafetyFinishResult): boolean {
+  if (/verification_required|rate_limited|captcha|risk_control|authentication_lost/.test(
+    result.errorCode ?? result.terminalReason
+  )) {
     return true;
   }
-  if (terminalReason === 'navigation_outcome_unknown' || terminalReason === 'gateway_restarted_before_completion') {
+  if (result.terminalReason === 'navigation_outcome_unknown' ||
+    result.terminalReason === 'gateway_restarted_before_completion') {
     return true;
+  }
+  if (result.platform === 'xiaohongshu') {
+    return result.semanticAction?.attempted === true && result.state !== 'completed';
   }
   // If a page was navigated and then disappeared or was taken over, the final
   // page state is ambiguous.  Do not silently start another task on that
   // binding until the user explicitly clears the safety state.
-  return navigationAttempted && (terminalReason === 'work_tab_closed' || terminalReason === 'work_tab_user_taken_over');
+  return result.navigation.attempted &&
+    (result.terminalReason === 'work_tab_closed' || result.terminalReason === 'work_tab_user_taken_over');
 }
 
 function isRecord(value: unknown): value is BrowserBindingSafetyRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const candidate = value as Partial<BrowserBindingSafetyRecord>;
   const active = candidate.activeOperation;
-  return candidate.schemaVersion === 1 && isUuid(candidate.browserBindingId) && candidate.platform === 'bilibili' &&
+  return candidate.schemaVersion === 1 && isUuid(candidate.browserBindingId) &&
+    (candidate.platform === 'bilibili' || candidate.platform === 'xiaohongshu') &&
     (candidate.state === 'ready' || candidate.state === 'running' || candidate.state === 'locked') &&
     (candidate.reasonCode === null || (typeof candidate.reasonCode === 'string' && SAFE_ERROR_CODE.test(candidate.reasonCode))) &&
     typeof candidate.manualUnlockRequired === 'boolean' &&
@@ -252,7 +262,7 @@ function isRecord(value: unknown): value is BrowserBindingSafetyRecord {
     (candidate.lastOperationAt === null || isTimestamp(candidate.lastOperationAt)) && isTimestamp(candidate.updatedAt);
 }
 
-function key(browserBindingId: string, platform: 'bilibili'): string {
+function key(browserBindingId: string, platform: BrowserBindingPlatform): string {
   return `${browserBindingId}\n${platform}`;
 }
 

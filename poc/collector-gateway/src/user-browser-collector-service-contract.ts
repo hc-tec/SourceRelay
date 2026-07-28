@@ -107,6 +107,15 @@ export interface UserBrowserVideoDiscussionCollectorServiceRequest extends UserB
   input: { canonicalVideoUrl: string };
 }
 
+export interface UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest {
+  schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  browserBindingId: string;
+  platform: 'xiaohongshu';
+  capability: 'xiaohongshu.search.public_notes.v1';
+  executionTarget: 'existing_public_explore_tab';
+  input: { query: string };
+}
+
 export type UserBrowserCollectorServiceRequest =
   | UserBrowserVideoDetailCollectorServiceRequest
   | UserBrowserNativeSearchCollectorServiceRequest
@@ -117,7 +126,8 @@ export type UserBrowserCollectorServiceRequest =
   | UserBrowserCollectionSeriesOverviewCollectorServiceRequest
   | UserBrowserCollectionSeriesDetailCollectorServiceRequest
   | UserBrowserDanmakuCollectorServiceRequest
-  | UserBrowserVideoDiscussionCollectorServiceRequest;
+  | UserBrowserVideoDiscussionCollectorServiceRequest
+  | UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -137,11 +147,31 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     Object.keys(candidate).some((key) => !allowed.has(key)) ||
     candidate.schemaVersion !== USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION ||
     typeof candidate.browserBindingId !== 'string' || !UUID_PATTERN.test(candidate.browserBindingId) ||
-    candidate.platform !== 'bilibili' ||
-    (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab') || !candidate.input ||
+    (candidate.platform !== 'bilibili' && candidate.platform !== 'xiaohongshu') ||
+    (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab' &&
+      executionTarget !== 'existing_public_explore_tab') || !candidate.input ||
     typeof candidate.input !== 'object' || Array.isArray(candidate.input)
   ) throw new Error('user_browser_collector_service_request_invalid');
   const input = candidate.input as Record<string, unknown>;
+  if (candidate.platform === 'xiaohongshu') {
+    if (candidate.capability !== 'xiaohongshu.search.public_notes.v1' ||
+      executionTarget !== 'existing_public_explore_tab' || Object.keys(input).length !== 1 ||
+      typeof input.query !== 'string' || input.query !== input.query.trim() || input.query.length < 1 ||
+      input.query.length > 80 || /[\u0000-\u001f\u007f]/.test(input.query)) {
+      throw new Error('user_browser_collector_service_request_invalid');
+    }
+    return {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      browserBindingId: candidate.browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      input: { query: input.query }
+    };
+  }
+  if (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab') {
+    throw new Error('user_browser_collector_service_request_invalid');
+  }
   if (candidate.capability === 'bilibili.video_detail') {
     if (executionTarget !== 'collector_work_tab') throw new Error('user_browser_collector_service_request_invalid');
     if (Object.keys(input).length !== 1 || typeof input.canonicalVideoUrl !== 'string') {

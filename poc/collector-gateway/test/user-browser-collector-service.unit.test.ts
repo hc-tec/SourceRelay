@@ -57,6 +57,39 @@ describe('user-owned browser collector service', () => {
     })).toThrow('user_browser_collector_service_request_invalid');
   });
 
+  test('admits Xiaohongshu only as query-only trusted input in an existing Explore tab', () => {
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      input: { query: '咖啡豆' }
+    })).toEqual({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      input: { query: '咖啡豆' }
+    });
+    for (const extra of [
+      { url: 'https://www.xiaohongshu.com/search_result?keyword=x' },
+      { tabId: 1 },
+      { selector: 'textarea' },
+      { coordinate: { x: 1, y: 2 } },
+      { script: 'document.body.innerHTML' },
+      { debuggerCommand: 'Runtime.evaluate' }
+    ]) expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      input: { query: '咖啡豆', ...extra }
+    })).toThrow('user_browser_collector_service_request_invalid');
+  });
+
   test('publishes direct and canary passive capabilities without a Profile or browser-control primitive', () => {
     const document = userBrowserCollectorServiceOpenApiDocument('http://127.0.0.1:43127') as Record<string, any>;
     const variants = document.components.schemas.UserBrowserCollectRequest.oneOf;
@@ -70,7 +103,8 @@ describe('user-owned browser collector service', () => {
       { $ref: '#/components/schemas/UserBrowserDynamicCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserCollectionSeriesOverviewCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserCollectionSeriesDetailCollectRequest' },
-      { $ref: '#/components/schemas/UserBrowserDanmakuCollectRequest' }
+      { $ref: '#/components/schemas/UserBrowserDanmakuCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserXiaohongshuPublicNotesSearchCollectRequest' }
     ]);
     expect(document.components.schemas.UserBrowserNativeSearchCollectRequest.properties).toMatchObject({
       capability: { const: 'bilibili.native_search' },
@@ -79,6 +113,12 @@ describe('user-owned browser collector service', () => {
     expect(document.components.schemas.UserBrowserNativeSearchBatchCollectRequest.properties).toMatchObject({
       capability: { const: 'bilibili.native_search_batch' },
       input: { required: ['query'] }
+    });
+    expect(document.components.schemas.UserBrowserXiaohongshuPublicNotesSearchCollectRequest.properties).toMatchObject({
+      platform: { const: 'xiaohongshu' },
+      capability: { const: 'xiaohongshu.search.public_notes.v1' },
+      executionTarget: { const: 'existing_public_explore_tab' },
+      input: { required: ['query'], additionalProperties: false }
     });
     expect(Object.keys(document.paths)).not.toContain('/v1/profiles');
     const schemaText = JSON.stringify(document.components.schemas);
@@ -156,7 +196,7 @@ describe('user-owned browser collector service', () => {
       enum: ['collector_work_tab', 'user_selected_tab']
     });
     expect(document.components.schemas.Operation.properties.executionTarget).toMatchObject({
-      enum: ['collector_work_tab', 'user_selected_tab']
+      enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab']
     });
   });
 

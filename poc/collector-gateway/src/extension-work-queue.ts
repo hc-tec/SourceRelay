@@ -13,6 +13,7 @@ import {
   isExtensionWorkItem,
   isExtensionWorkResultForItem,
   normaliseBilibiliNativeSearchRoute,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   type ExtensionWorkCapability,
   type ExtensionWorkExecutionTarget,
   type ExtensionWorkItem,
@@ -119,6 +120,11 @@ export interface EnqueueBilibiliDanmakuWorkInput {
   canonicalVideoUrl: string;
 }
 
+export interface EnqueueXiaohongshuPublicNotesSearchWorkInput {
+  browserBindingId: string;
+  query: string;
+}
+
 /**
  * Queued and claimed operations retain their signed envelope because it is
  * needed for one-time delivery. After they become terminal, native-search
@@ -128,7 +134,23 @@ export interface EnqueueBilibiliDanmakuWorkInput {
 type StoredExtensionWorkItem =
   | ExtensionWorkItem
   | RedactedBilibiliNativeSearchWorkItem
-  | RedactedBilibiliNativeSearchBatchWorkItem;
+  | RedactedBilibiliNativeSearchBatchWorkItem
+  | RedactedXiaohongshuPublicNotesSearchWorkItem;
+
+interface RedactedXiaohongshuPublicNotesSearchWorkItem {
+  schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
+  protocolVersion: typeof EXTENSION_WORK_PROTOCOL_VERSION;
+  workId: string;
+  operationId: string;
+  browserBindingId: string;
+  platform: 'xiaohongshu';
+  capability: 'xiaohongshu.search.public_notes.v1';
+  executionTarget: 'existing_public_explore_tab';
+  issuedAt: string;
+  expiresAt: string;
+  input: { queryDigest: string };
+  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET;
+}
 
 interface RedactedBilibiliNativeSearchWorkItem {
   schemaVersion: typeof EXTENSION_WORK_SCHEMA_VERSION;
@@ -653,12 +675,48 @@ export class ExtensionWorkQueue {
     return await this.#enqueueSigned(unsigned, issuedAt);
   }
 
+  async enqueueXiaohongshuPublicNotesSearch(
+    input: EnqueueXiaohongshuPublicNotesSearchWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId) || !isXiaohongshuQuery(input.query)) {
+      throw new Error('xiaohongshu_public_notes_search_input_invalid');
+    }
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(input.browserBindingId);
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: { query: input.query },
+      budget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET
+    };
+    return await this.#enqueueSigned(unsigned, issuedAt);
+  }
+
   /** Claiming is the irreversible delivery point.  There is no lease renewal. */
-  async claimNext(browserBindingId: string, now = new Date()): Promise<ExtensionWorkItem | null> {
+  async claimNext(
+    browserBindingId: string,
+    now = new Date(),
+    allowedPlatforms: readonly ExtensionWorkItem['platform'][] = ['bilibili', 'xiaohongshu']
+  ): Promise<ExtensionWorkItem | null> {
     if (!isUuid(browserBindingId)) throw new Error('extension_work_binding_invalid');
+    if (allowedPlatforms.some((platform) => platform !== 'bilibili' && platform !== 'xiaohongshu')) {
+      throw new Error('extension_work_platform_filter_invalid');
+    }
     const expired = this.#expire(now);
     const operation = this.#operations.find((candidate) =>
-      candidate.item.browserBindingId === browserBindingId && candidate.state === 'queued'
+      candidate.item.browserBindingId === browserBindingId && candidate.state === 'queued' &&
+      allowedPlatforms.includes(candidate.item.platform)
     );
     if (!operation) {
       if (expired.length > 0) await this.#save();
@@ -850,7 +908,24 @@ function isStoredOperation(value: unknown): value is StoredOperation {
 
 function isStoredExtensionWorkItem(value: unknown): value is StoredExtensionWorkItem {
   return isExtensionWorkItem(value) || isRedactedBilibiliNativeSearchWorkItem(value) ||
-    isRedactedBilibiliNativeSearchBatchWorkItem(value);
+    isRedactedBilibiliNativeSearchBatchWorkItem(value) || isRedactedXiaohongshuPublicNotesSearchWorkItem(value);
+}
+
+function isRedactedXiaohongshuPublicNotesSearchWorkItem(
+  value: unknown
+): value is RedactedXiaohongshuPublicNotesSearchWorkItem {
+  return isRecord(value) && hasExactKeys(value, [
+    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
+    'executionTarget', 'issuedAt', 'expiresAt', 'input', 'budget'
+  ]) && value.schemaVersion === EXTENSION_WORK_SCHEMA_VERSION &&
+    value.protocolVersion === EXTENSION_WORK_PROTOCOL_VERSION && isUuid(value.workId) && isUuid(value.operationId) &&
+    isUuid(value.browserBindingId) && value.platform === 'xiaohongshu' &&
+    value.capability === 'xiaohongshu.search.public_notes.v1' &&
+    value.executionTarget === 'existing_public_explore_tab' && isTimestamp(value.issuedAt) &&
+    isTimestamp(value.expiresAt) && Date.parse(value.expiresAt) > Date.parse(value.issuedAt) &&
+    isRecord(value.input) && hasExactKeys(value.input, ['queryDigest']) &&
+    /^[a-f0-9]{64}$/.test(stringValue(value.input.queryDigest)) &&
+    JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET);
 }
 
 function isRedactedBilibiliNativeSearchWorkItem(value: unknown): value is RedactedBilibiliNativeSearchWorkItem {
@@ -943,6 +1018,22 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
 }
 
 function redactTerminalWorkItem(item: StoredExtensionWorkItem): StoredExtensionWorkItem {
+  if (isExtensionWorkItem(item) && item.capability === 'xiaohongshu.search.public_notes.v1') {
+    return {
+      schemaVersion: item.schemaVersion,
+      protocolVersion: item.protocolVersion,
+      workId: item.workId,
+      operationId: item.operationId,
+      browserBindingId: item.browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      issuedAt: item.issuedAt,
+      expiresAt: item.expiresAt,
+      input: { queryDigest: sha256(item.input.query) },
+      budget: { ...item.budget }
+    };
+  }
   if (!isExtensionWorkItem(item) ||
     (item.capability !== 'bilibili.native_search' && item.capability !== 'bilibili.native_search_batch')
   ) return item;
@@ -986,6 +1077,11 @@ function redactTerminalWorkItem(item: StoredExtensionWorkItem): StoredExtensionW
     },
     budget: { ...item.budget }
   };
+}
+
+function isXiaohongshuQuery(value: unknown): value is string {
+  return typeof value === 'string' && value === value.trim() && value.length >= 1 && value.length <= 80 &&
+    !/[\u0000-\u001f\u007f]/.test(value);
 }
 
 function fixedDirectWorkBudget(): {

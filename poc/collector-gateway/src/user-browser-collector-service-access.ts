@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type {
+  CollectorServiceAuditCapability,
   CollectorServiceAuditAction,
   CollectorServiceAuditLog,
   CollectorServiceAuditOutcome
 } from './collector-service-audit';
-import type { CollectorServiceCapability } from './collector-service-contract';
 import type {
   CollectorServiceClientRegistry,
   CollectorServiceClientScope
@@ -68,7 +68,7 @@ export async function recordUserBrowserServiceAudit(
   principal: UserBrowserServicePrincipal | null,
   action: CollectorServiceAuditAction,
   details: {
-    capability: CollectorServiceCapability | null;
+    capability: CollectorServiceAuditCapability | null;
     artifactId: string | null;
     operationId: string | null;
     operationKind: 'run' | 'batch' | null;
