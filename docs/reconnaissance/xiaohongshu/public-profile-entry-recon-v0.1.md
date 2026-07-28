@@ -4,7 +4,7 @@
 
 `blocked`，但阻断事实已经得到可靠证明。2026-07-28，在独立、可见、持久的 `xiaohongshu_validation` 验证浏览器中，搜索结果页首个可见笔记卡作者入口是一个明确的 `new_tab` 目标。按照项目的小红书风控边界，扩展不能点击该入口，也不能随后关闭、接管或复用它打开的新页面。
 
-因此不能把下面这条路径写进生产能力：
+因此不能把下面这条“由平台页面自动发现作者并进入主页”的路径写进生产能力：
 
 ```text
 公开搜索结果
@@ -13,7 +13,10 @@
 → 采集公开笔记
 ```
 
-`xiaohongshu.account.public_notes.v1` 现阶段必须以“已经存在的公开博主主页 tab”为前置条件，调用方仍不能提交 URL、tab ID、selector 或脚本。
+这条“由平台页面自动发现作者”的路径仍必须以“已经存在的公开博主主页 tab”为前置条件；调用方不能通过它提交 URL、tab ID、selector 或脚本。
+
+这条结论只针对“从笔记卡或详情浮层自动发现作者入口”的路径。产品随后增加了一个不同的、一次性受控入口：上层应用可以在短时有效期内直接提供一个公开博主主页链接。该链接不是由扩展从页面推导出来的，也不允许作为长期账号档案保存；Gateway 只在未完成 work item 的短生命周期内使用它，扩展在唯一已有的小红书 tab 内导航一次，然后执行有界的 Network/XHR 投影与可信滚动。该入口的设计记录见
+[`xiaohongshu-ephemeral-profile-link-v0.1.md`](../../design/xiaohongshu-ephemeral-profile-link-v0.1.md)，目前仍等待真实有效链接完成独立 live canary，不能把 `implementation_ready_live_e2e_pending` 误报成真实平台已验收。
 
 2026-07-29 已对“同页笔记详情浮层 → 浮层内作者入口”完成独立真实验证。稳定公开标题 canary 经站内搜索和一次详情点击进入同页详情浮层后，固定 DOM 探针只选择评论标题上方、详情大浮层内部的顶部作者入口；结果仍为明确 `new_tab`。因此搜索卡作者和详情浮层作者两条入口都不能安全用于生产自动到达公开主页。
 
@@ -28,7 +31,7 @@ networkResponseCount: 0
 automaticRetries: 0
 ```
 
-本轮没有点击、没有新 tab、没有刷新、没有直接跳转 profile URL。`xiaohongshu.account.public_notes.v1` 继续保持 `direct_canary_pending / implementation_ready_live_e2e_pending`；只有浏览器中自然存在唯一公开主页 tab 时才能执行正式 canary。
+本轮没有点击、没有新 tab、没有刷新、没有直接跳转 profile URL。现有主页 tab 路径和短时链接路径都继续保持 `direct_canary_pending / implementation_ready_live_e2e_pending`；前者要求浏览器中自然存在唯一公开主页 tab，后者要求上层应用提供真实仍有效的主页链接，二者都必须分别完成正式 canary。
 
 ## Run 摘要
 
@@ -135,12 +138,25 @@ already-existing public profile tab
 → URL-free artifact
 ```
 
+另有一个独立入口（不改变上面的作者入口结论）：
+
+```text
+上层应用提供短时公开 profile URL
+→ 同一已有小红书 tab 一次导航
+→ 核验公开 profile document 与风险状态
+→ Network/XHR 投影优先，DOM 补齐
+→ 最多 20 次可信滚动 / 200 条投影
+→ URL-free artifact
+```
+
+该入口只表示“在固定预算和当前可见页面范围内的一次短时目录采集”，不代表平台账号历史的无界全量；达到滚动或投影预算时必须按预算终止，不能伪装成已证明的历史终点。
+
 仍未证明、不能标记 ready：
 
-- 如何在无需现成 profile tab 的情况下安全到达公开博主主页；
+- 如何在无需调用方提供短时链接、也无需现成 profile tab 的情况下安全到达公开博主主页；
 - 主页首屏公开信息的稳定 DOM/Network 结构；
 - 一次低频滚动是否触发公开 `user_posted` 类响应；
-- 多页/全部笔记的游标、结束条件与预算。
+- 多页/全部笔记的游标、结束条件与预算；短时链接入口当前只承诺固定的 20 次滚动 / 200 条投影预算。
 
 ## 残留
 
