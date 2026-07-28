@@ -34,6 +34,7 @@ export type UnsignedXiaohongshuAccountPublicNotesWorkItem =
 
 export type XiaohongshuAccountPublicNotesTerminalReason =
   | 'profile_notes_ready'
+  | 'profile_notes_budget_exhausted'
   | 'existing_public_profile_tab_required'
   | 'existing_public_profile_tab_ambiguous'
   | 'profile_url_invalid'
@@ -173,7 +174,7 @@ function isLinkBudget(value: unknown): value is typeof XIAOHONGSHU_ACCOUNT_PUBLI
 
 function terminalReason(value: unknown): value is XiaohongshuAccountPublicNotesTerminalReason {
   return typeof value === 'string' && [
-    'profile_notes_ready', 'existing_public_profile_tab_required', 'existing_public_profile_tab_ambiguous',
+    'profile_notes_ready', 'profile_notes_budget_exhausted', 'existing_public_profile_tab_required', 'existing_public_profile_tab_ambiguous',
     'profile_url_invalid', 'profile_url_expired', 'profile_url_navigation_failed', 'profile_url_context_changed',
     'document_context_changed', 'postcondition_unmet', 'permission_required', 'login_required',
     'verification_required', 'rate_limited', 'source_unavailable', 'debugger_attach_failed',

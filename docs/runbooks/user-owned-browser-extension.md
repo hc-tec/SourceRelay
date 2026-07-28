@@ -23,7 +23,7 @@
 }
 ```
 
-该模式只会在一个已有的小红书 tab 内导航一次，不刷新、不创建新 tab、不重试；公开主页响应优先进入受限 Network/XHR 投影，再用可见 DOM 补齐，最多 20 次可信滚动和 200 条笔记。终态 operation summary 和 artifact 不包含完整主页 URL、签名、响应 URL 或原始正文。`maximumScrolls: 1–3` 仍可用于已有主页 tab；`4–20` 只允许和 `ephemeral_public_profile_url` 一起提交。
+该模式只会在一个已有的小红书 tab 内导航一次，不刷新、不创建新 tab、不重试；公开主页响应优先进入受限 Network/XHR 投影，再用可见 DOM 补齐，最多 20 次可信滚动和 200 条笔记。连续两次滚动没有新增时返回 `profile_notes_ready`；达到滚动或投影上限但仍有结果时返回 `profile_notes_budget_exhausted`，并保留部分 artifact，不能把它解释成账号历史全量。终态 operation summary 和 artifact 不包含完整主页 URL、签名、响应 URL 或原始正文。`maximumScrolls: 1–3` 仍可用于已有主页 tab；`4–20` 只允许和 `ephemeral_public_profile_url` 一起提交。
 - API：`/v2/openapi.json`、`/v2/capabilities`、`/v2/collector-service/browser-bindings`、`/v2/collect`、`/v2/collect/operations/{operationId}`
 - 不属于本 runbook 的旧通道：`profileId`、Browser Host、Playwright persistent context、受管 Collection Profile、`POST /v1/collect`
 

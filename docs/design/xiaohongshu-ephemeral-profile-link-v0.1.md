@@ -40,7 +40,8 @@
 - `profile_url_navigation_failed`：一次导航失败；
 - `profile_url_context_changed`：出现新 tab、非目标 document 或平台身份变化；
 - `login_required`、`verification_required`、`rate_limited`、`source_unavailable`；
-- `profile_notes_ready`：在固定预算内取得 Network/DOM 合并结果。
+- `profile_notes_ready`：连续两次可信滚动没有新增条目，取得 Network/DOM 合并结果并在当前可遍历范围内自然停止；
+- `profile_notes_budget_exhausted`：仍有投影结果，但达到滚动或投影上限；artifact 保留部分结果，不能解释为已到达平台终点。
 
 ## 与现有能力的关系
 

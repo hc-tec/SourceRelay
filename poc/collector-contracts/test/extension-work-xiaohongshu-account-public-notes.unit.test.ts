@@ -121,6 +121,14 @@ describe('signed Xiaohongshu account public-notes work contract', () => {
       semanticAction: { attempted: false, attemptCount: 0 },
       scroll: { requestedCount: 2, completedCount: 0 }
     }, item)).toBe(true);
+    expect(isExtensionWorkResultForItem({
+      ...completedResult,
+      state: 'stopped',
+      errorCode: 'xiaohongshu_profile_notes_budget_exhausted',
+      terminalReason: 'profile_notes_budget_exhausted',
+      semanticAction: { attempted: true, attemptCount: 2 },
+      scroll: { requestedCount: 2, completedCount: 2 }
+    }, item)).toBe(true);
   });
 
   test('admits a one-time validated profile link without making it an artifact field', () => {

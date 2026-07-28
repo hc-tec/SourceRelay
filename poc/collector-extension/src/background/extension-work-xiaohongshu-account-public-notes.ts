@@ -50,6 +50,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   let renderedCardCount = 0;
   let navigationAttempted = false;
   let errorCode: string | null = null;
+  let completionReason: 'profile_notes_ready' | 'profile_notes_budget_exhausted' | null = null;
   try {
     if (item.executionTarget === 'ephemeral_public_profile_url') {
       const profileUrl = item.input.profileUrl;
@@ -71,6 +72,10 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     networkProjection = await readXiaohongshuExistingPublicProfileWorkProjection(document.tabId, item.workId, maximumItems);
     projection = mergeProfileNotesProjection(networkProjection, baseline.items, maximumItems);
     const ephemeralProfileLink = item.executionTarget === 'ephemeral_public_profile_url';
+    if (!ephemeralProfileLink) completionReason = 'profile_notes_ready';
+    if (ephemeralProfileLink && projection.items.length >= maximumItems) {
+      completionReason = 'profile_notes_budget_exhausted';
+    }
     // A temporary profile link is supplied precisely so the caller can drain
     // the public profile in this short-lived window.  Do not stop after the
     // first payload (the old existing-tab path intentionally did that to keep
@@ -109,15 +114,24 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
         projection = mergeProfileNotesProjection(networkProjection, afterScroll.items, maximumItems);
         completedCount = index as XiaohongshuProfileScrollCount;
         if (!ephemeralProfileLink && projection.items.length > 0) break;
-        if (projection.items.length >= maximumItems) break;
+        if (projection.items.length >= maximumItems) {
+          completionReason = 'profile_notes_budget_exhausted';
+          break;
+        }
         const madeProgress = projection.items.length > previousItemCount ||
           afterScroll.renderedCardCount > previousRenderedCardCount;
         if (ephemeralProfileLink) {
           noProgressRounds = madeProgress ? 0 : noProgressRounds + 1;
-          if (noProgressRounds >= 2) break;
+          if (noProgressRounds >= 2) {
+            completionReason = 'profile_notes_ready';
+            break;
+          }
         }
         previousItemCount = projection.items.length;
         previousRenderedCardCount = afterScroll.renderedCardCount;
+      }
+      if (ephemeralProfileLink && completionReason === null && projection.items.length > 0) {
+        completionReason = 'profile_notes_budget_exhausted';
       }
     }
     await completeXiaohongshuProfileScroll(item.workId);
@@ -142,8 +156,10 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     }
     if (document) await clearXiaohongshuWorkObserver(document.tabId, item.workId).catch(() => undefined);
   }
-  const completed = errorCode === null && projection !== null && projection.items.length > 0 &&
+  const projectionReady = errorCode === null && projection !== null && projection.items.length > 0 &&
     attemptedCount === completedCount && debuggerDetached;
+  const completed = projectionReady && completionReason === 'profile_notes_ready';
+  const budgetExhausted = projectionReady && completionReason === 'profile_notes_budget_exhausted';
   return {
     schemaVersion: 1,
     protocolVersion: 1,
@@ -154,8 +170,12 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     capability: 'xiaohongshu.account.public_notes.v1',
     executionTarget: item.executionTarget,
     state: completed ? 'completed' : 'stopped',
-    errorCode: completed ? null : errorCode ?? 'xiaohongshu_profile_notes_postcondition_unmet',
-    terminalReason: completed ? 'profile_notes_ready' : terminalReason(errorCode),
+    errorCode: completed ? null : budgetExhausted
+      ? 'xiaohongshu_profile_notes_budget_exhausted'
+      : errorCode ?? 'xiaohongshu_profile_notes_postcondition_unmet',
+    terminalReason: completed || budgetExhausted
+      ? completionReason!
+      : terminalReason(errorCode),
     completedAt: new Date().toISOString(),
     navigation: { attempted: navigationAttempted, attemptCount: navigationAttempted ? 1 : 0 },
     semanticAction: { attempted: attemptedCount > 0, attemptCount: attemptedCount },
@@ -415,6 +435,7 @@ function terminalReason(errorCode: string | null): XiaohongshuAccountPublicNotes
     case 'xiaohongshu_profile_url_expired': return 'profile_url_expired';
     case 'xiaohongshu_profile_url_navigation_failed': return 'profile_url_navigation_failed';
     case 'xiaohongshu_profile_url_new_tab_detected': return 'profile_url_context_changed';
+    case 'xiaohongshu_profile_notes_budget_exhausted': return 'profile_notes_budget_exhausted';
     default: return 'postcondition_unmet';
   }
 }

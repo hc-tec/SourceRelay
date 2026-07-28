@@ -1186,7 +1186,8 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'login_required' || value === 'search_ready' || value === 'existing_public_explore_tab_required' ||
     value === 'existing_public_explore_tab_ambiguous' || value === 'search_target_unavailable' ||
     value === 'query_not_echoed' || value === 'postcondition_unmet' || value === 'permission_required' ||
-    value === 'profile_notes_ready' || value === 'existing_public_profile_tab_required' ||
+    value === 'profile_notes_ready' || value === 'profile_notes_budget_exhausted' ||
+    value === 'existing_public_profile_tab_required' ||
     value === 'existing_public_profile_tab_ambiguous' ||
     value === 'profile_url_invalid' || value === 'profile_url_expired' ||
     value === 'profile_url_navigation_failed' || value === 'profile_url_context_changed' ||
