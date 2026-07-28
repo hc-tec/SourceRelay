@@ -308,14 +308,14 @@ function normaliseAccountId(value) {
 }
 
 function canonicalXiaohongshuProfileUrl(value) {
-  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value) || value.length > 4096) return null;
+  if (typeof value !== 'string' || value !== value.trim() || /[\u0000-\u001f\u007f]/.test(value) || value.length > 4096) return null;
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' || url.port ||
       url.username || url.password || url.hash || !XIAOHONGSHU_PROFILE_PATH_PATTERN.test(url.pathname)) {
       return null;
     }
-    return url.toString();
+    return value;
   } catch {
     return null;
   }

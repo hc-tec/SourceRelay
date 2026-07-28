@@ -12,10 +12,17 @@ import {
   isXiaohongshuManagedPageNetworkObserverRequest,
   isXiaohongshuManagedProfileNotesProjectionResult,
   isXiaohongshuManagedSearchProjectionResult,
+  canonicalXiaohongshuPublicProfileUrl,
   xiaohongshuCurrentPageNetworkPublicSurface
 } from '../src/index.js';
 
 describe('Xiaohongshu current-page network policy contract', () => {
+  test('validates a profile link without rewriting its short-lived query signature', () => {
+    const profileUrl = 'https://www.xiaohongshu.com/user/profile/abc123?xsec_token=a%2Fb%3Dc&xsec_source=pc';
+    expect(canonicalXiaohongshuPublicProfileUrl(profileUrl)).toBe(profileUrl);
+    expect(canonicalXiaohongshuPublicProfileUrl(` ${profileUrl}`)).toBeNull();
+  });
+
   test('makes the initial capability current-page-only and permanently actionless', () => {
     expect(XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY).toMatchObject({
       platform: 'xiaohongshu',

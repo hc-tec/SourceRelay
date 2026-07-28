@@ -422,14 +422,17 @@ export function xiaohongshuCurrentPageNetworkPublicSurface(
  * signed work item and is never copied into an artifact or operation summary.
  */
 export function canonicalXiaohongshuPublicProfileUrl(value: string): string | null {
-  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value) || value.length > 4096) return null;
+  if (typeof value !== 'string' || value !== value.trim() || /[\u0000-\u001f\u007f]/.test(value) || value.length > 4096) return null;
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' || url.port ||
       url.username || url.password || url.hash || !/^\/user\/profile\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)) {
       return null;
     }
-    return url.toString();
+    // Validate the parsed URL, but preserve the caller's exact query/signature
+    // bytes.  Re-serialising a short-lived signed link can change escaping and
+    // invalidate an otherwise still-live platform entry.
+    return value;
   } catch {
     return null;
   }

@@ -177,6 +177,16 @@ test('maps a short-lived Xiaohongshu profile link to the single-navigation accou
   }), TestbenchInputError);
 });
 
+test('preserves the exact short-lived profile-link query encoding', () => {
+  const profileUrl = 'https://www.xiaohongshu.com/user/profile/abc123?xsec_token=a%2Fb%3Dc&xsec_source=pc';
+  const parsed = parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_account_public_notes',
+    input: { maximumScrolls: 20, profileUrl }
+  });
+  assert.equal(parsed.input.profileUrl, profileUrl);
+});
+
 test('maps Xiaohongshu public detail to one ranked result in the existing search tab', () => {
   assert.deepEqual(parseTestbenchSubmission({
     browserBindingId: bindingId,
