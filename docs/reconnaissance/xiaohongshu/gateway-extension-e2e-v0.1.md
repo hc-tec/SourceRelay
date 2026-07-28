@@ -70,3 +70,25 @@ outcome: proved
 - 最终搜索页：`retained_for_review`，所有者为 `xiaohongshu_validation`；
 - 关闭条件：下一次显式停止/受管重建，或项目所有者要求关闭；
 - 用户日常浏览器：未触碰。
+
+## 最新构建回归 canary
+
+在后续加入主页短链 observer 预注入与 worker 中断清理后，重新执行了一次同一真实 Gateway→Extension 搜索闭环，确认共享控制链没有回归：
+
+```yaml
+runId: 03185392-e3a5-43f8-8054-ef3ae1132ec7
+validatedCapability: xiaohongshu.search.public_notes.v1
+validationBaselineNavigations: 1
+productPlatformNavigations: 0
+semanticActions: 1
+automaticPlatformRetries: 0
+operationState: completed
+terminalReason: search_ready
+itemCount: 20
+rawPayloadStored: false
+responseUrlsStored: false
+debuggerDetached: true
+finalPageState: retained_for_review
+```
+
+该回归 run 没有为主页短链能力提供额外证据；`xiaohongshu.account.public_notes.v1` 仍需使用真实短时主页链接单独完成 live canary。
