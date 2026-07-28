@@ -13,7 +13,22 @@
 → 采集公开笔记
 ```
 
-`xiaohongshu.account.public_notes.v1` 现阶段必须以“已经存在的公开博主主页 tab”为前置条件，调用方仍不能提交 URL、tab ID、selector 或脚本。另一条待独立实证的候选路径是“同页笔记详情浮层 → 浮层内作者入口”，但本轮没有继续点击。
+`xiaohongshu.account.public_notes.v1` 现阶段必须以“已经存在的公开博主主页 tab”为前置条件，调用方仍不能提交 URL、tab ID、selector 或脚本。
+
+2026-07-29 已对“同页笔记详情浮层 → 浮层内作者入口”完成独立真实验证。稳定公开标题 canary 经站内搜索和一次详情点击进入同页详情浮层后，固定 DOM 探针只选择评论标题上方、详情大浮层内部的顶部作者入口；结果仍为明确 `new_tab`。因此搜索卡作者和详情浮层作者两条入口都不能安全用于生产自动到达公开主页。
+
+```yaml
+beforeSurface: note_detail_overlay
+authorTargetMode: new_tab
+semanticAction:
+  attempted: false
+  attemptCount: 0
+finalSurface: null
+networkResponseCount: 0
+automaticRetries: 0
+```
+
+本轮没有点击、没有新 tab、没有刷新、没有直接跳转 profile URL。`xiaohongshu.account.public_notes.v1` 继续保持 `direct_canary_pending / implementation_ready_live_e2e_pending`；只有浏览器中自然存在唯一公开主页 tab 时才能执行正式 canary。
 
 ## Run 摘要
 
