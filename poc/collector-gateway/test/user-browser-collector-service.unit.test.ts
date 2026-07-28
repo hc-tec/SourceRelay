@@ -252,8 +252,19 @@ describe('user-owned browser collector service', () => {
     });
     expect(document.components.schemas.Operation.properties.executionTarget).toMatchObject({
       enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab',
-        'existing_public_profile_tab', 'existing_public_search_tab']
+        'existing_public_profile_tab', 'ephemeral_public_profile_url', 'existing_public_search_tab',
+        'existing_public_note_overlay']
     });
+    expect(document.components.schemas.Operation.properties.capability.enum).toEqual(expect.arrayContaining([
+      'xiaohongshu.search.public_notes.v1', 'xiaohongshu.account.public_notes.v1',
+      'xiaohongshu.note.public_detail.v1', 'xiaohongshu.note.public_comments.v1',
+      'xiaohongshu.note.public_comment_replies.v1'
+    ]));
+    expect(document.components.schemas.ArtifactResponse.properties.capability.enum).toEqual(expect.arrayContaining([
+      'xiaohongshu.search.public_notes.v1', 'xiaohongshu.account.public_notes.v1',
+      'xiaohongshu.note.public_detail.v1', 'xiaohongshu.note.public_comments.v1',
+      'xiaohongshu.note.public_comment_replies.v1'
+    ]));
   });
 
   test('admits comments only as a canonical video bound to a popup-selected existing document', () => {

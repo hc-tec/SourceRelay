@@ -647,13 +647,15 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'bilibili.dynamic', 'bilibili.collection_series.overview',
                 'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion',
                 'xiaohongshu.search.public_notes.v1', 'xiaohongshu.account.public_notes.v1',
-                'xiaohongshu.note.public_detail.v1'
+                'xiaohongshu.note.public_detail.v1', 'xiaohongshu.note.public_comments.v1',
+                'xiaohongshu.note.public_comment_replies.v1'
               ]
             },
             executionTarget: {
               type: 'string',
               enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab',
-                'existing_public_profile_tab', 'existing_public_search_tab']
+                'existing_public_profile_tab', 'ephemeral_public_profile_url', 'existing_public_search_tab',
+                'existing_public_note_overlay']
             },
             state: { type: 'string', enum: ['queued', 'claimed', 'completed', 'partial', 'stopped', 'failed'] },
             queuedAt: { type: 'string', format: 'date-time' },
@@ -675,7 +677,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'bilibili.video_detail', 'bilibili.native_search',
                 'bilibili.account_profile', 'bilibili.account_inventory',
                 'bilibili.dynamic', 'bilibili.collection_series.overview',
-                'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion'
+                'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion',
+                'xiaohongshu.search.public_notes.v1', 'xiaohongshu.account.public_notes.v1',
+                'xiaohongshu.note.public_detail.v1', 'xiaohongshu.note.public_comments.v1',
+                'xiaohongshu.note.public_comment_replies.v1'
               ]
             },
             artifact: { type: 'object' }
