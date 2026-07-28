@@ -59,6 +59,16 @@ xiaohongshu_reply_thread_target_unavailable
 
 因此不能用随机 rank 反复运行来碰运气，也不能把实现完成冒充正式 E2E 已通过。下一次真实验证必须先选择一个已知公开可见、确实包含至少一组公开回复的稳定 canary 笔记；仍只允许一个独立 run、一次详情点击、回复阶段最多一次展开动作、零刷新、零新 tab、零自动重试。
 
+## 稳定 canary 前置条件
+
+本地 Git ignored 历史视觉证据已经定位到之前真实成功的公开笔记，公开标题为：
+
+```text
+奉劝各位咖啡爱好者选好一点的咖啡豆
+```
+
+同一历史页面明确显示“共 6 条评论”和“展开 3 条回复”；展开后的独立截图显示入口消失、回复 DOM 出现。正式回复验证器默认使用完整公开标题作为站内搜索词，并固定选择首个真实渲染结果；普通搜索、详情或评论 canary 仍保持原有查询。验证器不保存或跳转该笔记 URL，也不向 Gateway 输入 note ID、comment ID、selector 或坐标。
+
 ## 隐私与清理
 
 - artifact 不保存 URL、route、query、header、Cookie、Token、raw payload、tab/document ID、selector 或 script；

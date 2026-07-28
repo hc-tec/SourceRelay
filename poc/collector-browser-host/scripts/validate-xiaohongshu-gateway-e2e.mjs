@@ -13,10 +13,12 @@ const extensionSourceDirectory = resolve(pocRoot, 'collector-extension');
 const gatewayDirectory = resolve(pocRoot, 'collector-gateway');
 const profileId = 'xiaohongshu_validation';
 const exploreUrl = 'https://www.xiaohongshu.com/explore';
-const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ?? '咖啡豆';
 const validateCommentRecon = process.argv.includes('--comment-recon');
 const validateReplyRecon = process.argv.includes('--reply-recon');
 const validatePublicReplies = process.argv.includes('--replies');
+const replyCanaryQuery = '奉劝各位咖啡爱好者选好一点的咖啡豆';
+const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ??
+  (validatePublicReplies ? replyCanaryQuery : '咖啡豆');
 const validatePublicComments = process.argv.includes('--comments') || validateReplyRecon || validatePublicReplies;
 const validateExistingPublicComments = process.argv.includes('--comments-existing');
 const validateNoteDetail = validateCommentRecon || validatePublicComments || process.argv.includes('--note-detail');
