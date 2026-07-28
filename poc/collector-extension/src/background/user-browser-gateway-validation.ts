@@ -121,10 +121,14 @@ function userBrowserGatewayDirectCapabilityDescriptor(
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const candidate = value as Partial<UserBrowserGatewayCapabilityDescriptor>;
   if (!USER_BROWSER_DIRECT_WORK_CAPABILITIES.includes(candidate.capability as never)) return null;
-  if (candidate.capability === 'xiaohongshu.search.public_notes.v1') {
+  if (candidate.capability === 'xiaohongshu.search.public_notes.v1' ||
+    candidate.capability === 'xiaohongshu.account.public_notes.v1') {
+    const expectedDispatch = candidate.capability === 'xiaohongshu.search.public_notes.v1'
+      ? 'direct_ready'
+      : 'direct_canary_pending';
     if (candidate.schemaVersion !== 1 || candidate.platform !== 'xiaohongshu' ||
       !safeDisplayText(candidate.title, 100) || !safeDisplayText(candidate.inputMode, 100) ||
-      !safeDisplayText(candidate.captureMode, 100) || candidate.dispatchState !== 'direct_ready' ||
+      !safeDisplayText(candidate.captureMode, 100) || candidate.dispatchState !== expectedDispatch ||
       candidate.browserHostFallback !== 'forbidden') return null;
     return {
       schemaVersion: 1,
@@ -132,7 +136,7 @@ function userBrowserGatewayDirectCapabilityDescriptor(
       platform: 'xiaohongshu',
       title: candidate.title,
       inputMode: candidate.inputMode,
-      dispatchState: 'direct_ready',
+      dispatchState: expectedDispatch,
       captureMode: candidate.captureMode,
       browserHostFallback: 'forbidden'
     };

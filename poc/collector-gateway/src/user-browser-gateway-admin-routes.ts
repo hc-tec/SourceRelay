@@ -10,6 +10,7 @@ import {
 } from './extension-work-passive-artifacts';
 import { collectorServiceClientCreateInput, type CollectorServiceClientRegistry } from './collector-service-clients';
 import type { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-artifacts';
+import type { XiaohongshuAccountPublicNotesArtifactStore } from './xiaohongshu-account-public-notes-artifacts';
 import type { CollectorServiceAuditLog } from './collector-service-audit';
 import { readJsonBody, requireSameOrigin, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
@@ -21,7 +22,7 @@ import {
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const DIRECT_ARTIFACT = new RegExp(
-  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\\.overview|collection_series\\.detail|danmaku|discussion)|xiaohongshu\\.search\\.public_notes\\.v1)/(${UUID})$`,
+  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\\.overview|collection_series\\.detail|danmaku|discussion)|xiaohongshu\\.(?:search|account)\\.public_notes\\.v1)/(${UUID})$`,
   'i'
 );
 
@@ -36,6 +37,7 @@ export interface UserBrowserGatewayAdminRouteContext {
   accountVideoInventoryArtifacts: BilibiliAccountVideoInventoryArtifactStore;
   passiveDirectArtifacts: ExtensionWorkPassiveArtifactStore;
   xiaohongshuPublicNotesArtifacts: XiaohongshuPublicNotesArtifactStore;
+  xiaohongshuAccountPublicNotesArtifacts: XiaohongshuAccountPublicNotesArtifactStore;
 }
 
 /**
@@ -85,6 +87,7 @@ export async function handleUserBrowserGatewayAdminRoute(
       | 'bilibili.account_profile'
       | 'bilibili.account_inventory'
       | 'xiaohongshu.search.public_notes.v1'
+      | 'xiaohongshu.account.public_notes.v1'
       | PassiveDirectCapability;
     const artifactId = artifact[2]!;
     if (!access.granted) {
@@ -111,6 +114,8 @@ export async function handleUserBrowserGatewayAdminRoute(
             ? await context.accountVideoInventoryArtifacts.get(artifactId)
             : capability === 'xiaohongshu.search.public_notes.v1'
               ? await context.xiaohongshuPublicNotesArtifacts.get(artifactId)
+              : capability === 'xiaohongshu.account.public_notes.v1'
+                ? await context.xiaohongshuAccountPublicNotesArtifacts.get(artifactId)
               : await context.passiveDirectArtifacts.get(capability, artifactId);
     if (!view) {
       await recordUserBrowserServiceAudit(context, access.principal, 'artifact_read', {

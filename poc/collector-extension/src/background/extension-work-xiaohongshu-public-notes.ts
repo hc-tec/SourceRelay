@@ -6,6 +6,7 @@ import {
 } from '@intelligence/collector-contracts';
 import {
   armXiaohongshuExistingExploreWorkObserver,
+  clearXiaohongshuWorkObserver,
   readXiaohongshuExistingExploreWorkProjection
 } from './xiaohongshu-current-page-network';
 import { executeXiaohongshuTrustedInputSearch } from './xiaohongshu-trusted-input';
@@ -15,6 +16,7 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
   internalBinding: { expectedTabId?: number } = {}
 ): Promise<XiaohongshuPublicNotesSearchWorkResult> {
   const projectionBox: { value: XiaohongshuManagedSearchProjectionResult | null } = { value: null };
+  let observedTabId: number | null = null;
   const action = await executeXiaohongshuTrustedInputSearch({
     schemaVersion: 1,
     actionId: item.workId,
@@ -28,6 +30,7 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
       if (internalBinding.expectedTabId !== undefined && document.tabId !== internalBinding.expectedTabId) {
         throw new Error('xiaohongshu_trusted_input_document_changed');
       }
+      observedTabId = document.tabId;
       await armXiaohongshuExistingExploreWorkObserver(document.tabId, item.workId);
     },
     onSearchPostcondition: async (document) => {
@@ -37,7 +40,7 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
   });
   const projection = projectionBox.value;
   const completed = action.state === 'completed' && projection !== null && projection.items.length > 0;
-  return {
+  const result: XiaohongshuPublicNotesSearchWorkResult = {
     schemaVersion: 1,
     protocolVersion: 1,
     workId: item.workId,
@@ -61,6 +64,8 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
     responseUrlsStored: false,
     debuggerDetached: action.debuggerDetached
   };
+  if (observedTabId !== null) await clearXiaohongshuWorkObserver(observedTabId, item.workId).catch(() => undefined);
+  return result;
 }
 
 function terminalReason(errorCode: string | null): XiaohongshuPublicNotesSearchTerminalReason {

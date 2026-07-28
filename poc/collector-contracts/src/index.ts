@@ -5,6 +5,7 @@ export * from './extension-work-bilibili-passive.js';
 export * from './extension-work-bilibili-discussion-user-selected-tab.js';
 export * from './extension-work-bilibili-native-search-batch.js';
 export * from './extension-work-xiaohongshu-public-notes.js';
+export * from './extension-work-xiaohongshu-account-public-notes.js';
 export * from './xiaohongshu-current-page-network.js';
 export * from './xiaohongshu-trusted-search.js';
 export * from './xiaohongshu-public-profile-recon.js';

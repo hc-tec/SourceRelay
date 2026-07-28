@@ -18,6 +18,7 @@ import {
   enqueueBilibiliNativeSearchWork,
   enqueueBilibiliVideoDetailWork,
   enqueueXiaohongshuPublicNotesSearchWork,
+  enqueueXiaohongshuAccountPublicNotesWork,
   reconcileExpiredExtensionWork,
   type ExtensionWorkRouteContext
 } from './extension-work-routes';
@@ -87,7 +88,13 @@ export async function handleUserBrowserCollectorServiceRoute(
     let operationId: string | null = null;
     try {
       const collection = userBrowserCollectorServiceRequestInput(await readJsonBody(request));
-      const operation = collection.capability === 'xiaohongshu.search.public_notes.v1'
+      const operation = collection.capability === 'xiaohongshu.account.public_notes.v1'
+        ? await enqueueXiaohongshuAccountPublicNotesWork(
+          context,
+          collection.browserBindingId,
+          collection.input.maximumScrolls
+        )
+        : collection.capability === 'xiaohongshu.search.public_notes.v1'
         ? await enqueueXiaohongshuPublicNotesSearchWork(
           context,
           collection.browserBindingId,
@@ -220,6 +227,7 @@ async function audit(
     | 'bilibili.collection_series.detail'
     | 'bilibili.danmaku'
     | 'xiaohongshu.search.public_notes.v1'
+    | 'xiaohongshu.account.public_notes.v1'
     | null,
   operationId: string | null,
   outcome: CollectorServiceAuditOutcome,

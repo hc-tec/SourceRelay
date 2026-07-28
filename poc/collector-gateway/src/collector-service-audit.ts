@@ -35,7 +35,8 @@ export type CollectorServiceAuditOutcome =
 
 export type CollectorServiceAuditCapability =
   | CollectorServiceCapability
-  | 'xiaohongshu.search.public_notes.v1';
+  | 'xiaohongshu.search.public_notes.v1'
+  | 'xiaohongshu.account.public_notes.v1';
 
 /**
  * Deliberately small, de-identified call history.  In particular it has no
@@ -162,7 +163,8 @@ function auditEvent(value: unknown): CollectorServiceAuditEvent {
     !isAuditActor(candidate.actor) ||
     !isAuditAction(candidate.action) ||
     !(candidate.capability === null || isCollectorServiceCapability(candidate.capability) ||
-      candidate.capability === 'xiaohongshu.search.public_notes.v1') ||
+      candidate.capability === 'xiaohongshu.search.public_notes.v1' ||
+      candidate.capability === 'xiaohongshu.account.public_notes.v1') ||
     !(candidate.profileIdDigest === null ||
       (typeof candidate.profileIdDigest === 'string' && PROFILE_DIGEST_PATTERN.test(candidate.profileIdDigest))) ||
     !(candidate.artifactId === null ||

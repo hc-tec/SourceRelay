@@ -75,6 +75,22 @@ describe('browser binding safety state', () => {
         reasonCode: 'search_ready',
         manualUnlockRequired: false
       });
+
+      await safety.begin(bindingId, 'xiaohongshu', operationId, new Date(base.getTime() + 6));
+      const profileNotesCompleted = await safety.finish(bindingId, 'xiaohongshu', operationId, {
+        platform: 'xiaohongshu',
+        state: 'completed',
+        terminalReason: 'profile_notes_ready',
+        errorCode: null,
+        navigation: { attempted: false, attemptCount: 0 },
+        semanticAction: { attempted: true, attemptCount: 3 }
+      }, new Date(base.getTime() + 7));
+      expect(profileNotesCompleted).toMatchObject({
+        platform: 'xiaohongshu',
+        state: 'ready',
+        reasonCode: 'profile_notes_ready',
+        manualUnlockRequired: false
+      });
     } finally {
       await rm(stateDirectory, { recursive: true, force: true });
     }

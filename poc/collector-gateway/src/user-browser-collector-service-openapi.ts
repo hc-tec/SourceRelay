@@ -129,7 +129,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           oneOf: [
             { $ref: '#/components/schemas/BilibiliUserBrowserCapability' },
             { $ref: '#/components/schemas/XiaohongshuUserBrowserCapability' },
-            { $ref: '#/components/schemas/XiaohongshuPublicNotesSearchCapability' }
+            { $ref: '#/components/schemas/XiaohongshuPublicNotesSearchCapability' },
+            { $ref: '#/components/schemas/XiaohongshuAccountPublicNotesCapability' }
           ]
         },
         BilibiliUserBrowserCapability: {
@@ -242,6 +243,46 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             browserHostFallback: { type: 'string', const: 'forbidden' }
           }
         },
+        XiaohongshuAccountPublicNotesCapability: {
+          type: 'object', additionalProperties: false,
+          required: [
+            'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'executionTarget',
+            'accountScopedSurfaces', 'dispatchState', 'managedValidationState', 'captureMode',
+            'responseBodies', 'routeAdmission', 'budget', 'browserHostFallback'
+          ],
+          properties: {
+            schemaVersion: { type: 'integer', const: 1 },
+            capability: { type: 'string', const: 'xiaohongshu.account.public_notes.v1' },
+            platform: { type: 'string', const: 'xiaohongshu' },
+            title: { type: 'string' },
+            inputMode: { type: 'string', const: 'scroll_budget_only_no_caller_url' },
+            executionTarget: { type: 'string', const: 'existing_public_profile_tab' },
+            accountScopedSurfaces: { type: 'string', const: 'public_profile_only' },
+            dispatchState: { type: 'string', const: 'direct_canary_pending' },
+            managedValidationState: { type: 'string', const: 'implementation_ready_live_e2e_pending' },
+            captureMode: { type: 'string', const: 'current_document_network_projection_plus_trusted_scroll' },
+            responseBodies: { type: 'string', const: 'temporarily_read_projected_not_stored' },
+            routeAdmission: { type: 'string', const: 'generic_public_note_card_projection_no_url_dependency' },
+            budget: {
+              type: 'object', additionalProperties: false,
+              required: [
+                'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+                'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
+                'maximumRawPayloadBytesStored'
+              ],
+              properties: {
+                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPageReloads: { type: 'integer', const: 0 },
+                maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
+                maximumSemanticActions: { type: 'integer', const: 3 },
+                maximumNetworkResponseBodies: { type: 'integer', const: 8 },
+                maximumProjectedItems: { type: 'integer', const: 40 },
+                maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
+              }
+            },
+            browserHostFallback: { type: 'string', const: 'forbidden' }
+          }
+        },
         BrowserBinding: {
           type: 'object', additionalProperties: false,
           required: ['schemaVersion', 'browserBindingId', 'extensionId', 'state', 'pairedAt', 'lastSeenAt'],
@@ -266,7 +307,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             { $ref: '#/components/schemas/UserBrowserCollectionSeriesOverviewCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserCollectionSeriesDetailCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserDanmakuCollectRequest' },
-            { $ref: '#/components/schemas/UserBrowserXiaohongshuPublicNotesSearchCollectRequest' }
+            { $ref: '#/components/schemas/UserBrowserXiaohongshuPublicNotesSearchCollectRequest' },
+            { $ref: '#/components/schemas/UserBrowserXiaohongshuAccountPublicNotesCollectRequest' }
           ]
         },
         UserBrowserVideoDetailCollectRequest: {
@@ -425,6 +467,23 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             }
           }
         },
+        UserBrowserXiaohongshuAccountPublicNotesCollectRequest: {
+          type: 'object', additionalProperties: false,
+          description: 'Collects public note cards from the unique existing public profile tab using bounded trusted scrolling and a pre-armed current-document Network projection. No URL, account ID, tab ID, selector, script, refresh, or new tab can be supplied.',
+          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            browserBindingId: { type: 'string', format: 'uuid' },
+            platform: { type: 'string', const: 'xiaohongshu' },
+            capability: { type: 'string', const: 'xiaohongshu.account.public_notes.v1' },
+            executionTarget: { type: 'string', const: 'existing_public_profile_tab' },
+            input: {
+              type: 'object', additionalProperties: false,
+              required: ['maximumScrolls'],
+              properties: { maximumScrolls: { type: 'integer', enum: [1, 2, 3] } }
+            }
+          }
+        },
         QueuedOperationResponse: {
           type: 'object', additionalProperties: false,
           required: ['schemaVersion', 'result'],
@@ -451,12 +510,13 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'bilibili.account_profile', 'bilibili.account_inventory',
                 'bilibili.dynamic', 'bilibili.collection_series.overview',
                 'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion',
-                'xiaohongshu.search.public_notes.v1'
+                'xiaohongshu.search.public_notes.v1', 'xiaohongshu.account.public_notes.v1'
               ]
             },
             executionTarget: {
               type: 'string',
-              enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab']
+              enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab',
+                'existing_public_profile_tab']
             },
             state: { type: 'string', enum: ['queued', 'claimed', 'completed', 'partial', 'stopped', 'failed'] },
             queuedAt: { type: 'string', format: 'date-time' },

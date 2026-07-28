@@ -48,15 +48,26 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
         maximumProjectedItems: 40,
         maximumRawPayloadBytesStored: 0
       }
+    }), expect.objectContaining({
+      capability: 'xiaohongshu.account.public_notes.v1',
+      platform: 'xiaohongshu',
+      inputMode: 'scroll_budget_only_no_caller_url',
+      executionTarget: 'existing_public_profile_tab',
+      dispatchState: 'direct_canary_pending',
+      captureMode: 'current_document_network_projection_plus_trusted_scroll',
+      responseBodies: 'temporarily_read_projected_not_stored',
+      browserHostFallback: 'forbidden',
+      budget: expect.objectContaining({ maximumSemanticActions: 3, maximumProjectedItems: 40 })
     })]);
   });
 
   test('keeps the Bilibili catalog and the Xiaohongshu policy visible together', () => {
     const catalog = listUserBrowserCapabilities();
-    expect(catalog).toHaveLength(14);
+    expect(catalog).toHaveLength(15);
     expect(catalog.map((entry) => entry.capability)).toContain('bilibili.discussion');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.current_page.network_metadata');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.search.public_notes.v1');
+    expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.account.public_notes.v1');
   });
 
   test('keeps the catalog-only policy outside the executable collect request union', () => {
@@ -86,6 +97,9 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
     ]));
     expect(document.components.schemas.UserBrowserCapability.oneOf).toContainEqual({
       $ref: '#/components/schemas/XiaohongshuPublicNotesSearchCapability'
+    });
+    expect(document.components.schemas.UserBrowserCapability.oneOf).toContainEqual({
+      $ref: '#/components/schemas/XiaohongshuAccountPublicNotesCapability'
     });
   });
 });

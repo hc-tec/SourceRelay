@@ -37,6 +37,16 @@ describe('user-browser Gateway direct capability catalog', () => {
           captureMode: 'current_document_main_world_public_projection',
           browserHostFallback: 'forbidden'
         },
+        {
+          schemaVersion: 1,
+          capability: 'xiaohongshu.account.public_notes.v1',
+          platform: 'xiaohongshu',
+          title: '小红书公开博主笔记列表',
+          inputMode: 'scroll_budget_only_no_caller_url',
+          dispatchState: 'direct_canary_pending',
+          captureMode: 'current_document_network_projection_plus_trusted_scroll',
+          browserHostFallback: 'forbidden'
+        },
         descriptor({ capability: 'bilibili.dynamic', dispatchState: 'direct_migration_required' })
       ]
     })).toEqual([
@@ -47,6 +57,11 @@ describe('user-browser Gateway direct capability catalog', () => {
         capability: 'xiaohongshu.search.public_notes.v1',
         platform: 'xiaohongshu',
         dispatchState: 'direct_ready'
+      }),
+      expect.objectContaining({
+        capability: 'xiaohongshu.account.public_notes.v1',
+        platform: 'xiaohongshu',
+        dispatchState: 'direct_canary_pending'
       })
     ]);
   });

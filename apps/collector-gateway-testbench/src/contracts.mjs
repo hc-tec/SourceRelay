@@ -2,7 +2,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const TOKEN_PATTERN = /^cst_[A-Za-z0-9_-]{43}$/;
 const BVID_PATTERN = /^BV[0-9A-Za-z]{10}$/;
 const ACCOUNT_ID_PATTERN = /^[1-9]\d{0,19}$/;
-const ARTIFACT_PATH_PATTERN = /^\/v1\/collect\/artifacts\/(bilibili\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\.(?:overview|detail)|danmaku|discussion)|xiaohongshu\.search\.public_notes\.v1)\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+const ARTIFACT_PATH_PATTERN = /^\/v1\/collect\/artifacts\/(bilibili\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\.(?:overview|detail)|danmaku|discussion)|xiaohongshu\.(?:search|account)\.public_notes\.v1)\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
 export const TESTBENCH_SCHEMA_VERSION = 1;
 export const DIRECT_SCHEMA_VERSION = 2;
@@ -88,6 +88,22 @@ export function parseTestbenchSubmission(value) {
       capability: 'xiaohongshu.search.public_notes.v1',
       executionTarget: 'existing_public_explore_tab',
       input: { query: normaliseSearchQuery(value.input.query) }
+    };
+  }
+
+  if (value.kind === 'xiaohongshu_account_public_notes') {
+    if (!hasExactKeys(value.input, ['maximumScrolls']) ||
+      !Number.isInteger(value.input.maximumScrolls) ||
+      value.input.maximumScrolls < 1 || value.input.maximumScrolls > 3) {
+      throw new TestbenchInputError('testbench_request_invalid');
+    }
+    return {
+      schemaVersion: DIRECT_SCHEMA_VERSION,
+      browserBindingId: value.browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.account.public_notes.v1',
+      executionTarget: 'existing_public_profile_tab',
+      input: { maximumScrolls: value.input.maximumScrolls }
     };
   }
 
@@ -251,7 +267,8 @@ function isDirectArtifactCapability(value) {
     value === 'bilibili.account_profile' || value === 'bilibili.account_inventory' ||
     value === 'bilibili.dynamic' || value === 'bilibili.collection_series.overview' ||
     value === 'bilibili.collection_series.detail' || value === 'bilibili.danmaku' ||
-    value === 'bilibili.discussion' || value === 'xiaohongshu.search.public_notes.v1';
+    value === 'bilibili.discussion' || value === 'xiaohongshu.search.public_notes.v1' ||
+    value === 'xiaohongshu.account.public_notes.v1';
 }
 
 function loopbackHttpOrigin(value, code) {

@@ -5,10 +5,12 @@ import {
   classifyXiaohongshuCurrentPageRisk,
   xiaohongshuCurrentPageNetworkPublicSurface,
   isXiaohongshuManagedSearchProjectionResult,
+  isXiaohongshuManagedProfileNotesProjectionResult,
   type XiaohongshuManagedPageNetworkObservationResult,
   type XiaohongshuManagedPageNetworkObserverArmResult,
   type XiaohongshuManagedPageNetworkObserverRequest,
   type XiaohongshuManagedSearchProjectionResult,
+  type XiaohongshuManagedProfileNotesProjectionResult,
   type XiaohongshuCurrentPageNetworkObservationResult,
   type XiaohongshuCurrentPageNetworkPermissionState,
   type XiaohongshuCurrentPageNetworkSelectionSummary
@@ -107,7 +109,7 @@ export async function readXiaohongshuManagedSearchProjection(
     target: { tabId, documentIds: [record.documentId] },
     world: 'MAIN',
     func: () => {
-      const key = '__personalIntelligenceXiaohongshuSearchObserverV1';
+      const key = '__personalIntelligenceXiaohongshuPublicNotesObserverV2';
       return (window as typeof window & { [key]?: unknown })[key] ?? null;
     }
   });
@@ -164,7 +166,82 @@ export async function armXiaohongshuExistingExploreWorkObserver(
   if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
     throw new Error('xiaohongshu_current_page_network_selection_active');
   }
-  if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null);
+  if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'explore');
+}
+
+export async function armXiaohongshuExistingPublicProfileWorkObserver(
+  tabId: number,
+  workId: string
+): Promise<void> {
+  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
+  if (permissionState !== 'permission_granted') {
+    throw new Error('xiaohongshu_current_page_network_permission_required');
+  }
+  const current = await loadActiveRecord();
+  if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
+    throw new Error('xiaohongshu_current_page_network_selection_active');
+  }
+  if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'public_profile');
+}
+
+export async function readXiaohongshuExistingPublicProfileWorkProjection(
+  tabId: number,
+  workId: string
+): Promise<XiaohongshuManagedProfileNotesProjectionResult> {
+  const record = await loadActiveRecord();
+  if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId ||
+    record.publicSurface !== 'public_profile') {
+    throw new Error('xiaohongshu_managed_profile_projection_binding_mismatch');
+  }
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, documentIds: [record.documentId] },
+    world: 'MAIN',
+    func: () => {
+      const key = '__personalIntelligenceXiaohongshuPublicNotesObserverV2';
+      return (window as typeof window & { [key]?: unknown })[key] ?? null;
+    }
+  });
+  const candidate = results[0]?.result as Record<string, unknown> | null | undefined;
+  const rawItems = Array.isArray(candidate?.items) ? candidate.items.slice(0, 40) : [];
+  const items = rawItems.map((value, index) => {
+    const item = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+    const text = (field: string, maximum: number): string =>
+      (typeof item[field] === 'string' ? item[field] as string : '').replace(/[\u0000-\u001f\u007f]/g, '')
+        .replace(/\s+/g, ' ').trim().slice(0, maximum);
+    return {
+      rank: index + 1,
+      noteId: text('noteId', 80),
+      title: text('title', 500),
+      contentType: text('contentType', 40),
+      authorId: text('authorId', 80),
+      authorNickname: text('authorNickname', 200),
+      likedCountText: text('likedCountText', 40)
+    };
+  }).filter((item) => item.noteId && item.title);
+  const result: XiaohongshuManagedProfileNotesProjectionResult = {
+    schemaVersion: XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION,
+    type: 'xiaohongshu_managed_profile_notes_projection',
+    pageAlias: workId,
+    runId: workId,
+    matchedPayloadCount: Number.isSafeInteger(candidate?.matchedPayloadCount)
+      ? Math.min(8, Math.max(0, Number(candidate?.matchedPayloadCount))) : 0,
+    bodyBytesRead: Number.isSafeInteger(candidate?.bodyBytesRead)
+      ? Math.min(16 * 1024 * 1024, Math.max(0, Number(candidate?.bodyBytesRead))) : 0,
+    rawPayloadStored: false,
+    responseUrlsStored: false,
+    items
+  };
+  if (!isXiaohongshuManagedProfileNotesProjectionResult(result)) {
+    throw new Error('xiaohongshu_managed_profile_projection_invalid');
+  }
+  return result;
+}
+
+export async function clearXiaohongshuWorkObserver(tabId: number, workId: string): Promise<void> {
+  const record = await loadActiveRecord();
+  if (!recordMatchesManagedPageRun(record, tabId, workId)) return;
+  await chrome.storage.session.remove(XIAOHONGSHU_CURRENT_PAGE_NETWORK_STORAGE_KEY);
+  unregisterNetworkMetadataListener();
 }
 
 export async function readXiaohongshuExistingExploreWorkProjection(
@@ -184,17 +261,19 @@ export async function readXiaohongshuExistingExploreWorkProjection(
 async function armManagedXiaohongshuCurrentDocument(
   tabId: number,
   managedRunId: string,
-  activeRecord: XiaohongshuCurrentPageNetworkRecord | null
+  activeRecord: XiaohongshuCurrentPageNetworkRecord | null,
+  expectedSurface: 'explore' | 'public_profile' = 'explore'
 ): Promise<XiaohongshuCurrentPageNetworkRecord> {
   if (activeRecord) throw new Error('xiaohongshu_current_page_network_selection_active');
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   const windowId = tab?.windowId;
   const surface = tab?.url ? xiaohongshuCurrentPageNetworkPublicSurface(tab.url) : null;
-  if (!tab || typeof windowId !== 'number' || !Number.isSafeInteger(windowId) || tab.incognito || surface !== 'explore') {
+  if (!tab || typeof windowId !== 'number' || !Number.isSafeInteger(windowId) || tab.incognito ||
+    surface !== expectedSurface) {
     throw new Error('xiaohongshu_current_page_network_public_surface_required');
   }
   const frame = await chrome.webNavigation.getFrame({ tabId, frameId: 0 }).catch(() => null);
-  if (!frame?.documentId || xiaohongshuCurrentPageNetworkPublicSurface(frame.url) !== 'explore') {
+  if (!frame?.documentId || xiaohongshuCurrentPageNetworkPublicSurface(frame.url) !== expectedSurface) {
     throw new Error('xiaohongshu_current_page_network_document_unavailable');
   }
   const now = Date.now();
@@ -206,7 +285,7 @@ async function armManagedXiaohongshuCurrentDocument(
     initialDocumentId: frame.documentId,
     documentId: frame.documentId,
     state: 'observing',
-    publicSurface: 'explore',
+    publicSurface: expectedSurface,
     selectedAt: new Date(now).toISOString(),
     expiresAt: new Date(now + XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS).toISOString(),
     navigationStarted: false,

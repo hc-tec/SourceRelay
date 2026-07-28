@@ -216,6 +216,8 @@ function directCapabilityFallbackTitle(capability: UserBrowserDirectWorkCapabili
       return '视频评论区（用户已选页面）';
     case 'xiaohongshu.search.public_notes.v1':
       return '小红书公开笔记站内搜索';
+    case 'xiaohongshu.account.public_notes.v1':
+      return '小红书公开博主笔记列表';
   }
 }
 

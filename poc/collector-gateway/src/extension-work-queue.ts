@@ -14,6 +14,7 @@ import {
   isExtensionWorkResultForItem,
   normaliseBilibiliNativeSearchRoute,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
+  XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
   type ExtensionWorkCapability,
   type ExtensionWorkExecutionTarget,
   type ExtensionWorkItem,
@@ -123,6 +124,11 @@ export interface EnqueueBilibiliDanmakuWorkInput {
 export interface EnqueueXiaohongshuPublicNotesSearchWorkInput {
   browserBindingId: string;
   query: string;
+}
+
+export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
+  browserBindingId: string;
+  maximumScrolls: 1 | 2 | 3;
 }
 
 /**
@@ -703,6 +709,35 @@ export class ExtensionWorkQueue {
     return await this.#enqueueSigned(unsigned, issuedAt);
   }
 
+  async enqueueXiaohongshuAccountPublicNotes(
+    input: EnqueueXiaohongshuAccountPublicNotesWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId) ||
+      (input.maximumScrolls !== 1 && input.maximumScrolls !== 2 && input.maximumScrolls !== 3)) {
+      throw new Error('xiaohongshu_account_public_notes_input_invalid');
+    }
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(input.browserBindingId);
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.account.public_notes.v1',
+      executionTarget: 'existing_public_profile_tab',
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: { maximumScrolls: input.maximumScrolls },
+      budget: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET
+    };
+    return await this.#enqueueSigned(unsigned, issuedAt);
+  }
+
   /** Claiming is the irreversible delivery point.  There is no lease renewal. */
   async claimNext(
     browserBindingId: string,
@@ -1013,6 +1048,8 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'login_required' || value === 'search_ready' || value === 'existing_public_explore_tab_required' ||
     value === 'existing_public_explore_tab_ambiguous' || value === 'search_target_unavailable' ||
     value === 'query_not_echoed' || value === 'postcondition_unmet' || value === 'permission_required' ||
+    value === 'profile_notes_ready' || value === 'existing_public_profile_tab_required' ||
+    value === 'existing_public_profile_tab_ambiguous' ||
     value === 'debugger_attach_failed' || value === 'debugger_input_failed' || value === 'debugger_detach_failed' ||
     value === 'extension_worker_interrupted';
 }

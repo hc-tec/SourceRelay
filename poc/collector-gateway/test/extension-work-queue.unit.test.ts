@@ -419,4 +419,89 @@ describe('extension work queue state machine', () => {
       await rm(stateDirectory, { recursive: true, force: true });
     }
   });
+
+  test('signs URL-free Xiaohongshu account notes work and persists no profile identity', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-xiaohongshu-account-'));
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const queued = await queue.enqueueXiaohongshuAccountPublicNotes({
+        browserBindingId: bindingId,
+        maximumScrolls: 2
+      }, base);
+      const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
+      expect(claimed).toMatchObject({
+        operationId: queued.operationId,
+        platform: 'xiaohongshu',
+        capability: 'xiaohongshu.account.public_notes.v1',
+        executionTarget: 'existing_public_profile_tab',
+        input: { maximumScrolls: 2 },
+        budget: {
+          maximumPlatformNavigations: 0,
+          maximumPageReloads: 0,
+          maximumPageInitiatedNewDocuments: 0,
+          maximumSemanticActions: 3
+        }
+      });
+      if (!claimed || claimed.capability !== 'xiaohongshu.account.public_notes.v1') {
+        throw new Error('test_claim_missing');
+      }
+      await queue.complete(bindingId, {
+        schemaVersion: 1,
+        protocolVersion: 1,
+        workId: claimed.workId,
+        operationId: claimed.operationId,
+        browserBindingId: claimed.browserBindingId,
+        platform: 'xiaohongshu',
+        capability: 'xiaohongshu.account.public_notes.v1',
+        executionTarget: 'existing_public_profile_tab',
+        state: 'completed',
+        errorCode: null,
+        terminalReason: 'profile_notes_ready',
+        completedAt: new Date(base.getTime() + 2).toISOString(),
+        navigation: { attempted: false, attemptCount: 0 },
+        semanticAction: { attempted: true, attemptCount: 2 },
+        scroll: { requestedCount: 2, completedCount: 2 },
+        page: { publicSurface: 'public_profile', renderedCardCount: 1 },
+        projection: {
+          schemaVersion: 2,
+          type: 'xiaohongshu_managed_profile_notes_projection',
+          pageAlias: claimed.workId,
+          runId: claimed.workId,
+          matchedPayloadCount: 1,
+          bodyBytesRead: 100,
+          rawPayloadStored: false,
+          responseUrlsStored: false,
+          items: [{
+            rank: 1,
+            noteId: 'note-1',
+            title: '公开笔记',
+            contentType: 'normal',
+            authorId: 'author-1',
+            authorNickname: '公开作者',
+            likedCountText: '1'
+          }]
+        },
+        rawPayloadStored: false,
+        responseUrlsStored: false,
+        debuggerDetached: true
+      }, {
+        artifactId: '44444444-4444-4444-8444-444444444444',
+        retrievalPath: '/v1/collect/artifacts/xiaohongshu.account.public_notes.v1/44444444-4444-4444-8444-444444444444',
+        summary: {}
+      });
+      const persisted = await readFile(join(stateDirectory, 'extension-work-operations.json'), 'utf8');
+      for (const forbidden of [
+        /"url"\s*:/i, /"profileId"\s*:/i, /"accountId"\s*:/i, /"tabId"\s*:/i,
+        /"selector"\s*:/i, /"script"\s*:/i
+      ]) expect(persisted).not.toMatch(forbidden);
+      const restored = await ExtensionWorkQueue.create(identity(), stateDirectory, new Date(base.getTime() + 3));
+      await expect(restored.get(queued.operationId)).resolves.toMatchObject({
+        platform: 'xiaohongshu',
+        capability: 'xiaohongshu.account.public_notes.v1',
+        state: 'completed'
+      });
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
 });

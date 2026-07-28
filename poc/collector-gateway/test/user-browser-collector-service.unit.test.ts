@@ -90,6 +90,36 @@ describe('user-owned browser collector service', () => {
     })).toThrow('user_browser_collector_service_request_invalid');
   });
 
+  test('admits Xiaohongshu public-profile notes with only a bounded scroll budget', () => {
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.account.public_notes.v1',
+      executionTarget: 'existing_public_profile_tab',
+      input: { maximumScrolls: 2 }
+    })).toEqual({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.account.public_notes.v1',
+      executionTarget: 'existing_public_profile_tab',
+      input: { maximumScrolls: 2 }
+    });
+    for (const input of [
+      { maximumScrolls: 0 }, { maximumScrolls: 4 },
+      { maximumScrolls: 1, url: 'https://www.xiaohongshu.com/user/profile/x' },
+      { maximumScrolls: 1, tabId: 1 }, { maximumScrolls: 1, selector: 'section.note-item' }
+    ]) expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.account.public_notes.v1',
+      executionTarget: 'existing_public_profile_tab',
+      input
+    })).toThrow('user_browser_collector_service_request_invalid');
+  });
+
   test('publishes direct and canary passive capabilities without a Profile or browser-control primitive', () => {
     const document = userBrowserCollectorServiceOpenApiDocument('http://127.0.0.1:43127') as Record<string, any>;
     const variants = document.components.schemas.UserBrowserCollectRequest.oneOf;
@@ -104,7 +134,8 @@ describe('user-owned browser collector service', () => {
       { $ref: '#/components/schemas/UserBrowserCollectionSeriesOverviewCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserCollectionSeriesDetailCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserDanmakuCollectRequest' },
-      { $ref: '#/components/schemas/UserBrowserXiaohongshuPublicNotesSearchCollectRequest' }
+      { $ref: '#/components/schemas/UserBrowserXiaohongshuPublicNotesSearchCollectRequest' },
+      { $ref: '#/components/schemas/UserBrowserXiaohongshuAccountPublicNotesCollectRequest' }
     ]);
     expect(document.components.schemas.UserBrowserNativeSearchCollectRequest.properties).toMatchObject({
       capability: { const: 'bilibili.native_search' },
@@ -119,6 +150,12 @@ describe('user-owned browser collector service', () => {
       capability: { const: 'xiaohongshu.search.public_notes.v1' },
       executionTarget: { const: 'existing_public_explore_tab' },
       input: { required: ['query'], additionalProperties: false }
+    });
+    expect(document.components.schemas.UserBrowserXiaohongshuAccountPublicNotesCollectRequest.properties).toMatchObject({
+      platform: { const: 'xiaohongshu' },
+      capability: { const: 'xiaohongshu.account.public_notes.v1' },
+      executionTarget: { const: 'existing_public_profile_tab' },
+      input: { required: ['maximumScrolls'], additionalProperties: false }
     });
     expect(Object.keys(document.paths)).not.toContain('/v1/profiles');
     const schemaText = JSON.stringify(document.components.schemas);
@@ -196,7 +233,8 @@ describe('user-owned browser collector service', () => {
       enum: ['collector_work_tab', 'user_selected_tab']
     });
     expect(document.components.schemas.Operation.properties.executionTarget).toMatchObject({
-      enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab']
+      enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab',
+        'existing_public_profile_tab']
     });
   });
 

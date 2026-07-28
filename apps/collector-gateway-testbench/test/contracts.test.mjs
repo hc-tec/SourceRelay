@@ -118,6 +118,33 @@ test('maps Xiaohongshu search to query-only existing-Explore trusted input', () 
   }), TestbenchInputError);
 });
 
+test('maps Xiaohongshu account notes to an existing profile tab with a bounded scroll budget', () => {
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_account_public_notes',
+    input: { maximumScrolls: 1 }
+  }), {
+    schemaVersion: 2,
+    browserBindingId: bindingId,
+    platform: 'xiaohongshu',
+    capability: 'xiaohongshu.account.public_notes.v1',
+    executionTarget: 'existing_public_profile_tab',
+    input: { maximumScrolls: 1 }
+  });
+  for (const input of [
+    { maximumScrolls: 0 },
+    { maximumScrolls: 4 },
+    { maximumScrolls: 1.5 },
+    { maximumScrolls: 1, url: 'https://www.xiaohongshu.com/user/profile/secret' },
+    { maximumScrolls: 1, tabId: 7 },
+    { maximumScrolls: 1, selector: '.note-item' }
+  ]) assert.throws(() => parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_account_public_notes',
+    input
+  }), TestbenchInputError);
+});
+
 test('maps a MID-only account request into the two fixed direct-mode account capabilities', () => {
   assert.deepEqual(parseTestbenchSubmission({
     browserBindingId: bindingId,
@@ -281,6 +308,13 @@ test('only accepts an artifact path derived from the matching direct operation c
       retrievalPath: `/v1/collect/artifacts/xiaohongshu.search.public_notes.v1/${artifactId}`
     }
   }), `/v1/collect/artifacts/xiaohongshu.search.public_notes.v1/${artifactId}`);
+  assert.equal(artifactPathFromOperation({
+    operationId,
+    capability: 'xiaohongshu.account.public_notes.v1',
+    artifact: {
+      retrievalPath: `/v1/collect/artifacts/xiaohongshu.account.public_notes.v1/${artifactId}`
+    }
+  }), `/v1/collect/artifacts/xiaohongshu.account.public_notes.v1/${artifactId}`);
 });
 
 test('keeps Gateway and testbench listener configuration on explicit loopback origins', () => {

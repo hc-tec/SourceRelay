@@ -21,7 +21,8 @@ export const USER_BROWSER_DIRECT_WORK_CAPABILITIES = [
   'bilibili.account_profile',
   'bilibili.account_inventory',
   'bilibili.discussion',
-  'xiaohongshu.search.public_notes.v1'
+  'xiaohongshu.search.public_notes.v1',
+  'xiaohongshu.account.public_notes.v1'
 ] as const;
 
 export type UserBrowserDirectWorkCapability =
@@ -48,11 +49,11 @@ export interface UserBrowserGatewayBilibiliCapabilityDescriptor {
 
 export interface UserBrowserGatewayXiaohongshuCapabilityDescriptor {
   schemaVersion: 1;
-  capability: 'xiaohongshu.search.public_notes.v1';
+  capability: 'xiaohongshu.search.public_notes.v1' | 'xiaohongshu.account.public_notes.v1';
   platform: 'xiaohongshu';
   title: string;
   inputMode: string;
-  dispatchState: 'direct_ready';
+  dispatchState: 'direct_ready' | 'direct_canary_pending';
   captureMode: string;
   browserHostFallback: 'forbidden';
 }

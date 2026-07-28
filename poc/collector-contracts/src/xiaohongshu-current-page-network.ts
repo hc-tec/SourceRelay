@@ -11,11 +11,22 @@ export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY =
   'xiaohongshu.current_page.network_metadata' as const;
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY =
   'xiaohongshu.search.public_notes.v1' as const;
+export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY =
+  'xiaohongshu.account.public_notes.v1' as const;
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET = Object.freeze({
   maximumPlatformNavigations: 0,
   maximumPageReloads: 0,
   maximumPageInitiatedNewDocuments: 0,
   maximumSemanticActions: 1,
+  maximumNetworkResponseBodies: 8,
+  maximumProjectedItems: 40,
+  maximumRawPayloadBytesStored: 0
+} as const);
+export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET = Object.freeze({
+  maximumPlatformNavigations: 0,
+  maximumPageReloads: 0,
+  maximumPageInitiatedNewDocuments: 0,
+  maximumSemanticActions: 3,
   maximumNetworkResponseBodies: 8,
   maximumProjectedItems: 40,
   maximumRawPayloadBytesStored: 0
@@ -31,7 +42,8 @@ export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS = 60_000 as const
  */
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_PUBLIC_SURFACES = [
   'explore',
-  'search'
+  'search',
+  'public_profile'
 ] as const;
 export type XiaohongshuCurrentPageNetworkPublicSurface =
   (typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_PUBLIC_SURFACES)[number];
@@ -208,6 +220,18 @@ export interface XiaohongshuManagedSearchProjectionResult {
   items: XiaohongshuPublicSearchItemProjection[];
 }
 
+export interface XiaohongshuManagedProfileNotesProjectionResult {
+  schemaVersion: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION;
+  type: 'xiaohongshu_managed_profile_notes_projection';
+  pageAlias: string;
+  runId: string;
+  matchedPayloadCount: number;
+  bodyBytesRead: number;
+  rawPayloadStored: false;
+  responseUrlsStored: false;
+  items: XiaohongshuPublicSearchItemProjection[];
+}
+
 /**
  * Only public page signals are supplied to this classifier.  It never reads a
  * credential, query value, response body or browser identifier.  A known
@@ -323,6 +347,21 @@ export function isXiaohongshuManagedSearchProjectionResult(
     value.items.every(isPublicSearchItemProjection);
 }
 
+export function isXiaohongshuManagedProfileNotesProjectionResult(
+  value: unknown
+): value is XiaohongshuManagedProfileNotesProjectionResult {
+  if (!record(value) || !exactKeys(value, [
+    'schemaVersion', 'type', 'pageAlias', 'runId', 'matchedPayloadCount', 'bodyBytesRead',
+    'rawPayloadStored', 'responseUrlsStored', 'items'
+  ])) return false;
+  return value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION &&
+    value.type === 'xiaohongshu_managed_profile_notes_projection' && boundedIdentifier(value.pageAlias) &&
+    boundedIdentifier(value.runId) && boundedProjectionCount(value.matchedPayloadCount, 8) &&
+    boundedProjectionCount(value.bodyBytesRead, 16 * 1024 * 1024) && value.rawPayloadStored === false &&
+    value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 40 &&
+    value.items.every(isPublicSearchItemProjection);
+}
+
 export function isXiaohongshuCurrentPageNetworkSelectionSummary(
   value: unknown
 ): value is XiaohongshuCurrentPageNetworkSelectionSummary {
@@ -333,7 +372,7 @@ export function isXiaohongshuCurrentPageNetworkSelectionSummary(
     return surface === null && value.selectedAt === null && value.expiresAt === null;
   }
   if (state !== 'armed_next_document' && state !== 'observing' && state !== 'stopped') return false;
-  return (surface === null || surface === 'explore' || surface === 'search') &&
+  return (surface === null || surface === 'explore' || surface === 'search' || surface === 'public_profile') &&
     typeof value.selectedAt === 'string' && typeof value.expiresAt === 'string' &&
     Number.isFinite(Date.parse(value.selectedAt)) && Number.isFinite(Date.parse(value.expiresAt)) &&
     Date.parse(value.expiresAt) > Date.parse(value.selectedAt);
@@ -356,6 +395,7 @@ export function xiaohongshuCurrentPageNetworkPublicSurface(
   if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' ||
     url.port || url.username || url.password || url.hash) return null;
   if ((url.pathname === '/explore' || url.pathname === '/explore/') && !url.search) return 'explore';
+  if (/^\/user\/profile\/[^/]+\/?$/.test(url.pathname)) return 'public_profile';
   return url.pathname === '/search_result' || url.pathname === '/search_result/' ||
     url.pathname === '/search_result_ai' || url.pathname === '/search_result_ai/' ? 'search' : null;
 }
