@@ -1,6 +1,8 @@
 import {
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
+  XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY,
+  canonicalXiaohongshuPublicProfileUrl,
   isXiaohongshuManagedProfileNotesProjectionResult,
   type XiaohongshuManagedProfileNotesProjectionResult
 } from './xiaohongshu-current-page-network.js';
@@ -17,11 +19,11 @@ export interface XiaohongshuAccountPublicNotesWorkItem {
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY;
-  executionTarget: 'existing_public_profile_tab';
+  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
   issuedAt: string;
   expiresAt: string;
-  input: { maximumScrolls: 1 | 2 | 3 };
-  budget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET;
+  input: { maximumScrolls: 1 | 2 | 3; profileUrl?: string };
+  budget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET | typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET;
   gatewaySignature: string;
 }
 
@@ -32,6 +34,10 @@ export type XiaohongshuAccountPublicNotesTerminalReason =
   | 'profile_notes_ready'
   | 'existing_public_profile_tab_required'
   | 'existing_public_profile_tab_ambiguous'
+  | 'profile_url_invalid'
+  | 'profile_url_expired'
+  | 'profile_url_navigation_failed'
+  | 'profile_url_context_changed'
   | 'document_context_changed'
   | 'postcondition_unmet'
   | 'permission_required'
@@ -52,12 +58,12 @@ export interface XiaohongshuAccountPublicNotesWorkResult {
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY;
-  executionTarget: 'existing_public_profile_tab';
+  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
   state: 'completed' | 'stopped';
   errorCode: string | null;
   terminalReason: XiaohongshuAccountPublicNotesTerminalReason;
   completedAt: string;
-  navigation: { attempted: false; attemptCount: 0 };
+  navigation: { attempted: boolean; attemptCount: 0 | 1 };
   semanticAction: { attempted: boolean; attemptCount: 0 | 1 | 2 | 3 };
   scroll: { requestedCount: 1 | 2 | 3; completedCount: 0 | 1 | 2 | 3 };
   page: { publicSurface: 'public_profile'; renderedCardCount: number } | null;
@@ -77,10 +83,11 @@ export function isXiaohongshuAccountPublicNotesWorkItem(
   return value.schemaVersion === 1 && value.protocolVersion === 1 && uuid(value.workId) &&
     uuid(value.operationId) && uuid(value.browserBindingId) && value.platform === 'xiaohongshu' &&
     value.capability === XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY &&
-    value.executionTarget === 'existing_public_profile_tab' && timestamp(value.issuedAt) && timestamp(value.expiresAt) &&
+    (value.executionTarget === 'existing_public_profile_tab' || value.executionTarget === 'ephemeral_public_profile_url') &&
+    timestamp(value.issuedAt) && timestamp(value.expiresAt) &&
     Date.parse(value.expiresAt as string) > Date.parse(value.issuedAt as string) &&
-    record(value.input) && exactKeys(value.input, ['maximumScrolls']) && scrollCount(value.input.maximumScrolls) &&
-    isBudget(value.budget) && typeof value.gatewaySignature === 'string' && SIGNATURE.test(value.gatewaySignature);
+    validInput(value.input, value.executionTarget) && validBudget(value.budget, value.executionTarget) &&
+    typeof value.gatewaySignature === 'string' && SIGNATURE.test(value.gatewaySignature);
 }
 
 export function isXiaohongshuAccountPublicNotesWorkResult(
@@ -94,9 +101,10 @@ export function isXiaohongshuAccountPublicNotesWorkResult(
   if (value.schemaVersion !== 1 || value.protocolVersion !== 1 || !uuid(value.workId) || !uuid(value.operationId) ||
     !uuid(value.browserBindingId) || value.platform !== 'xiaohongshu' ||
     value.capability !== XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY ||
-    value.executionTarget !== 'existing_public_profile_tab' || (value.state !== 'completed' && value.state !== 'stopped') ||
+    (value.executionTarget !== 'existing_public_profile_tab' && value.executionTarget !== 'ephemeral_public_profile_url') ||
+    (value.state !== 'completed' && value.state !== 'stopped') ||
     !(value.errorCode === null || (typeof value.errorCode === 'string' && SAFE_ERROR.test(value.errorCode))) ||
-    !terminalReason(value.terminalReason) || !timestamp(value.completedAt) || !zeroNavigation(value.navigation) ||
+    !terminalReason(value.terminalReason) || !timestamp(value.completedAt) || !navigation(value.navigation) ||
     !semanticAction(value.semanticAction) || !scroll(value.scroll) || !pageResult(value.page) ||
     !(value.projection === null || isXiaohongshuManagedProfileNotesProjectionResult(value.projection)) ||
     value.rawPayloadStored !== false || value.responseUrlsStored !== false || typeof value.debuggerDetached !== 'boolean') {
@@ -124,12 +132,38 @@ export function isXiaohongshuAccountPublicNotesWorkResultForItem(
     value.scroll.requestedCount === item.input.maximumScrolls && Date.parse(value.completedAt) >= Date.parse(item.issuedAt);
 }
 
+function validInput(value: unknown, executionTarget: unknown): boolean {
+  if (!record(value) || !scrollCount(value.maximumScrolls)) return false;
+  if (executionTarget === 'existing_public_profile_tab') {
+    return exactKeys(value, ['maximumScrolls']);
+  }
+  return exactKeys(value, ['maximumScrolls', 'profileUrl']) &&
+    typeof value.profileUrl === 'string' && canonicalXiaohongshuPublicProfileUrl(value.profileUrl) !== null;
+}
+
+function validBudget(value: unknown, executionTarget: unknown): boolean {
+  return executionTarget === 'ephemeral_public_profile_url'
+    ? isLinkBudget(value)
+    : isBudget(value);
+}
+
 function isBudget(value: unknown): value is typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET {
   return record(value) && exactKeys(value, [
     'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
     'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
     'maximumRawPayloadBytesStored'
   ]) && value.maximumPlatformNavigations === 0 && value.maximumPageReloads === 0 &&
+    value.maximumPageInitiatedNewDocuments === 0 && value.maximumSemanticActions === 3 &&
+    value.maximumNetworkResponseBodies === 8 && value.maximumProjectedItems === 40 &&
+    value.maximumRawPayloadBytesStored === 0;
+}
+
+function isLinkBudget(value: unknown): value is typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET {
+  return record(value) && exactKeys(value, [
+    'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+    'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
+    'maximumRawPayloadBytesStored'
+  ]) && value.maximumPlatformNavigations === 1 && value.maximumPageReloads === 0 &&
     value.maximumPageInitiatedNewDocuments === 0 && value.maximumSemanticActions === 3 &&
     value.maximumNetworkResponseBodies === 8 && value.maximumProjectedItems === 40 &&
     value.maximumRawPayloadBytesStored === 0;
@@ -144,9 +178,10 @@ function terminalReason(value: unknown): value is XiaohongshuAccountPublicNotesT
   ].includes(value);
 }
 
-function zeroNavigation(value: unknown): boolean {
+function navigation(value: unknown): boolean {
   return record(value) && exactKeys(value, ['attempted', 'attemptCount']) &&
-    value.attempted === false && value.attemptCount === 0;
+    typeof value.attempted === 'boolean' && (value.attemptCount === 0 || value.attemptCount === 1) &&
+    value.attempted === (value.attemptCount === 1);
 }
 
 function semanticAction(value: unknown): boolean {

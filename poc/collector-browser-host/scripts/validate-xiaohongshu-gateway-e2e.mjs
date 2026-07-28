@@ -17,6 +17,7 @@ const validateCommentRecon = process.argv.includes('--comment-recon');
 const validateReplyRecon = process.argv.includes('--reply-recon');
 const validatePublicReplies = process.argv.includes('--replies');
 const validateAccountNotes = process.argv.includes('--account-notes');
+const suppliedProfileUrl = process.env.COLLECTOR_XIAOHONGSHU_PROFILE_URL?.trim() || null;
 const replyCanaryQuery = '奉劝各位咖啡爱好者选好一点的咖啡豆';
 const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ??
   (validatePublicReplies || validateAccountNotes ? replyCanaryQuery : '咖啡豆');
@@ -209,41 +210,47 @@ try {
       responseUrlsStored: false
     });
     if (validateAccountNotes) {
-      const detailPage = await leasedPage();
-      profileEntryRecon = await client.command({
-        type: 'recon_xiaohongshu_public_profile_entry',
-        request: {
-          schemaVersion: 1,
-          profileId,
-          pageAlias: acquired.page.pageAlias,
-          pageLeaseId: acquired.lease.pageLeaseId,
-          runId,
-          expectedRecordVersion: detailPage.recordVersion,
-          expectedDocumentGeneration: detailPage.documentGeneration,
-          actionId: randomUUID(),
-          timeoutMs: 25_000
+      if (!suppliedProfileUrl) {
+        const detailPage = await leasedPage();
+        profileEntryRecon = await client.command({
+          type: 'recon_xiaohongshu_public_profile_entry',
+          request: {
+            schemaVersion: 1,
+            profileId,
+            pageAlias: acquired.page.pageAlias,
+            pageLeaseId: acquired.lease.pageLeaseId,
+            runId,
+            expectedRecordVersion: detailPage.recordVersion,
+            expectedDocumentGeneration: detailPage.documentGeneration,
+            actionId: randomUUID(),
+            timeoutMs: 25_000
+          }
+        }, { timeoutMs: 30_000 });
+        record('public_profile_entry_recon_completed', {
+          state: profileEntryRecon.state,
+          semanticAction: profileEntryRecon.semanticAction,
+          beforeSurface: profileEntryRecon.before.publicSurface,
+          authorTargetMode: profileEntryRecon.before.authorTarget?.targetMode ?? null,
+          finalSurface: profileEntryRecon.after?.publicSurface ?? null,
+          networkResponseCount: profileEntryRecon.network.responses.length
+        });
+        if (profileEntryRecon.state !== 'completed') {
+          throw new Error('xiaohongshu_account_notes_profile_entry_prerequisite_unmet');
         }
-      }, { timeoutMs: 30_000 });
-      record('public_profile_entry_recon_completed', {
-        state: profileEntryRecon.state,
-        semanticAction: profileEntryRecon.semanticAction,
-        beforeSurface: profileEntryRecon.before.publicSurface,
-        authorTargetMode: profileEntryRecon.before.authorTarget?.targetMode ?? null,
-        finalSurface: profileEntryRecon.after?.publicSurface ?? null,
-        networkResponseCount: profileEntryRecon.network.responses.length
-      });
-      if (profileEntryRecon.state !== 'completed') {
-        throw new Error('xiaohongshu_account_notes_profile_entry_prerequisite_unmet');
       }
+      const accountExecutionTarget = suppliedProfileUrl
+        ? 'ephemeral_public_profile_url' : 'existing_public_profile_tab';
       const accountDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
         method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
           browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
-          capability: 'xiaohongshu.account.public_notes.v1', executionTarget: 'existing_public_profile_tab',
-          input: { maximumScrolls: 3 } })
+          capability: 'xiaohongshu.account.public_notes.v1', executionTarget: accountExecutionTarget,
+          input: suppliedProfileUrl ? { maximumScrolls: 3, profileUrl: suppliedProfileUrl } : { maximumScrolls: 3 } })
       }, 201);
       const accountOperationId = accountDispatch.result?.operationId;
       if (!uuid(accountOperationId)) throw new Error('xiaohongshu_account_notes_e2e_operation_missing');
-      record('account_notes_operation_dispatched', { operationId: accountOperationId, maximumScrolls: 3 });
+      record('account_notes_operation_dispatched', {
+        operationId: accountOperationId, maximumScrolls: 3, executionTarget: accountExecutionTarget
+      });
       const accountOperation = await waitForOperation(gatewayOrigin, token, accountOperationId, 90_000);
       if (accountOperation.state !== 'completed' || accountOperation.terminalReason !== 'profile_notes_ready' ||
         !uuid(accountOperation.artifact?.artifactId) ||
@@ -255,7 +262,7 @@ try {
         { headers: { authorization: `Bearer ${token}` } },
         200
       );
-      assertAccountNotesArtifact(accountArtifactPayload.artifact, accountOperationId);
+      assertAccountNotesArtifact(accountArtifactPayload.artifact, accountOperationId, Boolean(suppliedProfileUrl));
       reportedOperation = accountOperation;
       reportedArtifact = accountArtifactPayload.artifact;
       record('account_notes_artifact_retrieved', {
@@ -638,12 +645,12 @@ function assertNoteRepliesArtifact(artifact, operationId) {
   }
 }
 
-function assertAccountNotesArtifact(artifact, operationId) {
+function assertAccountNotesArtifact(artifact, operationId, navigated) {
   const actionCount = artifact?.result?.semanticAction?.attemptCount;
   if (!artifact || artifact.summary?.operationId !== operationId ||
     artifact.summary?.capability !== 'xiaohongshu.account.public_notes.v1' ||
     artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'profile_notes_ready' ||
-    artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
+    artifact.result?.navigation?.attempted !== navigated || artifact.result.navigation.attemptCount !== (navigated ? 1 : 0) ||
     !Number.isInteger(actionCount) || actionCount < 0 || actionCount > 3 ||
     artifact.result.semanticAction.attempted !== (actionCount > 0) ||
     artifact.result?.scroll?.requestedCount !== 3 || artifact.result.scroll.completedCount !== actionCount ||

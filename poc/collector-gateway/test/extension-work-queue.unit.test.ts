@@ -504,4 +504,77 @@ describe('extension work queue state machine', () => {
       await rm(stateDirectory, { recursive: true, force: true });
     }
   });
+
+  test('uses a supplied profile link once and redacts it after terminal delivery', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-xiaohongshu-link-'));
+    const profileUrl = 'https://www.xiaohongshu.com/user/profile/abc123?expires=short';
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const queued = await queue.enqueueXiaohongshuAccountPublicNotes({
+        browserBindingId: bindingId,
+        maximumScrolls: 2,
+        profileUrl
+      }, base);
+      const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
+      expect(claimed).toMatchObject({
+        operationId: queued.operationId,
+        executionTarget: 'ephemeral_public_profile_url',
+        input: { maximumScrolls: 2, profileUrl },
+        budget: { maximumPlatformNavigations: 1 }
+      });
+      if (!claimed || claimed.capability !== 'xiaohongshu.account.public_notes.v1') {
+        throw new Error('test_claim_missing');
+      }
+      await queue.complete(bindingId, {
+        schemaVersion: 1,
+        protocolVersion: 1,
+        workId: claimed.workId,
+        operationId: claimed.operationId,
+        browserBindingId: claimed.browserBindingId,
+        platform: 'xiaohongshu',
+        capability: 'xiaohongshu.account.public_notes.v1',
+        executionTarget: 'ephemeral_public_profile_url',
+        state: 'completed',
+        errorCode: null,
+        terminalReason: 'profile_notes_ready',
+        completedAt: new Date(base.getTime() + 2).toISOString(),
+        navigation: { attempted: true, attemptCount: 1 },
+        semanticAction: { attempted: false, attemptCount: 0 },
+        scroll: { requestedCount: 2, completedCount: 0 },
+        page: { publicSurface: 'public_profile', renderedCardCount: 1 },
+        projection: {
+          schemaVersion: 2,
+          type: 'xiaohongshu_managed_profile_notes_projection',
+          pageAlias: claimed.workId,
+          runId: claimed.workId,
+          matchedPayloadCount: 1,
+          bodyBytesRead: 100,
+          rawPayloadStored: false,
+          responseUrlsStored: false,
+          items: [{
+            rank: 1,
+            noteId: 'note-1',
+            title: '公开笔记',
+            contentType: 'image',
+            authorId: 'author-1',
+            authorNickname: '公开作者',
+            likedCountText: '1'
+          }]
+        },
+        rawPayloadStored: false,
+        responseUrlsStored: false,
+        debuggerDetached: true
+      }, {
+        artifactId: '55555555-5555-4555-8555-555555555555',
+        retrievalPath: '/v1/collect/artifacts/xiaohongshu.account.public_notes.v1/55555555-5555-4555-8555-555555555555',
+        summary: {}
+      });
+      const persisted = await readFile(join(stateDirectory, 'extension-work-operations.json'), 'utf8');
+      expect(persisted).not.toContain(profileUrl);
+      expect(persisted).not.toContain('abc123');
+      expect(persisted).not.toContain('expires=short');
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
 });

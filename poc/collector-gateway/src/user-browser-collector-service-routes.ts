@@ -105,7 +105,8 @@ export async function handleUserBrowserCollectorServiceRoute(
         ? await enqueueXiaohongshuAccountPublicNotesWork(
           context,
           collection.browserBindingId,
-          collection.input.maximumScrolls
+          collection.input.maximumScrolls,
+          collection.executionTarget === 'ephemeral_public_profile_url' ? collection.input.profileUrl : undefined
         )
         : collection.capability === 'xiaohongshu.search.public_notes.v1'
         ? await enqueueXiaohongshuPublicNotesSearchWork(

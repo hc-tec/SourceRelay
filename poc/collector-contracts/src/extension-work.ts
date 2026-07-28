@@ -89,7 +89,8 @@ import { canonicalJson } from './ipc.js';
  * The production Gateway-to-extension protocol is intentionally narrow. A
  * work item names one registered capability and its validated input; it is
  * never a carrier for an arbitrary URL, selector, script, CDP command, or
- * input coordinate.
+ * input coordinate. The one XHS ephemeral profile-link input is validated by
+ * its capability contract and is removed before terminal state persistence.
  */
 export const EXTENSION_WORK_SCHEMA_VERSION = 1 as const;
 export const EXTENSION_WORK_PROTOCOL_VERSION = 1 as const;
@@ -118,6 +119,7 @@ export type ExtensionWorkExecutionTarget =
   | 'user_selected_tab'
   | 'existing_public_explore_tab'
   | 'existing_public_profile_tab'
+  | 'ephemeral_public_profile_url'
   | 'existing_public_search_tab'
   | 'existing_public_note_overlay';
 export type ExtensionWorkState = 'queued' | 'claimed' | 'completed' | 'partial' | 'stopped' | 'failed';

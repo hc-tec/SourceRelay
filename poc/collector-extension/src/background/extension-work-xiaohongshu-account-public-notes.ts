@@ -1,5 +1,6 @@
 import {
   classifyXiaohongshuCurrentPageRisk,
+  canonicalXiaohongshuPublicProfileUrl,
   xiaohongshuCurrentPageNetworkPublicSurface,
   type XiaohongshuAccountPublicNotesTerminalReason,
   type XiaohongshuAccountPublicNotesWorkItem,
@@ -45,8 +46,17 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   let projection: XiaohongshuManagedProfileNotesProjectionResult | null = null;
   let networkProjection: XiaohongshuManagedProfileNotesProjectionResult | null = null;
   let renderedCardCount = 0;
+  let navigationAttempted = false;
   let errorCode: string | null = null;
   try {
+    if (item.executionTarget === 'ephemeral_public_profile_url') {
+      const profileUrl = item.input.profileUrl;
+      if (!profileUrl || !canonicalXiaohongshuPublicProfileUrl(profileUrl)) {
+        throw new Error('xiaohongshu_profile_url_invalid');
+      }
+      navigationAttempted = true;
+      await navigateToEphemeralProfileUrl(profileUrl);
+    }
     document = await findUniquePublicProfileDocument();
     await foreground(document);
     await requireSameDocument(document);
@@ -120,12 +130,12 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     browserBindingId: item.browserBindingId,
     platform: 'xiaohongshu',
     capability: 'xiaohongshu.account.public_notes.v1',
-    executionTarget: 'existing_public_profile_tab',
+    executionTarget: item.executionTarget,
     state: completed ? 'completed' : 'stopped',
     errorCode: completed ? null : errorCode ?? 'xiaohongshu_profile_notes_postcondition_unmet',
     terminalReason: completed ? 'profile_notes_ready' : terminalReason(errorCode),
     completedAt: new Date().toISOString(),
-    navigation: { attempted: false, attemptCount: 0 },
+    navigation: { attempted: navigationAttempted, attemptCount: navigationAttempted ? 1 : 0 },
     semanticAction: { attempted: attemptedCount > 0, attemptCount: attemptedCount },
     scroll: { requestedCount: item.input.maximumScrolls, completedCount },
     page: renderedCardCount > 0
@@ -151,6 +161,47 @@ async function findUniquePublicProfileDocument(): Promise<ProfileDocument> {
     throw new Error('xiaohongshu_public_profile_document_unavailable');
   }
   return { tabId: tab.id!, windowId: tab.windowId!, documentId: frame.documentId };
+}
+
+async function navigateToEphemeralProfileUrl(profileUrl: string): Promise<void> {
+  const tabs = await chrome.tabs.query({});
+  const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && !tab.incognito && tab.status === 'complete' &&
+    isXiaohongshuPublicEntryTab(tab.url ?? ''));
+  if (eligible.length === 0) throw new Error('xiaohongshu_profile_entry_tab_required');
+  if (eligible.length !== 1) throw new Error('xiaohongshu_profile_entry_tab_ambiguous');
+  const tab = eligible[0]!;
+  const baselinePageCount = tabs.length;
+  await chrome.windows.update(tab.windowId!, { focused: true }).catch(() => undefined);
+  await chrome.tabs.update(tab.id!, { url: profileUrl });
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const currentTabs = await chrome.tabs.query({});
+    if (currentTabs.length !== baselinePageCount) throw new Error('xiaohongshu_profile_url_new_tab_detected');
+    const current = await chrome.tabs.get(tab.id!).catch(() => null);
+    const frame = await chrome.webNavigation.getFrame({ tabId: tab.id!, frameId: 0 }).catch(() => null);
+    if (current?.status === 'complete' && frame?.documentId) {
+      const surface = xiaohongshuCurrentPageNetworkPublicSurface(frame.url);
+      if (surface === 'public_profile') return;
+      if (surface !== null) throw new Error('xiaohongshu_profile_url_expired');
+    }
+    await delay(250);
+  }
+  throw new Error('xiaohongshu_profile_url_navigation_failed');
+}
+
+function isXiaohongshuPublicEntryTab(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' || url.username || url.password ||
+      url.hash || url.port) return false;
+    return url.pathname === '/explore' || url.pathname === '/explore/' ||
+      /^\/explore\/[A-Za-z0-9_-]+\/?$/.test(url.pathname) ||
+      url.pathname === '/search_result' || url.pathname === '/search_result/' ||
+      url.pathname === '/search_result_ai' || url.pathname === '/search_result_ai/' ||
+      /^\/user\/profile\/[A-Za-z0-9_-]+\/?$/.test(url.pathname);
+  } catch {
+    return false;
+  }
 }
 
 async function foreground(document: ProfileDocument): Promise<void> {
@@ -333,6 +384,12 @@ function terminalReason(errorCode: string | null): XiaohongshuAccountPublicNotes
     case 'debugger_attach_failed': return 'debugger_attach_failed';
     case 'debugger_input_failed': return 'debugger_input_failed';
     case 'xiaohongshu_profile_scroll_debugger_detach_failed': return 'debugger_detach_failed';
+    case 'xiaohongshu_profile_url_invalid': return 'profile_url_invalid';
+    case 'xiaohongshu_profile_entry_tab_required': return 'profile_url_navigation_failed';
+    case 'xiaohongshu_profile_entry_tab_ambiguous': return 'profile_url_navigation_failed';
+    case 'xiaohongshu_profile_url_expired': return 'profile_url_expired';
+    case 'xiaohongshu_profile_url_navigation_failed': return 'profile_url_navigation_failed';
+    case 'xiaohongshu_profile_url_new_tab_detected': return 'profile_url_context_changed';
     default: return 'postcondition_unmet';
   }
 }

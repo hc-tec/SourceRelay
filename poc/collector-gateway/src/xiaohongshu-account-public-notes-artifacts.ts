@@ -27,9 +27,9 @@ export interface XiaohongshuAccountPublicNotesArtifactView {
   summary: XiaohongshuAccountPublicNotesArtifactSummary;
   provenance: {
     environment: 'user_owned_browser_extension';
-    executionTarget: 'existing_public_profile_tab';
+    executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
     captureMode: 'current_document_network_projection_plus_trusted_scroll';
-    platformNavigations: 0;
+    platformNavigations: 0 | 1;
     pageReloads: 0;
     pageInitiatedNewTabs: 0;
     semanticActions: 0 | 1 | 2 | 3;
@@ -43,7 +43,7 @@ export interface XiaohongshuAccountPublicNotesArtifactView {
     errorCode: string | null;
     terminalReason: XiaohongshuAccountPublicNotesWorkResult['terminalReason'];
     completedAt: string;
-    navigation: { attempted: false; attemptCount: 0 };
+    navigation: { attempted: boolean; attemptCount: 0 | 1 };
     semanticAction: XiaohongshuAccountPublicNotesWorkResult['semanticAction'];
     scroll: XiaohongshuAccountPublicNotesWorkResult['scroll'];
     page: XiaohongshuAccountPublicNotesWorkResult['page'];
@@ -103,9 +103,9 @@ export class XiaohongshuAccountPublicNotesArtifactStore {
       capturedAt: input.result.completedAt,
       provenance: {
         environment: 'user_owned_browser_extension' as const,
-        executionTarget: 'existing_public_profile_tab' as const,
+        executionTarget: input.result.executionTarget,
         captureMode: 'current_document_network_projection_plus_trusted_scroll' as const,
-        platformNavigations: 0 as const,
+        platformNavigations: input.result.navigation.attemptCount,
         pageReloads: 0 as const,
         pageInitiatedNewTabs: 0 as const,
         semanticActions: input.result.semanticAction.attemptCount,

@@ -258,8 +258,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             capability: { type: 'string', const: 'xiaohongshu.account.public_notes.v1' },
             platform: { type: 'string', const: 'xiaohongshu' },
             title: { type: 'string' },
-            inputMode: { type: 'string', const: 'scroll_budget_only_no_caller_url' },
-            executionTarget: { type: 'string', const: 'existing_public_profile_tab' },
+            inputMode: { type: 'string', const: 'scroll_budget_only_or_ephemeral_profile_url' },
+            executionTarget: { type: 'string', enum: ['existing_public_profile_tab', 'ephemeral_public_profile_url'] },
             accountScopedSurfaces: { type: 'string', const: 'public_profile_only' },
             dispatchState: { type: 'string', const: 'direct_canary_pending' },
             managedValidationState: { type: 'string', const: 'implementation_ready_live_e2e_pending' },
@@ -274,7 +274,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'maximumRawPayloadBytesStored'
               ],
               properties: {
-                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPlatformNavigations: { type: 'integer', enum: [0, 1] },
                 maximumPageReloads: { type: 'integer', const: 0 },
                 maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
                 maximumSemanticActions: { type: 'integer', const: 3 },
@@ -543,18 +543,25 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserXiaohongshuAccountPublicNotesCollectRequest: {
           type: 'object', additionalProperties: false,
-          description: 'Collects public note cards from the unique existing public profile tab using bounded trusted scrolling and a pre-armed current-document Network projection. No URL, account ID, tab ID, selector, script, refresh, or new tab can be supplied.',
+          description: 'Collects public note cards from either a unique existing public profile tab or one user-supplied short-lived public profile link. A link is used once in the existing tab, never persisted in the artifact, and cannot cause refresh, retry, or a new tab.',
           required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'xiaohongshu' },
             capability: { type: 'string', const: 'xiaohongshu.account.public_notes.v1' },
-            executionTarget: { type: 'string', const: 'existing_public_profile_tab' },
+            executionTarget: { type: 'string', enum: ['existing_public_profile_tab', 'ephemeral_public_profile_url'] },
             input: {
               type: 'object', additionalProperties: false,
               required: ['maximumScrolls'],
-              properties: { maximumScrolls: { type: 'integer', enum: [1, 2, 3] } }
+              properties: {
+                maximumScrolls: { type: 'integer', enum: [1, 2, 3] },
+                profileUrl: { type: 'string', minLength: 1, maxLength: 4096, format: 'uri' }
+              },
+              anyOf: [
+                { required: ['maximumScrolls'] },
+                { required: ['maximumScrolls', 'profileUrl'] }
+              ]
             }
           }
         },

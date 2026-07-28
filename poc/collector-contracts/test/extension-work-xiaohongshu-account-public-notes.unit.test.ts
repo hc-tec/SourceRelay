@@ -122,4 +122,35 @@ describe('signed Xiaohongshu account public-notes work contract', () => {
       scroll: { requestedCount: 2, completedCount: 0 }
     }, item)).toBe(true);
   });
+
+  test('admits a one-time validated profile link without making it an artifact field', () => {
+    const linkItem: XiaohongshuAccountPublicNotesWorkItem = {
+      ...item,
+      executionTarget: 'ephemeral_public_profile_url',
+      input: {
+        maximumScrolls: 3,
+        profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short'
+      },
+      budget: {
+        maximumPlatformNavigations: 1,
+        maximumPageReloads: 0,
+        maximumPageInitiatedNewDocuments: 0,
+        maximumSemanticActions: 3,
+        maximumNetworkResponseBodies: 8,
+        maximumProjectedItems: 40,
+        maximumRawPayloadBytesStored: 0
+      }
+    };
+    expect(isExtensionWorkItem(linkItem)).toBe(true);
+    expect(extensionWorkSigningPayload(linkItem)).toContain('profileUrl');
+    expect(extensionWorkSigningPayload(linkItem)).not.toContain('gatewaySignature');
+    expect(isExtensionWorkItem({
+      ...linkItem,
+      input: { ...linkItem.input, profileUrl: 'https://www.xiaohongshu.com/explore' }
+    })).toBe(false);
+    expect(isExtensionWorkItem({
+      ...linkItem,
+      executionTarget: 'existing_public_profile_tab'
+    })).toBe(false);
+  });
 });

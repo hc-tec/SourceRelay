@@ -51,7 +51,7 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
     }), expect.objectContaining({
       capability: 'xiaohongshu.account.public_notes.v1',
       platform: 'xiaohongshu',
-      inputMode: 'scroll_budget_only_no_caller_url',
+      inputMode: 'scroll_budget_only_or_ephemeral_profile_url',
       executionTarget: 'existing_public_profile_tab',
       dispatchState: 'direct_canary_pending',
       captureMode: 'current_document_network_projection_plus_trusted_scroll',
@@ -136,6 +136,20 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
       input: { maximumScrolls: 1 }
     })).toMatchObject({ input: { maximumScrolls: 1 } });
+
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2, browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',
+      capability: 'xiaohongshu.account.public_notes.v1', executionTarget: 'ephemeral_public_profile_url',
+      input: { maximumScrolls: 3, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short' }
+    })).toMatchObject({
+      executionTarget: 'ephemeral_public_profile_url',
+      input: { maximumScrolls: 3, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short' }
+    });
+    expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2, browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',
+      capability: 'xiaohongshu.account.public_notes.v1', executionTarget: 'ephemeral_public_profile_url',
+      input: { maximumScrolls: 1, profileUrl: 'https://www.xiaohongshu.com/explore' }
+    })).toThrow('user_browser_collector_service_request_invalid');
 
     expect(userBrowserCollectorServiceRequestInput({
       schemaVersion: 2,

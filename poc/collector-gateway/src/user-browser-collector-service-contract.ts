@@ -1,4 +1,5 @@
 import {
+  canonicalXiaohongshuPublicProfileUrl,
   canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliPassiveVideoWorkUrl,
   canonicalBilibiliVideoWorkUrl,
@@ -11,7 +12,7 @@ interface UserBrowserCollectorServiceRequestBase {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
   browserBindingId: string;
   platform: 'bilibili';
-  executionTarget: 'collector_work_tab' | 'user_selected_tab';
+  executionTarget: 'collector_work_tab' | 'user_selected_tab' | 'ephemeral_public_profile_url';
 }
 
 export interface UserBrowserVideoDetailCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
@@ -121,8 +122,8 @@ export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.account.public_notes.v1';
-  executionTarget: 'existing_public_profile_tab';
-  input: { maximumScrolls: 1 | 2 | 3 };
+  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
+  input: { maximumScrolls: 1 | 2 | 3; profileUrl?: string };
 }
 
 export interface UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest {
@@ -180,7 +181,8 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     (candidate.platform !== 'bilibili' && candidate.platform !== 'xiaohongshu') ||
     (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab' &&
       executionTarget !== 'existing_public_explore_tab' && executionTarget !== 'existing_public_profile_tab' &&
-      executionTarget !== 'existing_public_search_tab' && executionTarget !== 'existing_public_note_overlay') ||
+      executionTarget !== 'existing_public_search_tab' && executionTarget !== 'existing_public_note_overlay' &&
+      executionTarget !== 'ephemeral_public_profile_url') ||
     !candidate.input ||
     typeof candidate.input !== 'object' || Array.isArray(candidate.input)
   ) throw new Error('user_browser_collector_service_request_invalid');
@@ -217,7 +219,13 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
       };
     }
     if (candidate.capability === 'xiaohongshu.account.public_notes.v1') {
-      if (executionTarget !== 'existing_public_profile_tab' || Object.keys(input).length !== 1 ||
+      const existingProfileTab = executionTarget === 'existing_public_profile_tab' &&
+        Object.keys(input).length === 1;
+      const canonicalProfileUrl = typeof input.profileUrl === 'string'
+        ? canonicalXiaohongshuPublicProfileUrl(input.profileUrl) : null;
+      const ephemeralProfileUrl = executionTarget === 'ephemeral_public_profile_url' &&
+        Object.keys(input).length === 2 && canonicalProfileUrl !== null;
+      if ((!existingProfileTab && !ephemeralProfileUrl) ||
         (input.maximumScrolls !== 1 && input.maximumScrolls !== 2 && input.maximumScrolls !== 3)) {
         throw new Error('user_browser_collector_service_request_invalid');
       }
@@ -226,8 +234,10 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
         browserBindingId: candidate.browserBindingId,
         platform: 'xiaohongshu',
         capability: 'xiaohongshu.account.public_notes.v1',
-        executionTarget: 'existing_public_profile_tab',
-        input: { maximumScrolls: input.maximumScrolls }
+        executionTarget: ephemeralProfileUrl ? 'ephemeral_public_profile_url' : 'existing_public_profile_tab',
+        input: ephemeralProfileUrl
+          ? { maximumScrolls: input.maximumScrolls, profileUrl: canonicalProfileUrl! }
+          : { maximumScrolls: input.maximumScrolls }
       };
     }
     if (candidate.capability !== 'xiaohongshu.search.public_notes.v1' ||

@@ -157,7 +157,7 @@ describe('user-owned browser collector service', () => {
     expect(document.components.schemas.UserBrowserXiaohongshuAccountPublicNotesCollectRequest.properties).toMatchObject({
       platform: { const: 'xiaohongshu' },
       capability: { const: 'xiaohongshu.account.public_notes.v1' },
-      executionTarget: { const: 'existing_public_profile_tab' },
+      executionTarget: { type: 'string', enum: ['existing_public_profile_tab', 'ephemeral_public_profile_url'] },
       input: { required: ['maximumScrolls'], additionalProperties: false }
     });
     expect(document.components.schemas.UserBrowserXiaohongshuNotePublicDetailCollectRequest.properties).toMatchObject({

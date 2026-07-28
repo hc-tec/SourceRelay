@@ -272,12 +272,15 @@ async function interruptedResult(active: ActiveExtensionWork): Promise<Extension
       browserBindingId: active.item.browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1',
-      executionTarget: 'existing_public_profile_tab',
+      executionTarget: active.item.executionTarget,
       state: 'stopped',
       errorCode: 'xiaohongshu_extension_worker_interrupted',
       terminalReason: 'extension_worker_interrupted',
       completedAt: new Date().toISOString(),
-      navigation: { attempted: false, attemptCount: 0 },
+      navigation: {
+        attempted: active.item.executionTarget === 'ephemeral_public_profile_url',
+        attemptCount: active.item.executionTarget === 'ephemeral_public_profile_url' ? 1 : 0
+      },
       semanticAction: { attempted: attemptedCount > 0, attemptCount: attemptedCount },
       scroll: { requestedCount: active.item.input.maximumScrolls, completedCount: 0 },
       page: null,

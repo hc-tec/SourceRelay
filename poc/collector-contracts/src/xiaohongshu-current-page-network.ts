@@ -31,6 +31,16 @@ export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET = Object.freeze({
   maximumProjectedItems: 40,
   maximumRawPayloadBytesStored: 0
 } as const);
+/** One-time user-supplied profile entry. The URL is never an artifact field. */
+export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET = Object.freeze({
+  maximumPlatformNavigations: 1,
+  maximumPageReloads: 0,
+  maximumPageInitiatedNewDocuments: 0,
+  maximumSemanticActions: 3,
+  maximumNetworkResponseBodies: 8,
+  maximumProjectedItems: 40,
+  maximumRawPayloadBytesStored: 0
+} as const);
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SELECTION_TTL_MS = 60_000 as const;
 
 /**
@@ -399,6 +409,25 @@ export function xiaohongshuCurrentPageNetworkPublicSurface(
   if (/^\/user\/profile\/[^/]+\/?$/.test(url.pathname)) return 'public_profile';
   return url.pathname === '/search_result' || url.pathname === '/search_result/' ||
     url.pathname === '/search_result_ai' || url.pathname === '/search_result_ai/' ? 'search' : null;
+}
+
+/**
+ * Validate a caller-supplied public profile entry without exposing or storing
+ * its query/signature. The returned value is used only by the short-lived
+ * signed work item and is never copied into an artifact or operation summary.
+ */
+export function canonicalXiaohongshuPublicProfileUrl(value: string): string | null {
+  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value) || value.length > 4096) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' || url.port ||
+      url.username || url.password || url.hash || !/^\/user\/profile\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 export function classifyXiaohongshuCurrentPageRisk(

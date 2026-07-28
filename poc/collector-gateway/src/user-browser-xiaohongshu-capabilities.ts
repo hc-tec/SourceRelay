@@ -58,8 +58,8 @@ export interface UserBrowserXiaohongshuAccountPublicNotesCapabilityDescriptor {
   capability: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY;
   platform: 'xiaohongshu';
   title: string;
-  inputMode: 'scroll_budget_only_no_caller_url';
-  executionTarget: 'existing_public_profile_tab';
+  inputMode: 'scroll_budget_only_or_ephemeral_profile_url';
+  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
   accountScopedSurfaces: 'public_profile_only';
   dispatchState: 'direct_canary_pending';
   managedValidationState: 'implementation_ready_live_e2e_pending';
@@ -146,7 +146,7 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     capability: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY,
     platform: 'xiaohongshu',
     title: '小红书公开博主笔记列表',
-    inputMode: 'scroll_budget_only_no_caller_url',
+    inputMode: 'scroll_budget_only_or_ephemeral_profile_url',
     executionTarget: 'existing_public_profile_tab',
     accountScopedSurfaces: 'public_profile_only',
     dispatchState: 'direct_canary_pending',

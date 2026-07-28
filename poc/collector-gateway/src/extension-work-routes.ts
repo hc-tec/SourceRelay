@@ -374,10 +374,11 @@ export async function enqueueXiaohongshuPublicNotesSearchWork(
 export async function enqueueXiaohongshuAccountPublicNotesWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  maximumScrolls: 1 | 2 | 3
+  maximumScrolls: 1 | 2 | 3,
+  profileUrl?: string
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
-  return await context.workQueue.enqueueXiaohongshuAccountPublicNotes({ browserBindingId, maximumScrolls });
+  return await context.workQueue.enqueueXiaohongshuAccountPublicNotes({ browserBindingId, maximumScrolls, profileUrl });
 }
 
 export async function enqueueXiaohongshuNotePublicDetailWork(
