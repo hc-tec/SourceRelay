@@ -104,6 +104,7 @@ const requiredScripts = [
   'bilibili-native-search-document-bridge.js',
   'bilibili-video-detail-document-bridge.js',
   'main-world-network-observer.js',
+  'xiaohongshu-search-main-world-observer.js',
   'control.js'
 ];
 for (const script of requiredScripts) {
@@ -166,6 +167,11 @@ assert.match(backgroundSource, /bilibili\.account\.profile\.dom\.v2/, 'compiled 
 assert.match(backgroundSource, /bilibili\.search\.breadth\.dom\.v2/, 'compiled Bilibili native-search Strategy is required');
 assert.match(backgroundSource, /document_start/, 'observer bridge must be registered before document scripts run');
 assert.match(backgroundSource, /persistAcrossSessions:\s*false/, 'observer bridge registration must be short-lived');
+assert.match(
+  backgroundSource,
+  /collector-xhs-profile-|xiaohongshu-search-main-world-observer\.js/,
+  'Xiaohongshu profile-link Network observer registration is required'
+);
 assert.match(
   backgroundSource,
   /collector_bilibili_video_detail_document_ready/,
