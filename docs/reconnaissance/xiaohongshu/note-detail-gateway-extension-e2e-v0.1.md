@@ -55,6 +55,31 @@ finalPageState: retained_for_review
 captureMode = dom_fallback
 ```
 
+## 2026-07-29：同文档 Network continuity 回归
+
+为修复一个会抹掉搜索阶段公开投影的生命周期问题，新增了一轮独立真实 Gateway → Extension canary：
+
+```yaml
+runId: 98469152-f7d3-4301-bdd8-d6423a6e27ee
+operationId: 2ba4fb08-8bac-4e81-85f3-f828aefa2b16
+artifactId: ead8fedf-e6a3-4e71-9428-9911bf393509
+state: completed
+terminalReason: note_detail_ready
+productPlatformNavigations: 0
+validationBaselineNavigations: 1
+semanticActions: 1
+automaticPlatformRetries: 0
+captureMode: dom_fallback
+networkMatchedPayloadCount: 1
+networkBodyBytesRead: 51533
+rawPayloadStored: false
+responseUrlsStored: false
+debuggerDetached: true
+finalPageState: retained_for_review
+```
+
+这轮证明搜索到详情之间的同文档连续性已生效：搜索阶段捕获的公开 Network payload 没有因详情 work 重新注入 observer 而丢失。该 payload 能够被记录为公开 Network 观察，但当前真实响应没有足够的详情正文字段，因此详情正文仍按证据契约使用可见浮层 DOM fallback；没有把搜索卡片数据误报成详情正文，也没有重放点击。
+
 这不是降低 Network 优先级。运行时会先检查受限 Network 详情投影；只有没有公开详情响应时，才读取已经对用户可见的同页详情浮层文本。原始 response、response URL 和任意认证材料均不持久化。
 
 ## 质量修复证据
