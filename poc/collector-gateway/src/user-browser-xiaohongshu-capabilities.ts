@@ -196,6 +196,12 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
 
 export function listUserBrowserXiaohongshuCapabilities(): UserBrowserXiaohongshuCapabilityDescriptor[] {
   return USER_BROWSER_XIAOHONGSHU_CAPABILITIES.map((value) =>
-    ({ ...value, budget: { ...value.budget } }) as UserBrowserXiaohongshuCapabilityDescriptor
+    ({
+      ...value,
+      budget: { ...value.budget },
+      ...('ephemeralProfileLinkBudget' in value
+        ? { ephemeralProfileLinkBudget: { ...value.ephemeralProfileLinkBudget } }
+        : {})
+    }) as UserBrowserXiaohongshuCapabilityDescriptor
   );
 }
