@@ -216,7 +216,11 @@ try {
       reportedOperation = commentsOperation;
       reportedArtifact = commentsArtifactPayload.artifact;
       record('note_comments_artifact_retrieved', { captureMode: reportedArtifact.summary.captureMode,
-        commentCount: reportedArtifact.summary.commentCount, rawPayloadStored: false, responseUrlsStored: false });
+        commentCount: reportedArtifact.summary.commentCount,
+        networkMatchedPayloadCount: reportedArtifact.result.projection.network.matchedPayloadCount,
+        networkBodyBytesRead: reportedArtifact.result.projection.network.bodyBytesRead,
+        networkCursorObserved: reportedArtifact.result.projection.network.cursorObserved,
+        rawPayloadStored: false, responseUrlsStored: false });
     } else if (validateCommentRecon) {
       const detailPage = await leasedPage();
       commentRecon = await client.command({
@@ -274,6 +278,10 @@ try {
       captureMode: reportedArtifact.summary.captureMode ?? 'search_projection',
       itemCount: reportedArtifact.summary.itemCount ?? null,
       queryDigest: reportedArtifact.queryDigest ?? null,
+      commentCount: reportedArtifact.summary.commentCount ?? null,
+      networkMatchedPayloadCount: reportedArtifact.result.projection?.network?.matchedPayloadCount ?? null,
+      networkBodyBytesRead: reportedArtifact.result.projection?.network?.bodyBytesRead ?? null,
+      networkCursorObserved: reportedArtifact.result.projection?.network?.cursorObserved ?? null,
       rawPayloadStored: reportedArtifact.provenance.rawPayloadStored,
       responseUrlsStored: reportedArtifact.provenance.responseUrlsStored,
       debuggerDetached: reportedArtifact.provenance.debuggerDetached
@@ -337,13 +345,20 @@ async function validateCommentsOnExistingOverlay(gatewayOrigin) {
     { headers: { authorization: `Bearer ${token}` } }, 200);
   assertNoteCommentsArtifact(payload.artifact, operationId);
   record('note_comments_artifact_retrieved', { captureMode: payload.artifact.summary.captureMode,
-    commentCount: payload.artifact.summary.commentCount, rawPayloadStored: false, responseUrlsStored: false });
+    commentCount: payload.artifact.summary.commentCount,
+    networkMatchedPayloadCount: payload.artifact.result.projection.network.matchedPayloadCount,
+    networkBodyBytesRead: payload.artifact.result.projection.network.bodyBytesRead,
+    networkCursorObserved: payload.artifact.result.projection.network.cursorObserved,
+    rawPayloadStored: false, responseUrlsStored: false });
   writeJson({ ok: true, runId: randomUUID(), gatewayPath: 'user_browser_api_to_signed_queue_to_production_extension',
     validatedCapability: 'xiaohongshu.note.public_comments.v1', productPlatformNavigations: 0,
     validationBaselineNavigations: 0, semanticActions: payload.artifact.result.semanticAction.attemptCount,
     automaticPlatformRetries: 0, operation: { operationId, state: operation.state,
       terminalReason: operation.terminalReason, artifactId: operation.artifact.artifactId },
     artifact: { captureMode: payload.artifact.summary.captureMode, commentCount: payload.artifact.summary.commentCount,
+      networkMatchedPayloadCount: payload.artifact.result.projection.network.matchedPayloadCount,
+      networkBodyBytesRead: payload.artifact.result.projection.network.bodyBytesRead,
+      networkCursorObserved: payload.artifact.result.projection.network.cursorObserved,
       rawPayloadStored: payload.artifact.provenance.rawPayloadStored,
       responseUrlsStored: payload.artifact.provenance.responseUrlsStored,
       debuggerDetached: payload.artifact.provenance.debuggerDetached }, finalPageState: 'existing_overlay_retained', timeline });
