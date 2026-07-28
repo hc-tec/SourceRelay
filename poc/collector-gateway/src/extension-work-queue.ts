@@ -15,6 +15,7 @@ import {
   normaliseBilibiliNativeSearchRoute,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
+  XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET,
   type ExtensionWorkCapability,
   type ExtensionWorkExecutionTarget,
   type ExtensionWorkItem,
@@ -129,6 +130,11 @@ export interface EnqueueXiaohongshuPublicNotesSearchWorkInput {
 export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
   browserBindingId: string;
   maximumScrolls: 1 | 2 | 3;
+}
+
+export interface EnqueueXiaohongshuNotePublicDetailWorkInput {
+  browserBindingId: string;
+  resultRank: number;
 }
 
 /**
@@ -738,6 +744,35 @@ export class ExtensionWorkQueue {
     return await this.#enqueueSigned(unsigned, issuedAt);
   }
 
+  async enqueueXiaohongshuNotePublicDetail(
+    input: EnqueueXiaohongshuNotePublicDetailWorkInput,
+    now = new Date()
+  ): Promise<ExtensionWorkOperationSummary> {
+    if (!isUuid(input.browserBindingId) || !Number.isSafeInteger(input.resultRank) ||
+      input.resultRank < 1 || input.resultRank > 20) {
+      throw new Error('xiaohongshu_note_public_detail_input_invalid');
+    }
+    const expired = this.#expire(now);
+    if (expired.length > 0) await this.#save();
+    this.#assertBindingIdle(input.browserBindingId);
+    const issuedAt = now.toISOString();
+    const unsigned: UnsignedExtensionWorkItem = {
+      schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+      protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+      workId: randomUUID(),
+      operationId: randomUUID(),
+      browserBindingId: input.browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.note.public_detail.v1',
+      executionTarget: 'existing_public_search_tab',
+      issuedAt,
+      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      input: { resultRank: input.resultRank },
+      budget: XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET
+    };
+    return await this.#enqueueSigned(unsigned, issuedAt);
+  }
+
   /** Claiming is the irreversible delivery point.  There is no lease renewal. */
   async claimNext(
     browserBindingId: string,
@@ -1050,6 +1085,9 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'query_not_echoed' || value === 'postcondition_unmet' || value === 'permission_required' ||
     value === 'profile_notes_ready' || value === 'existing_public_profile_tab_required' ||
     value === 'existing_public_profile_tab_ambiguous' ||
+    value === 'note_detail_ready' || value === 'existing_public_search_tab_required' ||
+    value === 'existing_public_search_tab_ambiguous' || value === 'search_result_rank_unavailable' ||
+    value === 'note_detail_target_new_tab' ||
     value === 'debugger_attach_failed' || value === 'debugger_input_failed' || value === 'debugger_detach_failed' ||
     value === 'extension_worker_interrupted';
 }

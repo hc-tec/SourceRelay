@@ -107,6 +107,25 @@
             <button type="submit" disabled>提交一次公开笔记测试</button>
           </form>
 
+          <form id="xiaohongshu-note-detail-form" class="workflow">
+            <div class="workflow-title">
+              <span class="step">X3</span>
+              <div>
+                <h3>小红书公开笔记详情</h3>
+                <p>要求浏览器中恰好存在一个公开搜索结果 tab。只接收当前可见结果排名 1–20；零 URL、零刷新、零新 tab，一次可信点击打开同页详情浮层，Network 优先、DOM 回退。</p>
+              </div>
+            </div>
+            <label>
+              在线 browser binding
+              <select class="binding-select" name="browserBindingId" required disabled></select>
+            </label>
+            <label>
+              当前结果排名
+              <input name="resultRank" type="number" min="1" max="20" step="1" value="1" required disabled>
+            </label>
+            <button type="submit" disabled>提交一次公开详情测试</button>
+          </form>
+
           <form id="search-form" class="workflow">
             <div class="workflow-title">
               <span class="step">B</span>

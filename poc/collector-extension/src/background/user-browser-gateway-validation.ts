@@ -122,7 +122,8 @@ function userBrowserGatewayDirectCapabilityDescriptor(
   const candidate = value as Partial<UserBrowserGatewayCapabilityDescriptor>;
   if (!USER_BROWSER_DIRECT_WORK_CAPABILITIES.includes(candidate.capability as never)) return null;
   if (candidate.capability === 'xiaohongshu.search.public_notes.v1' ||
-    candidate.capability === 'xiaohongshu.account.public_notes.v1') {
+    candidate.capability === 'xiaohongshu.account.public_notes.v1' ||
+    candidate.capability === 'xiaohongshu.note.public_detail.v1') {
     const expectedDispatch = candidate.capability === 'xiaohongshu.search.public_notes.v1'
       ? 'direct_ready'
       : 'direct_canary_pending';

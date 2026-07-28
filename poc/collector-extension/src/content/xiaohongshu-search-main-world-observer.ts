@@ -12,6 +12,12 @@ interface PublicItem {
   likedCountText: string;
 }
 
+interface PublicDetail {
+  publicText: string;
+  authorNickname: string;
+  interactionText: string;
+}
+
 interface ObserverController {
   schemaVersion: 2;
   generation: number;
@@ -19,6 +25,7 @@ interface ObserverController {
   matchedPayloadCount: number;
   bodyBytesRead: number;
   items: PublicItem[];
+  details: PublicDetail[];
 }
 
 const root = window as typeof window & { [stateKey]?: ObserverController };
@@ -29,7 +36,8 @@ const controller: ObserverController = existing ?? {
   expiresAt: 0,
   matchedPayloadCount: 0,
   bodyBytesRead: 0,
-  items: []
+  items: [],
+  details: []
 };
 
 if (!existing) {
@@ -41,10 +49,11 @@ if (!existing) {
   const object = (value: unknown): Record<string, unknown> | null =>
     value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 
-  const project = (value: unknown): PublicItem[] => {
-    const found: PublicItem[] = [];
+  const project = (value: unknown): { items: PublicItem[]; details: PublicDetail[] } => {
+    const items: PublicItem[] = [];
+    const details: PublicDetail[] = [];
     const visit = (node: unknown, depth: number): void => {
-      if (depth > 7 || found.length >= maximumItems) return;
+      if (depth > 7 || items.length >= maximumItems) return;
       if (Array.isArray(node)) {
         for (const entry of node.slice(0, 80)) visit(entry, depth + 1);
         return;
@@ -58,13 +67,23 @@ if (!existing) {
         const noteId = clean(card.note_id ?? card.noteId ?? record.id, 80);
         const title = clean(card.display_title ?? card.title, 500);
         if (noteId && title) {
-          found.push({
+          items.push({
             noteId,
             title,
             contentType: clean(card.type ?? record.model_type, 40),
             authorId: clean(user.user_id ?? user.userId, 80),
             authorNickname: clean(user.nickname ?? user.nick_name, 200),
             likedCountText: clean(interact.liked_count ?? interact.likedCount, 40)
+          });
+        }
+        const description = clean(card.desc ?? card.description, 11_000);
+        if (description && details.length === 0) {
+          const publicTitle = clean(card.title ?? card.display_title, 500);
+          details.push({
+            publicText: clean(`${publicTitle}\n${description}`, 12_000),
+            authorNickname: clean(user.nickname ?? user.nick_name, 200),
+            interactionText: clean(Object.values(interact).filter((entry) =>
+              typeof entry === 'string' || typeof entry === 'number').join(' '), 1_000)
           });
         }
       }
@@ -74,7 +93,7 @@ if (!existing) {
       }
     };
     visit(value, 0);
-    return found;
+    return { items, details };
   };
 
   const observeText = (text: string, generation: number): void => {
@@ -84,17 +103,20 @@ if (!existing) {
     const bytes = new TextEncoder().encode(text).byteLength;
     if (bytes > maximumBodyBytes) return;
     try {
-      const items = project(JSON.parse(text));
-      if (items.length === 0) return;
+      const projected = project(JSON.parse(text));
+      if (projected.items.length === 0 && projected.details.length === 0) return;
       active.matchedPayloadCount += 1;
       active.bodyBytesRead += bytes;
       const known = new Set(active.items.map((item) => item.noteId));
-      for (const item of items) {
+      for (const item of projected.items) {
         if (active.items.length >= maximumItems) break;
         if (!known.has(item.noteId)) {
           known.add(item.noteId);
           active.items.push(item);
         }
+      }
+      if (active.details.length === 0 && projected.details.length > 0) {
+        active.details.push(projected.details[0]!);
       }
     } catch {
       // Non-JSON or unreadable bodies are not retained.
@@ -163,3 +185,4 @@ controller.expiresAt = Date.now() + 60_000;
 controller.matchedPayloadCount = 0;
 controller.bodyBytesRead = 0;
 controller.items = [];
+controller.details = [];

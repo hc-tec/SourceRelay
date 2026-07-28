@@ -15,6 +15,7 @@ import { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-na
 import { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
 import { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-artifacts';
 import { XiaohongshuAccountPublicNotesArtifactStore } from './xiaohongshu-account-public-notes-artifacts';
+import { XiaohongshuNotePublicDetailArtifactStore } from './xiaohongshu-note-public-detail-artifacts';
 import { safeErrorCode, sendJson } from './gateway-http';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker } from './pairing';
@@ -38,6 +39,8 @@ const passiveDirectArtifacts = await ExtensionWorkPassiveArtifactStore.create(co
 const xiaohongshuPublicNotesArtifacts = await XiaohongshuPublicNotesArtifactStore.create(config.stateDirectory);
 const xiaohongshuAccountPublicNotesArtifacts =
   await XiaohongshuAccountPublicNotesArtifactStore.create(config.stateDirectory);
+const xiaohongshuNotePublicDetailArtifacts =
+  await XiaohongshuNotePublicDetailArtifactStore.create(config.stateDirectory);
 const expectedHost = config.host + ':' + config.port;
 
 const server = createServer(async (request, response) => {
@@ -61,7 +64,8 @@ const server = createServer(async (request, response) => {
       accountVideoInventoryArtifacts,
       passiveDirectArtifacts,
       xiaohongshuPublicNotesArtifacts,
-      xiaohongshuAccountPublicNotesArtifacts
+      xiaohongshuAccountPublicNotesArtifacts,
+      xiaohongshuNotePublicDetailArtifacts
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 2, ok: false, error: 'route_not_found' });
   } catch (error) {

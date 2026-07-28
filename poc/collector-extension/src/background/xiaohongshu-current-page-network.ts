@@ -184,6 +184,61 @@ export async function armXiaohongshuExistingPublicProfileWorkObserver(
   if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'public_profile');
 }
 
+export async function armXiaohongshuExistingSearchWorkObserver(
+  tabId: number,
+  workId: string
+): Promise<void> {
+  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
+  if (permissionState !== 'permission_granted') {
+    throw new Error('xiaohongshu_current_page_network_permission_required');
+  }
+  const current = await loadActiveRecord();
+  if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
+    throw new Error('xiaohongshu_current_page_network_selection_active');
+  }
+  if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'search');
+}
+
+export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
+  tabId: number,
+  workId: string
+): Promise<{
+  matchedPayloadCount: number;
+  bodyBytesRead: number;
+  detail: { publicText: string; authorNickname: string; interactionText: string } | null;
+}> {
+  const record = await loadActiveRecord();
+  if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId || record.publicSurface !== 'search') {
+    throw new Error('xiaohongshu_note_detail_network_projection_binding_mismatch');
+  }
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, documentIds: [record.documentId] },
+    world: 'MAIN',
+    func: () => {
+      const key = '__personalIntelligenceXiaohongshuPublicNotesObserverV2';
+      return (window as typeof window & { [key]?: unknown })[key] ?? null;
+    }
+  });
+  const candidate = results[0]?.result as Record<string, unknown> | null | undefined;
+  const rawDetail = Array.isArray(candidate?.details) && candidate.details.length > 0 &&
+    candidate.details[0] && typeof candidate.details[0] === 'object'
+    ? candidate.details[0] as Record<string, unknown> : null;
+  const text = (value: unknown, maximum: number): string => (typeof value === 'string' ? value : '')
+    .replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, maximum);
+  const publicText = text(rawDetail?.publicText, 12_000);
+  return {
+    matchedPayloadCount: Number.isSafeInteger(candidate?.matchedPayloadCount)
+      ? Math.min(4, Math.max(0, Number(candidate?.matchedPayloadCount))) : 0,
+    bodyBytesRead: Number.isSafeInteger(candidate?.bodyBytesRead)
+      ? Math.min(8 * 1024 * 1024, Math.max(0, Number(candidate?.bodyBytesRead))) : 0,
+    detail: publicText ? {
+      publicText,
+      authorNickname: text(rawDetail?.authorNickname, 200),
+      interactionText: text(rawDetail?.interactionText, 1_000)
+    } : null
+  };
+}
+
 export async function readXiaohongshuExistingPublicProfileWorkProjection(
   tabId: number,
   workId: string
@@ -262,7 +317,7 @@ async function armManagedXiaohongshuCurrentDocument(
   tabId: number,
   managedRunId: string,
   activeRecord: XiaohongshuCurrentPageNetworkRecord | null,
-  expectedSurface: 'explore' | 'public_profile' = 'explore'
+  expectedSurface: 'explore' | 'search' | 'public_profile' = 'explore'
 ): Promise<XiaohongshuCurrentPageNetworkRecord> {
   if (activeRecord) throw new Error('xiaohongshu_current_page_network_selection_active');
   const tab = await chrome.tabs.get(tabId).catch(() => null);

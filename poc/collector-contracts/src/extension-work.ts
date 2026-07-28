@@ -56,6 +56,15 @@ import {
   type XiaohongshuAccountPublicNotesWorkItem,
   type XiaohongshuAccountPublicNotesWorkResult
 } from './extension-work-xiaohongshu-account-public-notes.js';
+import {
+  isXiaohongshuNotePublicDetailWorkItem,
+  isXiaohongshuNotePublicDetailWorkResult,
+  isXiaohongshuNotePublicDetailWorkResultForItem,
+  type UnsignedXiaohongshuNotePublicDetailWorkItem,
+  type XiaohongshuNotePublicDetailTerminalReason,
+  type XiaohongshuNotePublicDetailWorkItem,
+  type XiaohongshuNotePublicDetailWorkResult
+} from './extension-work-xiaohongshu-note-public-detail.js';
 import { canonicalJson } from './ipc.js';
 
 /**
@@ -82,12 +91,14 @@ export type ExtensionWorkCapability =
   | 'bilibili.discussion'
   | BilibiliPassiveExtensionWorkCapability
   | 'xiaohongshu.search.public_notes.v1'
-  | 'xiaohongshu.account.public_notes.v1';
+  | 'xiaohongshu.account.public_notes.v1'
+  | 'xiaohongshu.note.public_detail.v1';
 export type ExtensionWorkExecutionTarget =
   | 'collector_work_tab'
   | 'user_selected_tab'
   | 'existing_public_explore_tab'
-  | 'existing_public_profile_tab';
+  | 'existing_public_profile_tab'
+  | 'existing_public_search_tab';
 export type ExtensionWorkState = 'queued' | 'claimed' | 'completed' | 'partial' | 'stopped' | 'failed';
 
 interface ExtensionWorkEnvelopeBase {
@@ -241,7 +252,8 @@ export type ExtensionWorkItem =
   | BilibiliVideoDiscussionUserSelectedTabWorkItem
   | BilibiliPassiveExtensionWorkItem
   | XiaohongshuPublicNotesSearchWorkItem
-  | XiaohongshuAccountPublicNotesWorkItem;
+  | XiaohongshuAccountPublicNotesWorkItem
+  | XiaohongshuNotePublicDetailWorkItem;
 export type UnsignedExtensionWorkItem =
   | Omit<BilibiliVideoDetailWorkItem, 'gatewaySignature'>
   | Omit<BilibiliNativeSearchWorkItem, 'gatewaySignature'>
@@ -252,7 +264,8 @@ export type UnsignedExtensionWorkItem =
   | Omit<BilibiliVideoDiscussionUserSelectedTabWorkItem, 'gatewaySignature'>
   | UnsignedBilibiliPassiveExtensionWorkItem
   | UnsignedXiaohongshuPublicNotesSearchWorkItem
-  | UnsignedXiaohongshuAccountPublicNotesWorkItem;
+  | UnsignedXiaohongshuAccountPublicNotesWorkItem
+  | UnsignedXiaohongshuNotePublicDetailWorkItem;
 
 export type SharedExtensionWorkTerminalReason =
   | 'verification_required'
@@ -311,7 +324,8 @@ export type ExtensionWorkTerminalReason =
   | BilibiliVideoDiscussionUserSelectedTabTerminalReason
   | BilibiliPassiveExtensionWorkTerminalReason
   | XiaohongshuPublicNotesSearchTerminalReason
-  | XiaohongshuAccountPublicNotesTerminalReason;
+  | XiaohongshuAccountPublicNotesTerminalReason
+  | XiaohongshuNotePublicDetailTerminalReason;
 
 export interface BilibiliVideoDetailDomObservation {
   bvid: string;
@@ -536,7 +550,8 @@ export type ExtensionWorkResult =
   | BilibiliVideoDiscussionUserSelectedTabWorkResult
   | BilibiliPassiveExtensionWorkResult
   | XiaohongshuPublicNotesSearchWorkResult
-  | XiaohongshuAccountPublicNotesWorkResult;
+  | XiaohongshuAccountPublicNotesWorkResult
+  | XiaohongshuNotePublicDetailWorkResult;
 
 export function canonicalBilibiliVideoWorkUrl(value: string): string | null {
   try {
@@ -557,7 +572,8 @@ export function canonicalBilibiliNativeSearchWorkUrl(value: string): string | nu
 
 /** Return only a target derived from a validated registered work capability. */
 export function extensionWorkTargetUrl(item: ExtensionWorkItem): string {
-  if (isXiaohongshuPublicNotesSearchWorkItem(item) || isXiaohongshuAccountPublicNotesWorkItem(item)) {
+  if (isXiaohongshuPublicNotesSearchWorkItem(item) || isXiaohongshuAccountPublicNotesWorkItem(item) ||
+    isXiaohongshuNotePublicDetailWorkItem(item)) {
     throw new Error('extension_work_target_navigation_forbidden');
   }
   switch (item.capability) {
@@ -589,6 +605,7 @@ export function extensionWorkSigningPayload(item: ExtensionWorkItem | UnsignedEx
 export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem {
   if (isXiaohongshuPublicNotesSearchWorkItem(value)) return true;
   if (isXiaohongshuAccountPublicNotesWorkItem(value)) return true;
+  if (isXiaohongshuNotePublicDetailWorkItem(value)) return true;
   if (!isRecord(value) || !hasExactKeys(value, [
     'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
     'executionTarget', 'issuedAt', 'expiresAt', 'input', 'budget', 'gatewaySignature'
@@ -633,6 +650,7 @@ export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem 
 export function isExtensionWorkResult(value: unknown): value is ExtensionWorkResult {
   if (isXiaohongshuPublicNotesSearchWorkResult(value)) return true;
   if (isXiaohongshuAccountPublicNotesWorkResult(value)) return true;
+  if (isXiaohongshuNotePublicDetailWorkResult(value)) return true;
   if (isBilibiliNativeSearchBatchWorkResult(value)) return true;
   if (isBilibiliAccountInventoryUserSelectedTabWorkResult(value)) return true;
   if (isBilibiliVideoDiscussionUserSelectedTabWorkResult(value)) return true;
@@ -677,6 +695,9 @@ export function isExtensionWorkResultForItem(
   }
   if (isXiaohongshuAccountPublicNotesWorkItem(item)) {
     return isXiaohongshuAccountPublicNotesWorkResultForItem(value, item);
+  }
+  if (isXiaohongshuNotePublicDetailWorkItem(item)) {
+    return isXiaohongshuNotePublicDetailWorkResultForItem(value, item);
   }
   if (isBilibiliVideoDiscussionUserSelectedTabWorkItem(item)) {
     return isBilibiliVideoDiscussionUserSelectedTabWorkResultForItem(value, item);

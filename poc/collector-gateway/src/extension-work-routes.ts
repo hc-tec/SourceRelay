@@ -14,6 +14,8 @@ import {
   isXiaohongshuPublicNotesSearchWorkResult,
   isXiaohongshuAccountPublicNotesWorkItem,
   isXiaohongshuAccountPublicNotesWorkResult,
+  isXiaohongshuNotePublicDetailWorkItem,
+  isXiaohongshuNotePublicDetailWorkResult,
   type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
 import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
@@ -30,10 +32,12 @@ import { recordBilibiliVideoDetailExtensionWork } from './extension-work-bilibil
 import { recordBilibiliPassiveExtensionWork } from './extension-work-bilibili-passive';
 import { recordXiaohongshuPublicNotesExtensionWork } from './extension-work-xiaohongshu-public-notes';
 import { recordXiaohongshuAccountPublicNotesExtensionWork } from './extension-work-xiaohongshu-account-public-notes';
+import { recordXiaohongshuNotePublicDetailExtensionWork } from './extension-work-xiaohongshu-note-public-detail';
 import type { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
 import type { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-native-search-batch-artifacts';
 import type { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-artifacts';
 import type { XiaohongshuAccountPublicNotesArtifactStore } from './xiaohongshu-account-public-notes-artifacts';
+import type { XiaohongshuNotePublicDetailArtifactStore } from './xiaohongshu-note-public-detail-artifacts';
 import type { ExtensionWorkArtifactReference, ExtensionWorkQueue } from './extension-work-queue';
 import { readJsonBody, readJsonBodyWithRaw, requireSameOrigin, safeErrorCode, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
@@ -66,6 +70,7 @@ export interface ExtensionWorkRouteContext {
   passiveDirectArtifacts: ExtensionWorkPassiveArtifactStore;
   xiaohongshuPublicNotesArtifacts: XiaohongshuPublicNotesArtifactStore;
   xiaohongshuAccountPublicNotesArtifacts: XiaohongshuAccountPublicNotesArtifactStore;
+  xiaohongshuNotePublicDetailArtifacts: XiaohongshuNotePublicDetailArtifactStore;
 }
 
 /**
@@ -365,6 +370,15 @@ export async function enqueueXiaohongshuAccountPublicNotesWork(
   return await context.workQueue.enqueueXiaohongshuAccountPublicNotes({ browserBindingId, maximumScrolls });
 }
 
+export async function enqueueXiaohongshuNotePublicDetailWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  resultRank: number
+) {
+  await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
+  return await context.workQueue.enqueueXiaohongshuNotePublicDetail({ browserBindingId, resultRank });
+}
+
 async function handleExtensionWorkNext(
   request: IncomingMessage,
   response: ServerResponse,
@@ -484,6 +498,13 @@ async function handleExtensionWorkResult(
         item,
         result,
         artifacts: context.xiaohongshuAccountPublicNotesArtifacts
+      });
+    } else if (isXiaohongshuNotePublicDetailWorkItem(item) &&
+      isXiaohongshuNotePublicDetailWorkResult(result)) {
+      artifact = await recordXiaohongshuNotePublicDetailExtensionWork({
+        item,
+        result,
+        artifacts: context.xiaohongshuNotePublicDetailArtifacts
       });
     } else {
       throw new Error('extension_work_result_capability_mismatch');

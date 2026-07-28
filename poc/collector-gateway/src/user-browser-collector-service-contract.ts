@@ -125,6 +125,15 @@ export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest
   input: { maximumScrolls: 1 | 2 | 3 };
 }
 
+export interface UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest {
+  schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  browserBindingId: string;
+  platform: 'xiaohongshu';
+  capability: 'xiaohongshu.note.public_detail.v1';
+  executionTarget: 'existing_public_search_tab';
+  input: { resultRank: number };
+}
+
 export type UserBrowserCollectorServiceRequest =
   | UserBrowserVideoDetailCollectorServiceRequest
   | UserBrowserNativeSearchCollectorServiceRequest
@@ -137,7 +146,8 @@ export type UserBrowserCollectorServiceRequest =
   | UserBrowserDanmakuCollectorServiceRequest
   | UserBrowserVideoDiscussionCollectorServiceRequest
   | UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest
-  | UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest;
+  | UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest
+  | UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -159,12 +169,27 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     typeof candidate.browserBindingId !== 'string' || !UUID_PATTERN.test(candidate.browserBindingId) ||
     (candidate.platform !== 'bilibili' && candidate.platform !== 'xiaohongshu') ||
     (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab' &&
-      executionTarget !== 'existing_public_explore_tab' && executionTarget !== 'existing_public_profile_tab') ||
+      executionTarget !== 'existing_public_explore_tab' && executionTarget !== 'existing_public_profile_tab' &&
+      executionTarget !== 'existing_public_search_tab') ||
     !candidate.input ||
     typeof candidate.input !== 'object' || Array.isArray(candidate.input)
   ) throw new Error('user_browser_collector_service_request_invalid');
   const input = candidate.input as Record<string, unknown>;
   if (candidate.platform === 'xiaohongshu') {
+    if (candidate.capability === 'xiaohongshu.note.public_detail.v1') {
+      if (executionTarget !== 'existing_public_search_tab' || Object.keys(input).length !== 1 ||
+        !Number.isSafeInteger(input.resultRank) || Number(input.resultRank) < 1 || Number(input.resultRank) > 20) {
+        throw new Error('user_browser_collector_service_request_invalid');
+      }
+      return {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        browserBindingId: candidate.browserBindingId,
+        platform: 'xiaohongshu',
+        capability: 'xiaohongshu.note.public_detail.v1',
+        executionTarget: 'existing_public_search_tab',
+        input: { resultRank: Number(input.resultRank) }
+      };
+    }
     if (candidate.capability === 'xiaohongshu.account.public_notes.v1') {
       if (executionTarget !== 'existing_public_profile_tab' || Object.keys(input).length !== 1 ||
         (input.maximumScrolls !== 1 && input.maximumScrolls !== 2 && input.maximumScrolls !== 3)) {
