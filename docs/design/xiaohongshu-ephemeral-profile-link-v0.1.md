@@ -22,7 +22,7 @@
 → 选择唯一已有的小红书公开 tab
 → 在同一 tab 只导航一次到临时主页链接
 → 核对仍是公开 profile document、无新 tab、无登录/验证/限流
-→ 在新 profile document 上注入受限 Network observer（首屏已有 DOM 可作为 fallback）
+→ 导航前注册一次性 `document_start` Network observer，导航后在新 profile document 上复用首批投影（首屏已有 DOM 可作为 fallback）
 → 先读 Network note-card projection
 → 合并已可见 DOM note-card fallback
 → 只做有界可信滚动，直到达到 20 次滚动、200 条笔记、或连续两次滚动没有新增条目
