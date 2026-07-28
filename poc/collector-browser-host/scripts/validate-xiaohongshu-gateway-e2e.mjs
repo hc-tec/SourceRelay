@@ -13,6 +13,7 @@ const extensionSourceDirectory = resolve(pocRoot, 'collector-extension');
 const gatewayDirectory = resolve(pocRoot, 'collector-gateway');
 const profileId = 'xiaohongshu_validation';
 const exploreUrl = 'https://www.xiaohongshu.com/explore';
+const validationLeaseDurationMs = 300_000;
 const validateCommentRecon = process.argv.includes('--comment-recon');
 const validateReplyRecon = process.argv.includes('--reply-recon');
 const validatePublicReplies = process.argv.includes('--replies');
@@ -49,19 +50,41 @@ try {
   } else {
 
   const runId = randomUUID();
-  acquired = await client.command({
-    type: 'acquire_page',
-    request: {
-      profileId,
-      taskId: 'xiaohongshu-gateway-e2e',
-      runId,
-      platform: 'xiaohongshu',
-      pageRole: 'public_search',
-      targetUrl: exploreUrl,
-      maximumManagedPages: 1,
-      leaseDurationMs: 120_000
-    }
-  });
+  const retainedPublicPage = profile.pages?.filter((page) =>
+    page.state === 'retained_for_review' && page.platform === 'xiaohongshu' &&
+    (page.pageRole === 'public_search' || page.pageRole === 'public_profile')
+  ) ?? [];
+  if (retainedPublicPage.length === 1) {
+    // A previous real run intentionally leaves its final page visible for
+    // review. Adopt that exact page instead of asking the pool for a second
+    // page (which would correctly fail at maximumManagedPages=1). Adoption is
+    // local lifecycle bookkeeping; the single baseline Explore navigation
+    // below remains the only validation navigation.
+    acquired = await client.command({
+      type: 'adopt_xiaohongshu_validation_public_page',
+      request: {
+        schemaVersion: 1,
+        profileId,
+        taskId: 'xiaohongshu-gateway-e2e',
+        runId,
+        leaseDurationMs: validationLeaseDurationMs
+      }
+    });
+  } else {
+    acquired = await client.command({
+      type: 'acquire_page',
+      request: {
+        profileId,
+        taskId: 'xiaohongshu-gateway-e2e',
+        runId,
+        platform: 'xiaohongshu',
+        pageRole: 'public_search',
+        targetUrl: exploreUrl,
+        maximumManagedPages: 1,
+        leaseDurationMs: validationLeaseDurationMs
+      }
+    });
+  }
   record('page_acquired', { pageAlias: acquired.page.pageAlias });
   await client.command({
     type: 'navigate_page',
@@ -69,7 +92,7 @@ try {
       profileId,
       pageAlias: acquired.page.pageAlias,
       pageLeaseId: acquired.lease.pageLeaseId,
-      actionId: 'xiaohongshu-gateway-e2e-explore-baseline-once',
+      actionId: `xiaohongshu-gateway-e2e-explore-baseline-${runId}`,
       url: exploreUrl,
       waitUntil: 'domcontentloaded',
       timeoutMs: 25_000

@@ -111,3 +111,25 @@ automaticPlatformRetries: 0
 - 扩展页：0；
 - 未创建新 tab；
 - 用户日常浏览器：未触碰。
+
+## 后续构建连续回归：操作完成、收尾 lease 过期
+
+在构建指纹 `188f2cc3e5ac37194641729fab24971fcc861c68624ae36ba483f3b819fca459` 的连续回归中，搜索、详情、评论和回复四个 operation 均已经分别返回 `completed` 并成功读取 artifact：
+
+```yaml
+validationBaselineNavigations: 1
+productPlatformNavigations: 0
+automaticPlatformRetries: 0
+searchItemCount: 17
+detailPublicTextLength: 616
+commentCount: 6
+commentCaptureMode: hybrid
+replyCount: 1
+replyCaptureMode: network_projection
+replyActionTriggeredResponseCount: 0
+replyOperationId: 1b36fe09-d8bf-4641-8897-3e6cf3239055
+```
+
+该回归的整体脚本终态没有记为 `proved`：原验证脚本使用的 `120s` 本地 PageLease 在四段 operation 完成后的收尾阶段过期，Browser Host 按安全策略将页面转为 `quarantined / lease_expired`，脚本随后得到 `xiaohongshu_gateway_e2e_page_context_changed`。这不是平台动作未知，也没有重放任何语义动作；隔离页已用精确 record version 显式关闭。
+
+验证脚本随后修复了三点本地生命周期问题：收养唯一 `retained_for_review` 小红书页、为 baseline 导航使用 run-scoped action ID、把连续闭环 lease 提高到有界的 `300s`。这次 partial 回归不改变前一节已完成四项能力的 direct-ready 结论，也不作为主页笔记能力的 live canary 证据。
