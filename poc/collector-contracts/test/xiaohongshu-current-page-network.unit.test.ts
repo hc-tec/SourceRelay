@@ -14,6 +14,7 @@ describe('Xiaohongshu current-page network policy contract', () => {
       platform: 'xiaohongshu',
       capability: XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY,
       executionTarget: 'user_selected_tab',
+      accountScopedSurfaces: 'forbidden',
       requiresExplicitCurrentPageSelection: true,
       requiresPrearmedSameDocumentObserver: true,
       responseBodies: 'not_read'

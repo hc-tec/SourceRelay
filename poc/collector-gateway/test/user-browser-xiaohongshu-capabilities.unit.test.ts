@@ -12,6 +12,7 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       platform: 'xiaohongshu',
       inputMode: 'explicit_current_page_selection_no_caller_url',
       executionTarget: 'user_selected_tab',
+      accountScopedSurfaces: 'forbidden',
       dispatchState: 'policy_ready_route_admission_required',
       captureMode: 'prearmed_same_document_network_metadata',
       responseBodies: 'not_read',
@@ -52,6 +53,12 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       { $ref: '#/components/schemas/BilibiliUserBrowserCapability' },
       { $ref: '#/components/schemas/XiaohongshuUserBrowserCapability' }
     ]));
+    const xiaohongshuCapabilitySchema = document.components.schemas.XiaohongshuUserBrowserCapability;
+    expect(xiaohongshuCapabilitySchema.required).toContain('accountScopedSurfaces');
+    expect(xiaohongshuCapabilitySchema.properties.accountScopedSurfaces).toEqual({
+      type: 'string',
+      const: 'forbidden'
+    });
     expect(document.components.schemas.UserBrowserCollectRequest.oneOf).not.toEqual(expect.arrayContaining([
       { $ref: '#/components/schemas/XiaohongshuCurrentPageNetworkCollectRequest' }
     ]));

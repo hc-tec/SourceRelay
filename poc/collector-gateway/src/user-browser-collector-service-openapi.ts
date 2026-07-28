@@ -167,7 +167,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           type: 'object', additionalProperties: false,
           required: [
             'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'executionTarget', 'dispatchState',
-            'captureMode', 'responseBodies', 'routeAdmission', 'budget', 'browserHostFallback'
+            'accountScopedSurfaces', 'captureMode', 'responseBodies', 'routeAdmission', 'budget', 'browserHostFallback'
           ],
           properties: {
             schemaVersion: { type: 'integer', const: 1 },
@@ -176,6 +176,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             title: { type: 'string' },
             inputMode: { type: 'string', const: 'explicit_current_page_selection_no_caller_url' },
             executionTarget: { type: 'string', const: 'user_selected_tab' },
+            accountScopedSurfaces: { type: 'string', const: 'forbidden' },
             dispatchState: { type: 'string', const: 'policy_ready_route_admission_required' },
             captureMode: { type: 'string', const: 'prearmed_same_document_network_metadata' },
             responseBodies: { type: 'string', const: 'not_read' },

@@ -18,6 +18,20 @@
 
 这里的“原始页面”可以是用户正常通过地址栏、书签或外部入口打开的页面；它不允许扩展、Gateway 或页面内脚本通过点击卡片、搜索、分页、弹层、history、刷新或新开 tab 抵达目标。
 
+## 已登录验证浏览器的账号边界
+
+后续可以在**独立、持久的小红书验证浏览器**中由用户人工登录一个仅能浏览公开内容的账号，以研究公开 Explore、公开搜索和用户自行打开的公开内容页。这个登录状态只改善公开页面的可见性；它不是账号数据的授权，也不会让验证浏览器接管用户日常浏览器。
+
+无论页面是否公开可见、账号是否已登录，当前 capability 的 `accountScopedSurfaces` 固定为 `forbidden`。下列当前账号相关 surface 永远不在能力范围内：
+
+- 收藏、喜欢或其他个人内容库；
+- 消息、私信、通知及其未读状态；
+- 个人中心、账号资料管理、登录与安全设置；
+- 创作中心、草稿、数据面板、订单或任何创作者后台；
+- 任何需要“当前登录账号”身份才能识别、管理或返回的数据。
+
+因此，未来即使验证账号只能访问公开浏览与搜索，也不会触发上述页面、读取其 DOM 或 Network 面、保存其数据，或尝试绕过该账号的封禁限制。
+
 ## 不可绕过的预算
 
 | 项目 | 上限 | 含义 |
@@ -63,6 +77,7 @@ dispatchState: policy_ready_route_admission_required
 captureMode: prearmed_same_document_network_metadata
 responseBodies: not_read
 routeAdmission: no_public_content_route_admitted
+accountScopedSurfaces: forbidden
 ```
 
 这是一条给上层应用的真实能力声明，不是可执行采集承诺。因此它目前不出现在 `/v2/collect` 的可调度请求集合中；调用方不能用它触发页面动作或网络正文读取。

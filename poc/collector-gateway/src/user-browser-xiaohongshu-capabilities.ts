@@ -17,6 +17,7 @@ export interface UserBrowserXiaohongshuCapabilityDescriptor {
   title: string;
   inputMode: 'explicit_current_page_selection_no_caller_url';
   executionTarget: 'user_selected_tab';
+  accountScopedSurfaces: 'forbidden';
   dispatchState: 'policy_ready_route_admission_required';
   captureMode: 'prearmed_same_document_network_metadata';
   responseBodies: 'not_read';
@@ -33,6 +34,7 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     title: '小红书当前已选页网络元数据',
     inputMode: 'explicit_current_page_selection_no_caller_url',
     executionTarget: XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY.executionTarget,
+    accountScopedSurfaces: XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY.accountScopedSurfaces,
     dispatchState: 'policy_ready_route_admission_required',
     captureMode: 'prearmed_same_document_network_metadata',
     responseBodies: XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY.responseBodies,

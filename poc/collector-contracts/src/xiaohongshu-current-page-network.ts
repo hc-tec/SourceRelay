@@ -10,6 +10,16 @@ export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION = 1 as const;
 export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY =
   'xiaohongshu.current_page.network_metadata' as const;
 
+/**
+ * Authentication in a dedicated validation browser can make public pages
+ * visible, but it must never turn the current account's own surfaces into a
+ * collection source.  This is a capability-wide prohibition rather than a
+ * best-effort URL block list, so a future route change cannot silently make
+ * favourites, messages, notifications, account management or creator tools
+ * eligible for collection.
+ */
+export const XIAOHONGSHU_CURRENT_PAGE_ACCOUNT_SCOPED_SURFACES = 'forbidden' as const;
+
 export interface XiaohongshuCurrentPageNetworkBudget {
   maximumPlatformNavigations: 0;
   maximumPageReloads: 0;
@@ -35,6 +45,7 @@ export interface XiaohongshuCurrentPageNetworkPolicy {
   platform: 'xiaohongshu';
   capability: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY;
   executionTarget: 'user_selected_tab';
+  accountScopedSurfaces: typeof XIAOHONGSHU_CURRENT_PAGE_ACCOUNT_SCOPED_SURFACES;
   requiresExplicitCurrentPageSelection: true;
   requiresPrearmedSameDocumentObserver: true;
   responseBodies: 'not_read';
@@ -95,6 +106,7 @@ export const XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY: XiaohongshuCurrentPageNetw
   platform: 'xiaohongshu',
   capability: XIAOHONGSHU_CURRENT_PAGE_NETWORK_CAPABILITY,
   executionTarget: 'user_selected_tab',
+  accountScopedSurfaces: XIAOHONGSHU_CURRENT_PAGE_ACCOUNT_SCOPED_SURFACES,
   requiresExplicitCurrentPageSelection: true,
   requiresPrearmedSameDocumentObserver: true,
   responseBodies: 'not_read',
