@@ -211,7 +211,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           required: [
             'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'executionTarget',
             'accountScopedSurfaces', 'dispatchState', 'managedValidationState', 'captureMode',
-            'responseBodies', 'routeAdmission', 'budget', 'depthBudget', 'commentsDepthBudget', 'commentsRepliesDepthBudget', 'browserHostFallback'
+            'responseBodies', 'routeAdmission', 'budget', 'depthBudget', 'commentsDepthBudget', 'commentsRepliesDepthBudget', 'commentsRepliesMultiDepthBudget', 'browserHostFallback'
           ],
           properties: {
             schemaVersion: { type: 'integer', const: 1 },
@@ -291,6 +291,23 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 maximumSemanticActions: { type: 'integer', const: 121 },
                 maximumNetworkResponseBodies: { type: 'integer', const: 328 },
                 maximumProjectedItems: { type: 'integer', const: 2440 },
+                maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
+              }
+            },
+            commentsRepliesMultiDepthBudget: {
+              type: 'object', additionalProperties: false,
+              required: [
+                'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+                'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
+                'maximumRawPayloadBytesStored'
+              ],
+              properties: {
+                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPageReloads: { type: 'integer', const: 0 },
+                maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
+                maximumSemanticActions: { type: 'integer', const: 161 },
+                maximumNetworkResponseBodies: { type: 'integer', const: 648 },
+                maximumProjectedItems: { type: 'integer', const: 4040 },
                 maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
               }
             },
@@ -433,7 +450,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             browserHostFallback: { type: 'string', const: 'forbidden' }
           }
         },
-        XiaohongshuReplyCapability:{type:'object',additionalProperties:false,required:['schemaVersion','capability','platform','title','inputMode','executionTarget','accountScopedSurfaces','dispatchState','managedValidationState','captureMode','responseBodies','routeAdmission','budget','browserHostFallback'],properties:{schemaVersion:{type:'integer',const:1},capability:{type:'string',const:'xiaohongshu.note.public_comment_replies.v1'},platform:{type:'string',const:'xiaohongshu'},title:{type:'string'},inputMode:{type:'string',const:'single_thread_budget_only_no_caller_identity'},executionTarget:{type:'string',const:'existing_public_note_overlay'},accountScopedSurfaces:{type:'string',const:'forbidden'},dispatchState:{type:'string',const:'direct_ready'},managedValidationState:{type:'string',const:'gateway_extension_real_e2e_passed'},captureMode:{type:'string',const:'network_archive_first_dom_hierarchy_fallback_trusted_click'},responseBodies:{type:'string',const:'temporarily_read_projected_not_stored'},routeAdmission:{type:'string',const:'preloaded_public_reply_shape_no_url_dependency'},budget:{type:'object',additionalProperties:false,required:['maximumPlatformNavigations','maximumPageReloads','maximumPageInitiatedNewDocuments','maximumSemanticActions','maximumNetworkResponseBodies','maximumProjectedItems','maximumRawPayloadBytesStored'],properties:{maximumPlatformNavigations:{type:'integer',const:0},maximumPageReloads:{type:'integer',const:0},maximumPageInitiatedNewDocuments:{type:'integer',const:0},maximumSemanticActions:{type:'integer',const:1},maximumNetworkResponseBodies:{type:'integer',const:8},maximumProjectedItems:{type:'integer',const:40},maximumRawPayloadBytesStored:{type:'integer',const:0}}},browserHostFallback:{type:'string',const:'forbidden'}}},
+        XiaohongshuReplyCapability:{type:'object',additionalProperties:false,required:['schemaVersion','capability','platform','title','inputMode','executionTarget','accountScopedSurfaces','dispatchState','managedValidationState','captureMode','responseBodies','routeAdmission','budget','multiThreadBudget','browserHostFallback'],properties:{schemaVersion:{type:'integer',const:1},capability:{type:'string',const:'xiaohongshu.note.public_comment_replies.v1'},platform:{type:'string',const:'xiaohongshu'},title:{type:'string'},inputMode:{type:'string',const:'bounded_thread_budget_only_no_caller_identity'},executionTarget:{type:'string',const:'existing_public_note_overlay'},accountScopedSurfaces:{type:'string',const:'forbidden'},dispatchState:{type:'string',const:'direct_ready'},managedValidationState:{type:'string',const:'gateway_extension_real_e2e_passed'},captureMode:{type:'string',const:'network_archive_first_dom_hierarchy_fallback_trusted_click'},responseBodies:{type:'string',const:'temporarily_read_projected_not_stored'},routeAdmission:{type:'string',const:'preloaded_public_reply_shape_no_url_dependency'},budget:{type:'object',additionalProperties:false,required:['maximumPlatformNavigations','maximumPageReloads','maximumPageInitiatedNewDocuments','maximumSemanticActions','maximumNetworkResponseBodies','maximumProjectedItems','maximumRawPayloadBytesStored'],properties:{maximumPlatformNavigations:{type:'integer',const:0},maximumPageReloads:{type:'integer',const:0},maximumPageInitiatedNewDocuments:{type:'integer',const:0},maximumSemanticActions:{type:'integer',const:1},maximumNetworkResponseBodies:{type:'integer',const:8},maximumProjectedItems:{type:'integer',const:40},maximumRawPayloadBytesStored:{type:'integer',const:0}}},multiThreadBudget:{type:'object',additionalProperties:false,required:['maximumPlatformNavigations','maximumPageReloads','maximumPageInitiatedNewDocuments','maximumSemanticActions','maximumNetworkResponseBodies','maximumProjectedItems','maximumRawPayloadBytesStored'],properties:{maximumPlatformNavigations:{type:'integer',const:0},maximumPageReloads:{type:'integer',const:0},maximumPageInitiatedNewDocuments:{type:'integer',const:0},maximumSemanticActions:{type:'integer',const:3},maximumNetworkResponseBodies:{type:'integer',const:24},maximumProjectedItems:{type:'integer',const:120},maximumRawPayloadBytesStored:{type:'integer',const:0}}},browserHostFallback:{type:'string',const:'forbidden'}}},
         UserBrowserCollectRequest: {
           oneOf: [
             { $ref: '#/components/schemas/UserBrowserVideoDetailCollectRequest' },
@@ -594,7 +611,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserXiaohongshuPublicNotesSearchCollectRequest: {
           type: 'object', additionalProperties: false,
-          description: 'Runs one fixed trusted in-page search in the unique existing public Explore tab. An optional maximumDetails (0–20) performs sequential same-document detail captures with a slow fixed delay and closes each overlay before the next rank. An optional comments.maximumScrolls (1–3) collects public comments while each requested detail overlay is open; comments.replies.maximumThreads=1 additionally expands at most one visible reply thread per detail, and is disabled unless comments is enabled. No URL, tab ID, selector, coordinate, script, debugger command, refresh, new tab, or Browser Host fallback can be supplied.',
+          description: 'Runs one fixed trusted in-page search in the unique existing public Explore tab. An optional maximumDetails (0–20) performs sequential same-document detail captures with a slow fixed delay and closes each overlay before the next rank. An optional comments.maximumScrolls (1–3) collects public comments while each requested detail overlay is open; comments.replies.maximumThreads (1–3) additionally expands up to the requested number of visible reply threads per detail, and is disabled unless comments is enabled. No URL, tab ID, selector, coordinate, script, debugger command, refresh, new tab, or Browser Host fallback can be supplied.',
           required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
@@ -616,7 +633,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                     replies: {
                       type: 'object', additionalProperties: false,
                       required: ['maximumThreads'],
-                      properties: { maximumThreads: { type: 'integer', const: 1 } }
+                      properties: { maximumThreads: { type: 'integer', enum: [1, 2, 3] } }
                     }
                   }
                 }
@@ -685,7 +702,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             input: { type: 'object', additionalProperties: false, required: ['maximumScrolls'],
               properties: { maximumScrolls: { type: 'integer', enum: [1, 2, 3] } } } }
         },
-        UserBrowserXiaohongshuReplyCollectRequest:{type:'object',additionalProperties:false,description:'Projects one public reply thread from the short-lived Network archive first; only when that projection is incomplete may it expand the first visible public reply thread once in the unique existing note overlay. No URL, note or comment identity, selector, coordinate, script, route or cursor can be supplied.',required:['schemaVersion','browserBindingId','platform','capability','executionTarget','input'],properties:{schemaVersion:{type:'integer',const:USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION},browserBindingId:{type:'string',format:'uuid'},platform:{type:'string',const:'xiaohongshu'},capability:{type:'string',const:'xiaohongshu.note.public_comment_replies.v1'},executionTarget:{type:'string',const:'existing_public_note_overlay'},input:{type:'object',additionalProperties:false,required:['maximumThreads'],properties:{maximumThreads:{type:'integer',const:1}}}}},
+        UserBrowserXiaohongshuReplyCollectRequest:{type:'object',additionalProperties:false,description:'Projects up to three public reply threads from the short-lived Network archive first; only when a requested thread is incomplete may it expand one visible public reply thread once in the unique existing note overlay. No URL, note or comment identity, selector, coordinate, script, route or cursor can be supplied.',required:['schemaVersion','browserBindingId','platform','capability','executionTarget','input'],properties:{schemaVersion:{type:'integer',const:USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION},browserBindingId:{type:'string',format:'uuid'},platform:{type:'string',const:'xiaohongshu'},capability:{type:'string',const:'xiaohongshu.note.public_comment_replies.v1'},executionTarget:{type:'string',const:'existing_public_note_overlay'},input:{type:'object',additionalProperties:false,required:['maximumThreads'],properties:{maximumThreads:{type:'integer',enum:[1,2,3]}}}}},
         QueuedOperationResponse: {
           type: 'object', additionalProperties: false,
           required: ['schemaVersion', 'result'],

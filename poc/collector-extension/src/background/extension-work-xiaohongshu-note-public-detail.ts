@@ -4,6 +4,7 @@ import {
   XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
   type XiaohongshuNotePublicDetailProjection,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
+  XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET,
   type XiaohongshuNotePublicCommentRepliesWorkItem,
   type XiaohongshuNotePublicCommentsWorkItem,
   type XiaohongshuNotePublicDetailTerminalReason,
@@ -43,7 +44,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
   options: {
     closeOverlayAfterCapture?: boolean;
     collectComments?: { maximumScrolls: 1 | 2 | 3 };
-    collectReplies?: { maximumThreads: 1 };
+    collectReplies?: { maximumThreads: 1 | 2 | 3 };
     /** Reuse a debugger lease already owned by the enclosing search action. */
     debuggee?: chrome.debugger.Debuggee;
   } = {}
@@ -124,7 +125,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     }
     if (options.collectReplies) {
       const repliesResult = await executeXiaohongshuNotePublicCommentRepliesExtensionWork(
-        createComposedRepliesWorkItem(item),
+        createComposedRepliesWorkItem(item, options.collectReplies.maximumThreads),
         {
           page: pageDocument,
           debuggee,
@@ -136,7 +137,12 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
       if (repliesResult.state !== 'completed' || !repliesResult.projection) {
         throw new Error(repliesResult.errorCode ?? 'xiaohongshu_comment_replies_postcondition_unmet');
       }
-      projection = { ...projection, replyThread: repliesResult.projection };
+      projection = {
+        ...projection,
+        ...(repliesResult.projections && repliesResult.projections.length > 1
+          ? { replyThreads: repliesResult.projections, replyThread: repliesResult.projection! }
+          : { replyThread: repliesResult.projection! })
+      };
     }
     if (options.closeOverlayAfterCapture) {
       await closeDetailOverlay(pageDocument, debuggee, continuity.timeOrigin);
@@ -202,7 +208,8 @@ function createComposedCommentsWorkItem(
 }
 
 function createComposedRepliesWorkItem(
-  detailItem: XiaohongshuNotePublicDetailWorkItem
+  detailItem: XiaohongshuNotePublicDetailWorkItem,
+  maximumThreads: 1 | 2 | 3
 ): XiaohongshuNotePublicCommentRepliesWorkItem {
   return {
     schemaVersion: 1,
@@ -215,8 +222,10 @@ function createComposedRepliesWorkItem(
     executionTarget: 'existing_public_note_overlay',
     issuedAt: new Date().toISOString(),
     expiresAt: detailItem.expiresAt,
-    input: { maximumThreads: 1 },
-    budget: XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
+    input: { maximumThreads },
+    budget: maximumThreads === 1
+      ? XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET
+      : XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET,
     gatewaySignature: 'a'.repeat(64)
   };
 }

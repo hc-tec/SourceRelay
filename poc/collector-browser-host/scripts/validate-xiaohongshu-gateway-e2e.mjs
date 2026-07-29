@@ -25,6 +25,9 @@ const suppliedProfileUrl = process.env.COLLECTOR_XIAOHONGSHU_PROFILE_URL?.trim()
 const requestedDepthDetails = parseBoundedDepthDetails(process.env.COLLECTOR_XIAOHONGSHU_MAX_DETAILS);
 const requestedCommentScrolls = parseBoundedCommentScrolls(process.env.COLLECTOR_XIAOHONGSHU_COMMENTS_SCROLLS);
 const includeReplyThreads = process.env.COLLECTOR_XIAOHONGSHU_INCLUDE_REPLIES === '1';
+const requestedReplyThreads = parseBoundedReplyThreads(
+  includeReplyThreads ? process.env.COLLECTOR_XIAOHONGSHU_REPLY_THREADS : undefined
+);
 if (requestedCommentScrolls > 0 && requestedDepthDetails < 1) {
   throw new Error('xiaohongshu_comments_require_maximum_details');
 }
@@ -171,7 +174,7 @@ try {
         maximumDetails: requestedDepthDetails,
         ...(requestedCommentScrolls > 0 ? { comments: {
           maximumScrolls: requestedCommentScrolls,
-          ...(includeReplyThreads ? { replies: { maximumThreads: 1 } } : {})
+          ...(includeReplyThreads ? { replies: { maximumThreads: requestedReplyThreads } } : {})
         } } : {})
       } : { query }
     })
@@ -180,7 +183,12 @@ try {
   if (!uuid(operationId)) throw new Error('xiaohongshu_gateway_e2e_operation_missing');
   record('operation_dispatched', { operationId });
 
-  const operation = await waitForOperation(gatewayOrigin, token, operationId, 90_000);
+  const operation = await waitForOperation(
+    gatewayOrigin,
+    token,
+    operationId,
+    requestedDepthDetails > 1 ? 240_000 : 90_000
+  );
   const expectedSearchTerminalReason = requestedDepthDetails > 0 ? 'search_depth_ready' : 'search_ready';
   if (operation.state !== 'completed' || operation.terminalReason !== expectedSearchTerminalReason ||
       !uuid(operation.artifact?.artifactId) || typeof operation.artifact?.retrievalPath !== 'string') {
@@ -226,7 +234,7 @@ try {
       : 0,
     replyThreadCount: Array.isArray(artifact.result?.projection?.details)
       ? artifact.result.projection.details.filter((detail) =>
-        Array.isArray(detail?.replyThread?.replies) && detail.replyThread.replies.length > 0).length
+        replyThreadsFromDetail(detail).length > 0).length
       : 0,
     queryDigest: artifact.queryDigest,
     rawPayloadStored: false,
@@ -687,9 +695,11 @@ function assertArtifact(artifact, operationId) {
     }
     if (includeReplyThreads) {
       const detailsWithReplies = artifact.result.projection.details.filter((detail) =>
-        detail && detail.replyThread && Array.isArray(detail.replyThread.replies) &&
-        detail.replyThread.replies.length > 0 &&
-        ['network_projection', 'dom_fallback', 'hybrid'].includes(detail.replyThread.captureMode)
+        detail && replyThreadsFromDetail(detail).length >= 1 &&
+        replyThreadsFromDetail(detail).length <= requestedReplyThreads &&
+        replyThreadsFromDetail(detail).every((thread) =>
+          Array.isArray(thread.replies) && thread.replies.length > 0 &&
+          ['network_projection', 'dom_fallback', 'hybrid'].includes(thread.captureMode))
       ).length;
       if (detailsWithReplies < requestedDepthDetails) {
         throw new Error('xiaohongshu_gateway_e2e_replies_depth_artifact_invalid');
@@ -740,7 +750,7 @@ function assertNoteCommentsArtifact(artifact, operationId) {
     .test(JSON.stringify(artifact))) throw new Error('xiaohongshu_note_comments_e2e_artifact_forbidden_material');
 }
 
-function assertNoteRepliesArtifact(artifact, operationId) {
+function assertNoteRepliesArtifact(artifact, operationId, expectedThreads = 1) {
   const actionCount = artifact?.result?.semanticAction?.attemptCount;
   const captureMode = artifact?.result?.projection?.captureMode;
   const actionTriggeredResponseCount = artifact?.result?.projection?.network?.actionTriggeredResponseCount;
@@ -748,12 +758,16 @@ function assertNoteRepliesArtifact(artifact, operationId) {
     artifact.summary?.capability !== 'xiaohongshu.note.public_comment_replies.v1' ||
     artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'comment_replies_ready' ||
     artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
-    !Number.isInteger(actionCount) || actionCount < 0 || actionCount > 1 ||
-    artifact.result.semanticAction.attempted !== (actionCount === 1) ||
+    !Number.isInteger(actionCount) || actionCount < 0 || actionCount > expectedThreads ||
+    artifact.result.semanticAction.attempted !== (actionCount > 0) ||
     (actionCount === 0 && captureMode !== 'network_projection') ||
-    artifact.result?.thread?.requestedCount !== 1 || artifact.result.thread.completedCount !== 1 ||
+    artifact.result?.thread?.requestedCount !== expectedThreads ||
+    artifact.result.thread.completedCount < 1 || artifact.result.thread.completedCount > expectedThreads ||
     artifact.result?.page?.publicSurface !== 'note_detail_overlay' ||
     !Array.isArray(artifact.result?.projection?.replies) || artifact.result.projection.replies.length < 1 ||
+    (expectedThreads > 1 && artifact.result.thread.completedCount > 1 &&
+      (!Array.isArray(artifact.result?.projections) ||
+        artifact.result.projections.length !== artifact.result.thread.completedCount)) ||
     !['network_projection', 'dom_fallback', 'hybrid'].includes(artifact.result.projection.captureMode) ||
     !Number.isInteger(actionTriggeredResponseCount) || actionTriggeredResponseCount < 0 ||
     actionTriggeredResponseCount > 8 || (actionCount === 0 && actionTriggeredResponseCount !== 0) ||
@@ -1005,6 +1019,20 @@ function parseBoundedCommentScrolls(value) {
     throw new Error('xiaohongshu_comments_scrolls_invalid');
   }
   return parsed;
+}
+
+function parseBoundedReplyThreads(value) {
+  if (value === undefined || value === '') return 1;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 3) {
+    throw new Error('xiaohongshu_reply_threads_invalid');
+  }
+  return parsed;
+}
+
+function replyThreadsFromDetail(detail) {
+  if (Array.isArray(detail?.replyThreads)) return detail.replyThreads;
+  return detail?.replyThread ? [detail.replyThread] : [];
 }
 
 function writeJson(value) {

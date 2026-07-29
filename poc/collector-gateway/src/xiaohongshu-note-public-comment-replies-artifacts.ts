@@ -9,7 +9,7 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA256 = /^[a-f0-9]{64}$/;
-const MAX_ARTIFACT_BYTES = 192 * 1024;
+const MAX_ARTIFACT_BYTES = 512 * 1024;
 
 export interface XiaohongshuReplyArtifactSummary {
   schemaVersion: 1;
@@ -32,7 +32,7 @@ export interface XiaohongshuReplyArtifactView {
     platformNavigations: 0;
     pageReloads: 0;
     pageInitiatedNewTabs: 0;
-    semanticActions: 0 | 1;
+    semanticActions: 0 | 1 | 2 | 3;
     rawPayloadStored: false;
     responseUrlsStored: false;
     debuggerDetached: boolean;
@@ -47,6 +47,7 @@ export interface XiaohongshuReplyArtifactView {
     thread: XiaohongshuNotePublicCommentRepliesWorkResult['thread'];
     page: XiaohongshuNotePublicCommentRepliesWorkResult['page'];
     projection: XiaohongshuNotePublicCommentRepliesWorkResult['projection'];
+    projections?: XiaohongshuNotePublicCommentRepliesWorkResult['projections'];
   };
 }
 
@@ -101,7 +102,9 @@ export class XiaohongshuReplyArtifactStore {
       state: input.result.state,
       capturedAt: input.result.completedAt,
       captureMode: input.result.projection?.captureMode ?? 'none',
-      replyCount: input.result.projection?.replies.length ?? 0,
+      replyCount: input.result.projections
+        ? input.result.projections.reduce((total, thread) => total + thread.replies.length, 0)
+        : input.result.projection?.replies.length ?? 0,
       sha256: digest(canonicalJson(draft))
     };
     const stored: XiaohongshuReplyArtifactView = { ...draft, summary };
@@ -171,7 +174,8 @@ function createArtifactDraft(result: XiaohongshuNotePublicCommentRepliesWorkResu
       semanticAction: structuredClone(result.semanticAction),
       thread: structuredClone(result.thread),
       page: structuredClone(result.page),
-      projection: structuredClone(result.projection)
+      projection: structuredClone(result.projection),
+      ...(result.projections ? { projections: structuredClone(result.projections) } : {})
     }
   };
 }
@@ -185,7 +189,7 @@ function isArtifactSummary(value: unknown): value is XiaohongshuReplyArtifactSum
     (value.state === 'completed' || value.state === 'stopped') &&
     typeof value.capturedAt === 'string' && Number.isFinite(Date.parse(value.capturedAt)) &&
     ['network_projection', 'dom_fallback', 'hybrid', 'none'].includes(String(value.captureMode)) &&
-    Number.isSafeInteger(value.replyCount) && Number(value.replyCount) >= 0 && Number(value.replyCount) <= 40 &&
+    Number.isSafeInteger(value.replyCount) && Number(value.replyCount) >= 0 && Number(value.replyCount) <= 120 &&
     typeof value.sha256 === 'string' && SHA256.test(value.sha256);
 }
 
@@ -194,7 +198,10 @@ function isStoredArtifact(value: unknown): value is XiaohongshuReplyArtifactView
     isArtifactSummary(value.summary) &&
     isRecord(value.result) &&
     !containsForbiddenPrivateFields(value) &&
-    (value.result.projection === null || isXiaohongshuPublicReplyThreadProjection(value.result.projection));
+    (value.result.projection === null || isXiaohongshuPublicReplyThreadProjection(value.result.projection)) &&
+    (value.result.projections === undefined || (Array.isArray(value.result.projections) &&
+      value.result.projections.length >= 1 && value.result.projections.length <= 3 &&
+      value.result.projections.every(isXiaohongshuPublicReplyThreadProjection)));
 }
 
 function containsForbiddenPrivateFields(value: unknown): boolean {

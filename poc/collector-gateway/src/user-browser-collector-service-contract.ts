@@ -116,7 +116,7 @@ export interface UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest 
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.search.public_notes.v1';
   executionTarget: 'existing_public_explore_tab';
-  input: { query: string; maximumDetails?: number; comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 } } };
+  input: { query: string; maximumDetails?: number; comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } } };
 }
 
 export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest {
@@ -143,7 +143,7 @@ export interface UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest
 }
 export interface UserBrowserXiaohongshuReplyCollectorServiceRequest {schemaVersion:typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
   browserBindingId:string;platform:'xiaohongshu';capability:'xiaohongshu.note.public_comment_replies.v1';
-  executionTarget:'existing_public_note_overlay';input:{maximumThreads:1};}
+  executionTarget:'existing_public_note_overlay';input:{maximumThreads:1|2|3};}
 
 export type UserBrowserCollectorServiceRequest =
   | UserBrowserVideoDetailCollectorServiceRequest
@@ -191,11 +191,12 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
   const input = candidate.input as Record<string, unknown>;
   if (candidate.platform === 'xiaohongshu') {
     if(candidate.capability==='xiaohongshu.note.public_comment_replies.v1'){
-      if(executionTarget!=='existing_public_note_overlay'||Object.keys(input).length!==1||input.maximumThreads!==1)
+      if(executionTarget!=='existing_public_note_overlay'||Object.keys(input).length!==1||
+        (input.maximumThreads!==1&&input.maximumThreads!==2&&input.maximumThreads!==3))
         throw new Error('user_browser_collector_service_request_invalid');
       return{schemaVersion:USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,browserBindingId:candidate.browserBindingId,
         platform:'xiaohongshu',capability:'xiaohongshu.note.public_comment_replies.v1',
-        executionTarget:'existing_public_note_overlay',input:{maximumThreads:1}};}
+        executionTarget:'existing_public_note_overlay',input:{maximumThreads:input.maximumThreads}};}
     if (candidate.capability === 'xiaohongshu.note.public_comments.v1') {
       if (executionTarget !== 'existing_public_note_overlay' || Object.keys(input).length !== 1 ||
         (input.maximumScrolls !== 1 && input.maximumScrolls !== 2 && input.maximumScrolls !== 3)) {
@@ -436,7 +437,7 @@ function validXiaohongshuSearchInput(
 ): input is Record<string, unknown> & {
   query: string;
   maximumDetails?: number;
-  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 } };
+  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } };
 } {
   const keys = Object.keys(input);
   if (!keys.every((key) => key === 'query' || key === 'maximumDetails' || key === 'comments')) return false;
@@ -453,5 +454,6 @@ function validXiaohongshuSearchInput(
   if (!Object.hasOwn(comments, 'replies')) return commentKeys.length === 1;
   if (commentKeys.length !== 2 || !comments.replies || typeof comments.replies !== 'object' || Array.isArray(comments.replies)) return false;
   const replies = comments.replies as Record<string, unknown>;
-  return exactKeys(replies, ['maximumThreads']) && replies.maximumThreads === 1;
+  return exactKeys(replies, ['maximumThreads']) &&
+    (replies.maximumThreads === 1 || replies.maximumThreads === 2 || replies.maximumThreads === 3);
 }

@@ -3,6 +3,7 @@ import {
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET,
   extensionWorkSigningPayload,
   extensionWorkTargetUrl,
   isExtensionWorkItem,
@@ -161,7 +162,7 @@ describe('signed Xiaohongshu public-notes work contract', () => {
     expect(isExtensionWorkItem({ ...commentsItem, input: { query: '咖啡', maximumDetails: 1, comments: { maximumScrolls: 4 } } })).toBe(false);
   });
 
-  test('admits one optional reply thread only inside the comments plan', () => {
+  test('admits a bounded optional reply-thread set only inside the comments plan', () => {
     const repliesItem = {
       ...item,
       input: {
@@ -173,7 +174,12 @@ describe('signed Xiaohongshu public-notes work contract', () => {
     expect(isExtensionWorkItem(repliesItem)).toBe(true);
     expect(isExtensionWorkItem({
       ...repliesItem,
-      input: { query: '咖啡', maximumDetails: 1, comments: { maximumScrolls: 2, replies: { maximumThreads: 2 } } }
+      input: { query: '咖啡', maximumDetails: 1, comments: { maximumScrolls: 2, replies: { maximumThreads: 3 } } },
+      budget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET
+    })).toBe(true);
+    expect(isExtensionWorkItem({
+      ...repliesItem,
+      input: { query: '咖啡', maximumDetails: 1, comments: { maximumScrolls: 2, replies: { maximumThreads: 4 } } }
     })).toBe(false);
     expect(isExtensionWorkItem({
       ...repliesItem,

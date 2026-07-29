@@ -15,7 +15,7 @@ describe('signed Xiaohongshu public reply-thread contract',()=>{
   test('allows one fixed thread and no browser-control carriers',()=>{
     expect(isExtensionWorkItem(item)).toBe(true);
     expect(()=>extensionWorkTargetUrl(item)).toThrow('extension_work_target_navigation_forbidden');
-    for(const input of [{maximumThreads:0},{maximumThreads:2},{maximumThreads:1,commentId:'x'},
+    for(const input of [{maximumThreads:0},{maximumThreads:4},{maximumThreads:1,commentId:'x'},
       {maximumThreads:1,url:'https://x'},{maximumThreads:1,selector:'.reply'},{maximumThreads:1,script:'click()'}])
       expect(isExtensionWorkItem({...item,input})).toBe(false);
   });
@@ -57,5 +57,34 @@ describe('signed Xiaohongshu public reply-thread contract',()=>{
         replies:[comment(1,'network')],rawPayloadStored:false,responseUrlsStored:false},
       rawPayloadStored:false,responseUrlsStored:false,debuggerDetached:true};
     expect(isExtensionWorkResultForItem(networkOnly,item)).toBe(true);
+  });
+  test('admits a bounded multi-thread request and requires one projection per completed thread',()=>{
+    const multiItem = { ...item, input: { maximumThreads: 2 as const }, budget: {
+      maximumPlatformNavigations: 0, maximumPageReloads: 0, maximumPageInitiatedNewDocuments: 0,
+      maximumSemanticActions: 3, maximumNetworkResponseBodies: 24, maximumProjectedItems: 120,
+      maximumRawPayloadBytesStored: 0
+    } as const };
+    expect(isExtensionWorkItem(multiItem)).toBe(true);
+    const first = {
+      schemaVersion: 1, captureMode: 'network_projection' as const,
+      network: { matchedPayloadCount: 1, bodyBytesRead: 512, cursorObserved: true, actionTriggeredResponseCount: 0 },
+      expandedLabelText: 'network_archive', parentComment: comment(1, 'network'), replies: [comment(1, 'network')],
+      rawPayloadStored: false as const, responseUrlsStored: false as const
+    };
+    const second = { ...first, expandedLabelText: '展开 2 条回复' };
+    const result = {
+      schemaVersion: 1, protocolVersion: 1, workId: item.workId, operationId: item.operationId,
+      browserBindingId: item.browserBindingId, platform: 'xiaohongshu' as const,
+      capability: item.capability, executionTarget: item.executionTarget, state: 'completed' as const,
+      errorCode: null, terminalReason: 'comment_replies_ready' as const, completedAt: '2026-07-28T12:00:20.000Z',
+      navigation: { attempted: false as const, attemptCount: 0 as const },
+      semanticAction: { attempted: true, attemptCount: 2 as const },
+      thread: { requestedCount: 2 as const, completedCount: 2 as const },
+      page: { publicSurface: 'note_detail_overlay' as const, sameDocument: true as const },
+      projection: first, projections: [first, second], rawPayloadStored: false as const,
+      responseUrlsStored: false as const, debuggerDetached: true
+    };
+    expect(isExtensionWorkResultForItem({ ...result, workId: multiItem.workId, operationId: multiItem.operationId }, multiItem)).toBe(true);
+    expect(isExtensionWorkResultForItem({ ...result, projections: [first] }, multiItem)).toBe(false);
   });
 });

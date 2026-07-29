@@ -95,7 +95,7 @@ export function parseTestbenchSubmission(value) {
           (Object.hasOwn(value.input.comments, 'replies') &&
             (!value.input.comments.replies || typeof value.input.comments.replies !== 'object' ||
               Array.isArray(value.input.comments.replies) || Object.keys(value.input.comments.replies).length !== 1 ||
-              value.input.comments.replies.maximumThreads !== 1)) ||
+              ![1, 2, 3].includes(value.input.comments.replies.maximumThreads))) ||
           !Object.hasOwn(value.input, 'maximumDetails') || value.input.maximumDetails < 1))) {
       throw new TestbenchInputError('testbench_request_invalid');
     }
@@ -111,7 +111,9 @@ export function parseTestbenchSubmission(value) {
         ...(Object.hasOwn(value.input, 'maximumDetails') ? { maximumDetails: value.input.maximumDetails } : {}),
         ...(Object.hasOwn(value.input, 'comments') ? { comments: {
           maximumScrolls: value.input.comments.maximumScrolls,
-          ...(Object.hasOwn(value.input.comments, 'replies') ? { replies: { maximumThreads: 1 } } : {})
+          ...(Object.hasOwn(value.input.comments, 'replies') ? { replies: {
+            maximumThreads: value.input.comments.replies.maximumThreads
+          } } : {})
         } } : {})
       }
     };
@@ -173,9 +175,9 @@ export function parseTestbenchSubmission(value) {
       input: { maximumScrolls: value.input.maximumScrolls } };
   }
   if(value.kind==='xiaohongshu_note_public_comment_replies'){
-    if(!hasExactKeys(value.input,['maximumThreads'])||value.input.maximumThreads!==1)throw new TestbenchInputError('testbench_request_invalid');
+    if(!hasExactKeys(value.input,['maximumThreads'])||![1,2,3].includes(value.input.maximumThreads))throw new TestbenchInputError('testbench_request_invalid');
     return{schemaVersion:DIRECT_SCHEMA_VERSION,browserBindingId:value.browserBindingId,platform:'xiaohongshu',
-      capability:'xiaohongshu.note.public_comment_replies.v1',executionTarget:'existing_public_note_overlay',input:{maximumThreads:1}};}
+      capability:'xiaohongshu.note.public_comment_replies.v1',executionTarget:'existing_public_note_overlay',input:{maximumThreads:value.input.maximumThreads}};}
 
   if (value.kind === 'account_profile' || value.kind === 'account_inventory') {
     const inventoryInput = value.kind === 'account_inventory';

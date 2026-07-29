@@ -2,6 +2,7 @@ import {
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY,
@@ -27,12 +28,13 @@ export interface XiaohongshuPublicNotesSearchWorkItem {
   input: {
     query: string;
     maximumDetails?: number;
-    comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 } };
+    comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } };
   };
   budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET |
     typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET |
     typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET;
+    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET |
+    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET;
   gatewaySignature: string;
 }
 
@@ -157,7 +159,8 @@ function validInput(value: unknown): value is XiaohongshuPublicNotesSearchWorkIt
     Number(value.maximumDetails ?? 0) <= 0) return false;
   if (!Object.hasOwn(value.comments, 'replies')) return true;
   const replies = value.comments.replies;
-  return record(replies) && exactKeys(replies, ['maximumThreads']) && replies.maximumThreads === 1;
+  return record(replies) && exactKeys(replies, ['maximumThreads']) &&
+    (replies.maximumThreads === 1 || replies.maximumThreads === 2 || replies.maximumThreads === 3);
 }
 
 function isBudget(
@@ -182,6 +185,10 @@ function isBudget(
     return maximumSemanticActions === 1 && maximumNetworkResponseBodies === 8 && maximumProjectedItems === 40;
   }
   if (Object.hasOwn(input, 'comments') && Object.hasOwn(input.comments!, 'replies')) {
+    const maximumThreads = Number(input.comments!.replies!.maximumThreads);
+    if (maximumThreads > 1) {
+      return maximumSemanticActions === 161 && maximumNetworkResponseBodies === 648 && maximumProjectedItems === 4040;
+    }
     return maximumSemanticActions === 121 && maximumNetworkResponseBodies === 328 && maximumProjectedItems === 2440;
   }
   if (Object.hasOwn(input, 'comments')) {

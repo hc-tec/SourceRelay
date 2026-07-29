@@ -10,11 +10,13 @@ import {
   XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_CAPABILITY,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
+  XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_CAPABILITY,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY
 } from '@intelligence/collector-contracts';
 
@@ -57,6 +59,7 @@ export interface UserBrowserXiaohongshuPublicNotesSearchCapabilityDescriptor {
   depthBudget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET;
   commentsDepthBudget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET;
   commentsRepliesDepthBudget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET;
+  commentsRepliesMultiDepthBudget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET;
   browserHostFallback: 'forbidden';
 }
 
@@ -104,10 +107,11 @@ export interface UserBrowserXiaohongshuNotePublicCommentsCapabilityDescriptor {
   browserHostFallback: 'forbidden';
 }
 export interface UserBrowserXiaohongshuReplyCapabilityDescriptor{schemaVersion:1;capability:typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_CAPABILITY;
-  platform:'xiaohongshu';title:string;inputMode:'single_thread_budget_only_no_caller_identity';executionTarget:'existing_public_note_overlay';
+  platform:'xiaohongshu';title:string;inputMode:'bounded_thread_budget_only_no_caller_identity';executionTarget:'existing_public_note_overlay';
   accountScopedSurfaces:'forbidden';dispatchState:'direct_ready';managedValidationState:'gateway_extension_real_e2e_passed';
   captureMode:'network_archive_first_dom_hierarchy_fallback_trusted_click';responseBodies:'temporarily_read_projected_not_stored';
-  routeAdmission:'preloaded_public_reply_shape_no_url_dependency';budget:typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET;browserHostFallback:'forbidden'}
+  routeAdmission:'preloaded_public_reply_shape_no_url_dependency';budget:typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET;
+  multiThreadBudget:typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET;browserHostFallback:'forbidden'}
 
 export type UserBrowserXiaohongshuCapabilityDescriptor =
   | UserBrowserXiaohongshuNetworkMetadataCapabilityDescriptor
@@ -150,6 +154,7 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     depthBudget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
     commentsDepthBudget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
     commentsRepliesDepthBudget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
+    commentsRepliesMultiDepthBudget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET,
     browserHostFallback: 'forbidden'
   },
   {
@@ -195,10 +200,11 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     browserHostFallback: 'forbidden'
   },
   {schemaVersion:1,capability:XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_CAPABILITY,platform:'xiaohongshu',
-    title:'小红书公开评论回复',inputMode:'single_thread_budget_only_no_caller_identity',executionTarget:'existing_public_note_overlay',
+    title:'小红书公开评论回复',inputMode:'bounded_thread_budget_only_no_caller_identity',executionTarget:'existing_public_note_overlay',
     accountScopedSurfaces:'forbidden',dispatchState:'direct_ready',managedValidationState:'gateway_extension_real_e2e_passed',
     captureMode:'network_archive_first_dom_hierarchy_fallback_trusted_click',responseBodies:'temporarily_read_projected_not_stored',
     routeAdmission:'preloaded_public_reply_shape_no_url_dependency',budget:XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
+    multiThreadBudget:XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET,
     browserHostFallback:'forbidden'
   }
 ] as const satisfies readonly UserBrowserXiaohongshuCapabilityDescriptor[];
@@ -210,6 +216,9 @@ export function listUserBrowserXiaohongshuCapabilities(): UserBrowserXiaohongshu
       budget: { ...value.budget },
       ...('ephemeralProfileLinkBudget' in value
         ? { ephemeralProfileLinkBudget: { ...value.ephemeralProfileLinkBudget } }
+        : {}),
+      ...('multiThreadBudget' in value
+        ? { multiThreadBudget: { ...value.multiThreadBudget } }
         : {})
     }) as UserBrowserXiaohongshuCapabilityDescriptor
   );

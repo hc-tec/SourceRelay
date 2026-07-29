@@ -9,6 +9,16 @@ export const XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET = Object.freeze({
   maximumProjectedItems: 40 as const,
   maximumRawPayloadBytesStored: 0 as const
 });
+export const XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MAX_THREADS = 3 as const;
+export const XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET = Object.freeze({
+  maximumPlatformNavigations: 0 as const,
+  maximumPageReloads: 0 as const,
+  maximumPageInitiatedNewDocuments: 0 as const,
+  maximumSemanticActions: 3 as const,
+  maximumNetworkResponseBodies: 24 as const,
+  maximumProjectedItems: 120 as const,
+  maximumRawPayloadBytesStored: 0 as const
+});
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SIGNATURE = /^[A-Za-z0-9_-]{40,}$/;
@@ -39,7 +49,9 @@ export interface XiaohongshuNotePublicCommentRepliesWorkItem {
   schemaVersion: 1; protocolVersion: 1; workId: string; operationId: string; browserBindingId: string;
   platform: 'xiaohongshu'; capability: typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_CAPABILITY;
   executionTarget: 'existing_public_note_overlay'; issuedAt: string; expiresAt: string;
-  input: { maximumThreads: 1 }; budget: typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET;
+  input: { maximumThreads: 1 | 2 | 3 };
+  budget: typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET |
+    typeof XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET;
   gatewaySignature: string;
 }
 export type UnsignedXiaohongshuNotePublicCommentRepliesWorkItem =
@@ -55,10 +67,11 @@ export interface XiaohongshuNotePublicCommentRepliesWorkResult {
   executionTarget: 'existing_public_note_overlay'; state: 'completed' | 'stopped'; errorCode: string | null;
   terminalReason: XiaohongshuNotePublicCommentRepliesTerminalReason; completedAt: string;
   navigation: { attempted: false; attemptCount: 0 };
-  semanticAction: { attempted: boolean; attemptCount: 0 | 1 };
-  thread: { requestedCount: 1; completedCount: 0 | 1 };
+  semanticAction: { attempted: boolean; attemptCount: 0 | 1 | 2 | 3 };
+  thread: { requestedCount: 1 | 2 | 3; completedCount: 0 | 1 | 2 | 3 };
   page: { publicSurface: 'note_detail_overlay'; sameDocument: true } | null;
   projection: XiaohongshuPublicReplyThreadProjection | null;
+  projections?: XiaohongshuPublicReplyThreadProjection[];
   rawPayloadStored: false; responseUrlsStored: false; debuggerDetached: boolean;
 }
 
@@ -71,8 +84,10 @@ value is XiaohongshuNotePublicCommentRepliesWorkItem {
     value.capability === XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_CAPABILITY &&
     value.executionTarget === 'existing_public_note_overlay' && timestamp(value.issuedAt) && timestamp(value.expiresAt) &&
     Date.parse(value.expiresAt) > Date.parse(value.issuedAt) && record(value.input) &&
-    exact(value.input, ['maximumThreads']) && value.input.maximumThreads === 1 && record(value.budget) &&
-    JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET) &&
+    exact(value.input, ['maximumThreads']) && threadCount(value.input.maximumThreads) && record(value.budget) &&
+    (value.input.maximumThreads === 1
+      ? JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET)
+      : JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET)) &&
     typeof value.gatewaySignature === 'string' && SIGNATURE.test(value.gatewaySignature);
 }
 export function isXiaohongshuPublicReplyThreadProjection(value: unknown):
@@ -89,9 +104,12 @@ value is XiaohongshuPublicReplyThreadProjection {
 }
 export function isXiaohongshuNotePublicCommentRepliesWorkResult(value: unknown):
 value is XiaohongshuNotePublicCommentRepliesWorkResult {
-  if (!record(value) || !exact(value, ['schemaVersion','protocolVersion','workId','operationId','browserBindingId',
+  if (!record(value) || !(exact(value, ['schemaVersion','protocolVersion','workId','operationId','browserBindingId',
     'platform','capability','executionTarget','state','errorCode','terminalReason','completedAt','navigation',
-    'semanticAction','thread','page','projection','rawPayloadStored','responseUrlsStored','debuggerDetached'])) return false;
+    'semanticAction','thread','page','projection','rawPayloadStored','responseUrlsStored','debuggerDetached']) ||
+    exact(value, ['schemaVersion','protocolVersion','workId','operationId','browserBindingId',
+      'platform','capability','executionTarget','state','errorCode','terminalReason','completedAt','navigation',
+      'semanticAction','thread','page','projection','projections','rawPayloadStored','responseUrlsStored','debuggerDetached']))) return false;
   if (value.schemaVersion !== 1 || value.protocolVersion !== 1 || !uuid(value.workId) || !uuid(value.operationId) ||
     !uuid(value.browserBindingId) || value.platform !== 'xiaohongshu' ||
     value.capability !== XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_CAPABILITY ||
@@ -100,13 +118,17 @@ value is XiaohongshuNotePublicCommentRepliesWorkResult {
     !terminal(value.terminalReason) || !timestamp(value.completedAt) || !zeroNavigation(value.navigation) ||
     !action(value.semanticAction) || !thread(value.thread) || !page(value.page) ||
     !(value.projection === null || isXiaohongshuPublicReplyThreadProjection(value.projection)) ||
+    !(value.projections === undefined || (Array.isArray(value.projections) && value.projections.length >= 1 &&
+      value.projections.length <= 3 && value.projections.every(isXiaohongshuPublicReplyThreadProjection))) ||
     value.rawPayloadStored !== false || value.responseUrlsStored !== false || typeof value.debuggerDetached !== 'boolean') return false;
   const candidate = value as unknown as XiaohongshuNotePublicCommentRepliesWorkResult;
-  if (candidate.semanticAction.attempted !== (candidate.semanticAction.attemptCount === 1)) return false;
-  if (candidate.thread.completedCount === 1 && (candidate.page === null || candidate.projection === null)) return false;
+  if (candidate.semanticAction.attempted !== (candidate.semanticAction.attemptCount > 0)) return false;
+  if (candidate.thread.completedCount > 0 && (candidate.page === null || candidate.projection === null)) return false;
+  if (candidate.projections !== undefined && candidate.projections.length !== candidate.thread.completedCount) return false;
+  if (candidate.thread.completedCount > 1 && candidate.projections === undefined) return false;
   return candidate.state === 'completed'
     ? candidate.errorCode === null && candidate.terminalReason === 'comment_replies_ready' &&
-      candidate.thread.completedCount === 1 &&
+      candidate.thread.completedCount >= 1 && candidate.thread.completedCount <= candidate.thread.requestedCount &&
       candidate.page !== null && candidate.projection !== null && candidate.debuggerDetached
     : candidate.errorCode !== null;
 }
@@ -114,6 +136,7 @@ export function isXiaohongshuNotePublicCommentRepliesWorkResultForItem(value: un
   item: XiaohongshuNotePublicCommentRepliesWorkItem): value is XiaohongshuNotePublicCommentRepliesWorkResult {
   return isXiaohongshuNotePublicCommentRepliesWorkResult(value) && value.workId === item.workId &&
     value.operationId === item.operationId && value.browserBindingId === item.browserBindingId &&
+    value.thread.requestedCount === item.input.maximumThreads &&
     Date.parse(value.completedAt) >= Date.parse(item.issuedAt);
 }
 function reply(value: unknown): boolean { return record(value) && exact(value,
@@ -129,9 +152,10 @@ function terminal(value: unknown): value is XiaohongshuNotePublicCommentRepliesT
 function zeroNavigation(value: unknown): boolean { return record(value) && exact(value,['attempted','attemptCount']) &&
   value.attempted === false && value.attemptCount === 0; }
 function action(value: unknown): boolean { return record(value) && exact(value,['attempted','attemptCount']) &&
-  typeof value.attempted === 'boolean' && (value.attemptCount === 0 || value.attemptCount === 1); }
+  typeof value.attempted === 'boolean' && completedCount(value.attemptCount); }
 function thread(value: unknown): boolean { return record(value) && exact(value,['requestedCount','completedCount']) &&
-  value.requestedCount === 1 && (value.completedCount === 0 || value.completedCount === 1); }
+  threadCount(value.requestedCount) && completedCount(value.completedCount) &&
+  Number(value.completedCount) <= Number(value.requestedCount); }
 function page(value: unknown): boolean { return value === null || (record(value) && exact(value,['publicSurface','sameDocument']) &&
   value.publicSurface === 'note_detail_overlay' && value.sameDocument === true); }
 function record(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
@@ -139,4 +163,6 @@ function exact(value: Record<string, unknown>, keys: readonly string[]): boolean
 function uuid(value: unknown): value is string { return typeof value === 'string' && UUID.test(value); }
 function timestamp(value: unknown): value is string { return typeof value === 'string' && Number.isFinite(Date.parse(value)); }
 function integer(value: unknown,min:number,max:number): boolean { return Number.isSafeInteger(value)&&Number(value)>=min&&Number(value)<=max; }
+function threadCount(value: unknown): value is 1 | 2 | 3 { return value === 1 || value === 2 || value === 3; }
+function completedCount(value: unknown): value is 0 | 1 | 2 | 3 { return value === 0 || value === 1 || value === 2 || value === 3; }
 function text(value: unknown,min:number,max:number): boolean { return typeof value==='string'&&value.length>=min&&value.length<=max&&!/[\u0000-\u001f\u007f]/.test(value); }

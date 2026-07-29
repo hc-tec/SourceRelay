@@ -70,6 +70,16 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
     const shouldScroll = network.comments.length === 0 || network.hasMore === true;
     if (shouldScroll) {
       if (!dom.scrollTarget && network.comments.length === 0) {
+        const waitDeadline = Date.now() + 8_000;
+        while (Date.now() < waitDeadline && !dom.scrollTarget && network.comments.length === 0) {
+          await delay(500);
+          await requireSameDocument(page, options.allowSearchOverlay === true);
+          assertRisk(await readRisk(page));
+          dom = await readDomProbe(page);
+          network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, observerWorkId);
+        }
+      }
+      if (!dom.scrollTarget && network.comments.length === 0) {
         throw new Error('xiaohongshu_comment_scroll_container_unavailable');
       }
       if (dom.scrollTarget) {

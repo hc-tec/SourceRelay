@@ -106,6 +106,8 @@
               <select name="commentReplies" disabled>
                 <option value="0" selected>关闭</option>
                 <option value="1">开启 · 最多 1 个线程</option>
+                <option value="2">开启 · 最多 2 个线程</option>
+                <option value="3">开启 · 最多 3 个线程</option>
               </select>
             </label>
             <button type="submit" disabled>提交一次小红书搜索测试</button>
@@ -190,10 +192,10 @@
           </form>
           <form id="xiaohongshu-comment-replies-form" class="workflow">
             <div class="workflow-title"><span class="step">X5</span><div><h3>小红书公开评论回复</h3>
-              <p>仅展开当前详情浮层中第一个可见回复线程；Network archive 优先，固定一次可信点击。</p></div></div>
+              <p>仅展开当前详情浮层中最多三个可见回复线程；Network archive 优先，每个线程最多一次可信点击。</p></div></div>
             <label>在线 browser binding<select class="binding-select" name="browserBindingId" required disabled></select></label>
-            <input name="maximumThreads" type="hidden" value="1">
-            <button type="submit" disabled>展开一个公开回复线程</button>
+            <label>最大回复线程数<select name="maximumThreads" required disabled><option value="1">1（首次 canary）</option><option value="2">2</option><option value="3">3</option></select></label>
+            <button type="submit" disabled>展开公开回复线程</button>
           </form>
 
           <form id="search-form" class="workflow">

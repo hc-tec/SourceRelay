@@ -368,7 +368,7 @@ export async function enqueueXiaohongshuPublicNotesSearchWork(
   browserBindingId: string,
   query: string,
   maximumDetails?: number,
-  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 } }
+  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } }
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
   return await context.workQueue.enqueueXiaohongshuPublicNotesSearch({
@@ -400,7 +400,7 @@ export async function enqueueXiaohongshuNotePublicCommentsWork(
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
   return await context.workQueue.enqueueXiaohongshuNotePublicComments({ browserBindingId, maximumScrolls });
 }
-export async function enqueueXiaohongshuReplyWork(context:ExtensionWorkRouteContext,browserBindingId:string,maximumThreads:1){
+export async function enqueueXiaohongshuReplyWork(context:ExtensionWorkRouteContext,browserBindingId:string,maximumThreads:1|2|3){
   await assertBindingCanAcceptWork(context,browserBindingId,'xiaohongshu');return await context.workQueue.enqueueXiaohongshuNotePublicCommentReplies({browserBindingId,maximumThreads});}
 
 async function handleExtensionWorkNext(

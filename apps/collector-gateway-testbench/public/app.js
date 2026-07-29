@@ -217,11 +217,11 @@ async function submitSearch(event, kind) {
     if (kind === 'xiaohongshu_search') {
       const maximumDetails = Number(form.elements.maximumDetails.value);
       const commentsScrolls = Number(form.elements.commentsScrolls.value);
-      const includeReplies = Number(form.elements.commentReplies.value) === 1;
+      const maximumThreads = Number(form.elements.commentReplies.value);
       if (maximumDetails > 0) input.maximumDetails = maximumDetails;
       if (commentsScrolls > 0) input.comments = {
         maximumScrolls: commentsScrolls,
-        ...(includeReplies ? { replies: { maximumThreads: 1 } } : {})
+        ...(maximumThreads > 0 ? { replies: { maximumThreads } } : {})
       };
     }
     const payload = await api('/api/operations', {

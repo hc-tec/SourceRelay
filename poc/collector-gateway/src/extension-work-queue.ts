@@ -17,6 +17,7 @@ import {
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
@@ -24,6 +25,7 @@ import {
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
+  XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET,
   type ExtensionWorkCapability,
   type ExtensionWorkExecutionTarget,
   type ExtensionWorkItem,
@@ -36,6 +38,7 @@ import {
 import type { LoadedGatewayIdentity } from './identity';
 
 const WORK_ITEM_TTL_MS = 60_000;
+const XIAOHONGSHU_COMPOSED_SEARCH_MAX_TTL_MS = 15 * 60_000;
 const MAX_RETAINED_OPERATIONS = 500;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_ERROR_CODE = /^[a-z0-9_]{1,100}$/;
@@ -135,7 +138,7 @@ export interface EnqueueXiaohongshuPublicNotesSearchWorkInput {
   browserBindingId: string;
   query: string;
   maximumDetails?: number;
-  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 } };
+  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } };
 }
 
 export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
@@ -152,7 +155,7 @@ export interface EnqueueXiaohongshuNotePublicCommentsWorkInput {
   browserBindingId: string;
   maximumScrolls: 1 | 2 | 3;
 }
-export interface EnqueueXiaohongshuNotePublicCommentRepliesWorkInput { browserBindingId: string; maximumThreads: 1; }
+export interface EnqueueXiaohongshuNotePublicCommentRepliesWorkInput { browserBindingId: string; maximumThreads: 1 | 2 | 3; }
 
 /**
  * Queued and claimed operations retain their signed envelope because it is
@@ -182,7 +185,8 @@ interface RedactedXiaohongshuPublicNotesSearchWorkItem {
   budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET |
     typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET |
     typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET;
+    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET |
+    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET;
 }
 
 interface RedactedXiaohongshuAccountPublicNotesWorkItem {
@@ -738,7 +742,8 @@ export class ExtensionWorkQueue {
         (input.comments.replies !== undefined &&
           (Object.keys(input.comments).length !== 2 ||
             !input.comments.replies || Object.keys(input.comments.replies).length !== 1 ||
-            input.comments.replies.maximumThreads !== 1))))) {
+            (input.comments.replies.maximumThreads !== 1 && input.comments.replies.maximumThreads !== 2 &&
+              input.comments.replies.maximumThreads !== 3)))))) {
       throw new Error('xiaohongshu_public_notes_search_input_invalid');
     }
     const expired = this.#expire(now);
@@ -755,7 +760,7 @@ export class ExtensionWorkQueue {
       capability: 'xiaohongshu.search.public_notes.v1',
       executionTarget: 'existing_public_explore_tab',
       issuedAt,
-      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      expiresAt: new Date(now.getTime() + xiaohongshuSearchTtlMs(input)).toISOString(),
       input: {
         query: input.query,
         ...(input.maximumDetails === undefined ? {} : { maximumDetails: input.maximumDetails }),
@@ -764,7 +769,9 @@ export class ExtensionWorkQueue {
       budget: input.maximumDetails && input.maximumDetails > 0
         ? input.comments
           ? input.comments.replies
-            ? XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET
+            ? input.comments.replies.maximumThreads > 1
+              ? XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET
+              : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET
             : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET
           : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET
         : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET
@@ -879,13 +886,18 @@ export class ExtensionWorkQueue {
   }
   async enqueueXiaohongshuNotePublicCommentReplies(input: EnqueueXiaohongshuNotePublicCommentRepliesWorkInput,
     now=new Date()):Promise<ExtensionWorkOperationSummary>{
-    if(!isUuid(input.browserBindingId)||input.maximumThreads!==1)throw new Error('xiaohongshu_note_public_comment_replies_input_invalid');
+    if(!isUuid(input.browserBindingId) || (input.maximumThreads !== 1 && input.maximumThreads !== 2 && input.maximumThreads !== 3)) {
+      throw new Error('xiaohongshu_note_public_comment_replies_input_invalid');
+    }
     const expired=this.#expire(now);if(expired.length>0)await this.#save();this.#assertBindingIdle(input.browserBindingId);
     const issuedAt=now.toISOString();const unsigned:UnsignedExtensionWorkItem={schemaVersion:EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion:EXTENSION_WORK_PROTOCOL_VERSION,workId:randomUUID(),operationId:randomUUID(),
       browserBindingId:input.browserBindingId,platform:'xiaohongshu',capability:'xiaohongshu.note.public_comment_replies.v1',
       executionTarget:'existing_public_note_overlay',issuedAt,expiresAt:new Date(now.getTime()+WORK_ITEM_TTL_MS).toISOString(),
-      input:{maximumThreads:1},budget:XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET};return await this.#enqueueSigned(unsigned,issuedAt);}
+      input:{maximumThreads: input.maximumThreads},
+      budget: input.maximumThreads === 1
+        ? XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET
+        : XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET};return await this.#enqueueSigned(unsigned,issuedAt);}
 
   /** Claiming is the irreversible delivery point.  There is no lease renewal. */
   async claimNext(
@@ -1076,6 +1088,18 @@ function summary(operation: StoredOperation): ExtensionWorkOperationSummary {
   };
 }
 
+function xiaohongshuSearchTtlMs(input: EnqueueXiaohongshuPublicNotesSearchWorkInput): number {
+  const maximumDetails = input.maximumDetails ?? 0;
+  if (maximumDetails <= 0) return WORK_ITEM_TTL_MS;
+  const perDetail = input.comments?.replies
+    ? input.comments.replies.maximumThreads > 1 ? 75_000 : 65_000
+    : input.comments ? 32_000 : 18_000;
+  return Math.min(
+    XIAOHONGSHU_COMPOSED_SEARCH_MAX_TTL_MS,
+    Math.max(WORK_ITEM_TTL_MS, 25_000 + maximumDetails * perDetail)
+  );
+}
+
 function isStoredOperation(value: unknown): value is StoredOperation {
   if (!isRecord(value) || value.schemaVersion !== 1 || !isStoredExtensionWorkItem(value.item) ||
     !isWorkState(value.state) || !isTimestamp(value.queuedAt) ||
@@ -1113,7 +1137,8 @@ function isRedactedXiaohongshuPublicNotesSearchWorkItem(
     (JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET) ||
       JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET) ||
       JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET) ||
-      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET));
+      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET) ||
+      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET));
 }
 
 function isRedactedXiaohongshuAccountPublicNotesWorkItem(

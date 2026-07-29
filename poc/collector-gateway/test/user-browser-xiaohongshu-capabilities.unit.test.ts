@@ -78,7 +78,8 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       executionTarget:'existing_public_note_overlay',dispatchState:'direct_ready',
       managedValidationState:'gateway_extension_real_e2e_passed',
       captureMode:'network_archive_first_dom_hierarchy_fallback_trusted_click',
-      budget:expect.objectContaining({maximumSemanticActions:1,maximumProjectedItems:40})
+      budget:expect.objectContaining({maximumSemanticActions:1,maximumProjectedItems:40}),
+      multiThreadBudget:expect.objectContaining({maximumSemanticActions:3,maximumNetworkResponseBodies:24,maximumProjectedItems:120})
     })]);
   });
 

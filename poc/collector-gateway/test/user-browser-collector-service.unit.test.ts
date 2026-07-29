@@ -103,7 +103,7 @@ describe('user-owned browser collector service', () => {
       { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 0 } },
       { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 4 } },
       { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, extra: true } },
-      { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, replies: { maximumThreads: 2 } } },
+      { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, replies: { maximumThreads: 4 } } },
       { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, replies: { maximumThreads: 1, extra: true } } }
     ]) expect(() => userBrowserCollectorServiceRequestInput({
       schemaVersion: 2,
@@ -223,6 +223,11 @@ describe('user-owned browser collector service', () => {
       platform:{const:'xiaohongshu'},capability:{const:'xiaohongshu.note.public_comment_replies.v1'},
       executionTarget:{const:'existing_public_note_overlay'},input:{required:['maximumThreads'],additionalProperties:false}
     });
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2, browserBindingId,
+      platform: 'xiaohongshu', capability: 'xiaohongshu.note.public_comment_replies.v1',
+      executionTarget: 'existing_public_note_overlay', input: { maximumThreads: 3 }
+    })).toMatchObject({ input: { maximumThreads: 3 } });
     expect(Object.keys(document.paths)).not.toContain('/v1/profiles');
     const schemaText = JSON.stringify(document.components.schemas);
     expect(schemaText).not.toContain('"profileId"');

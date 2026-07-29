@@ -121,6 +121,11 @@ test('maps Xiaohongshu search to query-only existing-Explore trusted input', () 
     kind: 'xiaohongshu_search',
     input: { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2, replies: { maximumThreads: 1 } } }
   }).input, { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2, replies: { maximumThreads: 1 } } });
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_search',
+    input: { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2, replies: { maximumThreads: 3 } } }
+  }).input.comments.replies, { maximumThreads: 3 });
   for (const maximumDetails of [-1, 21, 1.5]) assert.throws(() => parseTestbenchSubmission({
     browserBindingId: bindingId,
     kind: 'xiaohongshu_search',
@@ -128,7 +133,7 @@ test('maps Xiaohongshu search to query-only existing-Explore trusted input', () 
   }), TestbenchInputError);
   for (const comments of [
     { maximumScrolls: 0 }, { maximumScrolls: 4 }, { maximumScrolls: 1.5 }, {}, null,
-    { maximumScrolls: 1, replies: { maximumThreads: 2 } }, { maximumScrolls: 1, extra: true },
+    { maximumScrolls: 1, replies: { maximumThreads: 4 } }, { maximumScrolls: 1, extra: true },
   ]) assert.throws(() => parseTestbenchSubmission({
     browserBindingId: bindingId,
     kind: 'xiaohongshu_search',
@@ -258,11 +263,13 @@ test('maps Xiaohongshu public comments to bounded scrolling in the existing note
       kind: 'xiaohongshu_note_public_comments', input }), TestbenchInputError);
   }
 });
-test('maps Xiaohongshu public replies to one fixed existing-overlay thread',()=>{
+test('maps Xiaohongshu public replies to a bounded existing-overlay thread set',()=>{
   assert.deepEqual(parseTestbenchSubmission({browserBindingId:bindingId,kind:'xiaohongshu_note_public_comment_replies',
     input:{maximumThreads:1}}),{schemaVersion:2,browserBindingId:bindingId,platform:'xiaohongshu',
     capability:'xiaohongshu.note.public_comment_replies.v1',executionTarget:'existing_public_note_overlay',input:{maximumThreads:1}});
-  for(const input of [{maximumThreads:0},{maximumThreads:2},{maximumThreads:1,commentId:'x'},
+  assert.deepEqual(parseTestbenchSubmission({browserBindingId:bindingId,kind:'xiaohongshu_note_public_comment_replies',
+    input:{maximumThreads:3}}).input,{maximumThreads:3});
+  for(const input of [{maximumThreads:0},{maximumThreads:4},{maximumThreads:1,commentId:'x'},
     {maximumThreads:1,selector:'.reply'}])assert.throws(()=>parseTestbenchSubmission({browserBindingId:bindingId,
       kind:'xiaohongshu_note_public_comment_replies',input}),TestbenchInputError);
 });

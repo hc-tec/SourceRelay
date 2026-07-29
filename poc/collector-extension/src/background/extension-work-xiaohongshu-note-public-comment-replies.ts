@@ -52,9 +52,10 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
   let page: BoundPage | null = null;
   let debuggerAttached = false;
   let debuggerDetached = true;
-  let actionAttempted = false;
+  let attemptedCount: 0 | 1 | 2 | 3 = 0;
+  let completedCount: 0 | 1 | 2 | 3 = 0;
   let pageReady = false;
-  let projection: XiaohongshuPublicReplyThreadProjection | null = null;
+  let projections: XiaohongshuPublicReplyThreadProjection[] = [];
   let errorCode: string | null = null;
 
   try {
@@ -72,11 +73,18 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
       observerWorkId,
       options.allowSearchOverlay === true
     );
-    projection = projectArchivedReplyThread(networkBefore);
-    if (!projection) {
-      const target = await findReplyExpansionTarget(page);
-      const debuggee: chrome.debugger.Debuggee = options.debuggee ?? { tabId: page.tabId };
-      if (!options.debuggee) {
+    projections = projectArchivedReplyThreads(networkBefore, item.input.maximumThreads);
+    completedCount = projections.length as 0 | 1 | 2 | 3;
+    const expandedParentTexts = new Set(projections.map((thread) => normaliseParentText(thread.parentComment.publicText)));
+    const debuggee: chrome.debugger.Debuggee = options.debuggee ?? { tabId: page.tabId };
+    for (let ordinal = (projections.length + 1) as 1 | 2 | 3;
+      ordinal <= item.input.maximumThreads; ordinal = (ordinal + 1) as 1 | 2 | 3) {
+      const target = await findReplyExpansionTarget(page, [...expandedParentTexts]);
+      if (!target) {
+        if (projections.length === 0) throw new Error('xiaohongshu_reply_thread_target_unavailable');
+        break;
+      }
+      if (!options.debuggee && !debuggerAttached) {
         await chrome.debugger.attach(debuggee, '1.3').catch(() => {
           throw new Error('debugger_attach_failed');
         });
@@ -85,8 +93,8 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
       }
 
       const existingChildTabIds = await readChildTabIds(page.tabId);
-      await recordXiaohongshuCommentRepliesClickIntent(item.workId);
-      actionAttempted = true;
+      await recordXiaohongshuCommentRepliesClickIntent(item.workId, ordinal);
+      attemptedCount = ordinal;
       await dispatchTrustedClick(debuggee, target).catch(() => {
         throw new Error('debugger_input_failed');
       });
@@ -97,13 +105,19 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
       assertNoPageRisk(await readPageRisk(page));
 
       const domAfter = await readExpandedReplyThread(page, target.label);
-      await completeXiaohongshuCommentRepliesClick(item.workId);
       const networkAfter = await readXiaohongshuExistingNoteReplyNetworkProjection(
         page.tabId,
         observerWorkId,
         options.allowSearchOverlay === true
       );
-      projection = mergeReplyEvidence(target, domAfter, networkBefore, networkAfter);
+      const expandedProjection = mergeReplyEvidence(target, domAfter, networkBefore, networkAfter);
+      projections.push(expandedProjection);
+      expandedParentTexts.add(normaliseParentText(expandedProjection.parentComment.publicText));
+      await completeXiaohongshuCommentRepliesClick(item.workId, ordinal);
+      completedCount = ordinal;
+    }
+    if (projections.length === 0) {
+      throw new Error('xiaohongshu_comment_replies_postcondition_unmet');
     }
     pageReady = true;
   } catch (error) {
@@ -123,7 +137,9 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
     }
   }
 
-  const completed = errorCode === null && pageReady && projection !== null && debuggerDetached;
+  const projection = projections[0] ?? null;
+  const completed = errorCode === null && pageReady && projection !== null &&
+    completedCount >= 1 && completedCount <= item.input.maximumThreads && debuggerDetached;
   return {
     schemaVersion: 1,
     protocolVersion: 1,
@@ -138,43 +154,51 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
     terminalReason: completed ? 'comment_replies_ready' : terminalReasonFor(errorCode),
     completedAt: new Date().toISOString(),
     navigation: { attempted: false, attemptCount: 0 },
-    semanticAction: { attempted: actionAttempted, attemptCount: actionAttempted ? 1 : 0 },
-    thread: { requestedCount: 1, completedCount: completed ? 1 : 0 },
+    semanticAction: { attempted: attemptedCount > 0, attemptCount: attemptedCount },
+    thread: { requestedCount: item.input.maximumThreads, completedCount },
     page: pageReady ? { publicSurface: 'note_detail_overlay', sameDocument: true } : null,
     projection,
+    ...(projections.length > 1 ? { projections } : {}),
     rawPayloadStored: false,
     responseUrlsStored: false,
     debuggerDetached
   };
 }
 
-function projectArchivedReplyThread(
-  network: ReplyNetworkProjection
-): XiaohongshuPublicReplyThreadProjection | null {
-  const firstReply = network.comments.find((comment) => comment.parentCommentId.length > 0);
-  if (!firstReply) return null;
-  const parent = network.comments.find((comment) => comment.commentId === firstReply.parentCommentId);
-  if (!parent) return null;
-  const replies = network.comments
-    .filter((comment) => comment.parentCommentId === parent.commentId)
-    .slice(0, 40)
-    .map((comment, index) => projectArchivedComment(comment, index + 1));
-  if (replies.length === 0) return null;
-  return {
-    schemaVersion: 1,
-    captureMode: 'network_projection',
-    network: {
-      matchedPayloadCount: network.matchedPayloadCount,
-      bodyBytesRead: network.bodyBytesRead,
-      cursorObserved: network.cursorObserved,
-      actionTriggeredResponseCount: 0
-    },
-    expandedLabelText: 'network_archive',
-    parentComment: projectArchivedComment(parent, 1),
-    replies,
-    rawPayloadStored: false,
-    responseUrlsStored: false
-  };
+function projectArchivedReplyThreads(
+  network: ReplyNetworkProjection,
+  maximumThreads: 1 | 2 | 3
+): XiaohongshuPublicReplyThreadProjection[] {
+  const parentIds = [...new Set(network.comments
+    .filter((comment) => comment.parentCommentId.length > 0)
+    .map((comment) => comment.parentCommentId))];
+  return parentIds.slice(0, maximumThreads).flatMap((parentId) => {
+    const parent = network.comments.find((comment) => comment.commentId === parentId);
+    const replies = network.comments
+      .filter((comment) => comment.parentCommentId === parentId)
+      .slice(0, 40)
+      .map((comment, index) => projectArchivedComment(comment, index + 1));
+    if (!parent || replies.length === 0) return [];
+    return [{
+      schemaVersion: 1,
+      captureMode: 'network_projection' as const,
+      network: {
+        matchedPayloadCount: network.matchedPayloadCount,
+        bodyBytesRead: network.bodyBytesRead,
+        cursorObserved: network.cursorObserved,
+        actionTriggeredResponseCount: 0
+      },
+      expandedLabelText: 'network_archive',
+      parentComment: projectArchivedComment(parent, 1),
+      replies,
+      rawPayloadStored: false as const,
+      responseUrlsStored: false as const
+    }];
+  });
+}
+
+function normaliseParentText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, 160);
 }
 
 function projectArchivedComment(
@@ -258,10 +282,11 @@ function assertNoPageRisk(value: ReturnType<typeof classifyXiaohongshuCurrentPag
   if (value.loginRequired) throw new Error('xiaohongshu_login_required');
 }
 
-async function findReplyExpansionTarget(page: BoundPage): Promise<ReplyExpansionTarget> {
+async function findReplyExpansionTarget(page: BoundPage, excludedParentTexts: string[]): Promise<ReplyExpansionTarget | null> {
   const result = await chrome.scripting.executeScript({
     target: { tabId: page.tabId, documentIds: [page.documentId] },
-    func: () => {
+    args: [excludedParentTexts],
+    func: (excludedTexts) => {
       const visible = (element: Element): boolean => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
@@ -298,49 +323,51 @@ async function findReplyExpansionTarget(page: BoundPage): Promise<ReplyExpansion
           const rightRect = right.getBoundingClientRect();
           return leftRect.width * leftRect.height - rightRect.width * rightRect.height;
         });
-      const target = targets[0] ?? null;
-      if (!target) return null;
+      for (const target of targets) {
+        const rect = target.getBoundingClientRect();
+        const x = rect.x + rect.width / 2;
+        const y = rect.y + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        if (!hit || !(target === hit || target.contains(hit))) continue;
 
-      const rect = target.getBoundingClientRect();
-      const x = rect.x + rect.width / 2;
-      const y = rect.y + rect.height / 2;
-      const hit = document.elementFromPoint(x, y);
-      if (!hit || !(target === hit || target.contains(hit))) return null;
-
-      let root = target.parentElement;
-      for (let depth = 0; root && depth < 7; depth += 1, root = root.parentElement) {
-        const rootRect = root.getBoundingClientRect();
-        const text = clean(root.textContent ?? '', 2_000);
-        const author = Array.from(root.querySelectorAll('a[href*="/user/profile/"]')).find(visible) as
-          HTMLElement | undefined;
-        const authorName = clean(author?.innerText ?? '', 200);
-        if (
-          rootRect.width >= 220 && rootRect.height >= 50 && rootRect.height <= 650 &&
-          author && text.length > authorName.length + 3
-        ) {
-          return {
-            x,
-            y,
-            label: clean(target.textContent ?? '', 80),
-            parent: {
-              rank: 1,
-              commentId: `dom-${hashText(text)}`,
-              publicText: text,
-              authorNickname: authorName,
-              likedCountText: '',
-              createdAtText: '',
-              locationText: '',
-              source: 'dom' as const
-            }
-          };
+        let root = target.parentElement;
+        for (let depth = 0; root && depth < 7; depth += 1, root = root.parentElement) {
+          const rootRect = root.getBoundingClientRect();
+          const text = clean(root.textContent ?? '', 2_000);
+          const author = Array.from(root.querySelectorAll('a[href*="/user/profile/"]')).find(visible) as
+            HTMLElement | undefined;
+          const authorName = clean(author?.innerText ?? '', 200);
+          const normalisedText = clean(text, 160);
+          const alreadyCollected = excludedTexts.some((excluded) =>
+            typeof excluded === 'string' && excluded.length > 0 &&
+            (normalisedText.includes(excluded) || excluded.includes(normalisedText.slice(0, 40))));
+          if (
+            !alreadyCollected && rootRect.width >= 220 && rootRect.height >= 50 && rootRect.height <= 650 &&
+            author && text.length > authorName.length + 3
+          ) {
+            return {
+              x,
+              y,
+              label: clean(target.textContent ?? '', 80),
+              parent: {
+                rank: 1,
+                commentId: `dom-${hashText(text)}`,
+                publicText: text,
+                authorNickname: authorName,
+                likedCountText: '',
+                createdAtText: '',
+                locationText: '',
+                source: 'dom' as const
+              }
+            };
+          }
         }
       }
       return null;
     }
   });
   const value = result[0]?.result;
-  if (!value) throw new Error('xiaohongshu_reply_thread_target_unavailable');
-  return value;
+  return value ?? null;
 }
 
 async function readExpandedReplyThread(page: BoundPage, oldLabel: string): Promise<DomReplyThread> {

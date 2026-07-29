@@ -34,6 +34,7 @@ export interface XiaohongshuNotePublicDetailProjection {
   commentEntryVisible: boolean;
   comments?: XiaohongshuNotePublicCommentsProjection;
   replyThread?: XiaohongshuPublicReplyThreadProjection;
+  replyThreads?: XiaohongshuPublicReplyThreadProjection[];
   rawPayloadStored: false;
   responseUrlsStored: false;
 }
@@ -123,6 +124,8 @@ export function isXiaohongshuNotePublicDetailProjection(
     typeof value.commentEntryVisible === 'boolean' &&
     (value.comments === undefined || isXiaohongshuNotePublicCommentsProjection(value.comments)) &&
     (value.replyThread === undefined || isXiaohongshuPublicReplyThreadProjection(value.replyThread)) &&
+    (value.replyThreads === undefined || (Array.isArray(value.replyThreads) && value.replyThreads.length >= 1 &&
+      value.replyThreads.length <= 3 && value.replyThreads.every(isXiaohongshuPublicReplyThreadProjection))) &&
     value.rawPayloadStored === false && value.responseUrlsStored === false;
 }
 
@@ -214,7 +217,12 @@ function detailProjectionKeys(value: Record<string, unknown>): boolean {
   ] as const;
   const withComments = [...base.slice(0, 9), 'comments', ...base.slice(9)];
   const withReplies = [...base.slice(0, 9), 'replyThread', ...base.slice(9)];
+  const withReplyThreads = [...base.slice(0, 9), 'replyThreads', ...base.slice(9)];
   const withBoth = [...base.slice(0, 9), 'comments', 'replyThread', ...base.slice(9)];
+  const withBothThreads = [...base.slice(0, 9), 'comments', 'replyThreads', ...base.slice(9)];
+  const withAllReplies = [...base.slice(0, 9), 'replyThread', 'replyThreads', ...base.slice(9)];
+  const withCommentsAndAllReplies = [...base.slice(0, 9), 'comments', 'replyThread', 'replyThreads', ...base.slice(9)];
   return exactKeys(value, base) || exactKeys(value, withComments) || exactKeys(value, withReplies) ||
-    exactKeys(value, withBoth);
+    exactKeys(value, withReplyThreads) || exactKeys(value, withBoth) || exactKeys(value, withBothThreads) ||
+    exactKeys(value, withAllReplies) || exactKeys(value, withCommentsAndAllReplies);
 }

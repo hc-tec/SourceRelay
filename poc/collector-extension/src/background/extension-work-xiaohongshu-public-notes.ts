@@ -79,6 +79,7 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
           } as (typeof details)[number];
           if (detailResult.projection.comments) enriched.comments = detailResult.projection.comments;
           if (detailResult.projection.replyThread) enriched.replyThread = detailResult.projection.replyThread;
+          if (detailResult.projection.replyThreads) enriched.replyThreads = detailResult.projection.replyThreads;
           const existingIndex = details.findIndex((detail) => detail.noteId === noteId);
           if (existingIndex >= 0) details[existingIndex] = { ...details[existingIndex], ...enriched };
           else {

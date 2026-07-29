@@ -74,6 +74,16 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET = Obj
   maximumProjectedItems: 2440,
   maximumRawPayloadBytesStored: 0
 } as const);
+/** Aggregate upper bound when two or three reply threads are requested per detail. */
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET = Object.freeze({
+  maximumPlatformNavigations: 0,
+  maximumPageReloads: 0,
+  maximumPageInitiatedNewDocuments: 0,
+  maximumSemanticActions: 161,
+  maximumNetworkResponseBodies: 648,
+  maximumProjectedItems: 4040,
+  maximumRawPayloadBytesStored: 0
+} as const);
 export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET = Object.freeze({
   maximumPlatformNavigations: 0,
   maximumPageReloads: 0,
@@ -291,6 +301,8 @@ export interface XiaohongshuPublicNoteDetailProjection {
   comments?: XiaohongshuNotePublicCommentsProjection;
   /** Present only when the caller explicitly enables one reply thread. */
   replyThread?: XiaohongshuPublicReplyThreadProjection;
+  /** Present when the caller requests more than one reply thread. */
+  replyThreads?: XiaohongshuPublicReplyThreadProjection[];
 }
 
 export interface XiaohongshuManagedSearchProjectionResult {
@@ -576,14 +588,20 @@ function optionalPublicNoteDetails(value: unknown, maximumItems: 40 | 200): bool
       boundedProjectionText(entry.authorNickname, 200) &&
       boundedProjectionText(entry.interactionText, 1_000) &&
       (entry.comments === undefined || isXiaohongshuNotePublicCommentsProjection(entry.comments)) &&
-      (entry.replyThread === undefined || isXiaohongshuPublicReplyThreadProjection(entry.replyThread));
+      (entry.replyThread === undefined || isXiaohongshuPublicReplyThreadProjection(entry.replyThread)) &&
+      (entry.replyThreads === undefined || (Array.isArray(entry.replyThreads) && entry.replyThreads.length >= 1 &&
+        entry.replyThreads.length <= 3 && entry.replyThreads.every(isXiaohongshuPublicReplyThreadProjection)));
   });
 }
 
 function detailProjectionKeys(value: Record<string, unknown>): boolean {
   const base = ['noteId', 'publicText', 'authorNickname', 'interactionText'] as const;
   return exactKeys(value, base) || exactKeys(value, [...base, 'comments']) ||
-    exactKeys(value, [...base, 'replyThread']) || exactKeys(value, [...base, 'comments', 'replyThread']);
+    exactKeys(value, [...base, 'replyThread']) || exactKeys(value, [...base, 'replyThreads']) ||
+    exactKeys(value, [...base, 'comments', 'replyThread']) ||
+    exactKeys(value, [...base, 'comments', 'replyThreads']) ||
+    exactKeys(value, [...base, 'replyThread', 'replyThreads']) ||
+    exactKeys(value, [...base, 'comments', 'replyThread', 'replyThreads']);
 }
 
 function isXiaohongshuNotePublicCommentsProjection(value: unknown): value is XiaohongshuNotePublicCommentsProjection {

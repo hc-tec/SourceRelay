@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
@@ -117,5 +117,39 @@ describe('Xiaohongshu public-comment-reply artifact store', () => {
     const tampered = raw.replace('公开回复', '篡改回复');
     await writeFile(artifactPath, tampered, 'utf8');
     await expect(store.get(first.artifactId)).rejects.toThrow('xiaohongshu_reply_artifact_digest_mismatch');
+  });
+
+  test('persists bounded multi-thread projections without changing the private-field boundary', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xhs-comment-replies-multi-'));
+    const multiItem = {
+      ...item,
+      workId: '44444444-4444-4444-8444-444444444444',
+      operationId: '55555555-5555-4555-8555-555555555555',
+      input: { maximumThreads: 2 as const },
+      budget: {
+        maximumPlatformNavigations: 0 as const, maximumPageReloads: 0 as const,
+        maximumPageInitiatedNewDocuments: 0 as const, maximumSemanticActions: 3 as const,
+        maximumNetworkResponseBodies: 24 as const, maximumProjectedItems: 120 as const,
+        maximumRawPayloadBytesStored: 0 as const
+      }
+    };
+    const multiResult = {
+      ...result,
+      workId: multiItem.workId,
+      operationId: multiItem.operationId,
+      semanticAction: { attempted: true, attemptCount: 1 as const },
+      thread: { requestedCount: 2 as const, completedCount: 2 as const },
+      projections: [result.projection!, { ...result.projection!, expandedLabelText: '展开 2 条回复' }]
+    };
+    try {
+      const store = await XiaohongshuReplyArtifactStore.create(directory);
+      const summary = await store.record({ item: multiItem, result: multiResult });
+      expect(summary).toMatchObject({ replyCount: 2, captureMode: 'hybrid' });
+      await expect(store.get(summary.artifactId)).resolves.toMatchObject({
+        result: { thread: { requestedCount: 2, completedCount: 2 }, projections: [{}, {}] }
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });
