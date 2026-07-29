@@ -50,6 +50,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   let renderedCardCount = 0;
   let navigationAttempted = false;
   let profileObserverScriptId: string | null = null;
+  let navigatedProfileTabId: number | null = null;
   let errorCode: string | null = null;
   let completionReason: 'profile_notes_ready' | 'profile_notes_budget_exhausted' | null = null;
   try {
@@ -65,10 +66,10 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
       // that response and make the supposedly Network-first path DOM-only.
       profileObserverScriptId = await registerEphemeralProfileObserver(item.workId);
       navigationAttempted = true;
-      await navigateToEphemeralProfileUrl(profileUrl, item.expiresAt);
+      navigatedProfileTabId = await navigateToEphemeralProfileUrl(profileUrl, item.expiresAt);
     }
     assertWorkDeadline(item);
-    document = await findUniquePublicProfileDocument();
+    document = await findUniquePublicProfileDocument(navigatedProfileTabId);
     await foreground(document);
     await requireSameDocument(document);
     assertWorkDeadline(item);
@@ -254,22 +255,45 @@ function profileObserverScriptId(workId: string): string {
   return `collector-xhs-profile-${workId.replace(/-/g, '')}`;
 }
 
-async function findUniquePublicProfileDocument(): Promise<ProfileDocument> {
+async function findUniquePublicProfileDocument(preferredTabId: number | null = null): Promise<ProfileDocument> {
   const tabs = await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/user/profile/*'] });
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
     !tab.incognito &&
     xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '') === 'public_profile');
-  if (eligible.length === 0) throw new Error('xiaohongshu_public_profile_tab_required');
-  if (eligible.length !== 1) throw new Error('xiaohongshu_public_profile_tab_ambiguous');
-  const tab = eligible[0]!;
+  const selectedTabId = selectXiaohongshuProfileTabId(
+    eligible.map((candidate) => candidate.id!), preferredTabId
+  );
+  const tab = selectedTabId === null
+    ? null
+    : eligible.find((candidate) => candidate.id === selectedTabId) ?? null;
+  if (!tab) {
+    if (preferredTabId !== null) throw new Error('xiaohongshu_public_profile_document_changed');
+    if (eligible.length === 0) throw new Error('xiaohongshu_public_profile_tab_required');
+    throw new Error('xiaohongshu_public_profile_tab_ambiguous');
+  }
   const frame = await chrome.webNavigation.getFrame({ tabId: tab.id!, frameId: 0 }).catch(() => null);
   if (!frame?.documentId || xiaohongshuCurrentPageNetworkPublicSurface(frame.url) !== 'public_profile') {
-    throw new Error('xiaohongshu_public_profile_document_unavailable');
+    throw new Error(preferredTabId === null
+      ? 'xiaohongshu_public_profile_document_unavailable'
+      : 'xiaohongshu_public_profile_document_changed');
   }
   return { tabId: tab.id!, windowId: tab.windowId!, documentId: frame.documentId };
 }
 
-async function navigateToEphemeralProfileUrl(profileUrl: string, expiresAt: string): Promise<void> {
+/**
+ * Selects an internally bound profile tab. A caller never supplies this ID:
+ * the ephemeral-link path gets it from the tab it navigated exactly once.
+ * Existing-tab work deliberately keeps the stricter unique-tab rule.
+ */
+export function selectXiaohongshuProfileTabId(
+  eligibleTabIds: readonly number[],
+  preferredTabId: number | null
+): number | null {
+  if (preferredTabId !== null) return eligibleTabIds.includes(preferredTabId) ? preferredTabId : null;
+  return eligibleTabIds.length === 1 ? eligibleTabIds[0]! : null;
+}
+
+async function navigateToEphemeralProfileUrl(profileUrl: string, expiresAt: string): Promise<number> {
   const tabs = await chrome.tabs.query({});
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && !tab.incognito &&
     isXiaohongshuPublicEntryTab(tab.url ?? ''));
@@ -307,7 +331,7 @@ async function navigateToEphemeralProfileUrl(profileUrl: string, expiresAt: stri
     if (current && frame?.documentId) {
       if (Date.now() >= Date.parse(expiresAt)) throw new Error('xiaohongshu_profile_work_expired');
       const surface = xiaohongshuCurrentPageNetworkPublicSurface(frame.url);
-      if (surface === 'public_profile') return;
+      if (surface === 'public_profile') return tab.id!;
       // Xiaohongshu may expose an intermediate Explore/Search document while
       // its client-side profile route settles. Treat that as part of the same
       // one-time navigation, not as an expired link; only the final deadline

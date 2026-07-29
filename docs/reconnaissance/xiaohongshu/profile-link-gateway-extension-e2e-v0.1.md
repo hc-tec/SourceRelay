@@ -114,3 +114,23 @@ managedValidationState: gateway_extension_real_e2e_passed
 ```
 
 这只表示短时链接路径的 Gateway→Extension 闭环已经有真实证据。浏览器中自然存在的 `existing_public_profile_tab` 零导航路径随后也已独立通过，详情见 [`profile-tab-gateway-extension-e2e-v0.1.md`](profile-tab-gateway-extension-e2e-v0.1.md)。主页 Network/XHR 正文投影仍需另一条新的短时链接单独研究，不能用本 run 的 DOM fallback 结果替代。
+
+## 2026-07-29 多主页候选回归与修复
+
+随后使用另一条全新的短时主页链接做 Network-focused canary 时，导航本身成功到达目标主页，但 operation 在主页 document 选择阶段安全停止：
+
+```yaml
+operationId: ebd2aade-bd25-44f3-8c46-985fd2bbaf3c
+executionTarget: ephemeral_public_profile_url
+validationBaselineNavigations: 1
+productPlatformNavigations: 1
+automaticPlatformRetries: 0
+terminalError: xiaohongshu_public_profile_tab_ambiguous
+artifact: none
+```
+
+这不是短链失效、验证码或风控。视觉复核证据 `2130556d-8ae0-4c35-9bc7-25572ecd91a8` 显示目标主页已经渲染；失败原因是旧实现导航后重新查询全浏览器 profile tabs，并要求全局只有一个公开主页。验证 Profile 中同时存在另一个公开主页候选时，旧实现无法区分“刚刚由本 work 导航的 tab”和后台候选页，于是错误停止。
+
+修复已写入 `extension-work-xiaohongshu-account-public-notes.ts`：短链导航函数现在返回内部绑定的目标 tab ID，后续只核对该 tab 的 document；调用方仍不能提交 tab ID，已有主页 tab 路径仍保持全局唯一前置条件。纯逻辑回归已覆盖“多个主页存在时选择内部绑定 tab”和“绑定 tab 消失时停止”，扩展构建指纹更新为 `5bfc2e447312699caa018d6310e23cf1cc608c03f755d3b75058b72fa2501a4b`。
+
+由于该条新链接已经实际导航过，不能重放来验证修复。下一次真实验证必须使用另一条全新的短时主页链接；在此之前不能把这次修复描述成已经通过真实 multi-profile canary。

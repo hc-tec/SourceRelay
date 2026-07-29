@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver,
-  mergeProfileNotesProjection
+  mergeProfileNotesProjection,
+  selectXiaohongshuProfileTabId
 } from '../src/background/extension-work-xiaohongshu-account-public-notes.js';
 import type { XiaohongshuManagedProfileNotesProjectionResult } from '@intelligence/collector-contracts';
 
@@ -32,6 +33,13 @@ const networkProjection: XiaohongshuManagedProfileNotesProjectionResult = {
 };
 
 describe('Xiaohongshu profile note projection merge', () => {
+  test('keeps an ephemeral navigation bound to its own profile tab when another profile is open', () => {
+    expect(selectXiaohongshuProfileTabId([11, 22], 22)).toBe(22);
+    expect(selectXiaohongshuProfileTabId([11, 22], 33)).toBeNull();
+    expect(selectXiaohongshuProfileTabId([11], null)).toBe(11);
+    expect(selectXiaohongshuProfileTabId([11, 22], null)).toBeNull();
+  });
+
   test('crash recovery removes only the exact work-derived document-start observer', async () => {
     const unregisterContentScripts = vi.fn(async () => undefined);
     Object.defineProperty(globalThis, 'chrome', {
