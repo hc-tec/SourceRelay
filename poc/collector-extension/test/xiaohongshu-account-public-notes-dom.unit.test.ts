@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver,
+  classifyXiaohongshuProfileProbeRisk,
   mergeProfileNotesProjection,
   selectXiaohongshuProfileTabId
 } from '../src/background/extension-work-xiaohongshu-account-public-notes.js';
@@ -38,6 +39,17 @@ describe('Xiaohongshu profile note projection merge', () => {
     expect(selectXiaohongshuProfileTabId([11, 22], 33)).toBeNull();
     expect(selectXiaohongshuProfileTabId([11], null)).toBe(11);
     expect(selectXiaohongshuProfileTabId([11, 22], null)).toBeNull();
+  });
+
+  test('does not classify a populated profile as unavailable because a card contains an error phrase', () => {
+    expect(classifyXiaohongshuProfileProbeRisk({
+      pathname: '/user/profile/public-id', title: '公开主页', visibleText: '某条笔记：加载失败',
+      renderedCardCount: 4, itemCount: 4
+    }).sourceUnavailable).toBe(false);
+    expect(classifyXiaohongshuProfileProbeRisk({
+      pathname: '/user/profile/public-id', title: '公开主页', visibleText: '加载失败',
+      renderedCardCount: 0, itemCount: 0
+    }).sourceUnavailable).toBe(true);
   });
 
   test('crash recovery removes only the exact work-derived document-start observer', async () => {

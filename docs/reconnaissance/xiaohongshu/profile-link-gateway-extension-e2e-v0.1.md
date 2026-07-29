@@ -134,3 +134,22 @@ artifact: none
 修复已写入 `extension-work-xiaohongshu-account-public-notes.ts`：短链导航函数现在返回内部绑定的目标 tab ID，后续只核对该 tab 的 document；调用方仍不能提交 tab ID，已有主页 tab 路径仍保持全局唯一前置条件。纯逻辑回归已覆盖“多个主页存在时选择内部绑定 tab”和“绑定 tab 消失时停止”，扩展构建指纹更新为 `5bfc2e447312699caa018d6310e23cf1cc608c03f755d3b75058b72fa2501a4b`。
 
 由于该条新链接已经实际导航过，不能重放来验证修复。下一次真实验证必须使用另一条全新的短时主页链接；在此之前不能把这次修复描述成已经通过真实 multi-profile canary。
+
+## 2026-07-29 主页正文风险误报回归与修复
+
+在新的 tab 绑定修复 worker 上再次使用全新短链时，主页导航成功，但任务返回 `xiaohongshu_source_unavailable`：
+
+```yaml
+operationId: 4ba6c3e5-1143-48c5-9c83-a12ca89a4f5e
+executionTarget: ephemeral_public_profile_url
+validationBaselineNavigations: 1
+productPlatformNavigations: 1
+automaticPlatformRetries: 0
+artifact: none
+```
+
+只读视觉证据 `e619cdc2-85a2-4ab4-ac42-af0aff0b2195` 显示目标公开主页已经完整渲染头像、公开简介、统计和笔记卡片；没有验证码、登录页、空白页或异常访问提示。因此这次不是平台 source unavailable，而是风险分类器把主页正文/笔记文本中的“加载失败/网络错误”等词误认为整页不可用。
+
+修复已加入 profile DOM probe：当规范公开主页路径同时具有可见笔记卡片和可投影笔记时，只抑制这一类文本误报；登录、验证、限流风险仍然立即停止，真正没有公开主页结构的错误页仍返回 `source_unavailable`。纯逻辑门禁已覆盖“带错误短语但有卡片的主页”和“没有卡片的错误页”两种情况。
+
+这条短链也已经实际导航过，不能重放。修复后的构建指纹为 `ebf228c5df7c5a921ec165ab6e964f08760aa94f1ce28b8f2be9a4b15a87c3a9`，验证浏览器已显式重建并加载该 worker；下一次真实验证仍需要另一条全新的短时主页链接。

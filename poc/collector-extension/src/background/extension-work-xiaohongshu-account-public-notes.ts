@@ -468,11 +468,37 @@ async function readPageProbe(profileDocument: ProfileDocument, maximumItems = 40
     viewportWidth,
     viewportHeight,
     items: normaliseProfileDomItems(value.items, maximumItems),
-    risk: classifyXiaohongshuCurrentPageRisk({
+    risk: classifyXiaohongshuProfileProbeRisk({
       pathname: value.pathname,
       title: value.title,
-      visibleText: value.visibleText
+      visibleText: value.visibleText,
+      renderedCardCount,
+      itemCount: Array.isArray(value.items) ? value.items.length : 0
     })
+  };
+}
+
+/**
+ * Profile pages can contain public note text such as “加载失败” or
+ * “网络错误”. The generic page classifier must not turn a visible, populated
+ * profile into a source-unavailable result merely because a card contains one
+ * of those phrases. Keep the hard risk signals, but require the profile page
+ * to lack its own public structure before treating sourceUnavailable as a
+ * page-level failure.
+ */
+export function classifyXiaohongshuProfileProbeRisk(input: {
+  pathname: string;
+  title: string;
+  visibleText: string;
+  renderedCardCount: number;
+  itemCount: number;
+}): ReturnType<typeof classifyXiaohongshuCurrentPageRisk> {
+  const risk = classifyXiaohongshuCurrentPageRisk(input);
+  const isPublicProfilePath = /^\/user\/profile\/[A-Za-z0-9_-]+\/?$/.test(input.pathname);
+  const hasVisibleProfileContent = input.renderedCardCount > 0 && input.itemCount > 0;
+  return {
+    ...risk,
+    sourceUnavailable: risk.sourceUnavailable && !(isPublicProfilePath && hasVisibleProfileContent)
   };
 }
 
