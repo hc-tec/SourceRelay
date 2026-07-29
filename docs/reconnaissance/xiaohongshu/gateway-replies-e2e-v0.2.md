@@ -133,3 +133,13 @@ replyOperationId: 1b36fe09-d8bf-4641-8897-3e6cf3239055
 该回归的整体脚本终态没有记为 `proved`：原验证脚本使用的 `120s` 本地 PageLease 在四段 operation 完成后的收尾阶段过期，Browser Host 按安全策略将页面转为 `quarantined / lease_expired`，脚本随后得到 `xiaohongshu_gateway_e2e_page_context_changed`。这不是平台动作未知，也没有重放任何语义动作；隔离页已用精确 record version 显式关闭。
 
 验证脚本随后修复了三点本地生命周期问题：收养唯一 `retained_for_review` 小红书页、为 baseline 导航使用 run-scoped action ID、把连续闭环 lease 提高到有界的 `300s`。这次 partial 回归不改变前一节已完成四项能力的 direct-ready 结论，也不作为主页笔记能力的 live canary 证据。
+
+## 2026-07-29 核心修复后的真实回归
+
+本轮把 adoption contract 与连续闭环验证器统一为有界 `300s` lease，并补上“页面已有可见评论但没有滚动容器”时的合法 DOM fallback。验证浏览器经过 headless runtime probe 后以唯一可见会话运行，当前构建指纹为 `e15bba1c49ed120d3a00b66bef4e5cea43cff890ce067a0658efb3845cb27da5`。
+
+组合路径真实通过：一次公开搜索动作同时请求 1 条详情、评论和 1 个回复线程，返回 19 条搜索结果、1 条详情、10 条评论和 1 个带 parent/reply 关系的 Network 线程；没有新 tab、刷新或自动重试，最终页面为 `retained_for_review`。验证 run：`9cffdce2-7ed7-499a-b044-5c8b72b2dc4f`。
+
+独立评论 operation 在同一公开样本上也真实完成，采用 `dom_fallback`，收集 6 条评论并执行 2 次有界滚动。独立回复 operation 则按严格契约停止：页面视觉上已有多条带“回复”文本的内容，但没有可见“展开 N 条回复”控件，也没有可证明的稳定 parent id；不得把相邻 DOM 节点强行拼成线程。该失败属于 `xiaohongshu_comment_replies_postcondition_unmet`，不是 lease、闪退、验证码或风控。
+
+最终 Browser Host 状态：`ready`、扩展页 `0`、受管目标页 `1`、`livePlatformRequests: 0`；journal 以 `page_released → retained_for_review` 结束，没有 `lease_expired`、`controller_disconnected` 或 `quarantined`。
