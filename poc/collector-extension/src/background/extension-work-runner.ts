@@ -21,6 +21,7 @@ import { xiaohongshuProfileLinkDiscoveryAttempted } from './xiaohongshu-profile-
 import { xiaohongshuNoteDetailClickAttempted } from './xiaohongshu-note-detail-click-ledger';
 import { xiaohongshuNoteCommentsScrollCounts } from './xiaohongshu-note-comments-scroll-ledger';
 import { xiaohongshuCommentRepliesClickCounts } from './xiaohongshu-comment-replies-click-ledger';
+import { cleanupXiaohongshuSearchObserver } from './xiaohongshu-current-page-network';
 import { claimNextExtensionWork, submitExtensionWorkResult } from './extension-work-client';
 import {
   clearActiveExtensionWork,
@@ -207,6 +208,9 @@ async function deliverPendingResult(pending: PendingExtensionWorkResult): Promis
 }
 
 async function interruptedResult(active: ActiveExtensionWork): Promise<ExtensionWorkResult> {
+  if (active.item.platform === 'xiaohongshu') {
+    await cleanupXiaohongshuSearchObserver(active.item.workId).catch(() => undefined);
+  }
   if (active.item.capability === 'xiaohongshu.note.public_comment_replies.v1') {
     const counts = await xiaohongshuCommentRepliesClickCounts(active.item.workId);
     return { schemaVersion:1,protocolVersion:1,workId:active.item.workId,operationId:active.item.operationId,

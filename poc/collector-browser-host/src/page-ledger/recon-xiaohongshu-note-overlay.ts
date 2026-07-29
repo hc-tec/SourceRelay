@@ -87,8 +87,13 @@ export async function executeXiaohongshuNoteOverlayRecon(input: {
     } catch {
       return;
     }
-    if (url.hostname !== 'www.xiaohongshu.com') return;
-    responsePromises.push(projectResponseShape(response, url.pathname));
+    // Xiaohongshu serves public note data from more than the document host.
+    // Keep this recon-only observer limited to HTTPS first-party subdomains;
+    // never capture arbitrary third-party responses.  The host+path value is
+    // a temporary, query-free shape diagnostic and is not a production route.
+    if (url.protocol !== 'https:' ||
+      !(url.hostname === 'xiaohongshu.com' || url.hostname.endsWith('.xiaohongshu.com'))) return;
+    responsePromises.push(projectResponseShape(response, `${url.hostname}${url.pathname}`));
   };
 
   try {

@@ -680,8 +680,12 @@ try {
           total + (Array.isArray(detail?.comments?.comments) ? detail.comments.comments.length : 0), 0)
         : reportedArtifact.summary.commentCount ?? null,
       replyCount: reportedArtifact.summary.replyCount ?? null,
-      networkMatchedPayloadCount: reportedArtifact.result.projection?.network?.matchedPayloadCount ?? null,
-      networkBodyBytesRead: reportedArtifact.result.projection?.network?.bodyBytesRead ?? null,
+      // Search projection keeps Network counters at the projection root;
+      // detail/comment projections nest them under `network`.
+      networkMatchedPayloadCount: reportedArtifact.result.projection?.network?.matchedPayloadCount ??
+        reportedArtifact.result.projection?.matchedPayloadCount ?? null,
+      networkBodyBytesRead: reportedArtifact.result.projection?.network?.bodyBytesRead ??
+        reportedArtifact.result.projection?.bodyBytesRead ?? null,
       networkCursorObserved: reportedArtifact.result.projection?.network?.cursorObserved ?? null,
       actionTriggeredResponseCount:
         reportedArtifact.result.projection?.network?.actionTriggeredResponseCount ?? null,

@@ -85,6 +85,19 @@ if (!existing) {
       .replace(/\s+/g, ' ').trim().slice(0, maximum);
   const object = (value: unknown): Record<string, unknown> | null =>
     value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const jsonObject = (value: unknown): Record<string, unknown> | null => {
+    if (typeof value !== 'string' || value.length > maximumBodyBytes) return null;
+    try {
+      let parsed: unknown = JSON.parse(value);
+      // A few web builds double-encode the card envelope before placing it in
+      // the search item. Decode at most one additional layer; never evaluate
+      // arbitrary script text.
+      if (typeof parsed === 'string' && parsed.length <= maximumBodyBytes) parsed = JSON.parse(parsed);
+      return object(parsed);
+    } catch {
+      return null;
+    }
+  };
 
   const project = (value: unknown): {
     items: PublicItem[];
@@ -130,25 +143,32 @@ if (!existing) {
       const recordHasMore = record.has_more ?? record.hasMore;
       if (typeof recordHasMore === 'boolean') hasMore = recordHasMore;
       if (clean(record.cursor ?? record.next_cursor ?? record.nextCursor, 200)) cursorObserved = true;
-      const card = object(record.note_card ?? record.noteCard);
-      if (card) {
-        const user = object(card.user) ?? {};
-        const interact = object(card.interact_info ?? card.interactInfo) ?? {};
-        const noteId = clean(card.note_id ?? card.noteId ?? record.id, 80);
-        const title = clean(card.display_title ?? card.title, 500);
+      // Search/profile responses have changed the card envelope several
+      // times: some builds expose `note_card` as an object, others flatten it
+      // or serialise it as JSON.  Keep the projector shape-bound and only
+      // promote records that carry a note identity plus a title-like field.
+      const card = object(record.note_card ?? record.noteCard ?? record.note ?? record.card) ??
+        jsonObject(record.note_card ?? record.noteCard);
+      const candidate = card ?? (Object.hasOwn(record, 'model_type') ||
+        Object.hasOwn(record, 'display_title') || Object.hasOwn(record, 'note_id') ? record : null);
+      if (candidate) {
+        const user = object(candidate.user ?? candidate.user_info ?? record.user ?? record.user_info) ?? {};
+        const interact = object(candidate.interact_info ?? candidate.interactInfo ?? record.interact_info) ?? {};
+        const noteId = clean(candidate.note_id ?? candidate.noteId ?? record.note_id ?? record.noteId ?? record.id, 80);
+        const title = clean(candidate.display_title ?? candidate.title ?? record.display_title ?? record.title, 500);
         if (noteId && title) {
           items.push({
             noteId,
             title,
-            contentType: clean(card.type ?? record.model_type, 40),
+            contentType: clean(candidate.type ?? record.model_type, 40),
             authorId: clean(user.user_id ?? user.userId, 80),
             authorNickname: clean(user.nickname ?? user.nick_name, 200),
             likedCountText: clean(interact.liked_count ?? interact.likedCount, 40)
           });
         }
-        const description = clean(card.desc ?? card.description, 11_000);
+        const description = clean(candidate.desc ?? candidate.description ?? candidate.content ?? record.desc, 11_000);
         if (noteId && description && details.length < maximumItems) {
-          const publicTitle = clean(card.title ?? card.display_title, 500);
+          const publicTitle = clean(candidate.title ?? candidate.display_title ?? title, 500);
           details.push({
             noteId,
             publicText: clean(`${publicTitle}\n${description}`, 12_000),

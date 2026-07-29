@@ -2,6 +2,7 @@ import type { Page, Response } from 'playwright';
 import {
   XIAOHONGSHU_TRUSTED_SEARCH_SCHEMA_VERSION,
   isXiaohongshuTrustedSearchRequest,
+  type XiaohongshuTrustedSearchResponseShape,
   type XiaohongshuTrustedSearchRequest,
   type XiaohongshuTrustedSearchResult
 } from '@intelligence/collector-contracts';
@@ -58,6 +59,7 @@ export async function executeTrustedXiaohongshuSearch(input: {
   const deadline = Date.now() + request.timeoutMs;
   let actionAttempted = false;
   const responses: Array<{ successful: boolean; json: boolean }> = [];
+  const responseShapePromises: Array<Promise<XiaohongshuTrustedSearchResponseShape | null>> = [];
   const onResponse = (response: Response): void => {
     if (responses.length >= 64) return;
     const resourceType = response.request().resourceType();
@@ -67,6 +69,19 @@ export async function executeTrustedXiaohongshuSearch(input: {
       successful: response.status() >= 200 && response.status() < 300,
       json: contentType.includes('json')
     });
+    // This command is a live reconnaissance surface, not a production
+    // response API.  Read a bounded body in memory and retain only a
+    // query-free first-party shape so we can determine whether a stable
+    // public route is worth a separate, reviewed projector.
+    // Search pages may emit several telemetry/collection responses before the
+    // actual note batch. Keep a bounded shape window large enough to see the
+    // content response without retaining an unbounded network archive.
+    if (responseShapePromises.length >= 64) return;
+    let url: URL;
+    try { url = new URL(response.url()); } catch { return; }
+    if (url.protocol !== 'https:' ||
+      !(url.hostname === 'xiaohongshu.com' || url.hostname.endsWith('.xiaohongshu.com'))) return;
+    responseShapePromises.push(projectResponseShape(response, url.hostname, url.pathname));
   };
 
   try {
@@ -104,6 +119,9 @@ export async function executeTrustedXiaohongshuSearch(input: {
     }
     await withinDeadline(record.page.keyboard.press('Enter'), remaining(deadline));
     const after = await waitForSearchPostcondition(record.page, request.query, responses, deadline);
+    const responseShapes = (await Promise.all(responseShapePromises.map((promise) => withinDeadline(
+      promise.catch(() => null), Math.min(3_000, remaining(deadline))
+    )))).filter((value): value is XiaohongshuTrustedSearchResponseShape => value !== null);
     const afterVisualEvidence = await withinDeadline(captureManagedPageVisualEvidence({
       page: record.page,
       pageAlias: record.pageAlias,
@@ -138,7 +156,8 @@ export async function executeTrustedXiaohongshuSearch(input: {
         responseCount: responses.length,
         successfulResponseCount: responses.filter((response) => response.successful).length,
         jsonResponseCount: responses.filter((response) => response.json).length,
-        responseBodiesRead: false
+        responseBodiesRead: responseShapes.some((response) => response.bodyBytes > 0),
+        responseShapes
       },
       risk: {
         loginRequired: after.risk.loginRequired,
@@ -165,6 +184,76 @@ export async function executeTrustedXiaohongshuSearch(input: {
   } finally {
     record.page.off('response', onResponse);
   }
+}
+
+async function projectResponseShape(
+  response: Response,
+  host: string,
+  path: string
+): Promise<XiaohongshuTrustedSearchResponseShape | null> {
+  const mime = (response.headers()['content-type'] ?? '').split(';')[0]!.trim().toLowerCase();
+  const base = { host, path, status: response.status(), mime };
+  if (!mime.includes('json')) return {
+    ...base,
+    bodyBytes: 0,
+    topLevelKeys: [],
+    dataKeys: [],
+    firstArrayPath: null,
+    firstArrayLength: 0,
+    firstItemKeys: []
+  };
+  const body = await response.body();
+  if (body.byteLength > 512 * 1024) return null;
+  let value: unknown;
+  try { value = JSON.parse(body.toString('utf8')); } catch { return null; }
+  const array = firstArray(value, '$', 0);
+  const data = record(value) ? value.data : null;
+  return {
+    ...base,
+    bodyBytes: body.byteLength,
+    topLevelKeys: safeKeys(value),
+    dataKeys: safeKeys(data),
+    firstArrayPath: array?.path ?? null,
+    firstArrayLength: array?.value.length ?? 0,
+    firstItemKeys: array?.value.length ? firstItemShapeKeys(array.value[0]) : []
+  };
+}
+
+function firstItemShapeKeys(value: unknown): string[] {
+  const keys = safeKeys(value);
+  const item = record(value);
+  if (item) {
+    for (const [key, nested] of Object.entries(item)) {
+      if (record(nested)) keys.push(...safeKeys(nested).map((nestedKey) => `${safeKey(key)}.${nestedKey}`));
+      else if (Array.isArray(nested)) {
+        keys.push(`${safeKey(key)}.array`);
+        if (record(nested[0])) keys.push(...safeKeys(nested[0]).map((nestedKey) => `${safeKey(key)}[0].${nestedKey}`));
+      } else keys.push(`${safeKey(key)}.type.${nested === null ? 'null' : typeof nested}`);
+    }
+  }
+  return [...new Set(keys)].sort().slice(0, 80);
+}
+
+function firstArray(value: unknown, path: string, depth: number): { path: string; value: unknown[] } | null {
+  if (Array.isArray(value)) return { path, value };
+  if (!record(value) || depth >= 4) return null;
+  for (const key of Object.keys(value).sort()) {
+    const found = firstArray(value[key], `${path}.${safeKey(key)}`, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+function safeKeys(value: unknown): string[] {
+  return record(value) ? Object.keys(value).map(safeKey).filter(Boolean).sort().slice(0, 40) : [];
+}
+
+function safeKey(value: string): string {
+  return /^[A-Za-z0-9_.-]{1,80}$/.test(value) ? value : 'other';
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function assertSearchPrecondition(probe: SearchProbe): void {

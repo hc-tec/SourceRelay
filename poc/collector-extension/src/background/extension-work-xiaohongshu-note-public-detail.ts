@@ -95,8 +95,15 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
         !baselineChildTabIds.has(tab.id));
     if (opened) throw new Error('xiaohongshu_note_detail_new_tab_detected');
     await completeXiaohongshuNoteDetailClick(item.workId);
-    const network = await readXiaohongshuExistingSearchNoteDetailNetworkProjection(pageDocument.tabId, item.workId);
-    const networkDetail = network.detail;
+    const network = await readXiaohongshuExistingSearchNoteDetailNetworkProjection(
+      pageDocument.tabId, item.workId, item.input.resultRank
+    );
+    // A response projection may be ordered by the platform's API rather than
+    // by the DOM card order.  Only promote the rank fallback when its public
+    // text also appears in the visible overlay; otherwise keep the truthful
+    // DOM fallback instead of attaching another note's正文.
+    const networkDetail = network.detail && publicTextMatchesDom(network.detail.publicText, dom.publicText)
+      ? network.detail : null;
     projection = {
       schemaVersion: 1,
       sourceRank: item.input.resultRank,
@@ -190,6 +197,16 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     responseUrlsStored: false,
     debuggerDetached
   };
+}
+
+function publicTextMatchesDom(networkText: string, domText: string): boolean {
+  const normalise = (value: string): string => value.replace(/\s+/g, ' ').trim();
+  const network = normalise(networkText);
+  const dom = normalise(domText);
+  if (network.length < 20 || dom.length < 20) return false;
+  const networkSample = network.slice(0, Math.min(96, network.length));
+  const domSample = dom.slice(0, Math.min(96, dom.length));
+  return dom.includes(networkSample) || network.includes(domSample);
 }
 
 function createComposedCommentsWorkItem(

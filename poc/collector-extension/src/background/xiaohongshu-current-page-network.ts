@@ -181,6 +181,10 @@ export async function armXiaohongshuExistingExploreWorkObserver(
     throw new Error('xiaohongshu_current_page_network_selection_active');
   }
   if (!current) await armManagedXiaohongshuCurrentDocument(tabId, workId, null, 'explore');
+  // Entering a search replaces Explore with a new document. Register the
+  // bounded MAIN-world observer before the trusted Enter so it runs at
+  // document_start on /search_result and can see the first note response.
+  await registerSearchResultObserver(workId);
   await mutateMainWorldCommentContinuity(tabId, workId, 'reset');
 }
 
@@ -399,7 +403,8 @@ async function mutateMainWorldCommentContinuity(
 
 export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
   tabId: number,
-  workId: string
+  workId: string,
+  resultRank = 0
 ): Promise<{
   matchedPayloadCount: number;
   bodyBytesRead: number;
@@ -423,10 +428,11 @@ export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
   const text = (value: unknown, maximum: number): string => (typeof value === 'string' ? value : '')
     .replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, maximum);
   const selectedNoteId = text(candidate?.selectedNoteId, 80);
-  const rawDetail = Array.isArray(candidate?.details)
-    ? candidate.details.find((value) => value && typeof value === 'object' &&
-      text((value as Record<string, unknown>).noteId, 80) === selectedNoteId) as Record<string, unknown> | undefined
-    : undefined;
+  const rawDetails = Array.isArray(candidate?.details)
+    ? candidate.details.filter((value) => value && typeof value === 'object') as Record<string, unknown>[]
+    : [];
+  const rawDetail = rawDetails.find((value) => text(value.noteId, 80) === selectedNoteId) ??
+    (resultRank >= 1 ? rawDetails[resultRank - 1] : undefined);
   const publicText = text(rawDetail?.publicText, 12_000);
   return {
     matchedPayloadCount: Number.isSafeInteger(candidate?.matchedPayloadCount)
@@ -519,10 +525,43 @@ function normalisePublicNoteDetails(
 }
 
 export async function clearXiaohongshuWorkObserver(tabId: number, workId: string): Promise<void> {
+  await unregisterSearchResultObserver(workId);
   const record = await loadActiveRecord();
   if (!recordMatchesManagedPageRun(record, tabId, workId)) return;
   await chrome.storage.session.remove(XIAOHONGSHU_CURRENT_PAGE_NETWORK_STORAGE_KEY);
   unregisterNetworkMetadataListener();
+}
+
+async function registerSearchResultObserver(workId: string): Promise<void> {
+  const contentScriptId = searchObserverScriptId(workId);
+  await unregisterSearchResultObserver(workId);
+  try {
+    await chrome.scripting.registerContentScripts([{
+      id: contentScriptId,
+      matches: ['https://www.xiaohongshu.com/search_result*'],
+      js: ['xiaohongshu-search-main-world-observer.js'],
+      runAt: 'document_start',
+      allFrames: false,
+      persistAcrossSessions: false,
+      world: 'MAIN'
+    }]);
+  } catch {
+    throw new Error('xiaohongshu_search_observer_registration_failed');
+  }
+}
+
+async function unregisterSearchResultObserver(workId: string): Promise<void> {
+  if (!/^[0-9a-f-]{36}$/i.test(workId)) return;
+  await chrome.scripting.unregisterContentScripts({ ids: [searchObserverScriptId(workId)] }).catch(() => undefined);
+}
+
+/** Crash-recovery cleanup for a worker that stopped before its normal finally. */
+export async function cleanupXiaohongshuSearchObserver(workId: string): Promise<void> {
+  await unregisterSearchResultObserver(workId);
+}
+
+function searchObserverScriptId(workId: string): string {
+  return `collector-xhs-search-${workId.replace(/-/g, '')}`;
 }
 
 export async function readXiaohongshuExistingExploreWorkProjection(

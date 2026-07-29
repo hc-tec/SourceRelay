@@ -136,3 +136,27 @@ accountScopedSurfaces: forbidden
 7. 本地对象的保留、去重、删除与上层引用采用独立生命周期，避免平台采集任务顺带变成无限媒体仓库。
 
 这项工作已登记为后续核心能力，本轮回复 Network 闭环不包含实现，也不得以“已经保存临时 URL”冒充媒体已持久化。
+
+## 2026-07-30：direct 能力的 Network-first 实证更新
+
+本文件前面的 `current_page.network_metadata` 是 catalog-only 的旧观察能力，下面的结果属于独立的 direct Gateway → MV3 Extension capability，不改变旧 capability 的权限边界，也不把未知 route 变成通用 response API。
+
+真实搜索回归发现，回车会替换顶层 document。生产搜索 work 现在在可信输入前预注册一个短时 `document_start` MAIN-world observer，让新 `/search_result` document 在首个响应前开始监听；正常完成和 worker 中断恢复都会按 workId 注销该注册。真实 run 得到：
+
+```yaml
+capability: xiaohongshu.search.public_notes.v1
+sourceRoute: so.xiaohongshu.com/api/sns/web/v2/search/notes
+status: 200
+mime: application/json
+projection: data.items
+matchedPayloadCount: 1
+bodyBytesRead: 58830
+rawPayloadStored: false
+responseUrlsStored: false
+```
+
+独立 Host 侦察只保留主机、无 query 路径、状态、MIME、字节数和字段形状；正文在内存中读取后立即丢弃。该 route 尚未加入 `xiaohongshu.current_page.network_metadata`，也尚未被静态 `approvedResponseRouteIds` 宣布为任意调用方可用的通用接口。
+
+评论与回复已经在同一套有界 observer 上真实通过：评论结果为 `hybrid`，回复结果为 `network_projection`。两者都没有保存 URL、Cookie、Token 或原始 payload；回复样本的 `actionTriggeredResponseCount=0`，表示从 overlay 已有响应投影，不通过额外点击或重放获取。
+
+详情正文仍需保持保守：搜索响应虽有 Network 正文计数，但当前响应投影与详情浮层 DOM 尚未建立足够强的同一笔记身份对应，因而 capability 继续输出 `dom_fallback`。主页自然头像发现和临时 `xsec_token` 观察已通过，但主页首批 Network 正文仍为 `0/0`，继续输出 DOM fallback。上述两个未通过项不能通过扩大预算、刷新、重复点击或主动导航解决。

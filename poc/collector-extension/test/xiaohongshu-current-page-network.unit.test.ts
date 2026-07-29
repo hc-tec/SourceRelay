@@ -41,6 +41,8 @@ function installChromeMock() {
     frameId: 0,
     result: { pathname: '/search_result', title: '公开搜索', visibleText: '公开可见的搜索结果' }
   }]);
+  const registerContentScripts = vi.fn(async () => undefined);
+  const unregisterContentScripts = vi.fn(async () => undefined);
   const managedTab = {
     id: 11, windowId: 22, active: true, incognito: false, status: 'complete', url: exploreUrl
   };
@@ -67,12 +69,12 @@ function installChromeMock() {
           removeListener: removeNetworkListener
         }
       },
-      scripting: { executeScript }
+      scripting: { executeScript, registerContentScripts, unregisterContentScripts }
     } as unknown as typeof chrome
   });
   return {
-    request, contains, executeScript, getFrame, beforeNavigate, committed, errored, removed, completed,
-    removeNetworkListener, managedTab
+    request, contains, executeScript, registerContentScripts, unregisterContentScripts, getFrame,
+    beforeNavigate, committed, errored, removed, completed, removeNetworkListener, managedTab
   };
 }
 
@@ -398,6 +400,27 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
       world: 'MAIN'
     });
     expect(firstCall).not.toHaveProperty('files');
+  });
+
+  test('pre-registers a document-start observer for the search-result navigation and removes it at work end', async () => {
+    const chrome = installChromeMock();
+    const workId = '11111111-1111-4111-8111-111111111111';
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+
+    await expect(subject.armXiaohongshuExistingExploreWorkObserver(11, workId)).resolves.toBeUndefined();
+    expect(chrome.registerContentScripts).toHaveBeenCalledWith([expect.objectContaining({
+      id: 'collector-xhs-search-11111111111141118111111111111111',
+      matches: ['https://www.xiaohongshu.com/search_result*'],
+      js: ['xiaohongshu-search-main-world-observer.js'],
+      runAt: 'document_start',
+      world: 'MAIN',
+      persistAcrossSessions: false
+    })]);
+
+    await expect(subject.clearXiaohongshuWorkObserver(11, workId)).resolves.toBeUndefined();
+    expect(chrome.unregisterContentScripts).toHaveBeenCalledWith({
+      ids: ['collector-xhs-search-11111111111141118111111111111111']
+    });
   });
 
   test('does not overwrite or consume a popup-created active selection', async () => {

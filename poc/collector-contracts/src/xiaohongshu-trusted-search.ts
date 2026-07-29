@@ -3,6 +3,24 @@ import type { PageVisualEvidence } from './page-visual-evidence.js';
 export const XIAOHONGSHU_TRUSTED_SEARCH_SCHEMA_VERSION = 1 as const;
 
 /**
+ * A temporary, query-free response shape used only by the live reconnaissance
+ * command.  It deliberately keeps field names and array sizes, never the
+ * response URL, headers, credentials, or body content.
+ */
+export interface XiaohongshuTrustedSearchResponseShape {
+  host: string;
+  path: string;
+  status: number;
+  mime: string;
+  bodyBytes: number;
+  topLevelKeys: string[];
+  dataKeys: string[];
+  firstArrayPath: string | null;
+  firstArrayLength: number;
+  firstItemKeys: string[];
+}
+
+/**
  * One narrow, source-specific in-page search action. No URL, selector,
  * script, coordinate, tab ID or document ID can be supplied by the caller.
  */
@@ -45,7 +63,9 @@ export interface XiaohongshuTrustedSearchResult {
     responseCount: number;
     successfulResponseCount: number;
     jsonResponseCount: number;
-    responseBodiesRead: false;
+    responseBodiesRead: boolean;
+    /** Present only for the Host's live recon command; absent in production. */
+    responseShapes?: readonly XiaohongshuTrustedSearchResponseShape[];
   };
   risk: {
     loginRequired: boolean;
