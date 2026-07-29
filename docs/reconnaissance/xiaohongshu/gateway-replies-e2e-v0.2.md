@@ -207,3 +207,25 @@ finalPageState: retained_for_review
 - 验证器明确区分 `completed` 与 `partial_postcondition`，不把部分结果报告为完整成功。
 
 本回归仍遵守 at-most-once：验证基线导航 1 次、可信回复点击 1 次、动作后新增响应 0 次；没有刷新、换 tab、新 tab、自动重试、Cookie/Token/原始响应持久化。浏览器最终状态为 `ready`，扩展页 `0`，目标页 `1`，并保留为 `retained_for_review`。
+
+## 2026-07-29 回复后置条件等待与 DOM 归因回归
+
+针对上一节的第三线程未证明问题，扩展增加了一个有界后置条件等待：可信点击后最多等待 `10s`，每 `500ms` 在同一 document 内复核 DOM、Network、风险状态和子 tab 集合；同时把点击前父评论文本作为证据，优先选择包含该父评论的可见 DOM 根。该改动没有增加点击次数、刷新、导航或任意 selector 输入。
+
+真实 run：`237cd33f-e913-4957-8025-d5f118380aa4`，构建指纹 `f97a0953bb77f73c0dbf0ee6e4c47687a177f4e89dfd6364058bc0f6c737ddfc`。结果仍稳定为：
+
+```yaml
+requestedThreads: 3
+completedThreads: 2
+state: stopped
+terminalReason: postcondition_unmet
+replyCount: 2
+semanticActionCount: 1
+networkMatchedPayloadCount: 1
+networkBodyBytesRead: 3984
+networkCursorObserved: true
+actionTriggeredResponseCount: 0
+finalPageState: retained_for_review
+```
+
+收尾视觉证据中可以看到一个嵌套回复，但当前证据不能可靠证明它属于本次点击的第三目标；Network 也没有出现动作后新增响应。因此不能把这段相邻可见 DOM 当成第三条线程，也不能报告为 `3/3`。当前产品边界保持为：稳定交付已证明的 2 条，第三条在没有可归因后置条件时安全停止。

@@ -37,6 +37,9 @@ interface DomReplyThread {
 
 type ReplyNetworkProjection = Awaited<ReturnType<typeof readXiaohongshuExistingNoteReplyNetworkProjection>>;
 
+const REPLY_POSTCONDITION_WAIT_MS = 10_000;
+const REPLY_POSTCONDITION_POLL_MS = 500;
+
 export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
   item: XiaohongshuNotePublicCommentRepliesWorkItem,
   options: {
@@ -116,17 +119,16 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
         throw new Error('debugger_input_failed');
       });
 
-      await delay(3_500);
-      await assertSameDocument(page, options.allowSearchOverlay === true);
-      await assertNoNewChildTab(page.tabId, existingChildTabIds);
-      assertNoPageRisk(await readPageRisk(page));
-
-      const domAfter = await readExpandedReplyThread(page, target.label);
-      const networkAfter = await readXiaohongshuExistingNoteReplyNetworkProjection(
-        page.tabId,
+      const expanded = await waitForReplyPostcondition(
+        page,
+        target,
+        existingChildTabIds,
         observerWorkId,
+        networkBefore,
         options.allowSearchOverlay === true
       );
+      const domAfter = expanded.dom;
+      const networkAfter = expanded.network;
       const expandedProjection = mergeReplyEvidence(target, domAfter, networkBefore, networkAfter);
       projections.push(expandedProjection);
       expandedParentTexts.add(normaliseParentText(expandedProjection.parentComment.publicText));
@@ -536,11 +538,15 @@ async function findReplyExpansionTarget(page: BoundPage, excludedParentTexts: st
   return value ?? null;
 }
 
-async function readExpandedReplyThread(page: BoundPage, oldLabel: string): Promise<DomReplyThread> {
+async function readExpandedReplyThread(
+  page: BoundPage,
+  oldLabel: string,
+  expectedParentText: string
+): Promise<DomReplyThread | null> {
   const result = await chrome.scripting.executeScript({
     target: { tabId: page.tabId, documentIds: [page.documentId] },
-    args: [oldLabel],
-    func: (labelBeforeClick) => {
+    args: [oldLabel, expectedParentText],
+    func: (labelBeforeClick, parentTextBeforeClick) => {
       const visible = (element: Element): boolean => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
@@ -557,6 +563,7 @@ async function readExpandedReplyThread(page: BoundPage, oldLabel: string): Promi
       );
       if (stillCollapsed) return null;
 
+      const expectedParentPrefix = clean(parentTextBeforeClick, 160).slice(0, 80);
       const candidateRoots = Array.from(document.querySelectorAll('a[href*="/user/profile/"]'))
         .filter(visible)
         .map((anchor) => {
@@ -571,7 +578,13 @@ async function readExpandedReplyThread(page: BoundPage, oldLabel: string): Promi
           return null;
         })
         .filter((value): value is HTMLElement => value !== null)
-        .sort((left, right) => left.getBoundingClientRect().height - right.getBoundingClientRect().height);
+        .sort((left, right) => {
+          const leftText = clean(left.textContent ?? '', 2_000);
+          const rightText = clean(right.textContent ?? '', 2_000);
+          const leftMatch = expectedParentPrefix.length > 0 && leftText.includes(expectedParentPrefix) ? 0 : 1;
+          const rightMatch = expectedParentPrefix.length > 0 && rightText.includes(expectedParentPrefix) ? 0 : 1;
+          return leftMatch - rightMatch || left.getBoundingClientRect().height - right.getBoundingClientRect().height;
+        });
       const root = candidateRoots[0] ?? null;
       if (!root) return null;
 
@@ -609,8 +622,49 @@ async function readExpandedReplyThread(page: BoundPage, oldLabel: string): Promi
     }
   });
   const value = result[0]?.result;
-  if (!value?.replies?.length) throw new Error('xiaohongshu_comment_replies_postcondition_unmet');
-  return value;
+  return value?.replies?.length ? value : null;
+}
+
+async function waitForReplyPostcondition(
+  page: BoundPage,
+  target: ReplyExpansionTarget,
+  existingChildTabIds: Set<number>,
+  observerWorkId: string,
+  networkBefore: ReplyNetworkProjection,
+  allowSearchOverlay: boolean
+): Promise<{ dom: DomReplyThread | null; network: ReplyNetworkProjection }> {
+  const deadline = Date.now() + REPLY_POSTCONDITION_WAIT_MS;
+  let network = networkBefore;
+  let dom: DomReplyThread | null = null;
+  while (true) {
+    await assertSameDocument(page, allowSearchOverlay);
+    await assertNoNewChildTab(page.tabId, existingChildTabIds);
+    assertNoPageRisk(await readPageRisk(page));
+    dom = await readExpandedReplyThread(page, target.label, target.parent.publicText);
+    network = await readXiaohongshuExistingNoteReplyNetworkProjection(
+      page.tabId,
+      observerWorkId,
+      allowSearchOverlay
+    );
+    if (hasReplyEvidence(target, dom, network)) return { dom, network };
+    if (Date.now() >= deadline) throw new Error('xiaohongshu_comment_replies_postcondition_unmet');
+    await delay(REPLY_POSTCONDITION_POLL_MS);
+  }
+}
+
+function hasReplyEvidence(
+  target: ReplyExpansionTarget,
+  dom: DomReplyThread | null,
+  network: ReplyNetworkProjection
+): boolean {
+  if (dom?.replies.length) return true;
+  const normalise = (value: string): string => value.replace(/\s+/g, ' ').trim();
+  const targetText = normalise(target.parent.publicText);
+  const parent = network.comments.find((comment) => {
+    const candidateText = normalise(comment.publicText);
+    return targetText.includes(candidateText) || candidateText.includes(targetText.slice(0, 40));
+  });
+  return Boolean(parent && network.comments.some((comment) => comment.parentCommentId === parent.commentId));
 }
 
 async function readChildTabIds(openerTabId: number): Promise<Set<number>> {
@@ -648,7 +702,7 @@ async function dispatchTrustedClick(
 
 function mergeReplyEvidence(
   target: ReplyExpansionTarget,
-  domAfter: DomReplyThread,
+  domAfter: DomReplyThread | null,
   networkBefore: ReplyNetworkProjection,
   networkAfter: ReplyNetworkProjection
 ): XiaohongshuPublicReplyThreadProjection {
@@ -663,10 +717,10 @@ function mergeReplyEvidence(
   const archivedReplies = parentId
     ? networkAfter.comments.filter((comment) => comment.parentCommentId === parentId)
     : [];
-  const parentComment = archivedParent ? projectArchivedComment(archivedParent, 1) : domAfter.parent;
+  const parentComment = archivedParent ? projectArchivedComment(archivedParent, 1) : domAfter?.parent ?? target.parent;
   const replies = archivedReplies.length > 0
     ? archivedReplies.slice(0, 40).map((comment, index) => projectArchivedComment(comment, index + 1))
-    : domAfter.replies.map((comment, index) => ({ ...comment, rank: index + 1 }));
+    : (domAfter?.replies ?? []).map((comment, index) => ({ ...comment, rank: index + 1 }));
   const networkUsed = Boolean(archivedParent || archivedReplies.length);
 
   return {
