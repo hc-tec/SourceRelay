@@ -65,6 +65,33 @@ Remove-Item Env:COLLECTOR_XIAOHONGSHU_PROFILE_URL
 
 验证脚本不会把该环境变量写入运行摘要；没有提供时仍执行原有的“自然 profile tab 前置条件”侦察。
 
+## 短链的自然发现入口（设计待 live canary）
+
+短时主页链接不一定由上层人工复制提供。小红书主页或站内搜索结果中的公开笔记卡通常同时显示作者头像；产品可以把“作者头像 → 公开主页”作为一个独立、受限的自然入口：
+
+```text
+已有小红书主页/搜索页
+→ 发现一张可见公开笔记卡的作者头像
+→ 读取实时边界框与 target 行为
+→ 浏览器级可信点击一次
+→ 等待同一 tab 或平台自然打开的新 tab 完成主页渲染
+→ 只在内存中观察 URL 何时出现 xsec_token
+→ 校验规范 /user/profile/<id> 路径和公开主页后置条件
+→ 把短链交给一次性的 profile notes work
+```
+
+这不是“任意新 tab 控制”或“直接 URL 导航”：
+
+- 头像点击必须是一个预登记的语义动作，最多尝试一次；
+- 如果页面自然使用新 tab，产品只接管这个由点击产生的目标页，不主动创建第二个 tab，不关闭原页后重试；
+- 如果平台在原 tab 内完成 profile route 变化，则继续使用原 document，并重新读取 document generation；
+- 等待 `xsec_token` 只允许有界本地等待，不刷新、不重放、不改写 URL；
+- 完整 URL、`xsec_token`、`xsec_source`、响应 URL 和认证材料只存在于当前 work 的短生命周期内，不进入 artifact、日志、截图说明或长期档案；
+- 主页 work 仍使用固定一次性 TTL，不因等待 token 或滚动而续租；
+- 没有在 deadline 内得到规范主页和 token 时，终止为 `profile_url_token_unavailable`，不得自动再次点击头像。
+
+该入口需要独立 live canary，不能继承“搜索卡作者入口会打开新 tab”的旧结论，也不能把人工看到 URL 当作生产扩展已经通过。canary 至少要记录：头像的真实交互父节点、点击前后的 tab 数、目标 document 是否变化、URL token 出现时间、主页视觉/DOM 后置条件，以及动作后 Network/XHR 是否有可确认的公开主页投影。
+
 ## 明确留待后续：媒体物化
 
 小红书图片和视频通常使用短时 CDN 链接，不能把页面里看到的媒体 URL 当成长期可用地址。后续若要保留媒体，应单独设计“采集时立即下载”的受限媒体物化能力：在同一次页面文档和任务预算内下载、校验 MIME/大小、写入本地对象并以内容摘要关联笔记；不得把原始 CDN URL、请求头、Cookie 或签名写入长期 artifact。本 v0.1 只保存公开笔记卡片投影，不下载图片/视频，也不把媒体能力混入主页链接的 live canary。
