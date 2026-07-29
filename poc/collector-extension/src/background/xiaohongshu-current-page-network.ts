@@ -329,7 +329,8 @@ export async function readXiaohongshuExistingNoteCommentsNetworkProjection(
 
 export async function readXiaohongshuExistingNoteReplyNetworkProjection(
   tabId: number,
-  workId: string
+  workId: string,
+  allowSearchOverlay = false
 ): Promise<{
   matchedPayloadCount: number; bodyBytesRead: number; cursorObserved: boolean;
   comments: Array<{ commentId: string; parentCommentId: string; publicText: string; authorNickname: string;
@@ -337,7 +338,7 @@ export async function readXiaohongshuExistingNoteReplyNetworkProjection(
 }> {
   const record = await loadActiveRecord();
   if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId ||
-    record.publicSurface !== 'public_note_detail') {
+    (record.publicSurface !== 'public_note_detail' && !(allowSearchOverlay && record.publicSurface === 'search'))) {
     throw new Error('xiaohongshu_note_replies_network_projection_binding_mismatch');
   }
   const results = await chrome.scripting.executeScript({ target: { tabId, documentIds: [record.documentId] },

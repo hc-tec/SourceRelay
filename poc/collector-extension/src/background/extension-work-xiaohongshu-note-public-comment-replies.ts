@@ -38,8 +38,17 @@ interface DomReplyThread {
 type ReplyNetworkProjection = Awaited<ReturnType<typeof readXiaohongshuExistingNoteReplyNetworkProjection>>;
 
 export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
-  item: XiaohongshuNotePublicCommentRepliesWorkItem
+  item: XiaohongshuNotePublicCommentRepliesWorkItem,
+  options: {
+    /** Reuse the already-bound detail document in composed search depth. */
+    page?: BoundPage;
+    debuggee?: chrome.debugger.Debuggee;
+    observerWorkId?: string;
+    allowSearchOverlay?: boolean;
+    preserveObserver?: boolean;
+  } = {}
 ): Promise<XiaohongshuNotePublicCommentRepliesWorkResult> {
+  const observerWorkId = options.observerWorkId ?? item.workId;
   let page: BoundPage | null = null;
   let debuggerAttached = false;
   let debuggerDetached = true;
@@ -49,25 +58,31 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
   let errorCode: string | null = null;
 
   try {
-    page = await findUniqueExistingPublicNoteOverlay();
+    page = options.page ?? await findUniqueExistingPublicNoteOverlay();
     await foregroundPage(page);
-    await assertSameDocument(page);
+    await assertSameDocument(page, options.allowSearchOverlay === true);
     assertNoPageRisk(await readPageRisk(page));
 
-    await armXiaohongshuExistingNoteOverlayWorkObserver(page.tabId, item.workId);
+    await armXiaohongshuExistingNoteOverlayWorkObserver(page.tabId, observerWorkId);
     await prepareXiaohongshuCommentRepliesClick(item.workId);
     await delay(1_200);
 
-    const networkBefore = await readXiaohongshuExistingNoteReplyNetworkProjection(page.tabId, item.workId);
+    const networkBefore = await readXiaohongshuExistingNoteReplyNetworkProjection(
+      page.tabId,
+      observerWorkId,
+      options.allowSearchOverlay === true
+    );
     projection = projectArchivedReplyThread(networkBefore);
     if (!projection) {
       const target = await findReplyExpansionTarget(page);
-      const debuggee: chrome.debugger.Debuggee = { tabId: page.tabId };
-      await chrome.debugger.attach(debuggee, '1.3').catch(() => {
-        throw new Error('debugger_attach_failed');
-      });
-      debuggerAttached = true;
-      debuggerDetached = false;
+      const debuggee: chrome.debugger.Debuggee = options.debuggee ?? { tabId: page.tabId };
+      if (!options.debuggee) {
+        await chrome.debugger.attach(debuggee, '1.3').catch(() => {
+          throw new Error('debugger_attach_failed');
+        });
+        debuggerAttached = true;
+        debuggerDetached = false;
+      }
 
       const existingChildTabIds = await readChildTabIds(page.tabId);
       await recordXiaohongshuCommentRepliesClickIntent(item.workId);
@@ -77,13 +92,17 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
       });
 
       await delay(3_500);
-      await assertSameDocument(page);
+      await assertSameDocument(page, options.allowSearchOverlay === true);
       await assertNoNewChildTab(page.tabId, existingChildTabIds);
       assertNoPageRisk(await readPageRisk(page));
 
       const domAfter = await readExpandedReplyThread(page, target.label);
       await completeXiaohongshuCommentRepliesClick(item.workId);
-      const networkAfter = await readXiaohongshuExistingNoteReplyNetworkProjection(page.tabId, item.workId);
+      const networkAfter = await readXiaohongshuExistingNoteReplyNetworkProjection(
+        page.tabId,
+        observerWorkId,
+        options.allowSearchOverlay === true
+      );
       projection = mergeReplyEvidence(target, domAfter, networkBefore, networkAfter);
     }
     pageReady = true;
@@ -99,8 +118,8 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
         errorCode = 'xiaohongshu_comment_replies_debugger_detach_failed';
       }
     }
-    if (page) {
-      await clearXiaohongshuWorkObserver(page.tabId, item.workId).catch(() => undefined);
+    if (page && options.preserveObserver !== true) {
+      await clearXiaohongshuWorkObserver(page.tabId, observerWorkId).catch(() => undefined);
     }
   }
 
@@ -199,11 +218,24 @@ async function foregroundPage(page: BoundPage): Promise<void> {
   await delay(350);
 }
 
-async function assertSameDocument(page: BoundPage): Promise<void> {
+async function assertSameDocument(page: BoundPage, allowSearchOverlay = false): Promise<void> {
   const frame = await chrome.webNavigation.getFrame({ tabId: page.tabId, frameId: 0 }).catch(() => null);
-  if (!frame || frame.documentId !== page.documentId) {
+  const surface = frame?.url ? xiaohongshuCurrentPageSurface(frame.url) : null;
+  if (!frame || frame.documentId !== page.documentId ||
+    (surface !== 'public_note_detail' && !(allowSearchOverlay && surface === 'search'))) {
     throw new Error('xiaohongshu_public_note_document_changed');
   }
+}
+
+function xiaohongshuCurrentPageSurface(value: string): 'search' | 'public_note_detail' | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' || url.port ||
+      url.username || url.password || url.hash) return null;
+    if (/^\/search_result(?:_ai)?\/?$/.test(url.pathname)) return 'search';
+    if (/^\/explore\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)) return 'public_note_detail';
+    return null;
+  } catch { return null; }
 }
 
 async function readPageRisk(page: BoundPage) {

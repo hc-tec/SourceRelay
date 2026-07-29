@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
   extensionWorkSigningPayload,
   extensionWorkTargetUrl,
   isExtensionWorkItem,
@@ -158,5 +159,30 @@ describe('signed Xiaohongshu public-notes work contract', () => {
     expect(isExtensionWorkItem(commentsItem)).toBe(true);
     expect(isExtensionWorkItem({ ...commentsItem, input: { query: '咖啡', comments: { maximumScrolls: 2 } } })).toBe(false);
     expect(isExtensionWorkItem({ ...commentsItem, input: { query: '咖啡', maximumDetails: 1, comments: { maximumScrolls: 4 } } })).toBe(false);
+  });
+
+  test('admits one optional reply thread only inside the comments plan', () => {
+    const repliesItem = {
+      ...item,
+      input: {
+        query: '咖啡', maximumDetails: 1,
+        comments: { maximumScrolls: 2, replies: { maximumThreads: 1 } }
+      },
+      budget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET
+    };
+    expect(isExtensionWorkItem(repliesItem)).toBe(true);
+    expect(isExtensionWorkItem({
+      ...repliesItem,
+      input: { query: '咖啡', maximumDetails: 1, comments: { maximumScrolls: 2, replies: { maximumThreads: 2 } } }
+    })).toBe(false);
+    expect(isExtensionWorkItem({
+      ...repliesItem,
+      input: { query: '咖啡', maximumDetails: 1, comments: { maximumScrolls: 2 }, },
+      budget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET
+    })).toBe(false);
+    expect(isExtensionWorkItem({
+      ...repliesItem,
+      input: { query: '咖啡', maximumDetails: 1, replies: { maximumThreads: 1 } }
+    })).toBe(false);
   });
 });

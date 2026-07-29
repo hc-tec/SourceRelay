@@ -116,7 +116,7 @@ export interface UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest 
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.search.public_notes.v1';
   executionTarget: 'existing_public_explore_tab';
-  input: { query: string; maximumDetails?: number; comments?: { maximumScrolls: 1 | 2 | 3 } };
+  input: { query: string; maximumDetails?: number; comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 } } };
 }
 
 export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest {
@@ -436,7 +436,7 @@ function validXiaohongshuSearchInput(
 ): input is Record<string, unknown> & {
   query: string;
   maximumDetails?: number;
-  comments?: { maximumScrolls: 1 | 2 | 3 };
+  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 } };
 } {
   const keys = Object.keys(input);
   if (!keys.every((key) => key === 'query' || key === 'maximumDetails' || key === 'comments')) return false;
@@ -444,10 +444,14 @@ function validXiaohongshuSearchInput(
     (!Number.isSafeInteger(input.maximumDetails) || Number(input.maximumDetails) < 0 ||
       Number(input.maximumDetails) > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS)) return false;
   if (!Object.hasOwn(input, 'comments')) return true;
-  return typeof input.maximumDetails === 'number' && input.maximumDetails > 0 &&
-    Boolean(input.comments) && typeof input.comments === 'object' && !Array.isArray(input.comments) &&
-    exactKeys(input.comments as Record<string, unknown>, ['maximumScrolls']) &&
-    ((input.comments as Record<string, unknown>).maximumScrolls === 1 ||
-      (input.comments as Record<string, unknown>).maximumScrolls === 2 ||
-      (input.comments as Record<string, unknown>).maximumScrolls === 3);
+  if (typeof input.maximumDetails !== 'number' || input.maximumDetails <= 0 ||
+    !input.comments || typeof input.comments !== 'object' || Array.isArray(input.comments)) return false;
+  const comments = input.comments as Record<string, unknown>;
+  const commentKeys = Object.keys(comments);
+  if ((commentKeys.length !== 1 && commentKeys.length !== 2) || !Object.hasOwn(comments, 'maximumScrolls') ||
+    (comments.maximumScrolls !== 1 && comments.maximumScrolls !== 2 && comments.maximumScrolls !== 3)) return false;
+  if (!Object.hasOwn(comments, 'replies')) return commentKeys.length === 1;
+  if (commentKeys.length !== 2 || !comments.replies || typeof comments.replies !== 'object' || Array.isArray(comments.replies)) return false;
+  const replies = comments.replies as Record<string, unknown>;
+  return exactKeys(replies, ['maximumThreads']) && replies.maximumThreads === 1;
 }

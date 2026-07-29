@@ -24,8 +24,12 @@ const validateAccountNotes = process.argv.includes('--account-notes');
 const suppliedProfileUrl = process.env.COLLECTOR_XIAOHONGSHU_PROFILE_URL?.trim() || null;
 const requestedDepthDetails = parseBoundedDepthDetails(process.env.COLLECTOR_XIAOHONGSHU_MAX_DETAILS);
 const requestedCommentScrolls = parseBoundedCommentScrolls(process.env.COLLECTOR_XIAOHONGSHU_COMMENTS_SCROLLS);
+const includeReplyThreads = process.env.COLLECTOR_XIAOHONGSHU_INCLUDE_REPLIES === '1';
 if (requestedCommentScrolls > 0 && requestedDepthDetails < 1) {
   throw new Error('xiaohongshu_comments_require_maximum_details');
+}
+if (includeReplyThreads && (requestedCommentScrolls < 1 || requestedDepthDetails < 1)) {
+  throw new Error('xiaohongshu_replies_require_comments_and_maximum_details');
 }
 const replyCanaryQuery = '奉劝各位咖啡爱好者选好一点的咖啡豆';
 const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ??
@@ -165,7 +169,10 @@ try {
       input: requestedDepthDetails > 0 ? {
         query,
         maximumDetails: requestedDepthDetails,
-        ...(requestedCommentScrolls > 0 ? { comments: { maximumScrolls: requestedCommentScrolls } } : {})
+        ...(requestedCommentScrolls > 0 ? { comments: {
+          maximumScrolls: requestedCommentScrolls,
+          ...(includeReplyThreads ? { replies: { maximumThreads: 1 } } : {})
+        } } : {})
       } : { query }
     })
   }, 201);
@@ -216,6 +223,10 @@ try {
     commentCount: Array.isArray(artifact.result?.projection?.details)
       ? artifact.result.projection.details.reduce((total, detail) =>
         total + (Array.isArray(detail?.comments?.comments) ? detail.comments.comments.length : 0), 0)
+      : 0,
+    replyThreadCount: Array.isArray(artifact.result?.projection?.details)
+      ? artifact.result.projection.details.filter((detail) =>
+        Array.isArray(detail?.replyThread?.replies) && detail.replyThread.replies.length > 0).length
       : 0,
     queryDigest: artifact.queryDigest,
     rawPayloadStored: false,
@@ -672,6 +683,16 @@ function assertArtifact(artifact, operationId) {
       ).length;
       if (detailsWithComments < requestedDepthDetails) {
         throw new Error('xiaohongshu_gateway_e2e_comments_depth_artifact_invalid');
+      }
+    }
+    if (includeReplyThreads) {
+      const detailsWithReplies = artifact.result.projection.details.filter((detail) =>
+        detail && detail.replyThread && Array.isArray(detail.replyThread.replies) &&
+        detail.replyThread.replies.length > 0 &&
+        ['network_projection', 'dom_fallback', 'hybrid'].includes(detail.replyThread.captureMode)
+      ).length;
+      if (detailsWithReplies < requestedDepthDetails) {
+        throw new Error('xiaohongshu_gateway_e2e_replies_depth_artifact_invalid');
       }
     }
   }

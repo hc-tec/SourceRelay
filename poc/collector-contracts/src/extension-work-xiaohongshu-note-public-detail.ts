@@ -2,6 +2,10 @@ import {
   isXiaohongshuNotePublicCommentsProjection,
   type XiaohongshuNotePublicCommentsProjection
 } from './extension-work-xiaohongshu-note-public-comments.js';
+import {
+  isXiaohongshuPublicReplyThreadProjection,
+  type XiaohongshuPublicReplyThreadProjection
+} from './extension-work-xiaohongshu-note-public-comment-replies.js';
 
 export const XIAOHONGSHU_NOTE_PUBLIC_DETAIL_CAPABILITY = 'xiaohongshu.note.public_detail.v1' as const;
 export const XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET = Object.freeze({
@@ -29,6 +33,7 @@ export interface XiaohongshuNotePublicDetailProjection {
   visibleMediaCount: number;
   commentEntryVisible: boolean;
   comments?: XiaohongshuNotePublicCommentsProjection;
+  replyThread?: XiaohongshuPublicReplyThreadProjection;
   rawPayloadStored: false;
   responseUrlsStored: false;
 }
@@ -117,6 +122,7 @@ export function isXiaohongshuNotePublicDetailProjection(
     boundedText(value.interactionText, 0, 1_000) && boundedInteger(value.visibleMediaCount, 0, 20) &&
     typeof value.commentEntryVisible === 'boolean' &&
     (value.comments === undefined || isXiaohongshuNotePublicCommentsProjection(value.comments)) &&
+    (value.replyThread === undefined || isXiaohongshuPublicReplyThreadProjection(value.replyThread)) &&
     value.rawPayloadStored === false && value.responseUrlsStored === false;
 }
 
@@ -206,5 +212,9 @@ function detailProjectionKeys(value: Record<string, unknown>): boolean {
     'schemaVersion', 'sourceRank', 'captureMode', 'network', 'publicText', 'authorNickname', 'interactionText',
     'visibleMediaCount', 'commentEntryVisible', 'rawPayloadStored', 'responseUrlsStored'
   ] as const;
-  return exactKeys(value, base) || exactKeys(value, [...base.slice(0, 9), 'comments', ...base.slice(9)]);
+  const withComments = [...base.slice(0, 9), 'comments', ...base.slice(9)];
+  const withReplies = [...base.slice(0, 9), 'replyThread', ...base.slice(9)];
+  const withBoth = [...base.slice(0, 9), 'comments', 'replyThread', ...base.slice(9)];
+  return exactKeys(value, base) || exactKeys(value, withComments) || exactKeys(value, withReplies) ||
+    exactKeys(value, withBoth);
 }

@@ -1,4 +1,8 @@
 import type { XiaohongshuNotePublicCommentsProjection } from './extension-work-xiaohongshu-note-public-comments.js';
+import {
+  isXiaohongshuPublicReplyThreadProjection,
+  type XiaohongshuPublicReplyThreadProjection
+} from './extension-work-xiaohongshu-note-public-comment-replies.js';
 
 /**
  * The first Xiaohongshu surface is intentionally a policy/contract boundary,
@@ -53,6 +57,21 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET = Object.free
   maximumSemanticActions: 101,
   maximumNetworkResponseBodies: 168,
   maximumProjectedItems: 1640,
+  maximumRawPayloadBytesStored: 0
+} as const);
+/**
+ * Optional detail-plus-comments-plus-one-reply-thread mode. The reply
+ * expansion is still strictly bounded to one thread per requested detail;
+ * its extra response-body ceiling is an aggregate upper bound, not a replay
+ * budget. Raw payloads remain projection-only and are never persisted.
+ */
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET = Object.freeze({
+  maximumPlatformNavigations: 0,
+  maximumPageReloads: 0,
+  maximumPageInitiatedNewDocuments: 0,
+  maximumSemanticActions: 121,
+  maximumNetworkResponseBodies: 328,
+  maximumProjectedItems: 2440,
   maximumRawPayloadBytesStored: 0
 } as const);
 export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET = Object.freeze({
@@ -270,6 +289,8 @@ export interface XiaohongshuPublicNoteDetailProjection {
   interactionText: string;
   /** Present only when the caller explicitly enables comment collection. */
   comments?: XiaohongshuNotePublicCommentsProjection;
+  /** Present only when the caller explicitly enables one reply thread. */
+  replyThread?: XiaohongshuPublicReplyThreadProjection;
 }
 
 export interface XiaohongshuManagedSearchProjectionResult {
@@ -554,13 +575,15 @@ function optionalPublicNoteDetails(value: unknown, maximumItems: 40 | 200): bool
       boundedProjectionText(entry.publicText, 12_000, true) &&
       boundedProjectionText(entry.authorNickname, 200) &&
       boundedProjectionText(entry.interactionText, 1_000) &&
-      (entry.comments === undefined || isXiaohongshuNotePublicCommentsProjection(entry.comments));
+      (entry.comments === undefined || isXiaohongshuNotePublicCommentsProjection(entry.comments)) &&
+      (entry.replyThread === undefined || isXiaohongshuPublicReplyThreadProjection(entry.replyThread));
   });
 }
 
 function detailProjectionKeys(value: Record<string, unknown>): boolean {
   const base = ['noteId', 'publicText', 'authorNickname', 'interactionText'] as const;
-  return exactKeys(value, base) || exactKeys(value, [...base, 'comments']);
+  return exactKeys(value, base) || exactKeys(value, [...base, 'comments']) ||
+    exactKeys(value, [...base, 'replyThread']) || exactKeys(value, [...base, 'comments', 'replyThread']);
 }
 
 function isXiaohongshuNotePublicCommentsProjection(value: unknown): value is XiaohongshuNotePublicCommentsProjection {

@@ -39,6 +39,8 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
     debuggee?: chrome.debugger.Debuggee;
     observerWorkId?: string;
     allowSearchOverlay?: boolean;
+    /** Keep the enclosing detail observer alive for a following reply action. */
+    preserveObserver?: boolean;
   } = {}
 ): Promise<XiaohongshuNotePublicCommentsWorkResult> {
   const observerWorkId = options.observerWorkId ?? item.workId;
@@ -135,7 +137,9 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
         errorCode = 'xiaohongshu_note_comments_debugger_detach_failed';
       }
     }
-    if (page) await clearXiaohongshuWorkObserver(page.tabId, observerWorkId).catch(() => undefined);
+    if (page && options.preserveObserver !== true) {
+      await clearXiaohongshuWorkObserver(page.tabId, observerWorkId).catch(() => undefined);
+    }
   }
   const completed = errorCode === null && pageReady && projection !== null && debuggerDetached;
   return {

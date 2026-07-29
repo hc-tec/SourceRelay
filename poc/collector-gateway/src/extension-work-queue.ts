@@ -16,6 +16,7 @@ import {
   canonicalXiaohongshuPublicProfileUrl,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
@@ -134,7 +135,7 @@ export interface EnqueueXiaohongshuPublicNotesSearchWorkInput {
   browserBindingId: string;
   query: string;
   maximumDetails?: number;
-  comments?: { maximumScrolls: 1 | 2 | 3 };
+  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 } };
 }
 
 export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
@@ -180,7 +181,8 @@ interface RedactedXiaohongshuPublicNotesSearchWorkItem {
   input: { queryDigest: string };
   budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET |
     typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET;
+    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET |
+    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET;
 }
 
 interface RedactedXiaohongshuAccountPublicNotesWorkItem {
@@ -730,7 +732,13 @@ export class ExtensionWorkQueue {
         input.maximumDetails < 0 || input.maximumDetails > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS)) ||
       (input.comments !== undefined && (input.maximumDetails === undefined || input.maximumDetails < 1 ||
         !Number.isSafeInteger(input.comments.maximumScrolls) || input.comments.maximumScrolls < 1 ||
-        input.comments.maximumScrolls > 3))) {
+        input.comments.maximumScrolls > 3 ||
+        (Object.keys(input.comments).length !== 1 && Object.keys(input.comments).length !== 2) ||
+        (input.comments.replies === undefined && Object.keys(input.comments).length !== 1) ||
+        (input.comments.replies !== undefined &&
+          (Object.keys(input.comments).length !== 2 ||
+            !input.comments.replies || Object.keys(input.comments.replies).length !== 1 ||
+            input.comments.replies.maximumThreads !== 1))))) {
       throw new Error('xiaohongshu_public_notes_search_input_invalid');
     }
     const expired = this.#expire(now);
@@ -755,7 +763,9 @@ export class ExtensionWorkQueue {
       },
       budget: input.maximumDetails && input.maximumDetails > 0
         ? input.comments
-          ? XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET
+          ? input.comments.replies
+            ? XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET
+            : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET
           : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET
         : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET
     };
@@ -1101,7 +1111,9 @@ function isRedactedXiaohongshuPublicNotesSearchWorkItem(
     isRecord(value.input) && hasExactKeys(value.input, ['queryDigest']) &&
     /^[a-f0-9]{64}$/.test(stringValue((value.input as Record<string, unknown>).queryDigest)) &&
     (JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET) ||
-      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET));
+      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET) ||
+      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET) ||
+      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET));
 }
 
 function isRedactedXiaohongshuAccountPublicNotesWorkItem(

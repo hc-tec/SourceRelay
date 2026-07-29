@@ -89,8 +89,13 @@ export function parseTestbenchSubmission(value) {
       (Object.hasOwn(value.input, 'comments') &&
         (!value.input.comments || typeof value.input.comments !== 'object' || Array.isArray(value.input.comments) ||
           !Object.hasOwn(value.input.comments, 'maximumScrolls') ||
-          Object.keys(value.input.comments).length !== 1 ||
+          (Object.keys(value.input.comments).length !== 1 && Object.keys(value.input.comments).length !== 2) ||
+          (!Object.hasOwn(value.input.comments, 'replies') && Object.keys(value.input.comments).length !== 1) ||
           ![1, 2, 3].includes(value.input.comments.maximumScrolls) ||
+          (Object.hasOwn(value.input.comments, 'replies') &&
+            (!value.input.comments.replies || typeof value.input.comments.replies !== 'object' ||
+              Array.isArray(value.input.comments.replies) || Object.keys(value.input.comments.replies).length !== 1 ||
+              value.input.comments.replies.maximumThreads !== 1)) ||
           !Object.hasOwn(value.input, 'maximumDetails') || value.input.maximumDetails < 1))) {
       throw new TestbenchInputError('testbench_request_invalid');
     }
@@ -104,7 +109,10 @@ export function parseTestbenchSubmission(value) {
       input: {
         query,
         ...(Object.hasOwn(value.input, 'maximumDetails') ? { maximumDetails: value.input.maximumDetails } : {}),
-        ...(Object.hasOwn(value.input, 'comments') ? { comments: { maximumScrolls: value.input.comments.maximumScrolls } } : {})
+        ...(Object.hasOwn(value.input, 'comments') ? { comments: {
+          maximumScrolls: value.input.comments.maximumScrolls,
+          ...(Object.hasOwn(value.input.comments, 'replies') ? { replies: { maximumThreads: 1 } } : {})
+        } } : {})
       }
     };
   }

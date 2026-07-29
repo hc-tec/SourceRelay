@@ -211,7 +211,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           required: [
             'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'executionTarget',
             'accountScopedSurfaces', 'dispatchState', 'managedValidationState', 'captureMode',
-            'responseBodies', 'routeAdmission', 'budget', 'depthBudget', 'commentsDepthBudget', 'browserHostFallback'
+            'responseBodies', 'routeAdmission', 'budget', 'depthBudget', 'commentsDepthBudget', 'commentsRepliesDepthBudget', 'browserHostFallback'
           ],
           properties: {
             schemaVersion: { type: 'integer', const: 1 },
@@ -274,6 +274,23 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 maximumSemanticActions: { type: 'integer', const: 101 },
                 maximumNetworkResponseBodies: { type: 'integer', const: 168 },
                 maximumProjectedItems: { type: 'integer', const: 1640 },
+                maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
+              }
+            },
+            commentsRepliesDepthBudget: {
+              type: 'object', additionalProperties: false,
+              required: [
+                'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+                'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
+                'maximumRawPayloadBytesStored'
+              ],
+              properties: {
+                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPageReloads: { type: 'integer', const: 0 },
+                maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
+                maximumSemanticActions: { type: 'integer', const: 121 },
+                maximumNetworkResponseBodies: { type: 'integer', const: 328 },
+                maximumProjectedItems: { type: 'integer', const: 2440 },
                 maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
               }
             },
@@ -577,7 +594,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserXiaohongshuPublicNotesSearchCollectRequest: {
           type: 'object', additionalProperties: false,
-          description: 'Runs one fixed trusted in-page search in the unique existing public Explore tab. An optional maximumDetails (0–20) performs sequential same-document detail captures with a slow fixed delay and closes each overlay before the next rank. An optional comments.maximumScrolls (1–3) collects public comments while each requested detail overlay is open; comments are disabled when omitted. No URL, tab ID, selector, coordinate, script, debugger command, refresh, new tab, or Browser Host fallback can be supplied.',
+          description: 'Runs one fixed trusted in-page search in the unique existing public Explore tab. An optional maximumDetails (0–20) performs sequential same-document detail captures with a slow fixed delay and closes each overlay before the next rank. An optional comments.maximumScrolls (1–3) collects public comments while each requested detail overlay is open; comments.replies.maximumThreads=1 additionally expands at most one visible reply thread per detail, and is disabled unless comments is enabled. No URL, tab ID, selector, coordinate, script, debugger command, refresh, new tab, or Browser Host fallback can be supplied.',
           required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
@@ -594,7 +611,14 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 comments: {
                   type: 'object', additionalProperties: false,
                   required: ['maximumScrolls'],
-                  properties: { maximumScrolls: { type: 'integer', enum: [1, 2, 3] } }
+                  properties: {
+                    maximumScrolls: { type: 'integer', enum: [1, 2, 3] },
+                    replies: {
+                      type: 'object', additionalProperties: false,
+                      required: ['maximumThreads'],
+                      properties: { maximumThreads: { type: 'integer', const: 1 } }
+                    }
+                  }
                 }
               }
             }

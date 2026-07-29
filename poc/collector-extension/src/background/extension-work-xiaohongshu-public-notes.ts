@@ -61,7 +61,8 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
         const detailItem = createDepthDetailWorkItem(item, rank);
         const detailResult = await executeXiaohongshuNotePublicDetailExtensionWork(detailItem, {
           closeOverlayAfterCapture: true,
-          collectComments: commentsPlan,
+          collectComments: commentsPlan ? { maximumScrolls: commentsPlan.maximumScrolls } : undefined,
+          collectReplies: commentsPlan?.replies,
           debuggee: { tabId: document.tabId }
         });
         if (detailResult.state !== 'completed' || !detailResult.projection) {
@@ -77,6 +78,7 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
             interactionText: detailResult.projection.interactionText
           } as (typeof details)[number];
           if (detailResult.projection.comments) enriched.comments = detailResult.projection.comments;
+          if (detailResult.projection.replyThread) enriched.replyThread = detailResult.projection.replyThread;
           const existingIndex = details.findIndex((detail) => detail.noteId === noteId);
           if (existingIndex >= 0) details[existingIndex] = { ...details[existingIndex], ...enriched };
           else {

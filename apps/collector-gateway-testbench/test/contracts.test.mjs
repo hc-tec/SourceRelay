@@ -116,6 +116,11 @@ test('maps Xiaohongshu search to query-only existing-Explore trusted input', () 
     kind: 'xiaohongshu_search',
     input: { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2 } }
   }).input, { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2 } });
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_search',
+    input: { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2, replies: { maximumThreads: 1 } } }
+  }).input, { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2, replies: { maximumThreads: 1 } } });
   for (const maximumDetails of [-1, 21, 1.5]) assert.throws(() => parseTestbenchSubmission({
     browserBindingId: bindingId,
     kind: 'xiaohongshu_search',
@@ -123,6 +128,7 @@ test('maps Xiaohongshu search to query-only existing-Explore trusted input', () 
   }), TestbenchInputError);
   for (const comments of [
     { maximumScrolls: 0 }, { maximumScrolls: 4 }, { maximumScrolls: 1.5 }, {}, null,
+    { maximumScrolls: 1, replies: { maximumThreads: 2 } }, { maximumScrolls: 1, extra: true },
   ]) assert.throws(() => parseTestbenchSubmission({
     browserBindingId: bindingId,
     kind: 'xiaohongshu_search',

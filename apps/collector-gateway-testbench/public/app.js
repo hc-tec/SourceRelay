@@ -22,6 +22,7 @@ element('search-form').addEventListener('submit', (event) => void submitSearch(e
 element('search-batch-form').addEventListener('submit', (event) => void submitSearch(event, 'native_search_batch'));
 element('xiaohongshu-search-form').addEventListener('submit', (event) => void submitSearch(event, 'xiaohongshu_search'));
 element('xiaohongshu-search-form').elements.maximumDetails.addEventListener('change', syncXiaohongshuSearchMode);
+element('xiaohongshu-search-form').elements.commentsScrolls.addEventListener('change', syncXiaohongshuSearchMode);
 element('xiaohongshu-account-notes-form').addEventListener('submit', (event) => void submitXiaohongshuAccountNotes(event));
 element('xiaohongshu-account-notes-form').elements.executionTarget.addEventListener('change', syncXiaohongshuAccountMode);
 element('xiaohongshu-note-detail-form').addEventListener('submit', (event) => void submitXiaohongshuNoteDetail(event));
@@ -161,8 +162,11 @@ function syncXiaohongshuSearchMode() {
   if (!form) return;
   const maximumDetails = Number(form.elements.maximumDetails.value);
   const comments = form.elements.commentsScrolls;
+  const replies = form.elements.commentReplies;
   comments.disabled = state.bindings.length === 0 || maximumDetails < 1;
   if (maximumDetails < 1) comments.value = '0';
+  replies.disabled = state.bindings.length === 0 || maximumDetails < 1 || Number(comments.value) < 1;
+  if (replies.disabled) replies.value = '0';
 }
 
 function syncXiaohongshuAccountMode() {
@@ -213,8 +217,12 @@ async function submitSearch(event, kind) {
     if (kind === 'xiaohongshu_search') {
       const maximumDetails = Number(form.elements.maximumDetails.value);
       const commentsScrolls = Number(form.elements.commentsScrolls.value);
+      const includeReplies = Number(form.elements.commentReplies.value) === 1;
       if (maximumDetails > 0) input.maximumDetails = maximumDetails;
-      if (commentsScrolls > 0) input.comments = { maximumScrolls: commentsScrolls };
+      if (commentsScrolls > 0) input.comments = {
+        maximumScrolls: commentsScrolls,
+        ...(includeReplies ? { replies: { maximumThreads: 1 } } : {})
+      };
     }
     const payload = await api('/api/operations', {
       method: 'POST',

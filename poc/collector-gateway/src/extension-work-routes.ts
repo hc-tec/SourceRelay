@@ -368,7 +368,7 @@ export async function enqueueXiaohongshuPublicNotesSearchWork(
   browserBindingId: string,
   query: string,
   maximumDetails?: number,
-  comments?: { maximumScrolls: 1 | 2 | 3 }
+  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 } }
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
   return await context.workQueue.enqueueXiaohongshuPublicNotesSearch({

@@ -3,6 +3,8 @@ import {
   xiaohongshuCurrentPageNetworkPublicSurface,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
   type XiaohongshuNotePublicDetailProjection,
+  XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
+  type XiaohongshuNotePublicCommentRepliesWorkItem,
   type XiaohongshuNotePublicCommentsWorkItem,
   type XiaohongshuNotePublicDetailTerminalReason,
   type XiaohongshuNotePublicDetailWorkItem,
@@ -20,6 +22,7 @@ import {
   recordXiaohongshuNoteDetailClickIntent
 } from './xiaohongshu-note-detail-click-ledger';
 import { executeXiaohongshuNotePublicCommentsExtensionWork } from './extension-work-xiaohongshu-note-public-comments';
+import { executeXiaohongshuNotePublicCommentRepliesExtensionWork } from './extension-work-xiaohongshu-note-public-comment-replies';
 
 interface SearchDocument { tabId: number; windowId: number; documentId: string }
 interface Target { x: number; y: number; noteId: string }
@@ -40,6 +43,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
   options: {
     closeOverlayAfterCapture?: boolean;
     collectComments?: { maximumScrolls: 1 | 2 | 3 };
+    collectReplies?: { maximumThreads: 1 };
     /** Reuse a debugger lease already owned by the enclosing search action. */
     debuggee?: chrome.debugger.Debuggee;
   } = {}
@@ -109,13 +113,30 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
           page: pageDocument,
           debuggee,
           observerWorkId: item.workId,
-          allowSearchOverlay: true
+          allowSearchOverlay: true,
+          preserveObserver: options.collectReplies !== undefined
         }
       );
       if (commentsResult.state !== 'completed' || !commentsResult.projection) {
         throw new Error(commentsResult.errorCode ?? 'xiaohongshu_note_comments_postcondition_unmet');
       }
       projection = { ...projection, comments: commentsResult.projection };
+    }
+    if (options.collectReplies) {
+      const repliesResult = await executeXiaohongshuNotePublicCommentRepliesExtensionWork(
+        createComposedRepliesWorkItem(item),
+        {
+          page: pageDocument,
+          debuggee,
+          observerWorkId: item.workId,
+          allowSearchOverlay: true,
+          preserveObserver: true
+        }
+      );
+      if (repliesResult.state !== 'completed' || !repliesResult.projection) {
+        throw new Error(repliesResult.errorCode ?? 'xiaohongshu_comment_replies_postcondition_unmet');
+      }
+      projection = { ...projection, replyThread: repliesResult.projection };
     }
     if (options.closeOverlayAfterCapture) {
       await closeDetailOverlay(pageDocument, debuggee, continuity.timeOrigin);
@@ -180,6 +201,26 @@ function createComposedCommentsWorkItem(
   };
 }
 
+function createComposedRepliesWorkItem(
+  detailItem: XiaohongshuNotePublicDetailWorkItem
+): XiaohongshuNotePublicCommentRepliesWorkItem {
+  return {
+    schemaVersion: 1,
+    protocolVersion: 1,
+    workId: crypto.randomUUID(),
+    operationId: detailItem.operationId,
+    browserBindingId: detailItem.browserBindingId,
+    platform: 'xiaohongshu',
+    capability: 'xiaohongshu.note.public_comment_replies.v1',
+    executionTarget: 'existing_public_note_overlay',
+    issuedAt: new Date().toISOString(),
+    expiresAt: detailItem.expiresAt,
+    input: { maximumThreads: 1 },
+    budget: XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
+    gatewaySignature: 'a'.repeat(64)
+  };
+}
+
 /**
  * Depth collection reuses the same search document for several ranked notes.
  * The detail click itself is still at-most-once; after the projection is read
@@ -239,7 +280,7 @@ async function findDetailCloseTarget(pageDocument: SearchDocument): Promise<Targ
       }).filter((candidate): candidate is {
         element: Element; rect: DOMRect; semantic: boolean; closeLike: boolean; topLeft: boolean;
         pointerHitTarget: boolean;
-      } => Boolean(candidate) && candidate.semantic && candidate.pointerHitTarget &&
+      } => candidate !== null && candidate.semantic && candidate.pointerHitTarget &&
         candidate.rect.top >= 0 && candidate.rect.left >= 0 && candidate.rect.right <= window.innerWidth &&
         candidate.rect.bottom <= window.innerHeight)
         .sort((left, right) => Number(right.topLeft) - Number(left.topLeft) ||
@@ -269,7 +310,7 @@ async function readDocumentContinuity(pageDocument: SearchDocument): Promise<Doc
   });
   const timeOrigin = result[0]?.result?.timeOrigin;
   if (!Number.isFinite(timeOrigin)) throw new Error('xiaohongshu_public_search_document_unavailable');
-  return { documentId: pageDocument.documentId, timeOrigin };
+  return { documentId: pageDocument.documentId, timeOrigin: Number(timeOrigin) };
 }
 
 async function readCloseContinuity(tabId: number): Promise<{
@@ -280,7 +321,7 @@ async function readCloseContinuity(tabId: number): Promise<{
   renderedCardCount: number;
 }> {
   const frame = await chrome.webNavigation.getFrame({ tabId, frameId: 0 });
-  if (!frame.documentId) throw new Error('xiaohongshu_public_search_document_unavailable');
+  if (!frame?.documentId) throw new Error('xiaohongshu_public_search_document_unavailable');
   const results = await chrome.scripting.executeScript({
     target: { tabId, documentIds: [frame.documentId] },
     func: () => {

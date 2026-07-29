@@ -89,11 +89,22 @@ describe('user-owned browser collector service', () => {
       executionTarget: 'existing_public_explore_tab',
       input: { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2 } }
     })).toMatchObject({ input: { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2 } } });
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      input: { query: '咖啡豆', maximumDetails: 1,
+        comments: { maximumScrolls: 2, replies: { maximumThreads: 1 } } }
+    })).toMatchObject({ input: { comments: { maximumScrolls: 2, replies: { maximumThreads: 1 } } } });
     for (const input of [
       { query: '咖啡豆', comments: { maximumScrolls: 1 } },
       { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 0 } },
       { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 4 } },
-      { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, extra: true } }
+      { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, extra: true } },
+      { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, replies: { maximumThreads: 2 } } },
+      { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, replies: { maximumThreads: 1, extra: true } } }
     ]) expect(() => userBrowserCollectorServiceRequestInput({
       schemaVersion: 2,
       browserBindingId,
