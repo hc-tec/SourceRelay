@@ -249,16 +249,20 @@ async function discoverSearchTarget(eligibleDocument: EligibleDocument): Promise
       const candidates = [
         document.querySelector('#search-input-in-feeds'),
         document.querySelector('#search-input'),
-        ...document.querySelectorAll('input, textarea')
-      ].filter((value, index, all): value is HTMLInputElement | HTMLTextAreaElement =>
-        (value instanceof HTMLInputElement || value instanceof HTMLTextAreaElement) && all.indexOf(value) === index
+        ...document.querySelectorAll('input, textarea, [contenteditable="true"], [role="textbox"]')
+      ].filter((value, index, all): value is HTMLElement =>
+        value instanceof HTMLElement && all.indexOf(value) === index
       );
       for (const input of candidates) {
         const rect = input.getBoundingClientRect();
         const style = getComputedStyle(input);
-        const label = `${input.placeholder} ${input.getAttribute('aria-label') ?? ''}`;
+        const label = `${input.getAttribute('placeholder') ?? ''} ${input.getAttribute('aria-label') ?? ''} ${input.getAttribute('role') ?? ''}`;
         const knownSearchIdentity = input.id === 'search-input-in-feeds' || input.id === 'search-input';
-        if ((!knownSearchIdentity && !/搜索|search/i.test(label)) || input.disabled || input.readOnly ||
+        const disabled = (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)
+          ? input.disabled : input.getAttribute('aria-disabled') === 'true';
+        const readOnly = (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)
+          ? input.readOnly : input.getAttribute('contenteditable') !== 'true';
+        if ((!knownSearchIdentity && !/搜索|search|textbox/i.test(label)) || disabled || readOnly ||
           rect.width < 80 || rect.height < 20 ||
           style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) continue;
         const x = rect.left + rect.width / 2;
@@ -279,12 +283,18 @@ async function readQueryEcho(eligibleDocument: EligibleDocument, query: string):
   const results = await chrome.scripting.executeScript({
     target: { tabId: eligibleDocument.tabId, documentIds: [eligibleDocument.documentId] },
     args: [query],
-    func: (expected) => [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')]
-      .some((input) => input.value === expected && (
-        input.id === 'search-input-in-feeds' || input.id === 'search-input' || /搜索|search/i.test(
-          `${input.placeholder} ${input.getAttribute('aria-label') ?? ''}`
+    func: (expected) => [...document.querySelectorAll<HTMLElement>(
+      'input, textarea, [contenteditable="true"], [role="textbox"]'
+    )].some((input) => {
+      const text = input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement
+        ? input.value : input.innerText || input.textContent || '';
+      return text.trim() === expected && (
+        input.id === 'search-input-in-feeds' || input.id === 'search-input' ||
+        /搜索|search|textbox/i.test(
+          `${input.getAttribute('placeholder') ?? ''} ${input.getAttribute('aria-label') ?? ''} ${input.getAttribute('role') ?? ''}`
         )
-      ))
+      );
+    })
   });
   return results[0]?.result === true;
 }
@@ -356,8 +366,13 @@ async function readPostcondition(eligibleDocument: EligibleDocument, query: stri
     func: (expected) => {
       const pathname = location.pathname;
       const bodyText = (document.body?.innerText ?? '').slice(0, 12_000);
-      const queryEchoed = [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')]
-        .some((input) => input.value === expected);
+      const queryEchoed = [...document.querySelectorAll<HTMLElement>(
+        'input, textarea, [contenteditable="true"], [role="textbox"]'
+      )].some((input) => {
+        const text = input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement
+          ? input.value : input.innerText || input.textContent || '';
+        return text.trim() === expected;
+      });
       const cards = document.querySelectorAll('[data-v-a264b01a], section.note-item, .note-item, .feeds-page .note-item').length;
       return {
         publicSurface: pathname === '/explore' || pathname === '/explore/' ? 'explore' :

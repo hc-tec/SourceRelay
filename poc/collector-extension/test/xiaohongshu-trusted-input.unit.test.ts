@@ -63,7 +63,9 @@ function installChromeMock(input: {
         sourceUnavailable: input.risk === 'source'
       } }];
     }
-    if (source.includes('input.value === expected')) return [{ result: true }];
+    if (source.includes('text.trim() === expected') || source.includes('input.value === expected')) {
+      return [{ result: true }];
+    }
     return [{ result: { x: 100, y: 50, width: 240, height: 36 } }];
   });
   const attach = vi.fn(async () => undefined);
