@@ -86,6 +86,11 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
       expandedParentTexts.add(normaliseParentText(thread.parent.publicText));
     }
     completedCount = projections.length as 0 | 1 | 2 | 3;
+    // A Network/DOM projection is already a valid same-document observation.
+    // Preserve that page evidence if a later optional expansion fails; otherwise
+    // the stopped partial result would be rejected because completedCount > 0
+    // while page is null, leaving the Gateway item claimed until TTL expiry.
+    pageReady = projections.length > 0;
     const debuggee: chrome.debugger.Debuggee = options.debuggee ?? { tabId: page.tabId };
     for (let threadOrdinal = (projections.length + 1) as 1 | 2 | 3;
       threadOrdinal <= item.input.maximumThreads;
@@ -125,8 +130,11 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
       const expandedProjection = mergeReplyEvidence(target, domAfter, networkBefore, networkAfter);
       projections.push(expandedProjection);
       expandedParentTexts.add(normaliseParentText(expandedProjection.parentComment.publicText));
+      // Update the count before the ledger completion write. If that local
+      // bookkeeping step fails, the already-projected thread remains a valid
+      // bounded partial result and can still be delivered to the Gateway.
+      completedCount = projections.length as 0 | 1 | 2 | 3;
       await completeXiaohongshuCommentRepliesClick(item.workId, actionOrdinal);
-      completedCount = threadOrdinal;
     }
     if (projections.length === 0) {
       throw new Error('xiaohongshu_comment_replies_postcondition_unmet');
@@ -134,6 +142,7 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
     pageReady = true;
   } catch (error) {
     errorCode = safeErrorCode(error);
+    if (isDocumentContextFailure(errorCode) || isPageRiskFailure(errorCode)) pageReady = false;
   } finally {
     if (debuggerAttached && page) {
       try {
@@ -175,6 +184,17 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
     responseUrlsStored: false,
     debuggerDetached
   };
+}
+
+function isDocumentContextFailure(errorCode: string | null): boolean {
+  return errorCode === 'xiaohongshu_public_note_document_unavailable' ||
+    errorCode === 'xiaohongshu_public_note_document_changed' ||
+    errorCode === 'xiaohongshu_comment_replies_new_tab_detected';
+}
+
+function isPageRiskFailure(errorCode: string | null): boolean {
+  return errorCode === 'xiaohongshu_login_required' || errorCode === 'xiaohongshu_verification_required' ||
+    errorCode === 'xiaohongshu_rate_limited' || errorCode === 'xiaohongshu_source_unavailable';
 }
 
 function projectArchivedReplyThreads(

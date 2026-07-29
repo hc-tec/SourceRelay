@@ -29,6 +29,9 @@ const includeReplyThreads = process.env.COLLECTOR_XIAOHONGSHU_INCLUDE_REPLIES ==
 const requestedReplyThreads = parseBoundedReplyThreads(
   includeReplyThreads ? process.env.COLLECTOR_XIAOHONGSHU_REPLY_THREADS : undefined
 );
+const standaloneReplyThreads = parseBoundedReplyThreads(
+  process.env.COLLECTOR_XIAOHONGSHU_STANDALONE_REPLY_THREADS
+);
 if (requestedCommentScrolls > 0 && requestedDepthDetails < 1) {
   throw new Error('xiaohongshu_comments_require_maximum_details');
 }
@@ -399,13 +402,24 @@ try {
           method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
             browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
             capability: 'xiaohongshu.note.public_comment_replies.v1',
-            executionTarget: 'existing_public_note_overlay', input: { maximumThreads: 1 } })
+            executionTarget: 'existing_public_note_overlay', input: { maximumThreads: standaloneReplyThreads } })
         }, 201);
         const repliesOperationId = repliesDispatch.result?.operationId;
         if (!uuid(repliesOperationId)) throw new Error('xiaohongshu_note_replies_e2e_operation_missing');
-        record('note_replies_operation_dispatched', { operationId: repliesOperationId, maximumThreads: 1 });
-        const repliesOperation = await waitForOperation(gatewayOrigin, token, repliesOperationId, 90_000);
-        if (repliesOperation.state !== 'completed' || repliesOperation.terminalReason !== 'comment_replies_ready' ||
+        record('note_replies_operation_dispatched', {
+          operationId: repliesOperationId,
+          maximumThreads: standaloneReplyThreads
+        });
+        const repliesOperation = await waitForOperation(
+          gatewayOrigin,
+          token,
+          repliesOperationId,
+          standaloneReplyThreads > 1 ? 150_000 : 90_000
+        );
+        if ((repliesOperation.state !== 'completed' && repliesOperation.state !== 'stopped') ||
+          (repliesOperation.state === 'completed' && repliesOperation.terminalReason !== 'comment_replies_ready') ||
+          (repliesOperation.state === 'stopped' &&
+            (standaloneReplyThreads === 1 || repliesOperation.terminalReason !== 'postcondition_unmet')) ||
           !uuid(repliesOperation.artifact?.artifactId) ||
           typeof repliesOperation.artifact?.retrievalPath !== 'string') {
           throw new Error(repliesOperation.errorCode ?? 'xiaohongshu_note_replies_e2e_operation_not_completed');
@@ -416,7 +430,7 @@ try {
           200
         );
         record('note_replies_artifact_diagnostics', noteRepliesDiagnostics(repliesArtifactPayload.artifact));
-        assertNoteRepliesArtifact(repliesArtifactPayload.artifact, repliesOperationId);
+        assertNoteRepliesArtifact(repliesArtifactPayload.artifact, repliesOperationId, standaloneReplyThreads);
         reportedOperation = repliesOperation;
         reportedArtifact = repliesArtifactPayload.artifact;
         record('note_replies_artifact_retrieved', {
@@ -493,7 +507,8 @@ try {
       validateCommentRecon ? 'xiaohongshu.note.comments.recon' :
       validateNoteDetail ? 'xiaohongshu.note.public_detail.v1' : 'xiaohongshu.search.public_notes.v1',
     validationOutcome: reportedOperation.terminalReason === 'profile_notes_budget_exhausted'
-      ? 'partial_budget' : 'completed',
+      ? 'partial_budget' : reportedOperation.state === 'stopped'
+        ? 'partial_postcondition' : 'completed',
     productPlatformNavigations: reportedArtifact.result.navigation.attemptCount,
     validationBaselineNavigations: 1,
     semanticActions: reportedArtifact.result.semanticAction.attemptCount,
@@ -756,9 +771,12 @@ function assertNoteRepliesArtifact(artifact, operationId, expectedThreads = 1) {
   const actionCount = artifact?.result?.semanticAction?.attemptCount;
   const captureMode = artifact?.result?.projection?.captureMode;
   const actionTriggeredResponseCount = artifact?.result?.projection?.network?.actionTriggeredResponseCount;
+  const completed = artifact?.result?.state === 'completed' && artifact?.result?.terminalReason === 'comment_replies_ready';
+  const boundedPartial = expectedThreads > 1 && artifact?.result?.state === 'stopped' &&
+    artifact?.result?.terminalReason === 'postcondition_unmet' && typeof artifact?.result?.errorCode === 'string';
   if (!artifact || artifact.summary?.operationId !== operationId ||
     artifact.summary?.capability !== 'xiaohongshu.note.public_comment_replies.v1' ||
-    artifact.result?.state !== 'completed' || artifact.result?.terminalReason !== 'comment_replies_ready' ||
+    (!completed && !boundedPartial) ||
     artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
     !Number.isInteger(actionCount) || actionCount < 0 || actionCount > expectedThreads ||
     artifact.result.semanticAction.attempted !== (actionCount > 0) ||

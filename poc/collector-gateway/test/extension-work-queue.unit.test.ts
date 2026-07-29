@@ -24,6 +24,35 @@ function identity(): LoadedGatewayIdentity {
 }
 
 describe('extension work queue state machine', () => {
+  test('gives bounded multi-thread reply work one extra poll window', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-reply-ttl-'));
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const single = await queue.enqueueXiaohongshuNotePublicCommentReplies({
+        browserBindingId: bindingId,
+        maximumThreads: 1
+      }, base);
+      await expect(queue.get(single.operationId, new Date(base.getTime() + 60_001))).resolves.toMatchObject({
+        state: 'stopped',
+        errorCode: 'extension_work_expired'
+      });
+
+      const multi = await queue.enqueueXiaohongshuNotePublicCommentReplies({
+        browserBindingId: bindingId,
+        maximumThreads: 3
+      }, new Date(base.getTime() + 60_002));
+      await expect(queue.get(multi.operationId, new Date(base.getTime() + 180_001))).resolves.toMatchObject({
+        state: 'queued'
+      });
+      await expect(queue.get(multi.operationId, new Date(base.getTime() + 180_003))).resolves.toMatchObject({
+        state: 'stopped',
+        errorCode: 'extension_work_expired'
+      });
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
   test('delivers one signed work item once and never requeues a claimed platform action', async () => {
     const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-'));
     try {

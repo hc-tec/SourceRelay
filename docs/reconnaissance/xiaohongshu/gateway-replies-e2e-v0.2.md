@@ -170,3 +170,40 @@ finalPageState: retained_for_review
 ```
 
 这证明 standalone comments/replies 可以复用同一 document 的短时 Network archive，不需要再次滚动或点击，也没有跨 tab、跨 document 或重放平台动作。最终 journal 仍以 `page_released → retained_for_review` 结束。
+
+## 2026-07-29 多线程 bounded partial 交付回归
+
+本轮验证了 standalone reply operation 的多线程上限和失败交付语义。Gateway 对单线程 work 保持 `60s` TTL；`maximumThreads=2/3` 的 standalone work 使用有界 `120s` TTL，以覆盖 MV3 低频轮询窗口，但不续租、不重放平台动作。验证器将组合阶段的 `replyThreads` 与 standalone 阶段的 `standaloneReplyThreads` 分开配置。
+
+最新真实 run：`4c73da7d-b459-42cf-a46b-5c18eaced3fd`，构建指纹 `152ed716391c6be87acfcc6f77dc38edef68cbab2bf38f6362612260f3944492`。组合搜索、详情和评论先后完成；standalone 请求 `3` 个线程，最终证明 `2` 个线程：
+
+```yaml
+validationOutcome: partial_postcondition
+requestedThreads: 3
+completedThreads: 2
+replyCount: 2
+state: stopped
+terminalReason: postcondition_unmet
+captureMode: network_projection
+semanticActionCount: 1
+actionTriggeredResponseCount: 0
+networkMatchedPayloadCount: 1
+networkBodyBytesRead: 3984
+networkCursorObserved: true
+rawPayloadStored: false
+responseUrlsStored: false
+debuggerDetached: true
+automaticPlatformRetries: 0
+finalPageState: retained_for_review
+```
+
+这里的 `stopped / postcondition_unmet` 是有意保留的 bounded partial，不是成功伪装：请求值只是上限，平台只证明到两条就停止；没有为第三条强行点击、拼接或补造数据。artifact 已正常写入 Gateway，页面仍保留在同一受管 tab 供复核。
+
+本轮之前曾出现 `extension_work_expired`。根因不是平台或登录状态，而是扩展在已经拥有部分 projection 时，如果后续展开后置条件失败，会把 `completedCount > 0` 与 `page: null` 一起提交，Gateway 按契约拒收 pending result，直到队列 TTL 到期。修复后：
+
+- Network/DOM projection 一旦形成即保留同文档 page evidence；
+- 每次 projection 写入后先更新 `completedCount`，再写本地动作完成账本；
+- 多线程失败现在交付合法 `stopped + artifact`，不会变成无解释的 TTL 过期；
+- 验证器明确区分 `completed` 与 `partial_postcondition`，不把部分结果报告为完整成功。
+
+本回归仍遵守 at-most-once：验证基线导航 1 次、可信回复点击 1 次、动作后新增响应 0 次；没有刷新、换 tab、新 tab、自动重试、Cookie/Token/原始响应持久化。浏览器最终状态为 `ready`，扩展页 `0`，目标页 `1`，并保留为 `retained_for_review`。

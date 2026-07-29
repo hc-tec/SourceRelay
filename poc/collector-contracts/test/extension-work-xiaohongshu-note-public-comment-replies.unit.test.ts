@@ -45,6 +45,20 @@ describe('signed Xiaohongshu public reply-thread contract',()=>{
     expect(isExtensionWorkResultForItem({...stopped,semanticAction:{attempted:false,attemptCount:0},
       thread:{requestedCount:1,completedCount:1}},item)).toBe(false);
   });
+  test('accepts a stopped partial projection when a later expansion fails',()=>{
+    const projection={schemaVersion:1,captureMode:'network_projection' as const,
+      network:{matchedPayloadCount:1,bodyBytesRead:2368,cursorObserved:true,actionTriggeredResponseCount:0},
+      expandedLabelText:'network_archive',parentComment:comment(1,'network'),replies:[comment(1,'network')],
+      rawPayloadStored:false as const,responseUrlsStored:false as const};
+    const stopped={schemaVersion:1,protocolVersion:1,workId:item.workId,operationId:item.operationId,
+      browserBindingId:item.browserBindingId,platform:'xiaohongshu',capability:item.capability,
+      executionTarget:item.executionTarget,state:'stopped',errorCode:'xiaohongshu_comment_replies_postcondition_unmet',
+      terminalReason:'postcondition_unmet',completedAt:'2026-07-28T12:00:20.000Z',
+      navigation:{attempted:false,attemptCount:0},semanticAction:{attempted:true,attemptCount:1},
+      thread:{requestedCount:1,completedCount:1},page:{publicSurface:'note_detail_overlay',sameDocument:true},
+      projection,rawPayloadStored:false,responseUrlsStored:false,debuggerDetached:true};
+    expect(isExtensionWorkResultForItem(stopped,item)).toBe(true);
+  });
   test('accepts a completed Network-only thread without a page action',()=>{
     const networkOnly={schemaVersion:1,protocolVersion:1,workId:item.workId,operationId:item.operationId,
       browserBindingId:item.browserBindingId,platform:'xiaohongshu',capability:item.capability,

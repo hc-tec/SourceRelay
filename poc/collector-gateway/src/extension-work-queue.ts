@@ -38,6 +38,10 @@ import {
 import type { LoadedGatewayIdentity } from './identity';
 
 const WORK_ITEM_TTL_MS = 60_000;
+// MV3 work polling is intentionally low-frequency (30s). Multi-thread
+// replies have a larger bounded projection budget, so give the standalone
+// item one additional poll window without making it long-lived.
+const XIAOHONGSHU_MULTI_REPLY_WORK_TTL_MS = 120_000;
 const XIAOHONGSHU_COMPOSED_SEARCH_MAX_TTL_MS = 15 * 60_000;
 const MAX_RETAINED_OPERATIONS = 500;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -893,7 +897,8 @@ export class ExtensionWorkQueue {
     const issuedAt=now.toISOString();const unsigned:UnsignedExtensionWorkItem={schemaVersion:EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion:EXTENSION_WORK_PROTOCOL_VERSION,workId:randomUUID(),operationId:randomUUID(),
       browserBindingId:input.browserBindingId,platform:'xiaohongshu',capability:'xiaohongshu.note.public_comment_replies.v1',
-      executionTarget:'existing_public_note_overlay',issuedAt,expiresAt:new Date(now.getTime()+WORK_ITEM_TTL_MS).toISOString(),
+      executionTarget:'existing_public_note_overlay',issuedAt,expiresAt:new Date(now.getTime()+
+        (input.maximumThreads > 1 ? XIAOHONGSHU_MULTI_REPLY_WORK_TTL_MS : WORK_ITEM_TTL_MS)).toISOString(),
       input:{maximumThreads: input.maximumThreads},
       budget: input.maximumThreads === 1
         ? XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET
