@@ -192,7 +192,7 @@ try {
       executionTarget: 'ephemeral_public_profile_url',
       validationMode: 'direct_profile_link_only'
     });
-    const accountOperation = await waitForOperation(gatewayOrigin, token, accountOperationId, 120_000);
+    const accountOperation = await waitForOperation(gatewayOrigin, token, accountOperationId, 150_000);
     const accountCompleted = accountOperation.state === 'completed' && accountOperation.terminalReason === 'profile_notes_ready';
     const accountBudgetPartial = accountOperation.state === 'stopped' &&
       accountOperation.terminalReason === 'profile_notes_budget_exhausted';
@@ -1040,13 +1040,29 @@ async function waitForGateway(origin) {
 async function stopGateway(child) {
   if (child.exitCode !== null || child.killed) return;
   child.kill('SIGTERM');
-  await new Promise((resolvePromise) => {
-    const timeout = setTimeout(resolvePromise, 5_000);
+  const exited = await new Promise((resolvePromise) => {
+    const timeout = setTimeout(() => resolvePromise(false), 5_000);
     child.once('exit', () => {
       clearTimeout(timeout);
-      resolvePromise();
+      resolvePromise(true);
     });
   });
+  if (!exited && child.exitCode === null) {
+    // The Gateway is an ephemeral local child for this canary. A stuck
+    // shutdown must not keep the validation process alive after the platform
+    // action has already stopped; force only this exact child, then close its
+    // pipes so Node cannot wait on orphaned stdio handles.
+    child.kill('SIGKILL');
+    await new Promise((resolvePromise) => {
+      const timeout = setTimeout(resolvePromise, 1_000);
+      child.once('exit', () => {
+        clearTimeout(timeout);
+        resolvePromise();
+      });
+    });
+  }
+  child.stdout?.destroy();
+  child.stderr?.destroy();
 }
 
 async function apiJson(url, init, expectedStatus) {

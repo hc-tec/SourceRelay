@@ -42,6 +42,11 @@ const WORK_ITEM_TTL_MS = 60_000;
 // replies have a larger bounded projection budget, so give the standalone
 // item one additional poll window without making it long-lived.
 const XIAOHONGSHU_MULTI_REPLY_WORK_TTL_MS = 120_000;
+// A profile-link run may spend one poll window claiming the item, one bounded
+// navigation window settling the SPA route, and up to twenty low-frequency
+// scrolls. Keep this finite but give the declared 20-scroll budget enough
+// time to deliver one result; this is still a one-shot lease with no renewal.
+const XIAOHONGSHU_PROFILE_LINK_WORK_TTL_MS = 120_000;
 const XIAOHONGSHU_COMPOSED_SEARCH_MAX_TTL_MS = 15 * 60_000;
 const MAX_RETAINED_OPERATIONS = 500;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -815,7 +820,7 @@ export class ExtensionWorkQueue {
         capability: 'xiaohongshu.account.public_notes.v1',
         executionTarget: 'ephemeral_public_profile_url',
         issuedAt,
-        expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+        expiresAt: new Date(now.getTime() + XIAOHONGSHU_PROFILE_LINK_WORK_TTL_MS).toISOString(),
         input: { maximumScrolls: input.maximumScrolls, profileUrl },
         budget: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET
       };

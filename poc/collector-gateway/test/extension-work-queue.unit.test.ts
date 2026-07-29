@@ -551,6 +551,8 @@ describe('extension work queue state machine', () => {
         input: { maximumScrolls: 2, profileUrl },
         budget: { maximumPlatformNavigations: 1 }
       });
+      if (!claimed) throw new Error('test_claim_missing');
+      expect(Date.parse(claimed.expiresAt) - Date.parse(claimed.issuedAt)).toBe(120_000);
       if (!claimed || claimed.capability !== 'xiaohongshu.account.public_notes.v1') {
         throw new Error('test_claim_missing');
       }

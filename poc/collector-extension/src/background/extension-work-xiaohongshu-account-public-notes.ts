@@ -257,7 +257,7 @@ function profileObserverScriptId(workId: string): string {
 async function findUniquePublicProfileDocument(): Promise<ProfileDocument> {
   const tabs = await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/user/profile/*'] });
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
-    !tab.incognito && tab.status === 'complete' &&
+    !tab.incognito &&
     xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '') === 'public_profile');
   if (eligible.length === 0) throw new Error('xiaohongshu_public_profile_tab_required');
   if (eligible.length !== 1) throw new Error('xiaohongshu_public_profile_tab_ambiguous');
@@ -271,30 +271,52 @@ async function findUniquePublicProfileDocument(): Promise<ProfileDocument> {
 
 async function navigateToEphemeralProfileUrl(profileUrl: string, expiresAt: string): Promise<void> {
   const tabs = await chrome.tabs.query({});
-  const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && !tab.incognito && tab.status === 'complete' &&
+  const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && !tab.incognito &&
     isXiaohongshuPublicEntryTab(tab.url ?? ''));
   if (eligible.length === 0) throw new Error('xiaohongshu_profile_entry_tab_required');
-  if (eligible.length !== 1) throw new Error('xiaohongshu_profile_entry_tab_ambiguous');
-  const tab = eligible[0]!;
+  // A user-owned browser can legitimately contain more than one public
+  // Xiaohongshu page. Never take over a background page just because it is a
+  // candidate; when there are several candidates, only the unique active one
+  // in the current browser session may receive the explicitly requested
+  // one-time profile navigation. Multiple active candidates remain an
+  // intentional ambiguity stop.
+  const activeEligible = eligible.filter((tab) => tab.active === true);
+  const selected = eligible.length === 1
+    ? eligible
+    : activeEligible.length === 1
+      ? activeEligible
+      : [];
+  if (selected.length !== 1) throw new Error('xiaohongshu_profile_entry_tab_ambiguous');
+  const tab = selected[0]!;
   const baselinePageCount = tabs.length;
   await chrome.windows.update(tab.windowId!, { focused: true }).catch(() => undefined);
   if (Date.parse(expiresAt) <= Date.now()) throw new Error('xiaohongshu_profile_work_expired');
   await chrome.tabs.update(tab.id!, { url: profileUrl });
   const deadline = Math.min(Date.now() + 20_000, Date.parse(expiresAt));
+  let lastKnownSurface: ReturnType<typeof xiaohongshuCurrentPageNetworkPublicSurface> = null;
   while (Date.now() < deadline) {
     if (Date.now() >= Date.parse(expiresAt)) throw new Error('xiaohongshu_profile_work_expired');
     const currentTabs = await chrome.tabs.query({});
     if (currentTabs.length !== baselinePageCount) throw new Error('xiaohongshu_profile_url_new_tab_detected');
     const current = await chrome.tabs.get(tab.id!).catch(() => null);
     const frame = await chrome.webNavigation.getFrame({ tabId: tab.id!, frameId: 0 }).catch(() => null);
-    if (current?.status === 'complete' && frame?.documentId) {
+    // A profile document can be visibly usable while Chromium keeps the tab
+    // in `loading` for long-lived media or telemetry requests. The committed
+    // main-frame identity is the meaningful postcondition; waiting for the
+    // tab's aggregate status would turn a loaded page into a false timeout.
+    if (current && frame?.documentId) {
       if (Date.now() >= Date.parse(expiresAt)) throw new Error('xiaohongshu_profile_work_expired');
       const surface = xiaohongshuCurrentPageNetworkPublicSurface(frame.url);
       if (surface === 'public_profile') return;
-      if (surface !== null) throw new Error('xiaohongshu_profile_url_expired');
+      // Xiaohongshu may expose an intermediate Explore/Search document while
+      // its client-side profile route settles. Treat that as part of the same
+      // one-time navigation, not as an expired link; only the final deadline
+      // decides whether the profile route was never established.
+      if (surface !== null) lastKnownSurface = surface;
     }
     await delay(250);
   }
+  if (lastKnownSurface !== null) throw new Error('xiaohongshu_profile_url_expired');
   throw new Error('xiaohongshu_profile_url_navigation_failed');
 }
 
