@@ -67,6 +67,7 @@ const completedResult = {
       likedCountText: '10'
     }]
   },
+  profileLinkDiscovery: null,
   rawPayloadStored: false,
   responseUrlsStored: false,
   debuggerDetached: true

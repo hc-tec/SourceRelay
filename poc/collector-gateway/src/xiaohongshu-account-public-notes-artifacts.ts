@@ -35,11 +35,11 @@ export interface XiaohongshuAccountPublicNotesArtifactView {
   summary: XiaohongshuAccountPublicNotesArtifactSummary;
   provenance: {
     environment: 'user_owned_browser_extension';
-    executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
+    executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url' | 'discover_public_profile_from_note';
     captureMode: 'current_document_network_projection_plus_trusted_scroll';
     platformNavigations: 0 | 1;
     pageReloads: 0;
-    pageInitiatedNewTabs: 0;
+    pageInitiatedNewTabs: 0 | 1;
     semanticActions: XiaohongshuProfileScrollCompletedCount;
     responseBodies: 'temporarily_read_projected_not_stored';
     rawPayloadStored: false;
@@ -56,6 +56,7 @@ export interface XiaohongshuAccountPublicNotesArtifactView {
     scroll: XiaohongshuAccountPublicNotesWorkResult['scroll'];
     page: XiaohongshuAccountPublicNotesWorkResult['page'];
     projection: XiaohongshuAccountPublicNotesWorkResult['projection'];
+    profileLinkDiscovery: XiaohongshuAccountPublicNotesWorkResult['profileLinkDiscovery'];
   };
 }
 
@@ -115,7 +116,7 @@ export class XiaohongshuAccountPublicNotesArtifactStore {
         captureMode: 'current_document_network_projection_plus_trusted_scroll' as const,
         platformNavigations: input.result.navigation.attemptCount,
         pageReloads: 0 as const,
-        pageInitiatedNewTabs: 0 as const,
+        pageInitiatedNewTabs: (input.result.profileLinkDiscovery?.targetMode === 'new_tab' ? 1 : 0) as 0 | 1,
         semanticActions: input.result.semanticAction.attemptCount,
         responseBodies: 'temporarily_read_projected_not_stored' as const,
         rawPayloadStored: false as const,
@@ -131,7 +132,8 @@ export class XiaohongshuAccountPublicNotesArtifactStore {
         semanticAction: structuredClone(input.result.semanticAction),
         scroll: structuredClone(input.result.scroll),
         page: structuredClone(input.result.page),
-        projection: structuredClone(input.result.projection)
+        projection: structuredClone(input.result.projection),
+        profileLinkDiscovery: structuredClone(input.result.profileLinkDiscovery)
       }
     };
     const stored: StoredArtifact = {

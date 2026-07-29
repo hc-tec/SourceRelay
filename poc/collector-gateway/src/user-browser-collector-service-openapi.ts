@@ -319,15 +319,15 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           required: [
             'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'executionTarget',
             'accountScopedSurfaces', 'dispatchState', 'managedValidationState', 'captureMode',
-            'responseBodies', 'routeAdmission', 'budget', 'ephemeralProfileLinkBudget', 'browserHostFallback'
+            'responseBodies', 'routeAdmission', 'budget', 'ephemeralProfileLinkBudget', 'discoveryBudget', 'browserHostFallback'
           ],
           properties: {
             schemaVersion: { type: 'integer', const: 1 },
             capability: { type: 'string', const: 'xiaohongshu.account.public_notes.v1' },
             platform: { type: 'string', const: 'xiaohongshu' },
             title: { type: 'string' },
-            inputMode: { type: 'string', const: 'scroll_budget_only_or_ephemeral_profile_url' },
-            executionTarget: { type: 'string', enum: ['existing_public_profile_tab', 'ephemeral_public_profile_url'] },
+            inputMode: { type: 'string', const: 'scroll_budget_only_or_ephemeral_profile_url_or_note_avatar' },
+            executionTarget: { type: 'string', enum: ['existing_public_profile_tab', 'ephemeral_public_profile_url', 'discover_public_profile_from_note'] },
             accountScopedSurfaces: { type: 'string', const: 'public_profile_only' },
             dispatchState: { type: 'string', const: 'direct_ready' },
             managedValidationState: { type: 'string', const: 'gateway_extension_real_e2e_passed' },
@@ -348,6 +348,23 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 maximumSemanticActions: { type: 'integer', const: 3 },
                 maximumNetworkResponseBodies: { type: 'integer', const: 8 },
                 maximumProjectedItems: { type: 'integer', const: 40 },
+                maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
+              }
+            },
+            discoveryBudget: {
+              type: 'object', additionalProperties: false,
+              required: [
+                'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+                'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
+                'maximumRawPayloadBytesStored'
+              ],
+              properties: {
+                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPageReloads: { type: 'integer', const: 0 },
+                maximumPageInitiatedNewDocuments: { type: 'integer', const: 1 },
+                maximumSemanticActions: { type: 'integer', const: 21 },
+                maximumNetworkResponseBodies: { type: 'integer', const: 8 },
+                maximumProjectedItems: { type: 'integer', const: 200 },
                 maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
               }
             },
@@ -483,7 +500,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
               type: 'object', additionalProperties: false,
               required: ['canonicalVideoUrl'],
               properties: { canonicalVideoUrl: { type: 'string', format: 'uri' } }
-            }
+            },
           }
         },
         UserBrowserNativeSearchCollectRequest: {
@@ -643,36 +660,64 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserXiaohongshuAccountPublicNotesCollectRequest: {
           type: 'object', additionalProperties: false,
-          description: 'Collects public note cards from either a unique existing public profile tab or one user-supplied short-lived public profile link. A link is used once in the existing tab, never persisted in the artifact, and cannot cause refresh, retry, or a new tab.',
+          description: 'Collects public note cards from an existing profile, a one-time supplied short-lived profile link, or a natural author-avatar click that discovers a short-lived profile link. Tokens are never persisted.',
           required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'xiaohongshu' },
             capability: { type: 'string', const: 'xiaohongshu.account.public_notes.v1' },
-            executionTarget: { type: 'string', enum: ['existing_public_profile_tab', 'ephemeral_public_profile_url'] },
+            executionTarget: { type: 'string', enum: ['existing_public_profile_tab', 'ephemeral_public_profile_url', 'discover_public_profile_from_note'] },
             input: {
               type: 'object', additionalProperties: false,
               required: ['maximumScrolls'],
               properties: {
                 maximumScrolls: { type: 'integer', enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] },
                 profileUrl: { type: 'string', minLength: 1, maxLength: 4096, format: 'uri' }
+              }
+            }
+          },
+          // Bind the scroll ceiling and profileUrl requirement to the
+          // execution target. A free-standing input oneOf would make the two
+          // URL-free modes overlap for maximumScrolls 1-3.
+          allOf: [
+            {
+              if: {
+                required: ['executionTarget'],
+                properties: { executionTarget: { const: 'existing_public_profile_tab' } }
               },
-              oneOf: [
-                {
-                  required: ['maximumScrolls'],
-                  properties: { maximumScrolls: { type: 'integer', enum: [1, 2, 3] } },
-                  not: { required: ['profileUrl'] }
-                },
-                {
-                  required: ['maximumScrolls', 'profileUrl'],
-                  properties: {
-                    maximumScrolls: { type: 'integer', enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] }
+              then: {
+                properties: {
+                  input: {
+                    properties: { maximumScrolls: { type: 'integer', enum: [1, 2, 3] } },
+                    not: { required: ['profileUrl'] }
                   }
                 }
-              ]
+              }
+            },
+            {
+              if: {
+                required: ['executionTarget'],
+                properties: { executionTarget: { const: 'ephemeral_public_profile_url' } }
+              },
+              then: {
+                properties: { input: { required: ['maximumScrolls', 'profileUrl'] } }
+              }
+            },
+            {
+              if: {
+                required: ['executionTarget'],
+                properties: { executionTarget: { const: 'discover_public_profile_from_note' } }
+              },
+              then: {
+                properties: {
+                  input: {
+                    not: { required: ['profileUrl'] }
+                  }
+                }
+              }
             }
-          }
+          ]
         },
         UserBrowserXiaohongshuNotePublicDetailCollectRequest: {
           type: 'object', additionalProperties: false,
@@ -737,7 +782,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             executionTarget: {
               type: 'string',
               enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab',
-                'existing_public_profile_tab', 'ephemeral_public_profile_url', 'existing_public_search_tab',
+                'existing_public_profile_tab', 'ephemeral_public_profile_url', 'discover_public_profile_from_note', 'existing_public_search_tab',
                 'existing_public_note_overlay']
             },
             state: { type: 'string', enum: ['queued', 'claimed', 'completed', 'partial', 'stopped', 'failed'] },

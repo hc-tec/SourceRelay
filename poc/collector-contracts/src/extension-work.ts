@@ -120,6 +120,7 @@ export type ExtensionWorkExecutionTarget =
   | 'existing_public_explore_tab'
   | 'existing_public_profile_tab'
   | 'ephemeral_public_profile_url'
+  | 'discover_public_profile_from_note'
   | 'existing_public_search_tab'
   | 'existing_public_note_overlay';
 export type ExtensionWorkState = 'queued' | 'claimed' | 'completed' | 'partial' | 'stopped' | 'failed';

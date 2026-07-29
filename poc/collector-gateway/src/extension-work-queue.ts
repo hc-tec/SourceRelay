@@ -22,6 +22,7 @@ import {
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET,
+  XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
@@ -154,6 +155,7 @@ export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
   browserBindingId: string;
   maximumScrolls: XiaohongshuProfileScrollCount;
   profileUrl?: string;
+  discoverFromNote?: boolean;
 }
 
 export interface EnqueueXiaohongshuNotePublicDetailWorkInput {
@@ -206,11 +208,11 @@ interface RedactedXiaohongshuAccountPublicNotesWorkItem {
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.account.public_notes.v1';
-  executionTarget: 'ephemeral_public_profile_url';
+  executionTarget: 'ephemeral_public_profile_url' | 'discover_public_profile_from_note';
   issuedAt: string;
   expiresAt: string;
   input: { maximumScrolls: XiaohongshuProfileScrollCount };
-  budget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET;
+  budget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET | typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET;
 }
 
 interface RedactedBilibiliNativeSearchWorkItem {
@@ -796,13 +798,16 @@ export class ExtensionWorkQueue {
       input.maximumScrolls < 1 || input.maximumScrolls > 20) {
       throw new Error('xiaohongshu_account_public_notes_input_invalid');
     }
+    if (input.discoverFromNote === true && input.profileUrl !== undefined) {
+      throw new Error('xiaohongshu_account_public_notes_input_invalid');
+    }
     const profileUrl = input.profileUrl === undefined
       ? null
       : canonicalXiaohongshuPublicProfileUrl(input.profileUrl);
     if (input.profileUrl !== undefined && !profileUrl) {
       throw new Error('xiaohongshu_account_public_profile_url_invalid');
     }
-    if (input.profileUrl === undefined && input.maximumScrolls > 3) {
+    if (input.profileUrl === undefined && input.discoverFromNote !== true && input.maximumScrolls > 3) {
       throw new Error('xiaohongshu_account_public_notes_input_invalid');
     }
     const expired = this.#expire(now);
@@ -823,6 +828,23 @@ export class ExtensionWorkQueue {
         expiresAt: new Date(now.getTime() + XIAOHONGSHU_PROFILE_LINK_WORK_TTL_MS).toISOString(),
         input: { maximumScrolls: input.maximumScrolls, profileUrl },
         budget: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET
+      };
+      return await this.#enqueueSigned(unsigned, issuedAt);
+    }
+    if (input.discoverFromNote === true) {
+      const unsigned: UnsignedExtensionWorkItem = {
+        schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
+        protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
+        workId: randomUUID(),
+        operationId: randomUUID(),
+        browserBindingId: input.browserBindingId,
+        platform: 'xiaohongshu',
+        capability: 'xiaohongshu.account.public_notes.v1',
+        executionTarget: 'discover_public_profile_from_note',
+        issuedAt,
+        expiresAt: new Date(now.getTime() + XIAOHONGSHU_PROFILE_LINK_WORK_TTL_MS).toISOString(),
+        input: { maximumScrolls: input.maximumScrolls },
+        budget: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET
       };
       return await this.#enqueueSigned(unsigned, issuedAt);
     }
@@ -1161,12 +1183,14 @@ function isRedactedXiaohongshuAccountPublicNotesWorkItem(
     value.protocolVersion === EXTENSION_WORK_PROTOCOL_VERSION && isUuid(value.workId) && isUuid(value.operationId) &&
     isUuid(value.browserBindingId) && value.platform === 'xiaohongshu' &&
     value.capability === 'xiaohongshu.account.public_notes.v1' &&
-    value.executionTarget === 'ephemeral_public_profile_url' && isTimestamp(value.issuedAt) &&
+    (value.executionTarget === 'ephemeral_public_profile_url' || value.executionTarget === 'discover_public_profile_from_note') && isTimestamp(value.issuedAt) &&
     isTimestamp(value.expiresAt) && Date.parse(value.expiresAt) > Date.parse(value.issuedAt) &&
     isRecord(value.input) && hasExactKeys(value.input, ['maximumScrolls']) &&
     typeof value.input.maximumScrolls === 'number' && Number.isSafeInteger(value.input.maximumScrolls) &&
     value.input.maximumScrolls >= 1 && value.input.maximumScrolls <= 20 &&
-    JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET);
+    (value.executionTarget === 'ephemeral_public_profile_url'
+      ? JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET)
+      : JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET));
 }
 
 function isRedactedBilibiliNativeSearchWorkItem(value: unknown): value is RedactedBilibiliNativeSearchWorkItem {
@@ -1260,6 +1284,8 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'existing_public_profile_tab_ambiguous' ||
     value === 'profile_url_invalid' || value === 'profile_url_expired' ||
     value === 'profile_url_navigation_failed' || value === 'profile_url_context_changed' ||
+    value === 'profile_source_tab_required' || value === 'profile_source_tab_ambiguous' ||
+    value === 'profile_url_token_unavailable' ||
     value === 'note_detail_ready' || value === 'existing_public_search_tab_required' ||
     value === 'existing_public_search_tab_ambiguous' || value === 'search_result_rank_unavailable' ||
     value === 'note_detail_target_new_tab' ||
@@ -1269,7 +1295,7 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
 
 function redactTerminalWorkItem(item: StoredExtensionWorkItem): StoredExtensionWorkItem {
   if (isExtensionWorkItem(item) && item.capability === 'xiaohongshu.account.public_notes.v1' &&
-    item.executionTarget === 'ephemeral_public_profile_url') {
+    (item.executionTarget === 'ephemeral_public_profile_url' || item.executionTarget === 'discover_public_profile_from_note')) {
     return {
       schemaVersion: item.schemaVersion,
       protocolVersion: item.protocolVersion,
@@ -1278,11 +1304,13 @@ function redactTerminalWorkItem(item: StoredExtensionWorkItem): StoredExtensionW
       browserBindingId: item.browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1',
-      executionTarget: 'ephemeral_public_profile_url',
+      executionTarget: item.executionTarget,
       issuedAt: item.issuedAt,
       expiresAt: item.expiresAt,
       input: { maximumScrolls: item.input.maximumScrolls },
-      budget: { ...XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET }
+      budget: { ...(item.executionTarget === 'ephemeral_public_profile_url'
+        ? XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET
+        : XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET) }
     };
   }
   if (isExtensionWorkItem(item) && item.capability === 'xiaohongshu.search.public_notes.v1') {

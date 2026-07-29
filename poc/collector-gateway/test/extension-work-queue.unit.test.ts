@@ -510,6 +510,7 @@ describe('extension work queue state machine', () => {
             likedCountText: '1'
           }]
         },
+        profileLinkDiscovery: null,
         rawPayloadStored: false,
         responseUrlsStored: false,
         debuggerDetached: true
@@ -592,6 +593,7 @@ describe('extension work queue state machine', () => {
             likedCountText: '1'
           }]
         },
+        profileLinkDiscovery: null,
         rawPayloadStored: false,
         responseUrlsStored: false,
         debuggerDetached: true
@@ -604,6 +606,34 @@ describe('extension work queue state machine', () => {
       expect(persisted).not.toContain(profileUrl);
       expect(persisted).not.toContain('abc123');
       expect(persisted).not.toContain('expires=short');
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test('binds note-avatar discovery to the existing public source tab and keeps its short-lived budget', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-xiaohongshu-discovery-'));
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const queued = await queue.enqueueXiaohongshuAccountPublicNotes({
+        browserBindingId: bindingId,
+        maximumScrolls: 20,
+        discoverFromNote: true
+      }, base);
+      const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
+      expect(claimed).toMatchObject({
+        operationId: queued.operationId,
+        executionTarget: 'discover_public_profile_from_note',
+        input: { maximumScrolls: 20 },
+        budget: {
+          maximumPlatformNavigations: 0,
+          maximumPageInitiatedNewDocuments: 1,
+          maximumSemanticActions: 21,
+          maximumProjectedItems: 200
+        }
+      });
+      const persisted = await readFile(join(stateDirectory, 'extension-work-operations.json'), 'utf8');
+      expect(persisted).not.toMatch(/profileUrl|token|selector|tabId/i);
     } finally {
       await rm(stateDirectory, { recursive: true, force: true });
     }

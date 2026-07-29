@@ -1,6 +1,7 @@
 import {
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET,
+  XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY,
   canonicalXiaohongshuPublicProfileUrl,
   isXiaohongshuManagedProfileNotesProjectionResult,
@@ -21,11 +22,12 @@ export interface XiaohongshuAccountPublicNotesWorkItem {
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY;
-  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
+  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url' | 'discover_public_profile_from_note';
   issuedAt: string;
   expiresAt: string;
   input: { maximumScrolls: XiaohongshuProfileScrollCount; profileUrl?: string };
-  budget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET | typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET;
+  budget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET | typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET |
+    typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET;
   gatewaySignature: string;
 }
 
@@ -41,6 +43,9 @@ export type XiaohongshuAccountPublicNotesTerminalReason =
   | 'profile_url_expired'
   | 'profile_url_navigation_failed'
   | 'profile_url_context_changed'
+  | 'profile_source_tab_required'
+  | 'profile_source_tab_ambiguous'
+  | 'profile_url_token_unavailable'
   | 'run_deadline_exceeded'
   | 'document_context_changed'
   | 'postcondition_unmet'
@@ -62,7 +67,7 @@ export interface XiaohongshuAccountPublicNotesWorkResult {
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY;
-  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
+  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url' | 'discover_public_profile_from_note';
   state: 'completed' | 'stopped';
   errorCode: string | null;
   terminalReason: XiaohongshuAccountPublicNotesTerminalReason;
@@ -75,6 +80,12 @@ export interface XiaohongshuAccountPublicNotesWorkResult {
   rawPayloadStored: false;
   responseUrlsStored: false;
   debuggerDetached: boolean;
+  profileLinkDiscovery: null | {
+    attempted: boolean;
+    attemptCount: 0 | 1;
+    targetMode: 'same_tab' | 'new_tab' | null;
+    tokenObserved: boolean;
+  };
 }
 
 export function isXiaohongshuAccountPublicNotesWorkItem(
@@ -87,7 +98,8 @@ export function isXiaohongshuAccountPublicNotesWorkItem(
   return value.schemaVersion === 1 && value.protocolVersion === 1 && uuid(value.workId) &&
     uuid(value.operationId) && uuid(value.browserBindingId) && value.platform === 'xiaohongshu' &&
     value.capability === XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY &&
-    (value.executionTarget === 'existing_public_profile_tab' || value.executionTarget === 'ephemeral_public_profile_url') &&
+    (value.executionTarget === 'existing_public_profile_tab' || value.executionTarget === 'ephemeral_public_profile_url' ||
+      value.executionTarget === 'discover_public_profile_from_note') &&
     timestamp(value.issuedAt) && timestamp(value.expiresAt) &&
     Date.parse(value.expiresAt as string) > Date.parse(value.issuedAt as string) &&
     validInput(value.input, value.executionTarget) && validBudget(value.budget, value.executionTarget) &&
@@ -100,18 +112,20 @@ export function isXiaohongshuAccountPublicNotesWorkResult(
   if (!record(value) || !exactKeys(value, [
     'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
     'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction',
-    'scroll', 'page', 'projection', 'rawPayloadStored', 'responseUrlsStored', 'debuggerDetached'
+    'scroll', 'page', 'projection', 'rawPayloadStored', 'responseUrlsStored', 'debuggerDetached', 'profileLinkDiscovery'
   ])) return false;
   if (value.schemaVersion !== 1 || value.protocolVersion !== 1 || !uuid(value.workId) || !uuid(value.operationId) ||
     !uuid(value.browserBindingId) || value.platform !== 'xiaohongshu' ||
     value.capability !== XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY ||
-    (value.executionTarget !== 'existing_public_profile_tab' && value.executionTarget !== 'ephemeral_public_profile_url') ||
+    (value.executionTarget !== 'existing_public_profile_tab' && value.executionTarget !== 'ephemeral_public_profile_url' &&
+      value.executionTarget !== 'discover_public_profile_from_note') ||
     (value.state !== 'completed' && value.state !== 'stopped') ||
     !(value.errorCode === null || (typeof value.errorCode === 'string' && SAFE_ERROR.test(value.errorCode))) ||
     !terminalReason(value.terminalReason) || !timestamp(value.completedAt) || !navigation(value.navigation) ||
     !semanticAction(value.semanticAction) || !scroll(value.scroll) || !pageResult(value.page) ||
     !(value.projection === null || isXiaohongshuManagedProfileNotesProjectionResult(value.projection)) ||
-    value.rawPayloadStored !== false || value.responseUrlsStored !== false || typeof value.debuggerDetached !== 'boolean') {
+    value.rawPayloadStored !== false || value.responseUrlsStored !== false || typeof value.debuggerDetached !== 'boolean' ||
+    !profileLinkDiscovery(value.profileLinkDiscovery)) {
     return false;
   }
   const candidate = value as unknown as XiaohongshuAccountPublicNotesWorkResult;
@@ -141,14 +155,17 @@ function validInput(value: unknown, executionTarget: unknown): boolean {
   if (executionTarget === 'existing_public_profile_tab') {
     return exactKeys(value, ['maximumScrolls']) && Number(value.maximumScrolls) <= 3;
   }
+  if (executionTarget === 'discover_public_profile_from_note') {
+    return exactKeys(value, ['maximumScrolls']);
+  }
   return exactKeys(value, ['maximumScrolls', 'profileUrl']) &&
     typeof value.profileUrl === 'string' && canonicalXiaohongshuPublicProfileUrl(value.profileUrl) !== null;
 }
 
 function validBudget(value: unknown, executionTarget: unknown): boolean {
-  return executionTarget === 'ephemeral_public_profile_url'
-    ? isLinkBudget(value)
-    : isBudget(value);
+  if (executionTarget === 'ephemeral_public_profile_url') return isLinkBudget(value);
+  if (executionTarget === 'discover_public_profile_from_note') return isDiscoveryBudget(value);
+  return isBudget(value);
 }
 
 function isBudget(value: unknown): value is typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET {
@@ -173,10 +190,22 @@ function isLinkBudget(value: unknown): value is typeof XIAOHONGSHU_ACCOUNT_PUBLI
     value.maximumRawPayloadBytesStored === 0;
 }
 
+function isDiscoveryBudget(value: unknown): value is typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET {
+  return record(value) && exactKeys(value, [
+    'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+    'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
+    'maximumRawPayloadBytesStored'
+  ]) && value.maximumPlatformNavigations === 0 && value.maximumPageReloads === 0 &&
+    value.maximumPageInitiatedNewDocuments === 1 && value.maximumSemanticActions === 21 &&
+    value.maximumNetworkResponseBodies === 8 && value.maximumProjectedItems === 200 &&
+    value.maximumRawPayloadBytesStored === 0;
+}
+
 function terminalReason(value: unknown): value is XiaohongshuAccountPublicNotesTerminalReason {
   return typeof value === 'string' && [
     'profile_notes_ready', 'profile_notes_budget_exhausted', 'existing_public_profile_tab_required', 'existing_public_profile_tab_ambiguous',
     'profile_url_invalid', 'profile_url_expired', 'profile_url_navigation_failed', 'profile_url_context_changed',
+    'profile_source_tab_required', 'profile_source_tab_ambiguous', 'profile_url_token_unavailable',
     'run_deadline_exceeded', 'document_context_changed', 'postcondition_unmet', 'permission_required', 'login_required',
     'verification_required', 'rate_limited', 'source_unavailable', 'debugger_attach_failed',
     'debugger_input_failed', 'debugger_detach_failed', 'extension_worker_interrupted'
@@ -203,6 +232,15 @@ function pageResult(value: unknown): boolean {
   return value === null || (record(value) && exactKeys(value, ['publicSurface', 'renderedCardCount']) &&
     value.publicSurface === 'public_profile' && Number.isSafeInteger(value.renderedCardCount) &&
     Number(value.renderedCardCount) >= 0 && Number(value.renderedCardCount) <= 80);
+}
+
+function profileLinkDiscovery(value: unknown): boolean {
+  if (value === null) return true;
+  return record(value) && exactKeys(value, ['attempted', 'attemptCount', 'targetMode', 'tokenObserved']) &&
+    typeof value.attempted === 'boolean' && (value.attemptCount === 0 || value.attemptCount === 1) &&
+    value.attempted === (value.attemptCount === 1) &&
+    (value.targetMode === null || value.targetMode === 'same_tab' || value.targetMode === 'new_tab') &&
+    typeof value.tokenObserved === 'boolean';
 }
 
 function scrollCount(value: unknown): value is XiaohongshuProfileScrollCount {

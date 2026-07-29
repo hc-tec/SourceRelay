@@ -20,6 +20,10 @@ import {
   prepareXiaohongshuProfileScroll,
   recordXiaohongshuProfileScrollIntent
 } from './xiaohongshu-profile-scroll-ledger';
+import {
+  completeXiaohongshuProfileLinkDiscovery,
+  recordXiaohongshuProfileLinkDiscoveryIntent
+} from './xiaohongshu-profile-link-discovery-ledger';
 
 interface ProfileDocument {
   tabId: number;
@@ -35,6 +39,13 @@ interface ProfileDomProbe {
   viewportHeight: number;
   items: PublicProfileItem[];
   risk: ReturnType<typeof classifyXiaohongshuCurrentPageRisk>;
+}
+
+interface ProfileLinkDiscoveryState {
+  attempted: boolean;
+  attemptCount: 0 | 1;
+  targetMode: 'same_tab' | 'new_tab' | null;
+  tokenObserved: boolean;
 }
 
 export async function executeXiaohongshuAccountPublicNotesExtensionWork(
@@ -53,9 +64,23 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   let navigatedProfileTabId: number | null = null;
   let errorCode: string | null = null;
   let completionReason: 'profile_notes_ready' | 'profile_notes_budget_exhausted' | null = null;
+  let profileLinkDiscovery: ProfileLinkDiscoveryState | null =
+    item.executionTarget === 'discover_public_profile_from_note'
+      ? { attempted: false, attemptCount: 0, targetMode: null, tokenObserved: false }
+      : null;
   try {
     assertWorkDeadline(item);
-    if (item.executionTarget === 'ephemeral_public_profile_url') {
+    if (item.executionTarget === 'discover_public_profile_from_note') {
+      const discovered = await discoverProfileFromAuthorAvatar(item);
+      profileObserverScriptId = discovered.observerScriptId;
+      profileLinkDiscovery = {
+        attempted: true,
+        attemptCount: 1,
+        targetMode: discovered.targetMode,
+        tokenObserved: true
+      };
+      navigatedProfileTabId = discovered.tabId;
+    } else if (item.executionTarget === 'ephemeral_public_profile_url') {
       const profileUrl = item.input.profileUrl;
       if (!profileUrl || !canonicalXiaohongshuPublicProfileUrl(profileUrl)) {
         throw new Error('xiaohongshu_profile_url_invalid');
@@ -211,7 +236,8 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     projection,
     rawPayloadStored: false,
     responseUrlsStored: false,
-    debuggerDetached
+    debuggerDetached,
+    profileLinkDiscovery
   };
 }
 
@@ -230,6 +256,172 @@ export async function cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver(
   await chrome.scripting.unregisterContentScripts({
     ids: [profileObserverScriptId(workId)]
   }).catch(() => undefined);
+}
+
+interface AuthorAvatarTarget {
+  tabId: number;
+  windowId: number;
+  documentId: string;
+  x: number;
+  y: number;
+  targetMode: 'same_tab' | 'new_tab';
+}
+
+interface DiscoveredProfileTarget {
+  tabId: number;
+  targetMode: 'same_tab' | 'new_tab';
+  observerScriptId: string;
+}
+
+/**
+ * Discover a short-lived profile link through the platform's own visible
+ * author-avatar flow. The full URL is intentionally never returned from this
+ * helper and never enters a result or artifact; it is only observed in-memory
+ * long enough to bind the resulting profile document.
+ */
+async function discoverProfileFromAuthorAvatar(
+  item: XiaohongshuAccountPublicNotesWorkItem
+): Promise<DiscoveredProfileTarget> {
+  const source = await findUniquePublicEntryDocument();
+  await foreground(source);
+  const target = await readAuthorAvatarTarget(source);
+  if (!target) throw new Error('xiaohongshu_profile_source_tab_required');
+  const baselineTabs = await chrome.tabs.query({});
+  const baselineTabIds = new Set(baselineTabs
+    .map((tab) => tab.id)
+    .filter((tabId): tabId is number => Number.isSafeInteger(tabId)));
+  const profileObserverScriptId = await registerEphemeralProfileObserver(item.workId);
+  const debuggee: chrome.debugger.Debuggee = { tabId: source.tabId };
+  let attached = false;
+  let keepObserver = false;
+  try {
+    await recordXiaohongshuProfileLinkDiscoveryIntent(item.workId);
+    await chrome.debugger.attach(debuggee, '1.3').catch(() => {
+      throw new Error('debugger_attach_failed');
+    });
+    attached = true;
+    await dispatchTrustedClick(debuggee, target.x, target.y);
+    const discovered = await waitForProfileToken(baselineTabIds, source.tabId, item.expiresAt);
+    await completeXiaohongshuProfileLinkDiscovery(item.workId);
+    keepObserver = true;
+    return { ...discovered, observerScriptId: profileObserverScriptId };
+  } finally {
+    if (attached) await chrome.debugger.detach(debuggee).catch(() => undefined);
+    if (!keepObserver) {
+      await chrome.scripting.unregisterContentScripts({ ids: [profileObserverScriptId] }).catch(() => undefined);
+    }
+  }
+}
+
+async function findUniquePublicEntryDocument(): Promise<ProfileDocument> {
+  const tabs = await chrome.tabs.query({});
+  const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
+    !tab.incognito && ['explore', 'search'].includes(xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '') ?? ''));
+  const active = eligible.filter((tab) => tab.active === true);
+  const selected = eligible.length === 1 ? eligible : active.length === 1 ? active : [];
+  if (selected.length !== 1) {
+    throw new Error(selected.length === 0
+      ? 'xiaohongshu_profile_source_tab_required'
+      : 'xiaohongshu_profile_source_tab_ambiguous');
+  }
+  const tab = selected[0]!;
+  const frame = await chrome.webNavigation.getFrame({ tabId: tab.id!, frameId: 0 }).catch(() => null);
+  if (!frame?.documentId || !['explore', 'search'].includes(xiaohongshuCurrentPageNetworkPublicSurface(frame.url) ?? '')) {
+    throw new Error('xiaohongshu_profile_source_tab_required');
+  }
+  return { tabId: tab.id!, windowId: tab.windowId!, documentId: frame.documentId };
+}
+
+async function readAuthorAvatarTarget(profileDocument: ProfileDocument): Promise<AuthorAvatarTarget | null> {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: profileDocument.tabId, documentIds: [profileDocument.documentId] },
+    func: () => {
+      const visible = (element: Element): boolean => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+          style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+      };
+      const cards = Array.from(document.querySelectorAll('section.note-item')).filter(visible)
+        .sort((left, right) => left.getBoundingClientRect().y - right.getBoundingClientRect().y ||
+          left.getBoundingClientRect().x - right.getBoundingClientRect().x);
+      const card = cards[0] ?? null;
+      if (!card) return null;
+      const avatar = Array.from(card.querySelectorAll('a[href*="/user/profile/"]')).find((element) =>
+        visible(element) && Boolean(element.querySelector('img, [class*="avatar"], [class*="Avatar"]'))
+      ) as HTMLAnchorElement | undefined;
+      const fallback = Array.from(card.querySelectorAll('a[href*="/user/profile/"]')).find(visible) as HTMLAnchorElement | undefined;
+      const anchor = avatar ?? fallback;
+      if (!anchor) return null;
+      const rect = anchor.getBoundingClientRect();
+      const center = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      if (!center || !(center === anchor || anchor.contains(center))) return null;
+      return {
+        x: rect.x + rect.width / 2,
+        y: rect.y + rect.height / 2,
+        targetMode: anchor.target && anchor.target !== '_self' ? 'new_tab' as const : 'same_tab' as const
+      };
+    }
+  });
+  const value = results[0]?.result as { x?: unknown; y?: unknown; targetMode?: unknown } | null | undefined;
+  if (!value || typeof value.x !== 'number' || typeof value.y !== 'number' ||
+    (value.targetMode !== 'same_tab' && value.targetMode !== 'new_tab')) return null;
+  return {
+    tabId: profileDocument.tabId,
+    windowId: profileDocument.windowId,
+    documentId: profileDocument.documentId,
+    x: value.x,
+    y: value.y,
+    targetMode: value.targetMode
+  };
+}
+
+async function waitForProfileToken(
+  baselineTabIds: ReadonlySet<number>,
+  sourceTabId: number,
+  expiresAt: string
+): Promise<DiscoveredProfileTarget> {
+  const deadline = Math.min(Date.now() + 15_000, Date.parse(expiresAt));
+  while (Date.now() < deadline) {
+    const tabs = await chrome.tabs.query({});
+    const newTabs = tabs.filter((tab) => typeof tab.id === 'number' && !baselineTabIds.has(tab.id));
+    if (newTabs.length > 1) throw new Error('xiaohongshu_profile_url_context_changed');
+    const candidates = tabs.filter((tab) => tab.id === sourceTabId || newTabs.some((candidate) => candidate.id === tab.id));
+    for (const tab of candidates) {
+      if (typeof tab.id !== 'number' || !hasEphemeralProfileToken(tab.url ?? '')) continue;
+      const frame = await chrome.webNavigation.getFrame({ tabId: tab.id, frameId: 0 }).catch(() => null);
+      if (!frame?.documentId || !hasEphemeralProfileToken(frame.url)) continue;
+      return { tabId: tab.id, targetMode: tab.id === sourceTabId ? 'same_tab' : 'new_tab', observerScriptId: '' };
+    }
+    await delay(250);
+  }
+  throw new Error('xiaohongshu_profile_url_token_unavailable');
+}
+
+function hasEphemeralProfileToken(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return xiaohongshuCurrentPageNetworkPublicSurface(value) === 'public_profile' &&
+      url.searchParams.has('xsec_token') && Boolean(url.searchParams.get('xsec_token'));
+  } catch {
+    return false;
+  }
+}
+
+async function dispatchTrustedClick(
+  debuggee: chrome.debugger.Debuggee,
+  x: number,
+  y: number
+): Promise<void> {
+  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+    type: 'mouseMoved', x, y
+  });
+  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+    type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1
+  });
+  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+    type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1
+  });
 }
 
 async function registerEphemeralProfileObserver(workId: string): Promise<string> {
@@ -575,6 +767,10 @@ function terminalReason(errorCode: string | null): XiaohongshuAccountPublicNotes
     case 'xiaohongshu_profile_url_invalid': return 'profile_url_invalid';
     case 'xiaohongshu_profile_entry_tab_required': return 'profile_url_navigation_failed';
     case 'xiaohongshu_profile_entry_tab_ambiguous': return 'profile_url_navigation_failed';
+    case 'xiaohongshu_profile_source_tab_required': return 'profile_source_tab_required';
+    case 'xiaohongshu_profile_source_tab_ambiguous': return 'profile_source_tab_ambiguous';
+    case 'xiaohongshu_profile_url_token_unavailable': return 'profile_url_token_unavailable';
+    case 'xiaohongshu_profile_url_context_changed': return 'profile_url_context_changed';
     case 'xiaohongshu_profile_url_expired': return 'profile_url_expired';
     case 'xiaohongshu_profile_url_navigation_failed': return 'profile_url_navigation_failed';
     case 'xiaohongshu_profile_url_new_tab_detected': return 'profile_url_context_changed';

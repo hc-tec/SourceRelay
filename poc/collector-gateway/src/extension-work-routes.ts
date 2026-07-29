@@ -380,10 +380,13 @@ export async function enqueueXiaohongshuAccountPublicNotesWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
   maximumScrolls: XiaohongshuProfileScrollCount,
-  profileUrl?: string
+  profileUrl?: string,
+  discoverFromNote = false
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
-  return await context.workQueue.enqueueXiaohongshuAccountPublicNotes({ browserBindingId, maximumScrolls, profileUrl });
+  return await context.workQueue.enqueueXiaohongshuAccountPublicNotes({
+    browserBindingId, maximumScrolls, profileUrl, discoverFromNote
+  });
 }
 
 export async function enqueueXiaohongshuNotePublicDetailWork(

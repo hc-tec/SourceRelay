@@ -51,7 +51,7 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
     }), expect.objectContaining({
       capability: 'xiaohongshu.account.public_notes.v1',
       platform: 'xiaohongshu',
-      inputMode: 'scroll_budget_only_or_ephemeral_profile_url',
+      inputMode: 'scroll_budget_only_or_ephemeral_profile_url_or_note_avatar',
       executionTarget: 'existing_public_profile_tab',
       dispatchState: 'direct_ready',
       managedValidationState: 'gateway_extension_real_e2e_passed',
@@ -59,7 +59,8 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       responseBodies: 'temporarily_read_projected_not_stored',
       browserHostFallback: 'forbidden',
       budget: expect.objectContaining({ maximumSemanticActions: 3, maximumProjectedItems: 40 }),
-      ephemeralProfileLinkBudget: expect.objectContaining({ maximumSemanticActions: 20, maximumProjectedItems: 200 })
+      ephemeralProfileLinkBudget: expect.objectContaining({ maximumSemanticActions: 20, maximumProjectedItems: 200 }),
+      discoveryBudget: expect.objectContaining({ maximumPageInitiatedNewDocuments: 1, maximumSemanticActions: 21, maximumProjectedItems: 200 })
     }), expect.objectContaining({
       capability: 'xiaohongshu.note.public_detail.v1',
       platform: 'xiaohongshu',

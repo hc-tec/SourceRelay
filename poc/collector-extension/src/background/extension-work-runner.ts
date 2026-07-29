@@ -17,6 +17,7 @@ import { executeXiaohongshuNotePublicCommentsExtensionWork } from './extension-w
 import { executeXiaohongshuNotePublicCommentRepliesExtensionWork } from './extension-work-xiaohongshu-note-public-comment-replies';
 import { wasXiaohongshuTrustedInputAttempted } from './xiaohongshu-trusted-input';
 import { xiaohongshuProfileScrollAttemptCount } from './xiaohongshu-profile-scroll-ledger';
+import { xiaohongshuProfileLinkDiscoveryAttempted } from './xiaohongshu-profile-link-discovery-ledger';
 import { xiaohongshuNoteDetailClickAttempted } from './xiaohongshu-note-detail-click-ledger';
 import { xiaohongshuNoteCommentsScrollCounts } from './xiaohongshu-note-comments-scroll-ledger';
 import { xiaohongshuCommentRepliesClickCounts } from './xiaohongshu-comment-replies-click-ledger';
@@ -267,10 +268,14 @@ async function interruptedResult(active: ActiveExtensionWork): Promise<Extension
     };
   }
   if (active.item.capability === 'xiaohongshu.account.public_notes.v1') {
-    if (active.item.executionTarget === 'ephemeral_public_profile_url') {
+    if (active.item.executionTarget === 'ephemeral_public_profile_url' ||
+      active.item.executionTarget === 'discover_public_profile_from_note') {
       await cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver(active.item.workId);
     }
     const attemptedCount = await xiaohongshuProfileScrollAttemptCount(active.item.workId);
+    const discoveryAttempted = active.item.executionTarget === 'discover_public_profile_from_note'
+      ? await xiaohongshuProfileLinkDiscoveryAttempted(active.item.workId)
+      : false;
     return {
       schemaVersion: 1,
       protocolVersion: 1,
@@ -294,7 +299,10 @@ async function interruptedResult(active: ActiveExtensionWork): Promise<Extension
       projection: null,
       rawPayloadStored: false,
       responseUrlsStored: false,
-      debuggerDetached: false
+      debuggerDetached: false,
+      profileLinkDiscovery: active.item.executionTarget === 'discover_public_profile_from_note'
+        ? { attempted: discoveryAttempted, attemptCount: discoveryAttempted ? 1 : 0, targetMode: null, tokenObserved: false }
+        : null
     };
   }
   if (active.item.capability === 'xiaohongshu.search.public_notes.v1') {

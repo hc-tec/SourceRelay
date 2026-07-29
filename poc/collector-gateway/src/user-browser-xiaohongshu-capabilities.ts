@@ -4,6 +4,7 @@ import {
   XIAOHONGSHU_CURRENT_PAGE_NETWORK_POLICY,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET,
+  XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY,
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_CAPABILITY,
@@ -68,8 +69,8 @@ export interface UserBrowserXiaohongshuAccountPublicNotesCapabilityDescriptor {
   capability: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY;
   platform: 'xiaohongshu';
   title: string;
-  inputMode: 'scroll_budget_only_or_ephemeral_profile_url';
-  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
+  inputMode: 'scroll_budget_only_or_ephemeral_profile_url' | 'scroll_budget_only_or_ephemeral_profile_url_or_note_avatar';
+  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url' | 'discover_public_profile_from_note';
   accountScopedSurfaces: 'public_profile_only';
   dispatchState: 'direct_ready';
   managedValidationState: 'gateway_extension_real_e2e_passed';
@@ -78,6 +79,7 @@ export interface UserBrowserXiaohongshuAccountPublicNotesCapabilityDescriptor {
   routeAdmission: 'generic_public_note_card_projection_no_url_dependency';
   budget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET;
   ephemeralProfileLinkBudget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET;
+  discoveryBudget: typeof XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET;
   browserHostFallback: 'forbidden';
 }
 
@@ -162,7 +164,7 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     capability: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY,
     platform: 'xiaohongshu',
     title: '小红书公开博主笔记列表',
-    inputMode: 'scroll_budget_only_or_ephemeral_profile_url',
+    inputMode: 'scroll_budget_only_or_ephemeral_profile_url_or_note_avatar',
     executionTarget: 'existing_public_profile_tab',
     accountScopedSurfaces: 'public_profile_only',
     dispatchState: 'direct_ready',
@@ -172,6 +174,7 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     routeAdmission: 'generic_public_note_card_projection_no_url_dependency',
     budget: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
     ephemeralProfileLinkBudget: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET,
+    discoveryBudget: XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET,
     browserHostFallback: 'forbidden'
   },
   {

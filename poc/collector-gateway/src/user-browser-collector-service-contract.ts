@@ -14,7 +14,7 @@ interface UserBrowserCollectorServiceRequestBase {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
   browserBindingId: string;
   platform: 'bilibili';
-  executionTarget: 'collector_work_tab' | 'user_selected_tab' | 'ephemeral_public_profile_url';
+  executionTarget: 'collector_work_tab' | 'user_selected_tab' | 'ephemeral_public_profile_url' | 'discover_public_profile_from_note';
 }
 
 export interface UserBrowserVideoDetailCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
@@ -124,7 +124,7 @@ export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.account.public_notes.v1';
-  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
+  executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url' | 'discover_public_profile_from_note';
   input: { maximumScrolls: XiaohongshuProfileScrollCount; profileUrl?: string };
 }
 
@@ -184,7 +184,7 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab' &&
       executionTarget !== 'existing_public_explore_tab' && executionTarget !== 'existing_public_profile_tab' &&
       executionTarget !== 'existing_public_search_tab' && executionTarget !== 'existing_public_note_overlay' &&
-      executionTarget !== 'ephemeral_public_profile_url') ||
+      executionTarget !== 'ephemeral_public_profile_url' && executionTarget !== 'discover_public_profile_from_note') ||
     !candidate.input ||
     typeof candidate.input !== 'object' || Array.isArray(candidate.input)
   ) throw new Error('user_browser_collector_service_request_invalid');
@@ -224,14 +224,16 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     if (candidate.capability === 'xiaohongshu.account.public_notes.v1') {
       const existingProfileTab = executionTarget === 'existing_public_profile_tab' &&
         Object.keys(input).length === 1;
+      const discoveredProfile = executionTarget === 'discover_public_profile_from_note' &&
+        Object.keys(input).length === 1;
       const canonicalProfileUrl = typeof input.profileUrl === 'string'
         ? canonicalXiaohongshuPublicProfileUrl(input.profileUrl) : null;
       const ephemeralProfileUrl = executionTarget === 'ephemeral_public_profile_url' &&
         Object.keys(input).length === 2 && canonicalProfileUrl !== null;
       const maximumScrolls = typeof input.maximumScrolls === 'number' ? input.maximumScrolls : null;
-      if ((!existingProfileTab && !ephemeralProfileUrl) ||
+      if ((!existingProfileTab && !ephemeralProfileUrl && !discoveredProfile) ||
         maximumScrolls === null || !Number.isSafeInteger(maximumScrolls) || maximumScrolls < 1 ||
-        maximumScrolls > (ephemeralProfileUrl ? 20 : 3)) {
+        maximumScrolls > (ephemeralProfileUrl || discoveredProfile ? 20 : 3)) {
         throw new Error('user_browser_collector_service_request_invalid');
       }
       const boundedMaximumScrolls = maximumScrolls as XiaohongshuProfileScrollCount;
@@ -240,7 +242,8 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
         browserBindingId: candidate.browserBindingId,
         platform: 'xiaohongshu',
         capability: 'xiaohongshu.account.public_notes.v1',
-        executionTarget: ephemeralProfileUrl ? 'ephemeral_public_profile_url' : 'existing_public_profile_tab',
+        executionTarget: ephemeralProfileUrl ? 'ephemeral_public_profile_url'
+          : discoveredProfile ? 'discover_public_profile_from_note' : 'existing_public_profile_tab',
         input: ephemeralProfileUrl
           ? { maximumScrolls: boundedMaximumScrolls, profileUrl: canonicalProfileUrl! }
           : { maximumScrolls: boundedMaximumScrolls }

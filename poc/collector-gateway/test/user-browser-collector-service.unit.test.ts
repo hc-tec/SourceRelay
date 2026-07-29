@@ -168,6 +168,36 @@ describe('user-owned browser collector service', () => {
     })).toThrow('user_browser_collector_service_request_invalid');
   });
 
+  test('admits note-avatar profile discovery without accepting a caller URL or browser identity', () => {
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.account.public_notes.v1',
+      executionTarget: 'discover_public_profile_from_note',
+      input: { maximumScrolls: 20 }
+    })).toEqual({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.account.public_notes.v1',
+      executionTarget: 'discover_public_profile_from_note',
+      input: { maximumScrolls: 20 }
+    });
+    for (const input of [
+      { maximumScrolls: 20, profileUrl: 'https://www.xiaohongshu.com/user/profile/x' },
+      { maximumScrolls: 20, tabId: 1 },
+      { maximumScrolls: 20, selector: 'a[href*="/user/profile/"]' }
+    ]) expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.account.public_notes.v1',
+      executionTarget: 'discover_public_profile_from_note',
+      input
+    })).toThrow('user_browser_collector_service_request_invalid');
+  });
+
   test('publishes direct and canary passive capabilities without a Profile or browser-control primitive', () => {
     const document = userBrowserCollectorServiceOpenApiDocument('http://127.0.0.1:43127') as Record<string, any>;
     const variants = document.components.schemas.UserBrowserCollectRequest.oneOf;
@@ -205,7 +235,7 @@ describe('user-owned browser collector service', () => {
     expect(document.components.schemas.UserBrowserXiaohongshuAccountPublicNotesCollectRequest.properties).toMatchObject({
       platform: { const: 'xiaohongshu' },
       capability: { const: 'xiaohongshu.account.public_notes.v1' },
-      executionTarget: { type: 'string', enum: ['existing_public_profile_tab', 'ephemeral_public_profile_url'] },
+      executionTarget: { type: 'string', enum: ['existing_public_profile_tab', 'ephemeral_public_profile_url', 'discover_public_profile_from_note'] },
       input: { required: ['maximumScrolls'], additionalProperties: false }
     });
     expect(document.components.schemas.UserBrowserXiaohongshuNotePublicDetailCollectRequest.properties).toMatchObject({
@@ -305,7 +335,7 @@ describe('user-owned browser collector service', () => {
     });
     expect(document.components.schemas.Operation.properties.executionTarget).toMatchObject({
       enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab',
-        'existing_public_profile_tab', 'ephemeral_public_profile_url', 'existing_public_search_tab',
+        'existing_public_profile_tab', 'ephemeral_public_profile_url', 'discover_public_profile_from_note', 'existing_public_search_tab',
         'existing_public_note_overlay']
     });
     expect(document.components.schemas.Operation.properties.capability.enum).toEqual(expect.arrayContaining([

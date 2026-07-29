@@ -31,6 +31,20 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET = Object.freeze({
 /** Upper bound for optional, same-document detail enrichment of ranked cards. */
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS = 20 as const;
 /**
+ * Natural author-avatar discovery spends one trusted click before the profile
+ * directory work. A platform-created profile document is bounded to one;
+ * the service never creates or replays a tab itself.
+ */
+export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET = Object.freeze({
+  maximumPlatformNavigations: 0,
+  maximumPageReloads: 0,
+  maximumPageInitiatedNewDocuments: 1,
+  maximumSemanticActions: 21,
+  maximumNetworkResponseBodies: 8,
+  maximumProjectedItems: 200,
+  maximumRawPayloadBytesStored: 0
+} as const);
+/**
  * Detail enrichment is deliberately bounded to the existing search document:
  * it may click and close at most twenty visible cards, but it never navigates,
  * reloads, opens a page-initiated document, or stores raw payloads.
