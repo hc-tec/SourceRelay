@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { isXiaohongshuValidationPageAdoptionRequest } from '../src/index.js';
+import {
+  isXiaohongshuValidationPageAdoptionRequest,
+  XIAOHONGSHU_VALIDATION_PAGE_ADOPTION_MAX_LEASE_MS
+} from '../src/index.js';
 
 const request = {
   schemaVersion: 1,
@@ -15,5 +18,16 @@ describe('Xiaohongshu validation-page adoption contract', () => {
     for (const extra of [{ url: 'https://example.com' }, { tabId: 1 }, { selector: 'a' }]) {
       expect(isXiaohongshuValidationPageAdoptionRequest({ ...request, ...extra })).toBe(false);
     }
+  });
+
+  test('allows the bounded five-minute composed validation lease, but no more', () => {
+    expect(isXiaohongshuValidationPageAdoptionRequest({
+      ...request,
+      leaseDurationMs: XIAOHONGSHU_VALIDATION_PAGE_ADOPTION_MAX_LEASE_MS
+    })).toBe(true);
+    expect(isXiaohongshuValidationPageAdoptionRequest({
+      ...request,
+      leaseDurationMs: XIAOHONGSHU_VALIDATION_PAGE_ADOPTION_MAX_LEASE_MS + 1
+    })).toBe(false);
   });
 });

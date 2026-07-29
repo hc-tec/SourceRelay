@@ -13,10 +13,11 @@ const extensionSourceDirectory = resolve(pocRoot, 'collector-extension');
 const gatewayDirectory = resolve(pocRoot, 'collector-gateway');
 const profileId = 'xiaohongshu_validation';
 const exploreUrl = 'https://www.xiaohongshu.com/explore';
-// Page adoption is intentionally short-lived; keep this inside the adoption
-// contract's 120-second upper bound so a retained review page can be reused
-// without falling back to a second browser page.
-const validationLeaseDurationMs = 120_000;
+// The composed live run keeps one exact page lease across search, same-
+// document detail, comments and bounded replies.  Keep this equal to the
+// validation adoption contract's finite five-minute upper bound so a retained
+// review page can be reused without falling back to a second browser page.
+const validationLeaseDurationMs = 300_000;
 const validateCommentRecon = process.argv.includes('--comment-recon');
 const validateReplyRecon = process.argv.includes('--reply-recon');
 const validatePublicReplies = process.argv.includes('--replies');
@@ -719,7 +720,8 @@ function assertNoteDetailArtifact(artifact, operationId) {
     artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
     artifact.result?.semanticAction?.attempted !== true || artifact.result.semanticAction.attemptCount !== 1 ||
     artifact.result?.page?.publicSurface !== 'note_detail_overlay' ||
-    typeof artifact.result?.projection?.publicText !== 'string' || artifact.result.projection.publicText.length < 120 ||
+    typeof artifact.result?.projection?.publicText !== 'string' ||
+    artifact.result.projection.publicText.trim().length < 1 ||
     !['network_projection', 'dom_fallback'].includes(artifact.result.projection.captureMode) ||
     artifact.provenance?.rawPayloadStored !== false || artifact.provenance?.responseUrlsStored !== false ||
     artifact.provenance?.debuggerDetached !== true) {

@@ -1,4 +1,12 @@
 export const XIAOHONGSHU_VALIDATION_PAGE_ADOPTION_SCHEMA_VERSION = 1 as const;
+/**
+ * A composed live validation run keeps one already-visible page leased while
+ * search, same-document detail, comments and bounded replies complete.  Five
+ * minutes is long enough for that bounded sequence while remaining a finite
+ * validation-only lease (the generic page pool still permits its separate
+ * one-hour upper bound).
+ */
+export const XIAOHONGSHU_VALIDATION_PAGE_ADOPTION_MAX_LEASE_MS = 300_000 as const;
 
 export interface XiaohongshuValidationPageAdoptionRequest {
   schemaVersion: typeof XIAOHONGSHU_VALIDATION_PAGE_ADOPTION_SCHEMA_VERSION;
@@ -17,7 +25,7 @@ export function isXiaohongshuValidationPageAdoptionRequest(
   return value.schemaVersion === XIAOHONGSHU_VALIDATION_PAGE_ADOPTION_SCHEMA_VERSION &&
     identifier(value.profileId) && identifier(value.taskId) && identifier(value.runId) &&
     Number.isSafeInteger(value.leaseDurationMs) && Number(value.leaseDurationMs) >= 5_000 &&
-    Number(value.leaseDurationMs) <= 120_000;
+    Number(value.leaseDurationMs) <= XIAOHONGSHU_VALIDATION_PAGE_ADOPTION_MAX_LEASE_MS;
 }
 
 function identifier(value: unknown): value is string {

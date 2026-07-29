@@ -69,9 +69,13 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
     // comments as the whole discussion.
     const shouldScroll = network.comments.length === 0 || network.hasMore === true;
     if (shouldScroll) {
-      if (!dom.scrollTarget && network.comments.length === 0) {
+      // A note may render a bounded public comment sample directly without a
+      // scrollable container.  That is still a valid DOM fallback; only stop
+      // when both independent evidence surfaces are empty.
+      if (!dom.scrollTarget && network.comments.length === 0 && dom.comments.length === 0) {
         const waitDeadline = Date.now() + 8_000;
-        while (Date.now() < waitDeadline && !dom.scrollTarget && network.comments.length === 0) {
+        while (Date.now() < waitDeadline && !dom.scrollTarget &&
+          network.comments.length === 0 && dom.comments.length === 0) {
           await delay(500);
           await requireSameDocument(page, options.allowSearchOverlay === true);
           assertRisk(await readRisk(page));
@@ -79,7 +83,7 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
           network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, observerWorkId);
         }
       }
-      if (!dom.scrollTarget && network.comments.length === 0) {
+      if (!dom.scrollTarget && network.comments.length === 0 && dom.comments.length === 0) {
         throw new Error('xiaohongshu_comment_scroll_container_unavailable');
       }
       if (dom.scrollTarget) {
