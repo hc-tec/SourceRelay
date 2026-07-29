@@ -16,7 +16,7 @@
 这条“由平台页面自动发现作者”的路径仍必须以“已经存在的公开博主主页 tab”为前置条件；调用方不能通过它提交 URL、tab ID、selector 或脚本。
 
 这条结论只针对“从笔记卡或详情浮层自动发现作者入口”的路径。产品随后增加了一个不同的、一次性受控入口：上层应用可以在短时有效期内直接提供一个公开博主主页链接。该链接不是由扩展从页面推导出来的，也不允许作为长期账号档案保存；Gateway 只在未完成 work item 的短生命周期内使用它，扩展在唯一已有的小红书 tab 内导航一次，然后执行有界的 Network/XHR 投影与可信滚动。该入口的设计记录见
-[`xiaohongshu-ephemeral-profile-link-v0.1.md`](../../design/xiaohongshu-ephemeral-profile-link-v0.1.md)，目前仍等待真实有效链接完成独立 live canary，不能把 `implementation_ready_live_e2e_pending` 误报成真实平台已验收。
+[`xiaohongshu-ephemeral-profile-link-v0.1.md`](../../design/xiaohongshu-ephemeral-profile-link-v0.1.md)。2026-07-29 已使用另一条全新的短时链接完成独立 live canary；该路径现在登记为 `direct_ready / gateway_extension_real_e2e_passed`。本次样本没有匹配到可投影的 Network 正文，6 条笔记由 DOM fallback 提供，不能把结果误报成主页 Network/XHR 已验收。
 
 2026-07-29 已对“同页笔记详情浮层 → 浮层内作者入口”完成独立真实验证。稳定公开标题 canary 经站内搜索和一次详情点击进入同页详情浮层后，固定 DOM 探针只选择评论标题上方、详情大浮层内部的顶部作者入口；结果仍为明确 `new_tab`。因此搜索卡作者和详情浮层作者两条入口都不能安全用于生产自动到达公开主页。
 
@@ -31,7 +31,7 @@ networkResponseCount: 0
 automaticRetries: 0
 ```
 
-本轮没有点击、没有新 tab、没有刷新、没有直接跳转 profile URL。现有主页 tab 路径和短时链接路径都继续保持 `direct_canary_pending / implementation_ready_live_e2e_pending`；前者要求浏览器中自然存在唯一公开主页 tab，后者要求上层应用提供真实仍有效的主页链接，二者都必须分别完成正式 canary。
+本轮没有点击、没有新 tab、没有刷新、没有直接跳转 profile URL。作者入口路径仍然禁止自动点击；已有主页 tab 的零导航路径仍要求浏览器中自然存在唯一公开主页 tab，并尚未完成独立 live canary。短时链接路径已由后续独立 run 完成正式 canary，要求上层应用提供真实仍有效的主页链接。
 
 ## Run 摘要
 
@@ -154,7 +154,7 @@ already-existing public profile tab
 仍未证明、不能标记 ready：
 
 - 如何在无需调用方提供短时链接、也无需现成 profile tab 的情况下安全到达公开博主主页；
-- 主页首屏公开信息的稳定 DOM/Network 结构；
+- 主页 Network/XHR 正文投影的稳定结构（本轮只证明 DOM fallback）；
 - 一次低频滚动是否触发公开 `user_posted` 类响应；
 - 多页/全部笔记的游标、结束条件与预算；短时链接入口当前只承诺固定的 20 次滚动 / 200 条投影预算。
 
@@ -177,7 +177,7 @@ already-existing public profile tab
 - 多候选 tab 不接管后台页；只允许唯一 active 候选；
 - 验证 Gateway 停止超时会强制清理本地子进程和管道，避免测试进程长时间悬挂。
 
-当前仍需一条新的、尚未过期的短时公开主页链接完成最终 live 回归。原链接已经实际尝试过导航，后续不再重放；下一次必须使用新的链接，以保持 at-most-once 语义。
+短时链接入口的最终 live 回归已由新的链接完成；原链接和本次新链接都已经实际尝试过导航，后续不得重放。短链 canary 详情见 [`profile-link-gateway-extension-e2e-v0.1.md`](profile-link-gateway-extension-e2e-v0.1.md)。
 
 ## 残留
 

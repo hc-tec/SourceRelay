@@ -71,8 +71,8 @@ export interface UserBrowserXiaohongshuAccountPublicNotesCapabilityDescriptor {
   inputMode: 'scroll_budget_only_or_ephemeral_profile_url';
   executionTarget: 'existing_public_profile_tab' | 'ephemeral_public_profile_url';
   accountScopedSurfaces: 'public_profile_only';
-  dispatchState: 'direct_canary_pending';
-  managedValidationState: 'implementation_ready_live_e2e_pending';
+  dispatchState: 'direct_ready';
+  managedValidationState: 'gateway_extension_real_e2e_passed';
   captureMode: 'current_document_network_projection_plus_trusted_scroll';
   responseBodies: 'temporarily_read_projected_not_stored';
   routeAdmission: 'generic_public_note_card_projection_no_url_dependency';
@@ -165,8 +165,8 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     inputMode: 'scroll_budget_only_or_ephemeral_profile_url',
     executionTarget: 'existing_public_profile_tab',
     accountScopedSurfaces: 'public_profile_only',
-    dispatchState: 'direct_canary_pending',
-    managedValidationState: 'implementation_ready_live_e2e_pending',
+    dispatchState: 'direct_ready',
+    managedValidationState: 'gateway_extension_real_e2e_passed',
     captureMode: 'current_document_network_projection_plus_trusted_scroll',
     responseBodies: 'temporarily_read_projected_not_stored',
     routeAdmission: 'generic_public_note_card_projection_no_url_dependency',

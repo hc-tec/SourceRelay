@@ -53,7 +53,8 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       platform: 'xiaohongshu',
       inputMode: 'scroll_budget_only_or_ephemeral_profile_url',
       executionTarget: 'existing_public_profile_tab',
-      dispatchState: 'direct_canary_pending',
+      dispatchState: 'direct_ready',
+      managedValidationState: 'gateway_extension_real_e2e_passed',
       captureMode: 'current_document_network_projection_plus_trusted_scroll',
       responseBodies: 'temporarily_read_projected_not_stored',
       browserHostFallback: 'forbidden',
@@ -128,6 +129,10 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
     });
     expect(document.components.schemas.XiaohongshuAccountPublicNotesCapability.required)
       .toContain('ephemeralProfileLinkBudget');
+    expect(document.components.schemas.XiaohongshuAccountPublicNotesCapability.properties.dispatchState)
+      .toEqual({ type: 'string', const: 'direct_ready' });
+    expect(document.components.schemas.XiaohongshuAccountPublicNotesCapability.properties.managedValidationState)
+      .toEqual({ type: 'string', const: 'gateway_extension_real_e2e_passed' });
     expect(document.components.schemas.XiaohongshuAccountPublicNotesCapability.properties.ephemeralProfileLinkBudget)
       .toMatchObject({ properties: {
         maximumPlatformNavigations: { const: 1 },

@@ -3,7 +3,7 @@
 - 状态：可用的 direct-mode MVP
 - 已有真实 direct canary：`bilibili.video_detail`、`bilibili.native_search`、`bilibili.native_search_batch`、`bilibili.account_profile`、`bilibili.account_inventory`、`bilibili.discussion`
 - 已登记 B站能力：`GET /v2/capabilities` 会列出 12 项已有实现及其 direct-mode 迁移状态；登记不等于自动开放旧 Browser Host fallback。
-- 小红书 direct 能力：公开搜索、公开笔记详情、公开评论和公开评论回复已有真实 Gateway→Extension 闭环；公开博主笔记列表还支持一次性短时主页链接入口，但该入口必须用真实链接单独完成 live canary 后才会改变 `implementation_ready_live_e2e_pending` 状态。
+- 小红书 direct 能力：公开搜索、公开笔记详情、公开评论、公开评论回复和短时公开主页链接入口均已有真实 Gateway→Extension 闭环。主页链接 canary 证明了单次导航、低频可信滚动和去敏 artifact 交付；本次样本的 Network 投影没有匹配正文，6 条笔记由 DOM fallback 完成。浏览器中自然存在的公开主页 tab（零导航）仍需单独 live canary，不得把短链结果解释成该路径已验收。
 
 ### 小红书临时主页链接入口
 

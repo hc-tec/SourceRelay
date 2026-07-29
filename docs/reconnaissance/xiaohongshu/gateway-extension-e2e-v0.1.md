@@ -91,4 +91,4 @@ debuggerDetached: true
 finalPageState: retained_for_review
 ```
 
-该回归 run 没有为主页短链能力提供额外证据；`xiaohongshu.account.public_notes.v1` 仍需使用真实短时主页链接单独完成 live canary。
+该回归 run 本身没有为主页短链能力提供额外证据；随后使用一条全新的短时主页链接完成了独立 live canary，详见 [`profile-link-gateway-extension-e2e-v0.1.md`](profile-link-gateway-extension-e2e-v0.1.md)。
