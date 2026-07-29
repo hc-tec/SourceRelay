@@ -23,6 +23,11 @@ const validateReplyRecon = process.argv.includes('--reply-recon');
 const validatePublicReplies = process.argv.includes('--replies');
 const validateAccountNotes = process.argv.includes('--account-notes');
 const suppliedProfileUrl = process.env.COLLECTOR_XIAOHONGSHU_PROFILE_URL?.trim() || null;
+// A supplied short-lived profile URL is its own live canary.  Do not spend
+// platform actions on the unrelated search/detail chain before exercising the
+// single-navigation account capability; that would both waste a real run and
+// make the profile-link evidence harder to attribute.
+const directAccountCanary = validateAccountNotes && Boolean(suppliedProfileUrl);
 const requestedDepthDetails = parseBoundedDepthDetails(process.env.COLLECTOR_XIAOHONGSHU_MAX_DETAILS);
 const requestedCommentScrolls = parseBoundedCommentScrolls(process.env.COLLECTOR_XIAOHONGSHU_COMMENTS_SCROLLS);
 const includeReplyThreads = process.env.COLLECTOR_XIAOHONGSHU_INCLUDE_REPLIES === '1';
@@ -43,7 +48,8 @@ const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ??
   (validatePublicReplies || validateAccountNotes ? replyCanaryQuery : '咖啡豆');
 const validatePublicComments = process.argv.includes('--comments') || validateReplyRecon || validatePublicReplies;
 const validateExistingPublicComments = process.argv.includes('--comments-existing');
-const validateNoteDetail = validateCommentRecon || validatePublicComments || validateAccountNotes ||
+const validateNoteDetail = validateCommentRecon || validatePublicComments ||
+  (validateAccountNotes && !directAccountCanary) ||
   process.argv.includes('--note-detail');
 const timeline = [];
 let client = null;
@@ -164,6 +170,58 @@ try {
   });
 
   const token = await issueClientToken(gatewayOrigin);
+  let reportedOperation;
+  let reportedArtifact;
+  let commentRecon = null;
+  let replyRecon = null;
+  let profileEntryRecon = null;
+  if (directAccountCanary) {
+    const accountMaximumScrolls = 20;
+    const accountDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
+      method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
+        browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+        capability: 'xiaohongshu.account.public_notes.v1',
+        executionTarget: 'ephemeral_public_profile_url',
+        input: { maximumScrolls: accountMaximumScrolls, profileUrl: suppliedProfileUrl } })
+    }, 201);
+    const accountOperationId = accountDispatch.result?.operationId;
+    if (!uuid(accountOperationId)) throw new Error('xiaohongshu_account_notes_e2e_operation_missing');
+    record('account_notes_operation_dispatched', {
+      operationId: accountOperationId,
+      maximumScrolls: accountMaximumScrolls,
+      executionTarget: 'ephemeral_public_profile_url',
+      validationMode: 'direct_profile_link_only'
+    });
+    const accountOperation = await waitForOperation(gatewayOrigin, token, accountOperationId, 120_000);
+    const accountCompleted = accountOperation.state === 'completed' && accountOperation.terminalReason === 'profile_notes_ready';
+    const accountBudgetPartial = accountOperation.state === 'stopped' &&
+      accountOperation.terminalReason === 'profile_notes_budget_exhausted';
+    if ((!accountCompleted && !accountBudgetPartial) ||
+      !uuid(accountOperation.artifact?.artifactId) ||
+      typeof accountOperation.artifact?.retrievalPath !== 'string') {
+      throw new Error(accountOperation.errorCode ?? 'xiaohongshu_account_notes_e2e_operation_not_completed');
+    }
+    const accountArtifactPayload = await apiJson(
+      `${gatewayOrigin}${accountOperation.artifact.retrievalPath}`,
+      { headers: { authorization: `Bearer ${token}` } },
+      200
+    );
+    assertAccountNotesArtifact(
+      accountArtifactPayload.artifact, accountOperationId, true, accountMaximumScrolls
+    );
+    reportedOperation = accountOperation;
+    reportedArtifact = accountArtifactPayload.artifact;
+    record('account_notes_artifact_retrieved', {
+      itemCount: reportedArtifact.summary.itemCount,
+      networkMatchedPayloadCount: reportedArtifact.result.projection.matchedPayloadCount,
+      networkBodyBytesRead: reportedArtifact.result.projection.bodyBytesRead,
+      semanticActionCount: reportedArtifact.result.semanticAction.attemptCount,
+      completedScrolls: reportedArtifact.result.scroll.completedCount,
+      rawPayloadStored: false,
+      responseUrlsStored: false,
+      validationMode: 'direct_profile_link_only'
+    });
+  } else {
   const dispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
     method: 'POST',
     headers: serviceHeaders(token),
@@ -245,11 +303,8 @@ try {
     responseUrlsStored: false
   });
 
-  let reportedOperation = operation;
-  let reportedArtifact = artifact;
-  let commentRecon = null;
-  let replyRecon = null;
-  let profileEntryRecon = null;
+  reportedOperation = operation;
+  reportedArtifact = artifact;
   if (validateNoteDetail) {
     const detailResultRank = 1;
     record('note_detail_target_selected', {
@@ -297,7 +352,7 @@ try {
       rawPayloadStored: false,
       responseUrlsStored: false
     });
-    if (validateAccountNotes) {
+    if (validateAccountNotes && !directAccountCanary) {
       if (!suppliedProfileUrl) {
         const detailPage = await leasedPage();
         profileEntryRecon = await client.command({
@@ -486,6 +541,7 @@ try {
       });
       if (commentRecon.state !== 'completed') throw new Error('xiaohongshu_note_comments_recon_incomplete');
     }
+  }
   }
 
   const after = await leasedPage();
