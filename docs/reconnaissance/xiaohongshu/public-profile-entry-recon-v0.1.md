@@ -158,6 +158,27 @@ already-existing public profile tab
 - 一次低频滚动是否触发公开 `user_posted` 类响应；
 - 多页/全部笔记的游标、结束条件与预算；短时链接入口当前只承诺固定的 20 次滚动 / 200 条投影预算。
 
+## 2026-07-29 短链真实 canary 诊断
+
+本轮使用调用方提供的一条短时公开主页链接，在 `xiaohongshu_validation` 隔离浏览器执行了真实 Gateway→Extension 链路。没有保存链接、签名、响应 URL 或原始正文，也没有触碰用户日常浏览器。
+
+结果按动作顺序记录如下：
+
+1. 初次运行在导航前发现多个公开小红书候选 tab，返回 `xiaohongshu_profile_entry_tab_ambiguous`；没有发出主页导航。
+2. 收紧为“多个候选时只选择唯一 active 公开 tab”后，导航实际到达了公开主页。保留页视觉证据 `1c56ff91-b265-41b5-a03a-e58ff9710687` 显示了博主公开资料、统计和笔记卡片，但旧逻辑因聚合 `tabs.status=loading` 超时，误报 `xiaohongshu_profile_url_navigation_failed`。
+3. 移除对聚合 loading 状态的依赖后，第三次运行暴露了 SPA 中间 Explore/Search route 被过早判为 `profile_url_expired`；视觉复核仍显示主页已到达，证据 `c77f7124-dc05-4e61-8738-646e8fa35154`。
+4. 修正中间 route 等待逻辑后，最后一次运行使用的仍是旧 Gateway 制品（主页 work TTL 仍为 60 秒），在 20 次滚动预算尚未完成前未能交付终态 operation，最终验证页因 lease 过期进入 `quarantined / lease_expired`。该次没有形成可验收 artifact，不能标记能力 ready。
+
+本轮产生的生产/验证修复：
+
+- 短链 work TTL 固定为 `120s`，不续租；
+- 主页导航以已提交的公开 profile 主文档为后置条件；
+- SPA 中间公开 route 只在同一次导航窗口内等待，不刷新、不重导航；
+- 多候选 tab 不接管后台页；只允许唯一 active 候选；
+- 验证 Gateway 停止超时会强制清理本地子进程和管道，避免测试进程长时间悬挂。
+
+当前仍需一条新的、尚未过期的短时公开主页链接完成最终 live 回归。原链接已经实际尝试过导航，后续不再重放；下一次必须使用新的链接，以保持 at-most-once 语义。
+
 ## 残留
 
 - 最终搜索页：`retained_for_review`；
