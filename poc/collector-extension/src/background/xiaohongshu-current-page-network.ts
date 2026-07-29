@@ -622,9 +622,11 @@ async function activateExistingProfileObserver(tabId: number, documentId: string
 /**
  * Search and detail are intentionally one same-document continuity chain.
  * The search work has already paid for a bounded public response projection;
- * re-injecting the observer here would erase that projection before the
- * detail click can consume it. Keep item/detail identities, but begin a new
- * observation generation so only responses from this detail work are added.
+ * re-injecting the observer here must not erase that projection before the
+ * detail click or a following standalone comments/replies work item can
+ * consume it. Keep the short-lived comment archive (which is filtered again
+ * after the selected note is rebound), but begin a new observation generation
+ * so current-work counters only include responses from this detail work.
  */
 async function activateExistingSearchObserver(tabId: number, documentId: string): Promise<boolean> {
   const results = await chrome.scripting.executeScript({
@@ -643,11 +645,6 @@ async function activateExistingSearchObserver(tabId: number, documentId: string)
       controller.selectedNoteId = '';
       controller.comments = [];
       controller.commentPagination = { hasMore: null, cursorObserved: false };
-      controller.commentArchiveExpiresAt = 0;
-      controller.commentArchiveMatchedPayloadCount = 0;
-      controller.commentArchiveBodyBytesRead = 0;
-      controller.commentArchive = [];
-      controller.commentArchivePagination = { hasMore: null, cursorObserved: false };
       return true;
     }
   });
