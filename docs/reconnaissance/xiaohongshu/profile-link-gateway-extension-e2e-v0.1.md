@@ -113,7 +113,7 @@ dispatchState: direct_ready
 managedValidationState: gateway_extension_real_e2e_passed
 ```
 
-这只表示短时链接路径的 Gateway→Extension 闭环已经有真实证据。浏览器中自然存在的 `existing_public_profile_tab` 零导航路径随后也已独立通过，详情见 [`profile-tab-gateway-extension-e2e-v0.1.md`](profile-tab-gateway-extension-e2e-v0.1.md)。主页 Network/XHR 正文投影仍需另一条新的短时链接单独研究，不能用本 run 的 DOM fallback 结果替代。
+这只表示短时链接路径的 Gateway→Extension 闭环已经有真实证据。浏览器中自然存在的 `existing_public_profile_tab` 零导航路径随后也已独立通过，详情见 [`profile-tab-gateway-extension-e2e-v0.1.md`](profile-tab-gateway-extension-e2e-v0.1.md)。主页 Network/XHR 正文投影仍未确认；后续若研究网络投影，必须单独记录，不得用本 run 的 DOM fallback 结果替代。
 
 ## 2026-07-29 多主页候选回归与修复
 
@@ -152,4 +152,54 @@ artifact: none
 
 修复已加入 profile DOM probe：当规范公开主页路径同时具有可见笔记卡片和可投影笔记时，只抑制这一类文本误报；登录、验证、限流风险仍然立即停止，真正没有公开主页结构的错误页仍返回 `source_unavailable`。纯逻辑门禁已覆盖“带错误短语但有卡片的主页”和“没有卡片的错误页”两种情况。
 
-这条短链也已经实际导航过，不能重放。修复后的构建指纹为 `ebf228c5df7c5a921ec165ab6e964f08760aa94f1ce28b8f2be9a4b15a87c3a9`，验证浏览器已显式重建并加载该 worker；下一次真实验证仍需要另一条全新的短时主页链接。
+这条短链也已经实际导航过，不能重放。修复后的构建指纹为 `ebf228c5df7c5a921ec165ab6e964f08760aa94f1ce28b8f2be9a4b15a87c3a9`，验证浏览器已显式重建并加载该 worker。
+
+## 2026-07-29 修复后全新短链真实复验
+
+使用另一条此前从未导航过的短时公开主页链接完成一次真实 Gateway → Extension → artifact 闭环，验证了前两项修复可以在同一受管浏览器会话中共同工作：
+
+```yaml
+runId: d0682997-c4bb-40d2-b81a-b897090a1442
+operationId: 3ba55d52-2388-4422-a031-d5423455fa5e
+artifactId: 55ba7e65-2432-40cb-8796-f045e7556e06
+executionTarget: ephemeral_public_profile_url
+validationOutcome: completed
+terminalReason: profile_notes_ready
+validationBaselineNavigations: 1
+productPlatformNavigations: 1
+semanticActions: 7
+completedScrolls: 7
+automaticPlatformRetries: 0
+itemCount: 135
+detailCount: 0
+publicTextCount: 0
+rawPayloadStored: false
+responseUrlsStored: false
+debuggerDetached: true
+finalPageState: retained_for_review
+```
+
+### 三面证据
+
+- 基线视觉证据：`514ce065-2abd-4edd-828c-4b040c5caba4.png`，浏览器在一次基线导航后显示正常 Explore 页面。
+- 最终视觉证据：`5a399802-43cc-4b72-a231-7e8b99f6d1a9.png`，目标公开主页的笔记网格可见，页面滚动到 `scrollY=3780`；没有详情浮层、评论面板或新 tab。
+- DOM/artifact：`itemCount=135`，说明本轮滚动预算内得到 135 条公开笔记卡片；`detailCount=0`、`publicTextCount=0` 表示本能力仍只做目录投影，不代表已经抓取笔记详情正文或评论。
+
+### Network
+
+```yaml
+networkMatchedPayloadCount: 0
+networkBodyBytesRead: 0
+networkPostcondition: no_confirmed_profile_note_payload
+```
+
+本轮没有把主页后台刷新、遥测或其他候选响应归因到目标目录，也没有读取或保存 Network response body；因此结果明确属于 DOM fallback，而不是 Network/XHR projection 成功。
+
+### 动作与生命周期
+
+- 只执行 1 次验证基线导航、1 次短链主页导航和 7 次有界滚动；没有刷新、重复导航、换 tab 或自动平台重试。
+- 所有动作在同一受管隔离 Profile 会话内完成；最终页面按策略保留为 `retained_for_review`，Browser Host 仍为 `ready`，扩展页为 0，运行时指纹与构建一致。
+
+### 结论
+
+短时主页链接能力可以登记为 `direct_ready / managedValidationState: gateway_extension_real_e2e_passed`。多主页候选绑定和主页正文风险误报两项修复均已通过新的真实 canary；主页笔记目录当前仍是 DOM fallback，详情、评论以及 Network/XHR 正文投影不在本能力的已验证范围内。
