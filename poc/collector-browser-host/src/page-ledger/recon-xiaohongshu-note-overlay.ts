@@ -32,6 +32,14 @@ interface OverlayProbe {
   timeOrigin: number;
   overlayVisible: boolean;
   publicText: string;
+  closeTarget: null | {
+    tag: string;
+    role: string | null;
+    labelClass: 'close_like' | 'icon_only' | 'unclassified';
+    insideOverlay: true;
+    bounds: { x: number; y: number; width: number; height: number };
+    pointerHitTarget: boolean;
+  };
   authorTarget: null | {
     targetMode: 'same_tab' | 'new_tab';
     displayText: string;
@@ -171,6 +179,7 @@ export async function executeXiaohongshuNoteOverlayRecon(input: {
         sameDocument: true,
         overlayVisible: true,
         publicTextDigest: sha256(after.publicText),
+        closeTarget: after.closeTarget,
         authorTarget: after.authorTarget ? {
           targetMode: after.authorTarget.targetMode,
           targetKind: 'overlay_public_author',
@@ -323,6 +332,68 @@ async function readOverlayProbe(page: Page, timeoutMs: number): Promise<OverlayP
       const r = right.getBoundingClientRect();
       return (r.width * r.height) - (l.width * l.height);
     })[0] ?? null;
+    const closeTarget = overlay ? (() => {
+      const overlayAncestors = new Set<Element>();
+      for (let current: Element | null = overlay; current && current !== document.body &&
+        overlayAncestors.size < 6; current = current.parentElement) {
+        const rect = current.getBoundingClientRect();
+        const style = getComputedStyle(current);
+        if (style.position === 'fixed' || rect.width >= window.innerWidth * 0.8 ||
+          rect.height >= window.innerHeight * 0.8) overlayAncestors.add(current);
+      }
+      const candidates = Array.from(document.querySelectorAll(
+        'button, [role="button"], [aria-label], [title], [class*="close"], [class*="Close"], svg, path'
+      )).filter(visible).map((rawElement) => {
+        const interactive = rawElement.closest(
+          'button, [role="button"], [aria-label], [title], [class*="close"], [class*="Close"]'
+        ) ?? rawElement;
+        if (!visible(interactive)) return null;
+        const rect = interactive.getBoundingClientRect();
+        const semantic = [interactive.getAttribute('aria-label'), interactive.getAttribute('title'),
+          interactive.textContent, typeof interactive.className === 'string' ? interactive.className : '',
+          rawElement.getAttribute('aria-label'), rawElement.getAttribute('title')]
+          .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+        const topLeft = rect.left >= 0 && rect.top >= 0 && rect.left < 140 && rect.top < 140;
+        const hasCrossGlyph = /[×✕✖]/.test(semantic) || /(^|\b)close(\b|[-_])/i.test(semantic);
+        const labelClass = /关闭|close|退出/i.test(semantic) ? 'close_like' as const
+          : (rawElement.tagName.toLowerCase() === 'svg' || rawElement.tagName.toLowerCase() === 'path') &&
+            (hasCrossGlyph || topLeft) ? 'icon_only' as const
+          : 'unclassified' as const;
+        const center = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        const insideOverlay = overlay.contains(interactive) || [...overlayAncestors].some((ancestor) => ancestor.contains(interactive));
+        return {
+          element: interactive,
+          rect,
+          labelClass,
+          insideOverlay,
+          topLeft,
+          pointerHitTarget: Boolean(center && (center === interactive || interactive.contains(center)))
+        };
+      }).filter((candidate): candidate is {
+        element: Element;
+        rect: DOMRect;
+        labelClass: 'close_like' | 'icon_only' | 'unclassified';
+        insideOverlay: boolean;
+        topLeft: boolean;
+        pointerHitTarget: boolean;
+      } => Boolean(candidate) && candidate.rect.top >= 0 && candidate.rect.left >= 0 &&
+        candidate.rect.right <= window.innerWidth && candidate.rect.bottom <= window.innerHeight &&
+        candidate.pointerHitTarget && candidate.labelClass !== 'unclassified')
+        .sort((left, right) => Number(right.insideOverlay) - Number(left.insideOverlay) ||
+          Number(right.topLeft) - Number(left.topLeft) ||
+          (left.labelClass === 'close_like' ? 0 : 1) - (right.labelClass === 'close_like' ? 0 : 1) ||
+          left.rect.top - right.rect.top || left.rect.left - right.rect.left);
+      const target = candidates[0];
+      if (!target) return null;
+      return {
+        tag: target.element.tagName.toLowerCase(),
+        role: target.element.getAttribute('role'),
+        labelClass: target.labelClass,
+        insideOverlay: target.insideOverlay,
+        bounds: { x: target.rect.x, y: target.rect.y, width: target.rect.width, height: target.rect.height },
+        pointerHitTarget: target.pointerHitTarget
+      };
+    })() : null;
     const author = overlay ? Array.from(overlay.querySelectorAll('a[href]')).find((element) => {
       if (!(element instanceof HTMLAnchorElement) || !visible(element)) return false;
       try {
@@ -340,6 +411,7 @@ async function readOverlayProbe(page: Page, timeoutMs: number): Promise<OverlayP
       timeOrigin: performance.timeOrigin,
       overlayVisible: Boolean(overlay),
       publicText,
+      closeTarget,
       authorTarget: author && rect ? {
         targetMode: author.target && author.target !== '_self' ? 'new_tab' as const : 'same_tab' as const,
         displayText: (author.innerText || author.getAttribute('aria-label') || 'public-author').trim().slice(0, 200),

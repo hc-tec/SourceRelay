@@ -366,10 +366,11 @@ export async function enqueueBilibiliDanmakuWork(
 export async function enqueueXiaohongshuPublicNotesSearchWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  query: string
+  query: string,
+  maximumDetails?: number
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
-  return await context.workQueue.enqueueXiaohongshuPublicNotesSearch({ browserBindingId, query });
+  return await context.workQueue.enqueueXiaohongshuPublicNotesSearch({ browserBindingId, query, maximumDetails });
 }
 
 export async function enqueueXiaohongshuAccountPublicNotesWork(

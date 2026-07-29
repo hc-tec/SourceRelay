@@ -282,6 +282,43 @@ describe('Xiaohongshu current-page network policy contract', () => {
     })).toBe(false);
   });
 
+  test('accepts additive public detail projections without admitting route or credential fields', () => {
+    const result = {
+      schemaVersion: 2,
+      type: 'xiaohongshu_managed_search_projection',
+      pageAlias: 'page-1',
+      runId: 'run-123',
+      matchedPayloadCount: 1,
+      bodyBytesRead: 4096,
+      rawPayloadStored: false,
+      responseUrlsStored: false,
+      items: [{
+        rank: 1,
+        noteId: 'public-note-id',
+        title: '公开笔记标题',
+        contentType: 'normal',
+        authorId: 'public-author-id',
+        authorNickname: '公开昵称',
+        likedCountText: '123'
+      }],
+      details: [{
+        noteId: 'public-note-id',
+        publicText: '公开正文与描述',
+        authorNickname: '公开昵称',
+        interactionText: '赞 123 收藏 45'
+      }]
+    };
+    expect(isXiaohongshuManagedSearchProjectionResult(result)).toBe(true);
+    expect(isXiaohongshuManagedSearchProjectionResult({
+      ...result,
+      details: [{ ...result.details[0], responseUrl: 'https://www.xiaohongshu.com/api/private' }]
+    })).toBe(false);
+    expect(isXiaohongshuManagedSearchProjectionResult({
+      ...result,
+      details: [{ ...result.details[0], publicText: '' }]
+    })).toBe(false);
+  });
+
   test('keeps profile-link inventory at its larger bounded projection while search stays first-page bounded', () => {
     const item = {
       rank: 1,

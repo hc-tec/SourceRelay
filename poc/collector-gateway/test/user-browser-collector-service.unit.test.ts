@@ -57,7 +57,7 @@ describe('user-owned browser collector service', () => {
     })).toThrow('user_browser_collector_service_request_invalid');
   });
 
-  test('admits Xiaohongshu only as query-only trusted input in an existing Explore tab', () => {
+  test('admits Xiaohongshu query-only or bounded sequential depth input in an existing Explore tab', () => {
     expect(userBrowserCollectorServiceRequestInput({
       schemaVersion: 2,
       browserBindingId,
@@ -73,6 +73,22 @@ describe('user-owned browser collector service', () => {
       executionTarget: 'existing_public_explore_tab',
       input: { query: '咖啡豆' }
     });
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      input: { query: '咖啡豆', maximumDetails: 3 }
+    })).toMatchObject({ input: { query: '咖啡豆', maximumDetails: 3 } });
+    for (const invalidDepth of [-1, 21, 1.5]) expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      input: { query: '咖啡豆', maximumDetails: invalidDepth }
+    })).toThrow('user_browser_collector_service_request_invalid');
     for (const extra of [
       { url: 'https://www.xiaohongshu.com/search_result?keyword=x' },
       { tabId: 1 },

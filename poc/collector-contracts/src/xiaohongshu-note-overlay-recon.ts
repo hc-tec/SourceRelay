@@ -38,6 +38,14 @@ export interface XiaohongshuNoteOverlayReconResult {
     sameDocument: true;
     overlayVisible: true;
     publicTextDigest: string;
+    closeTarget: null | {
+      tag: string;
+      role: string | null;
+      labelClass: 'close_like' | 'icon_only' | 'unclassified';
+      insideOverlay: boolean;
+      bounds: { x: number; y: number; width: number; height: number };
+      pointerHitTarget: boolean;
+    };
     authorTarget: null | {
       targetMode: 'same_tab' | 'new_tab';
       targetKind: 'overlay_public_author';

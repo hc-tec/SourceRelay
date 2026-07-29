@@ -112,7 +112,8 @@ export async function handleUserBrowserCollectorServiceRoute(
         ? await enqueueXiaohongshuPublicNotesSearchWork(
           context,
           collection.browserBindingId,
-          collection.input.query
+          collection.input.query,
+          collection.input.maximumDetails
         )
         : collection.capability === 'bilibili.video_detail'
         ? await enqueueBilibiliVideoDetailWork(

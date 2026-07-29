@@ -14,7 +14,10 @@ const SHA256 = /^[a-f0-9]{64}$/;
 // projections.  This is still only the sanitised projection (never a raw
 // response), but the generic 128 KiB limit could reject a valid result near
 // the declared item ceiling.
-const MAX_ARTIFACT_BYTES = 512 * 1024;
+// Profile-link runs may return up to 200 cards plus their already-observed
+// public descriptions. This remains a bounded sanitised projection, not a raw
+// response archive.
+const MAX_ARTIFACT_BYTES = 4 * 1024 * 1024;
 
 export interface XiaohongshuAccountPublicNotesArtifactSummary {
   schemaVersion: 1;

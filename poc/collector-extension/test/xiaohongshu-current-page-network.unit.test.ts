@@ -343,6 +343,45 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
       .resolves.toEqual({ matchedPayloadCount: 1, bodyBytesRead: 2_048, detail: null });
   });
 
+  test('returns response-backed public descriptions together with ranked search cards', async () => {
+    const chrome = installChromeMock();
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+    await subject.armXiaohongshuManagedPageNetworkObserver(11, managedRequest);
+    chrome.beforeNavigate[0]?.({
+      tabId: 11,
+      frameId: 0,
+      url: 'https://www.xiaohongshu.com/search_result?keyword=public'
+    });
+    await settle();
+    chrome.committed[0]?.({
+      tabId: 11,
+      frameId: 0,
+      documentId: 'document-2',
+      url: 'https://www.xiaohongshu.com/search_result?keyword=public'
+    });
+    await settle();
+    chrome.executeScript.mockResolvedValueOnce([{
+      frameId: 0,
+      result: {
+        matchedPayloadCount: 2,
+        bodyBytesRead: 8_192,
+        items: [{
+          noteId: 'note-1', title: '公开标题', contentType: 'normal', authorId: 'author-1',
+          authorNickname: '公开作者', likedCountText: '10'
+        }],
+        details: [{
+          noteId: 'note-1', publicText: '公开正文', authorNickname: '公开作者', interactionText: '赞 10'
+        }]
+      }
+    }]);
+
+    await expect(subject.readXiaohongshuExistingExploreWorkProjection(11, 'run-123'))
+      .resolves.toMatchObject({
+        items: [{ noteId: 'note-1', title: '公开标题' }],
+        details: [{ noteId: 'note-1', publicText: '公开正文', interactionText: '赞 10' }]
+      });
+  });
+
   test('reuses the same-document search observer so prefetched details survive the detail work', async () => {
     const chrome = installChromeMock();
     chrome.managedTab.url = 'https://www.xiaohongshu.com/search_result';

@@ -57,16 +57,22 @@ const result: XiaohongshuPublicNotesSearchWorkResult = {
     matchedPayloadCount: 1,
     bodyBytesRead: 1024,
     rawPayloadStored: false,
-    responseUrlsStored: false,
-    items: [{
+      responseUrlsStored: false,
+      items: [{
       rank: 1,
       noteId: 'note-1',
       title: '公开标题',
       contentType: 'normal',
       authorId: 'author-1',
-      authorNickname: '公开作者',
-      likedCountText: '10'
-    }]
+        authorNickname: '公开作者',
+        likedCountText: '10'
+      }],
+      details: [{
+        noteId: 'note-1',
+        publicText: '公开正文描述',
+        authorNickname: '公开作者',
+        interactionText: '赞 10'
+      }]
   },
   rawPayloadStored: false,
   responseUrlsStored: false,
@@ -98,7 +104,7 @@ describe('Xiaohongshu public-notes artifact store', () => {
           responseUrlsStored: false,
           debuggerDetached: true
         },
-        result: { projection: { items: [{ title: '公开标题' }] } }
+        result: { projection: { items: [{ title: '公开标题' }], details: [{ publicText: '公开正文描述' }] } }
       });
       const fileName = (await readdir(join(directory, 'xiaohongshu-public-notes-artifacts')))[0]!;
       const persisted = await readFile(join(directory, 'xiaohongshu-public-notes-artifacts', fileName), 'utf8');

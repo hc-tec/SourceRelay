@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
   isXiaohongshuManagedSearchProjectionResult,
   type XiaohongshuPublicNotesSearchWorkItem,
   type XiaohongshuPublicNotesSearchWorkResult
@@ -9,7 +10,10 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA256 = /^[a-f0-9]{64}$/;
-const MAX_ARTIFACT_BYTES = 128 * 1024;
+// Search can now carry the already-observed public description projection for
+// each card. Keep the cap bounded, but large enough that a high-coverage page
+// does not fail merely because its public text is longer than a card title.
+const MAX_ARTIFACT_BYTES = 2 * 1024 * 1024;
 
 export interface XiaohongshuPublicNotesArtifactSummary {
   schemaVersion: 1;
@@ -48,6 +52,7 @@ export interface XiaohongshuPublicNotesArtifactView {
     navigation: { attempted: false; attemptCount: 0 };
     semanticAction: { attempted: boolean; attemptCount: 0 | 1 };
     input: { queryEchoed: boolean; enterAttempted: boolean };
+    detailActions?: XiaohongshuPublicNotesSearchWorkResult['detailActions'];
     page: XiaohongshuPublicNotesSearchWorkResult['page'];
     projection: XiaohongshuPublicNotesSearchWorkResult['projection'];
   };
@@ -126,6 +131,9 @@ export class XiaohongshuPublicNotesArtifactStore {
         navigation: structuredClone(input.result.navigation),
         semanticAction: structuredClone(input.result.semanticAction),
         input: structuredClone(input.result.input),
+        ...(input.result.detailActions
+          ? { detailActions: structuredClone(input.result.detailActions) }
+          : {}),
         page: structuredClone(input.result.page),
         projection: structuredClone(input.result.projection)
       }
@@ -210,9 +218,26 @@ function isStoredArtifact(value: unknown): value is StoredArtifact {
     (provenance.semanticActions === 0 || provenance.semanticActions === 1) &&
     provenance.responseBodies === 'temporarily_read_projected_not_stored' &&
     provenance.rawPayloadStored === false && provenance.responseUrlsStored === false &&
-    typeof provenance.debuggerDetached === 'boolean' && exactKeys(result, [
-      'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction', 'input', 'page', 'projection'
-    ]) && (result.projection === null || isXiaohongshuManagedSearchProjectionResult(result.projection));
+    typeof provenance.debuggerDetached === 'boolean' && storedResultKeys(result) &&
+    validDetailActions(result.detailActions) &&
+    (result.projection === null || isXiaohongshuManagedSearchProjectionResult(result.projection));
+}
+
+function storedResultKeys(value: Record<string, any>): boolean {
+  const base = ['state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction', 'input', 'page', 'projection'] as const;
+  return exactKeys(value, base) || exactKeys(value, [...base.slice(0, 6), 'detailActions', ...base.slice(6)]);
+}
+
+function validDetailActions(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!record(value) || !exactKeys(value, ['requestedCount', 'attemptedCount', 'completedCount', 'stoppedReason'])) return false;
+  return Number.isSafeInteger(value.requestedCount) && Number(value.requestedCount) >= 1 &&
+    Number(value.requestedCount) <= XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS &&
+    Number.isSafeInteger(value.attemptedCount) && Number(value.attemptedCount) >= 0 &&
+    Number(value.attemptedCount) <= Number(value.requestedCount) &&
+    Number.isSafeInteger(value.completedCount) && Number(value.completedCount) >= 0 &&
+    Number(value.completedCount) <= Number(value.attemptedCount) &&
+    (value.stoppedReason === null || (typeof value.stoppedReason === 'string' && /^[a-z0-9_]{1,100}$/.test(value.stoppedReason)));
 }
 
 function containsForbiddenMaterial(value: unknown): boolean {

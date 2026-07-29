@@ -1,4 +1,6 @@
 import {
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY,
   isXiaohongshuManagedSearchProjectionResult,
@@ -20,8 +22,8 @@ export interface XiaohongshuPublicNotesSearchWorkItem {
   executionTarget: 'existing_public_explore_tab';
   issuedAt: string;
   expiresAt: string;
-  input: { query: string };
-  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET;
+  input: { query: string; maximumDetails?: number };
+  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET | typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET;
   gatewaySignature: string;
 }
 
@@ -30,6 +32,8 @@ export type UnsignedXiaohongshuPublicNotesSearchWorkItem =
 
 export type XiaohongshuPublicNotesSearchTerminalReason =
   | 'search_ready'
+  | 'search_depth_ready'
+  | 'search_depth_stopped'
   | 'existing_public_explore_tab_required'
   | 'existing_public_explore_tab_ambiguous'
   | 'document_context_changed'
@@ -62,6 +66,12 @@ export interface XiaohongshuPublicNotesSearchWorkResult {
   navigation: { attempted: false; attemptCount: 0 };
   semanticAction: { attempted: boolean; attemptCount: 0 | 1 };
   input: { queryEchoed: boolean; enterAttempted: boolean };
+  detailActions?: {
+    requestedCount: number;
+    attemptedCount: number;
+    completedCount: number;
+    stoppedReason: string | null;
+  };
   page: { publicSurface: 'search'; renderedCardCount: number } | null;
   projection: XiaohongshuManagedSearchProjectionResult | null;
   rawPayloadStored: false;
@@ -81,32 +91,32 @@ export function isXiaohongshuPublicNotesSearchWorkItem(
     value.capability === XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY &&
     value.executionTarget === 'existing_public_explore_tab' && timestamp(value.issuedAt) && timestamp(value.expiresAt) &&
     Date.parse(value.expiresAt as string) > Date.parse(value.issuedAt as string) &&
-    record(value.input) && exactKeys(value.input, ['query']) && query(value.input.query) &&
-    isBudget(value.budget) && typeof value.gatewaySignature === 'string' && SIGNATURE.test(value.gatewaySignature);
+    validInput(value.input) && isBudget(value.budget, value.input) &&
+    typeof value.gatewaySignature === 'string' && SIGNATURE.test(value.gatewaySignature);
 }
 
 export function isXiaohongshuPublicNotesSearchWorkResult(
   value: unknown
 ): value is XiaohongshuPublicNotesSearchWorkResult {
-  if (!record(value) || !exactKeys(value, [
-    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
-    'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction',
-    'input', 'page', 'projection', 'rawPayloadStored', 'responseUrlsStored', 'debuggerDetached'
-  ])) return false;
+  if (!record(value) || !searchResultKeys(value)) return false;
   if (value.schemaVersion !== 1 || value.protocolVersion !== 1 || !uuid(value.workId) || !uuid(value.operationId) ||
     !uuid(value.browserBindingId) || value.platform !== 'xiaohongshu' ||
     value.capability !== XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY ||
     value.executionTarget !== 'existing_public_explore_tab' || (value.state !== 'completed' && value.state !== 'stopped') ||
     !(value.errorCode === null || (typeof value.errorCode === 'string' && SAFE_ERROR.test(value.errorCode))) ||
     !terminalReason(value.terminalReason) || !timestamp(value.completedAt) || !zeroNavigation(value.navigation) ||
-    !semanticAction(value.semanticAction) || !inputResult(value.input) || !pageResult(value.page) ||
+    !semanticAction(value.semanticAction) || !inputResult(value.input) || !detailActions(value.detailActions) || !pageResult(value.page) ||
     !(value.projection === null || isXiaohongshuManagedSearchProjectionResult(value.projection)) ||
     value.rawPayloadStored !== false || value.responseUrlsStored !== false || typeof value.debuggerDetached !== 'boolean') {
     return false;
   }
   const candidate = value as unknown as XiaohongshuPublicNotesSearchWorkResult;
   if (candidate.state === 'completed') {
-    return candidate.errorCode === null && candidate.terminalReason === 'search_ready' &&
+    const depth = candidate.detailActions;
+    const depthRequested = depth?.requestedCount ?? 0;
+    return candidate.errorCode === null &&
+      (depthRequested > 0 ? candidate.terminalReason === 'search_depth_ready' &&
+        depth !== undefined && depth.completedCount === depth.requestedCount : candidate.terminalReason === 'search_ready') &&
       candidate.debuggerDetached === true && candidate.semanticAction.attempted &&
       candidate.semanticAction.attemptCount === 1 && candidate.input.queryEchoed &&
       candidate.input.enterAttempted && candidate.page !== null && candidate.page.renderedCardCount > 0 &&
@@ -125,24 +135,56 @@ export function isXiaohongshuPublicNotesSearchWorkResultForItem(
     value.semanticAction.attemptCount === (value.semanticAction.attempted ? 1 : 0);
 }
 
-function isBudget(value: unknown): value is typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET {
+function validInput(value: unknown): value is XiaohongshuPublicNotesSearchWorkItem['input'] {
+  if (!record(value) || !query(value.query)) return false;
+  if (Object.keys(value).length === 1) return true;
+  return Object.keys(value).length === 2 && Number.isSafeInteger(value.maximumDetails) &&
+    Number(value.maximumDetails) >= 0 && Number(value.maximumDetails) <= XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS;
+}
+
+function isBudget(
+  value: unknown,
+  input: XiaohongshuPublicNotesSearchWorkItem['input']
+): value is XiaohongshuPublicNotesSearchWorkItem['budget'] {
   return record(value) && exactKeys(value, [
     'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
     'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
     'maximumRawPayloadBytesStored'
   ]) && value.maximumPlatformNavigations === 0 && value.maximumPageReloads === 0 &&
-    value.maximumPageInitiatedNewDocuments === 0 && value.maximumSemanticActions === 1 &&
+    value.maximumPageInitiatedNewDocuments === 0 &&
     value.maximumNetworkResponseBodies === 8 && value.maximumProjectedItems === 40 &&
-    value.maximumRawPayloadBytesStored === 0;
+    value.maximumRawPayloadBytesStored === 0 &&
+    (Number(input.maximumDetails ?? 0) > 0 ? value.maximumSemanticActions === 41 : value.maximumSemanticActions === 1);
 }
 
 function terminalReason(value: unknown): value is XiaohongshuPublicNotesSearchTerminalReason {
   return typeof value === 'string' && [
-    'search_ready', 'existing_public_explore_tab_required', 'existing_public_explore_tab_ambiguous',
+    'search_ready', 'search_depth_ready', 'search_depth_stopped', 'existing_public_explore_tab_required', 'existing_public_explore_tab_ambiguous',
     'document_context_changed', 'search_target_unavailable', 'query_not_echoed', 'postcondition_unmet', 'permission_required',
     'login_required', 'verification_required', 'rate_limited', 'source_unavailable', 'debugger_attach_failed',
     'debugger_input_failed', 'debugger_detach_failed', 'extension_worker_interrupted'
   ].includes(value);
+}
+
+function detailActions(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!record(value) || !exactKeys(value, ['requestedCount', 'attemptedCount', 'completedCount', 'stoppedReason'])) return false;
+  return Number.isSafeInteger(value.requestedCount) && Number(value.requestedCount) >= 0 &&
+    Number(value.requestedCount) <= XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS &&
+    Number.isSafeInteger(value.attemptedCount) && Number(value.attemptedCount) >= 0 &&
+    Number(value.attemptedCount) <= Number(value.requestedCount) &&
+    Number.isSafeInteger(value.completedCount) && Number(value.completedCount) >= 0 &&
+    Number(value.completedCount) <= Number(value.attemptedCount) &&
+    (value.stoppedReason === null || (typeof value.stoppedReason === 'string' && SAFE_ERROR.test(value.stoppedReason)));
+}
+
+function searchResultKeys(value: Record<string, unknown>): boolean {
+  const base = [
+    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
+    'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction',
+    'input', 'page', 'projection', 'rawPayloadStored', 'responseUrlsStored', 'debuggerDetached'
+  ] as const;
+  return exactKeys(value, base) || exactKeys(value, [...base.slice(0, 15), 'detailActions', ...base.slice(15)]);
 }
 
 function zeroNavigation(value: unknown): boolean {

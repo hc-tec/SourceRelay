@@ -12,6 +12,7 @@ import {
   XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_CAPABILITY,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY
 } from '@intelligence/collector-contracts';
 
@@ -51,6 +52,7 @@ export interface UserBrowserXiaohongshuPublicNotesSearchCapabilityDescriptor {
   responseBodies: 'temporarily_read_projected_not_stored';
   routeAdmission: 'public_payload_shape_verified_no_url_dependency';
   budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET;
+  depthBudget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET;
   browserHostFallback: 'forbidden';
 }
 
@@ -141,6 +143,7 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     responseBodies: 'temporarily_read_projected_not_stored',
     routeAdmission: 'public_payload_shape_verified_no_url_dependency',
     budget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
+    depthBudget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
     browserHostFallback: 'forbidden'
   },
   {

@@ -14,6 +14,8 @@ import {
   isExtensionWorkResultForItem,
   normaliseBilibiliNativeSearchRoute,
   canonicalXiaohongshuPublicProfileUrl,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET,
@@ -130,6 +132,7 @@ export interface EnqueueBilibiliDanmakuWorkInput {
 export interface EnqueueXiaohongshuPublicNotesSearchWorkInput {
   browserBindingId: string;
   query: string;
+  maximumDetails?: number;
 }
 
 export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
@@ -173,7 +176,7 @@ interface RedactedXiaohongshuPublicNotesSearchWorkItem {
   issuedAt: string;
   expiresAt: string;
   input: { queryDigest: string };
-  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET;
+  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET | typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET;
 }
 
 interface RedactedXiaohongshuAccountPublicNotesWorkItem {
@@ -718,7 +721,9 @@ export class ExtensionWorkQueue {
     input: EnqueueXiaohongshuPublicNotesSearchWorkInput,
     now = new Date()
   ): Promise<ExtensionWorkOperationSummary> {
-    if (!isUuid(input.browserBindingId) || !isXiaohongshuQuery(input.query)) {
+    if (!isUuid(input.browserBindingId) || !isXiaohongshuQuery(input.query) ||
+      (input.maximumDetails !== undefined && (!Number.isSafeInteger(input.maximumDetails) ||
+        input.maximumDetails < 0 || input.maximumDetails > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS))) {
       throw new Error('xiaohongshu_public_notes_search_input_invalid');
     }
     const expired = this.#expire(now);
@@ -736,8 +741,12 @@ export class ExtensionWorkQueue {
       executionTarget: 'existing_public_explore_tab',
       issuedAt,
       expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
-      input: { query: input.query },
-      budget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET
+      input: input.maximumDetails === undefined
+        ? { query: input.query }
+        : { query: input.query, maximumDetails: input.maximumDetails },
+      budget: input.maximumDetails && input.maximumDetails > 0
+        ? XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET
+        : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET
     };
     return await this.#enqueueSigned(unsigned, issuedAt);
   }
@@ -1079,8 +1088,9 @@ function isRedactedXiaohongshuPublicNotesSearchWorkItem(
     value.executionTarget === 'existing_public_explore_tab' && isTimestamp(value.issuedAt) &&
     isTimestamp(value.expiresAt) && Date.parse(value.expiresAt) > Date.parse(value.issuedAt) &&
     isRecord(value.input) && hasExactKeys(value.input, ['queryDigest']) &&
-    /^[a-f0-9]{64}$/.test(stringValue(value.input.queryDigest)) &&
-    JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET);
+    /^[a-f0-9]{64}$/.test(stringValue((value.input as Record<string, unknown>).queryDigest)) &&
+    (JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET) ||
+      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET));
 }
 
 function isRedactedXiaohongshuAccountPublicNotesWorkItem(
@@ -1183,7 +1193,8 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'user_selected_tab_required' || value === 'user_selected_tab_closed' ||
     value === 'user_selected_tab_document_changed' || value === 'user_selected_tab_target_mismatch' ||
     value === 'user_selected_tab_page_not_supported' || value === 'user_selected_tab_worker_interrupted' ||
-    value === 'login_required' || value === 'search_ready' || value === 'existing_public_explore_tab_required' ||
+    value === 'login_required' || value === 'search_ready' || value === 'search_depth_ready' ||
+    value === 'search_depth_stopped' || value === 'existing_public_explore_tab_required' ||
     value === 'existing_public_explore_tab_ambiguous' || value === 'search_target_unavailable' ||
     value === 'query_not_echoed' || value === 'postcondition_unmet' || value === 'permission_required' ||
     value === 'profile_notes_ready' || value === 'profile_notes_budget_exhausted' ||

@@ -13,12 +13,16 @@ const extensionSourceDirectory = resolve(pocRoot, 'collector-extension');
 const gatewayDirectory = resolve(pocRoot, 'collector-gateway');
 const profileId = 'xiaohongshu_validation';
 const exploreUrl = 'https://www.xiaohongshu.com/explore';
-const validationLeaseDurationMs = 300_000;
+// Page adoption is intentionally short-lived; keep this inside the adoption
+// contract's 120-second upper bound so a retained review page can be reused
+// without falling back to a second browser page.
+const validationLeaseDurationMs = 120_000;
 const validateCommentRecon = process.argv.includes('--comment-recon');
 const validateReplyRecon = process.argv.includes('--reply-recon');
 const validatePublicReplies = process.argv.includes('--replies');
 const validateAccountNotes = process.argv.includes('--account-notes');
 const suppliedProfileUrl = process.env.COLLECTOR_XIAOHONGSHU_PROFILE_URL?.trim() || null;
+const requestedDepthDetails = parseBoundedDepthDetails(process.env.COLLECTOR_XIAOHONGSHU_MAX_DETAILS);
 const replyCanaryQuery = '奉劝各位咖啡爱好者选好一点的咖啡豆';
 const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ??
   (validatePublicReplies || validateAccountNotes ? replyCanaryQuery : '咖啡豆');
@@ -154,7 +158,7 @@ try {
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
       executionTarget: 'existing_public_explore_tab',
-      input: { query }
+      input: requestedDepthDetails > 0 ? { query, maximumDetails: requestedDepthDetails } : { query }
     })
   }, 201);
   const operationId = dispatch.result?.operationId;
@@ -162,8 +166,25 @@ try {
   record('operation_dispatched', { operationId });
 
   const operation = await waitForOperation(gatewayOrigin, token, operationId, 90_000);
-  if (operation.state !== 'completed' || operation.terminalReason !== 'search_ready' ||
-    !uuid(operation.artifact?.artifactId) || typeof operation.artifact?.retrievalPath !== 'string') {
+  const expectedSearchTerminalReason = requestedDepthDetails > 0 ? 'search_depth_ready' : 'search_ready';
+  if (operation.state !== 'completed' || operation.terminalReason !== expectedSearchTerminalReason ||
+      !uuid(operation.artifact?.artifactId) || typeof operation.artifact?.retrievalPath !== 'string') {
+    record('operation_stopped', {
+      state: operation.state,
+      terminalReason: operation.terminalReason,
+      errorCode: operation.errorCode,
+      artifactId: operation.artifact?.artifactId ?? null
+    });
+    if (typeof operation.artifact?.retrievalPath === 'string') {
+      const stoppedArtifact = await apiJson(`${gatewayOrigin}${operation.artifact.retrievalPath}`, {
+        headers: { authorization: `Bearer ${token}` }
+      }, 200).catch(() => null);
+      record('stopped_artifact_diagnostics', {
+        detailActions: stoppedArtifact?.artifact?.result?.detailActions ?? null,
+        detailCount: Array.isArray(stoppedArtifact?.artifact?.result?.projection?.details)
+          ? stoppedArtifact.artifact.result.projection.details.length : null
+      });
+    }
     throw new Error(operation.errorCode ?? 'xiaohongshu_gateway_e2e_operation_not_completed');
   }
   record('operation_completed', {
@@ -179,6 +200,11 @@ try {
   assertArtifact(artifact, operationId);
   record('artifact_retrieved', {
     itemCount: artifact.summary.itemCount,
+    detailCount: Array.isArray(artifact.result?.projection?.details)
+      ? artifact.result.projection.details.length : 0,
+    publicTextCount: Array.isArray(artifact.result?.projection?.details)
+      ? artifact.result.projection.details.filter((detail) => typeof detail?.publicText === 'string' && detail.publicText.length > 0).length
+      : 0,
     queryDigest: artifact.queryDigest,
     rawPayloadStored: false,
     responseUrlsStored: false
@@ -449,6 +475,11 @@ try {
     artifact: {
       captureMode: reportedArtifact.summary.captureMode ?? 'search_projection',
       itemCount: reportedArtifact.summary.itemCount ?? null,
+      detailCount: Array.isArray(reportedArtifact.result.projection?.details)
+        ? reportedArtifact.result.projection.details.length : 0,
+      publicTextCount: Array.isArray(reportedArtifact.result.projection?.details)
+        ? reportedArtifact.result.projection.details.filter((detail) => typeof detail?.publicText === 'string' && detail.publicText.length > 0).length
+        : 0,
       queryDigest: reportedArtifact.queryDigest ?? null,
       commentCount: reportedArtifact.summary.commentCount ?? null,
       replyCount: reportedArtifact.summary.replyCount ?? null,
@@ -610,6 +641,16 @@ function assertArtifact(artifact, operationId) {
     artifact.provenance?.rawPayloadStored !== false || artifact.provenance?.responseUrlsStored !== false ||
     artifact.provenance?.debuggerDetached !== true) {
     throw new Error('xiaohongshu_gateway_e2e_artifact_invalid');
+  }
+  if (requestedDepthDetails > 0) {
+    const depth = artifact.result?.detailActions;
+    if (artifact.result?.terminalReason !== 'search_depth_ready' ||
+      depth?.requestedCount !== requestedDepthDetails || depth.attemptedCount !== requestedDepthDetails ||
+      depth.completedCount !== requestedDepthDetails || depth.stoppedReason !== null ||
+      !Array.isArray(artifact.result?.projection?.details) ||
+      artifact.result.projection.details.length < requestedDepthDetails) {
+      throw new Error('xiaohongshu_gateway_e2e_depth_artifact_invalid');
+    }
   }
   const serialized = JSON.stringify(artifact);
   if (/"(?:url|responseUrl|route|query|header|cookie|token|rawPayload|tabId|documentId)"\s*:/i.test(serialized)) {
@@ -902,6 +943,15 @@ function uuid(value) {
 function safeErrorCode(error) {
   const value = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
   return /^[a-z0-9_.:-]{1,160}$/i.test(value) ? value : 'xiaohongshu_gateway_e2e_failed';
+}
+
+function parseBoundedDepthDetails(value) {
+  if (value === undefined || value === '') return 0;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 20) {
+    throw new Error('xiaohongshu_gateway_e2e_depth_details_invalid');
+  }
+  return parsed;
 }
 
 function writeJson(value) {

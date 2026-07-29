@@ -106,6 +106,16 @@ test('maps Xiaohongshu search to query-only existing-Explore trusted input', () 
     executionTarget: 'existing_public_explore_tab',
     input: { query: '咖啡豆' }
   });
+  assert.deepEqual(parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_search',
+    input: { query: '咖啡豆', maximumDetails: 2 }
+  }).input, { query: '咖啡豆', maximumDetails: 2 });
+  for (const maximumDetails of [-1, 21, 1.5]) assert.throws(() => parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'xiaohongshu_search',
+    input: { query: '咖啡豆', maximumDetails }
+  }), TestbenchInputError);
   for (const extra of [
     { url: 'https://www.xiaohongshu.com/search_result?keyword=x' },
     { tabId: 7 },

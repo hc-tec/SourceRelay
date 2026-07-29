@@ -80,16 +80,22 @@ export function parseTestbenchSubmission(value) {
   }
 
   if (value.kind === 'xiaohongshu_search') {
-    if (!hasExactKeys(value.input, ['query']) || typeof value.input.query !== 'string') {
+    if ((!hasExactKeys(value.input, ['query']) && !hasExactKeys(value.input, ['query', 'maximumDetails'])) ||
+      typeof value.input.query !== 'string' ||
+      (Object.hasOwn(value.input, 'maximumDetails') &&
+        (!Number.isInteger(value.input.maximumDetails) || value.input.maximumDetails < 0 || value.input.maximumDetails > 20))) {
       throw new TestbenchInputError('testbench_request_invalid');
     }
+    const query = normaliseSearchQuery(value.input.query);
     return {
       schemaVersion: DIRECT_SCHEMA_VERSION,
       browserBindingId: value.browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
       executionTarget: 'existing_public_explore_tab',
-      input: { query: normaliseSearchQuery(value.input.query) }
+      input: Object.hasOwn(value.input, 'maximumDetails')
+        ? { query, maximumDetails: value.input.maximumDetails }
+        : { query }
     };
   }
 

@@ -20,6 +20,10 @@ import {
 
 interface SearchDocument { tabId: number; windowId: number; documentId: string }
 interface Target { x: number; y: number; noteId: string }
+interface DocumentContinuity {
+  documentId: string;
+  timeOrigin: number;
+}
 interface DomProjection {
   publicText: string;
   authorNickname: string;
@@ -29,7 +33,12 @@ interface DomProjection {
 }
 
 export async function executeXiaohongshuNotePublicDetailExtensionWork(
-  item: XiaohongshuNotePublicDetailWorkItem
+  item: XiaohongshuNotePublicDetailWorkItem,
+  options: {
+    closeOverlayAfterCapture?: boolean;
+    /** Reuse a debugger lease already owned by the enclosing search action. */
+    debuggee?: chrome.debugger.Debuggee;
+  } = {}
 ): Promise<XiaohongshuNotePublicDetailWorkResult> {
   let pageDocument: SearchDocument | null = null;
   let attached = false;
@@ -41,17 +50,24 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
   try {
     pageDocument = await findUniqueSearchDocument();
     await foreground(pageDocument);
-    await requireSameDocument(pageDocument);
+    try {
+      await requireSameDocument(pageDocument);
+    } catch {
+      throw new Error('xiaohongshu_public_search_document_changed_before_detail');
+    }
     const baseline = await readRisk(pageDocument);
     assertRisk(baseline);
+    const continuity = await readDocumentContinuity(pageDocument);
     const target = await findRankedDetailTarget(pageDocument, item.input.resultRank);
     await armXiaohongshuExistingSearchWorkObserver(pageDocument.tabId, item.workId);
     await bindXiaohongshuObserverSelectedNote(pageDocument.tabId, item.workId, target.noteId);
     await prepareXiaohongshuNoteDetailClick(item.workId);
-    const debuggee: chrome.debugger.Debuggee = { tabId: pageDocument.tabId };
-    await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
-    attached = true;
-    debuggerDetached = false;
+    const debuggee: chrome.debugger.Debuggee = options.debuggee ?? { tabId: pageDocument.tabId };
+    if (!options.debuggee) {
+      await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
+      attached = true;
+      debuggerDetached = false;
+    }
     const baselineChildTabIds = new Set((await chrome.tabs.query({}))
       .filter((tab) => tab.openerTabId === pageDocument!.tabId && typeof tab.id === 'number')
       .map((tab) => tab.id!));
@@ -82,6 +98,9 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
       rawPayloadStored: false,
       responseUrlsStored: false
     };
+    if (options.closeOverlayAfterCapture) {
+      await closeDetailOverlay(pageDocument, debuggee, continuity.timeOrigin);
+    }
     pageReady = true;
   } catch (error) {
     errorCode = safeErrorCode(error);
@@ -121,16 +140,142 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
   };
 }
 
+/**
+ * Depth collection reuses the same search document for several ranked notes.
+ * The detail click itself is still at-most-once; after the projection is read
+ * we discover the visible public close control and click it once through the
+ * browser input layer. A failed or unknown cleanup is terminal for that depth
+ * run, never a reason to click another card.
+ */
+async function closeDetailOverlay(
+  pageDocument: SearchDocument,
+  debuggee: chrome.debugger.Debuggee,
+  timeOriginBefore: number
+): Promise<void> {
+  const closeTarget = await findDetailCloseTarget(pageDocument);
+  if (!closeTarget) throw new Error('xiaohongshu_note_detail_close_target_unavailable');
+  await dispatchClick(debuggee, closeTarget);
+  const deadline = Date.now() + 4_000;
+  while (Date.now() < deadline) {
+    const state = await readCloseContinuity(pageDocument.tabId).catch(() => null);
+    if (state && state.timeOrigin !== timeOriginBefore) {
+      throw new Error('xiaohongshu_public_search_document_changed_during_close');
+    }
+    if (state?.surface === 'search' && state.overlayVisible === false && state.renderedCardCount > 0) return;
+    await delay(150);
+  }
+  throw new Error('xiaohongshu_note_detail_overlay_close_postcondition_unmet');
+}
+
+async function findDetailCloseTarget(pageDocument: SearchDocument): Promise<Target | null> {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: pageDocument.tabId, documentIds: [pageDocument.documentId] },
+    func: () => {
+      const visible = (element: Element): boolean => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+          style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+      };
+      const candidates = Array.from(document.querySelectorAll(
+        'button, [role="button"], [aria-label], [title], [class*="close"], [class*="Close"], svg, path'
+      )).filter(visible).map((rawElement) => {
+        const element = rawElement.closest(
+          'button, [role="button"], [aria-label], [title], [class*="close"], [class*="Close"]'
+        ) ?? rawElement;
+        if (!visible(element)) return null;
+        const rect = element.getBoundingClientRect();
+        const label = [element.getAttribute('aria-label'), element.getAttribute('title'),
+          element.textContent, typeof element.className === 'string' ? element.className : '',
+          rawElement.getAttribute('aria-label'), rawElement.getAttribute('title')]
+          .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+        const topLeft = rect.left >= 0 && rect.top >= 0 && rect.left < 140 && rect.top < 140;
+        const semantic = /关闭|close|×|✕|✖|退出/i.test(label) ||
+          ((rawElement.tagName.toLowerCase() === 'svg' || rawElement.tagName.toLowerCase() === 'path') && topLeft);
+        const closeLike = /关闭|close|退出/i.test(label);
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return { element, rect, semantic, closeLike, topLeft,
+          pointerHitTarget: Boolean(hit && (hit === element || element.contains(hit))) };
+      }).filter((candidate): candidate is {
+        element: Element; rect: DOMRect; semantic: boolean; closeLike: boolean; topLeft: boolean;
+        pointerHitTarget: boolean;
+      } => Boolean(candidate) && candidate.semantic && candidate.pointerHitTarget &&
+        candidate.rect.top >= 0 && candidate.rect.left >= 0 && candidate.rect.right <= window.innerWidth &&
+        candidate.rect.bottom <= window.innerHeight)
+        .sort((left, right) => Number(right.topLeft) - Number(left.topLeft) ||
+          Number(right.closeLike) - Number(left.closeLike) || left.rect.top - right.rect.top ||
+          left.rect.left - right.rect.left);
+      const target = candidates[0];
+      if (!target) return null;
+      const hit = document.elementFromPoint(target.rect.left + target.rect.width / 2,
+        target.rect.top + target.rect.height / 2);
+      if (!hit || !(hit === target.element || target.element.contains(hit))) return null;
+      return {
+        x: target.rect.left + target.rect.width / 2,
+        y: target.rect.top + target.rect.height / 2,
+        noteId: 'close'
+      };
+    }
+  });
+  const value = results[0]?.result;
+  return value && typeof value === 'object' && Number.isFinite((value as { x?: unknown }).x) &&
+    Number.isFinite((value as { y?: unknown }).y) ? value as Target : null;
+}
+
+async function readDocumentContinuity(pageDocument: SearchDocument): Promise<DocumentContinuity> {
+  const result = await chrome.scripting.executeScript({
+    target: { tabId: pageDocument.tabId, documentIds: [pageDocument.documentId] },
+    func: () => ({ timeOrigin: performance.timeOrigin })
+  });
+  const timeOrigin = result[0]?.result?.timeOrigin;
+  if (!Number.isFinite(timeOrigin)) throw new Error('xiaohongshu_public_search_document_unavailable');
+  return { documentId: pageDocument.documentId, timeOrigin };
+}
+
+async function readCloseContinuity(tabId: number): Promise<{
+  documentId: string;
+  timeOrigin: number;
+  surface: 'search' | 'other';
+  overlayVisible: boolean;
+  renderedCardCount: number;
+}> {
+  const frame = await chrome.webNavigation.getFrame({ tabId, frameId: 0 });
+  if (!frame.documentId) throw new Error('xiaohongshu_public_search_document_unavailable');
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, documentIds: [frame.documentId] },
+    func: () => {
+      const visible = (element: Element): boolean => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+          style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+      };
+      const roots = Array.from(document.querySelectorAll(
+        '[role="dialog"], [aria-modal="true"], [class*="note-detail"], [class*="note-container"], [class*="modal"]'
+      )).filter(visible);
+      return {
+        timeOrigin: performance.timeOrigin,
+        surface: /^\/search_result(?:_ai)?\/?$/.test(location.pathname) ? 'search' as const : 'other' as const,
+        overlayVisible: roots.some((element) => (element.textContent ?? '').trim().length > 0),
+        renderedCardCount: Array.from(document.querySelectorAll('section.note-item')).filter(visible).length
+      };
+    }
+  });
+  const value = results[0]?.result;
+  if (!value || !Number.isFinite(value.timeOrigin)) throw new Error('xiaohongshu_public_search_document_unavailable');
+  return { documentId: frame.documentId, ...value };
+}
+
 async function findUniqueSearchDocument(): Promise<SearchDocument> {
   const tabs = await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/search_result*'] });
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
     !tab.incognito && tab.status === 'complete' &&
-    xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '') === 'search');
+    isSearchContinuitySurface(xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '')));
   if (eligible.length === 0) throw new Error('xiaohongshu_public_search_tab_required');
   if (eligible.length !== 1) throw new Error('xiaohongshu_public_search_tab_ambiguous');
   const tab = eligible[0]!;
   const frame = await chrome.webNavigation.getFrame({ tabId: tab.id!, frameId: 0 }).catch(() => null);
-  if (!frame?.documentId || xiaohongshuCurrentPageNetworkPublicSurface(frame.url) !== 'search') {
+  if (!frame?.documentId || !isSearchContinuitySurface(xiaohongshuCurrentPageNetworkPublicSurface(frame.url))) {
     throw new Error('xiaohongshu_public_search_document_unavailable');
   }
   return { tabId: tab.id!, windowId: tab.windowId!, documentId: frame.documentId };
@@ -145,9 +290,15 @@ async function foreground(pageDocument: SearchDocument): Promise<void> {
 async function requireSameDocument(pageDocument: SearchDocument): Promise<void> {
   const frame = await chrome.webNavigation.getFrame({ tabId: pageDocument.tabId, frameId: 0 }).catch(() => null);
   if (!frame || frame.documentId !== pageDocument.documentId ||
-    xiaohongshuCurrentPageNetworkPublicSurface(frame.url) !== 'search') {
+    !isSearchContinuitySurface(xiaohongshuCurrentPageNetworkPublicSurface(frame.url))) {
     throw new Error('xiaohongshu_public_search_document_changed');
   }
+}
+
+function isSearchContinuitySurface(
+  surface: ReturnType<typeof xiaohongshuCurrentPageNetworkPublicSurface>
+): boolean {
+  return surface === 'search' || surface === 'public_note_detail';
 }
 
 async function readRisk(pageDocument: SearchDocument): Promise<ReturnType<typeof classifyXiaohongshuCurrentPageRisk>> {

@@ -211,7 +211,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           required: [
             'schemaVersion', 'capability', 'platform', 'title', 'inputMode', 'executionTarget',
             'accountScopedSurfaces', 'dispatchState', 'managedValidationState', 'captureMode',
-            'responseBodies', 'routeAdmission', 'budget', 'browserHostFallback'
+            'responseBodies', 'routeAdmission', 'budget', 'depthBudget', 'browserHostFallback'
           ],
           properties: {
             schemaVersion: { type: 'integer', const: 1 },
@@ -238,6 +238,23 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 maximumPageReloads: { type: 'integer', const: 0 },
                 maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
                 maximumSemanticActions: { type: 'integer', const: 1 },
+                maximumNetworkResponseBodies: { type: 'integer', const: 8 },
+                maximumProjectedItems: { type: 'integer', const: 40 },
+                maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
+              }
+            },
+            depthBudget: {
+              type: 'object', additionalProperties: false,
+              required: [
+                'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
+                'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
+                'maximumRawPayloadBytesStored'
+              ],
+              properties: {
+                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPageReloads: { type: 'integer', const: 0 },
+                maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
+                maximumSemanticActions: { type: 'integer', const: 41 },
                 maximumNetworkResponseBodies: { type: 'integer', const: 8 },
                 maximumProjectedItems: { type: 'integer', const: 40 },
                 maximumRawPayloadBytesStored: { type: 'integer', const: 0 }
@@ -543,7 +560,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserXiaohongshuPublicNotesSearchCollectRequest: {
           type: 'object', additionalProperties: false,
-          description: 'Runs one fixed trusted in-page search in the unique existing public Explore tab. No URL, tab ID, selector, coordinate, script, debugger command, refresh, new tab, or Browser Host fallback can be supplied.',
+          description: 'Runs one fixed trusted in-page search in the unique existing public Explore tab. An optional maximumDetails (0–20) performs sequential same-document detail captures with a slow fixed delay and closes each overlay before the next rank. No URL, tab ID, selector, coordinate, script, debugger command, refresh, new tab, or Browser Host fallback can be supplied.',
           required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
@@ -554,7 +571,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             input: {
               type: 'object', additionalProperties: false,
               required: ['query'],
-              properties: { query: { type: 'string', minLength: 1, maxLength: 80 } }
+              properties: {
+                query: { type: 'string', minLength: 1, maxLength: 80 },
+                maximumDetails: { type: 'integer', minimum: 0, maximum: 20, default: 0 }
+              }
             }
           }
         },

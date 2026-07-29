@@ -22,6 +22,22 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET = Object.freeze({
   maximumProjectedItems: 40,
   maximumRawPayloadBytesStored: 0
 } as const);
+/** Upper bound for optional, same-document detail enrichment of ranked cards. */
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS = 20 as const;
+/**
+ * Detail enrichment is deliberately bounded to the existing search document:
+ * it may click and close at most twenty visible cards, but it never navigates,
+ * reloads, opens a page-initiated document, or stores raw payloads.
+ */
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET = Object.freeze({
+  maximumPlatformNavigations: 0,
+  maximumPageReloads: 0,
+  maximumPageInitiatedNewDocuments: 0,
+  maximumSemanticActions: 41,
+  maximumNetworkResponseBodies: 8,
+  maximumProjectedItems: 40,
+  maximumRawPayloadBytesStored: 0
+} as const);
 export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET = Object.freeze({
   maximumPlatformNavigations: 0,
   maximumPageReloads: 0,
@@ -224,6 +240,19 @@ export interface XiaohongshuPublicSearchItemProjection {
   likedCountText: string;
 }
 
+/**
+ * A public note description that was already present in an admitted search or
+ * profile response.  This is deliberately separate from the ranked card so an
+ * upper application can tell the difference between a card-only result and a
+ * response-backed public text projection without issuing another navigation.
+ */
+export interface XiaohongshuPublicNoteDetailProjection {
+  noteId: string;
+  publicText: string;
+  authorNickname: string;
+  interactionText: string;
+}
+
 export interface XiaohongshuManagedSearchProjectionResult {
   schemaVersion: typeof XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION;
   type: 'xiaohongshu_managed_search_projection';
@@ -234,6 +263,8 @@ export interface XiaohongshuManagedSearchProjectionResult {
   rawPayloadStored: false;
   responseUrlsStored: false;
   items: XiaohongshuPublicSearchItemProjection[];
+  /** Additive field; older v1 producers may omit it. */
+  details?: XiaohongshuPublicNoteDetailProjection[];
 }
 
 export interface XiaohongshuManagedProfileNotesProjectionResult {
@@ -246,6 +277,8 @@ export interface XiaohongshuManagedProfileNotesProjectionResult {
   rawPayloadStored: false;
   responseUrlsStored: false;
   items: XiaohongshuPublicSearchItemProjection[];
+  /** Additive field; older v1 producers may omit it. */
+  details?: XiaohongshuPublicNoteDetailProjection[];
 }
 
 /**
@@ -351,31 +384,27 @@ export function isXiaohongshuManagedPageNetworkObservationResult(
 export function isXiaohongshuManagedSearchProjectionResult(
   value: unknown
 ): value is XiaohongshuManagedSearchProjectionResult {
-  if (!record(value) || !exactKeys(value, [
-    'schemaVersion', 'type', 'pageAlias', 'runId', 'matchedPayloadCount', 'bodyBytesRead',
-    'rawPayloadStored', 'responseUrlsStored', 'items'
-  ])) return false;
+  if (!record(value) || !projectionKeys(value)) return false;
   return value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION &&
     value.type === 'xiaohongshu_managed_search_projection' && boundedIdentifier(value.pageAlias) &&
     boundedIdentifier(value.runId) && boundedProjectionCount(value.matchedPayloadCount, 8) &&
     boundedProjectionCount(value.bodyBytesRead, 16 * 1024 * 1024) && value.rawPayloadStored === false &&
     value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 40 &&
-    value.items.every((item) => isPublicSearchItemProjection(item, 40));
+    value.items.every((item) => isPublicSearchItemProjection(item, 40)) &&
+    optionalPublicNoteDetails(value.details, 40);
 }
 
 export function isXiaohongshuManagedProfileNotesProjectionResult(
   value: unknown
 ): value is XiaohongshuManagedProfileNotesProjectionResult {
-  if (!record(value) || !exactKeys(value, [
-    'schemaVersion', 'type', 'pageAlias', 'runId', 'matchedPayloadCount', 'bodyBytesRead',
-    'rawPayloadStored', 'responseUrlsStored', 'items'
-  ])) return false;
+  if (!record(value) || !projectionKeys(value)) return false;
   return value.schemaVersion === XIAOHONGSHU_CURRENT_PAGE_NETWORK_SCHEMA_VERSION &&
     value.type === 'xiaohongshu_managed_profile_notes_projection' && boundedIdentifier(value.pageAlias) &&
     boundedIdentifier(value.runId) && boundedProjectionCount(value.matchedPayloadCount, 8) &&
     boundedProjectionCount(value.bodyBytesRead, 16 * 1024 * 1024) && value.rawPayloadStored === false &&
     value.responseUrlsStored === false && Array.isArray(value.items) && value.items.length <= 200 &&
-    value.items.every((item) => isPublicSearchItemProjection(item, 200));
+    value.items.every((item) => isPublicSearchItemProjection(item, 200)) &&
+    optionalPublicNoteDetails(value.details, 200);
 }
 
 export function isXiaohongshuCurrentPageNetworkSelectionSummary(
@@ -488,6 +517,25 @@ function isPublicSearchItemProjection(
     boundedProjectionText(value.noteId, 80, true) && boundedProjectionText(value.title, 500, true) &&
     boundedProjectionText(value.contentType, 40) && boundedProjectionText(value.authorId, 80) &&
     boundedProjectionText(value.authorNickname, 200) && boundedProjectionText(value.likedCountText, 40);
+}
+
+function projectionKeys(value: Record<string, unknown>): boolean {
+  const base = [
+    'schemaVersion', 'type', 'pageAlias', 'runId', 'matchedPayloadCount', 'bodyBytesRead',
+    'rawPayloadStored', 'responseUrlsStored', 'items'
+  ] as const;
+  return exactKeys(value, base) || exactKeys(value, [...base, 'details']);
+}
+
+function optionalPublicNoteDetails(value: unknown, maximumItems: 40 | 200): boolean {
+  if (value === undefined) return true;
+  return Array.isArray(value) && value.length <= maximumItems && value.every((entry) => {
+    if (!record(entry) || !exactKeys(entry, ['noteId', 'publicText', 'authorNickname', 'interactionText'])) return false;
+    return boundedProjectionText(entry.noteId, 80, true) &&
+      boundedProjectionText(entry.publicText, 12_000, true) &&
+      boundedProjectionText(entry.authorNickname, 200) &&
+      boundedProjectionText(entry.interactionText, 1_000);
+  });
 }
 
 function boundedProjectionText(value: unknown, maximum: number, required = false): value is string {

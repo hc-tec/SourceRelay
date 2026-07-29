@@ -1,5 +1,6 @@
 import {
   canonicalXiaohongshuPublicProfileUrl,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
   type XiaohongshuProfileScrollCount,
   canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliPassiveVideoWorkUrl,
@@ -115,7 +116,7 @@ export interface UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest 
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.search.public_notes.v1';
   executionTarget: 'existing_public_explore_tab';
-  input: { query: string };
+  input: { query: string; maximumDetails?: number };
 }
 
 export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest {
@@ -245,18 +246,23 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
       };
     }
     if (candidate.capability !== 'xiaohongshu.search.public_notes.v1' ||
-      executionTarget !== 'existing_public_explore_tab' || Object.keys(input).length !== 1 ||
+      executionTarget !== 'existing_public_explore_tab' ||
+      (!exactKeys(input, ['query']) && !exactKeys(input, ['query', 'maximumDetails'])) ||
       typeof input.query !== 'string' || input.query !== input.query.trim() || input.query.length < 1 ||
-      input.query.length > 80 || /[\u0000-\u001f\u007f]/.test(input.query)) {
+      input.query.length > 80 || /[\u0000-\u001f\u007f]/.test(input.query) ||
+      (Object.hasOwn(input, 'maximumDetails') &&
+        (!Number.isSafeInteger(input.maximumDetails) || Number(input.maximumDetails) < 0 ||
+          Number(input.maximumDetails) > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS))) {
       throw new Error('user_browser_collector_service_request_invalid');
     }
+    const maximumDetails = Object.hasOwn(input, 'maximumDetails') ? Number(input.maximumDetails) : undefined;
     return {
       schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
       browserBindingId: candidate.browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
       executionTarget: 'existing_public_explore_tab',
-      input: { query: input.query }
+      input: maximumDetails === undefined ? { query: input.query } : { query: input.query, maximumDetails }
     };
   }
   if (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab') {
@@ -417,4 +423,9 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     };
   }
   throw new Error('user_browser_collector_service_request_invalid');
+}
+
+function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }
