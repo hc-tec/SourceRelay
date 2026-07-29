@@ -367,10 +367,13 @@ export async function enqueueXiaohongshuPublicNotesSearchWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
   query: string,
-  maximumDetails?: number
+  maximumDetails?: number,
+  comments?: { maximumScrolls: 1 | 2 | 3 }
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
-  return await context.workQueue.enqueueXiaohongshuPublicNotesSearch({ browserBindingId, query, maximumDetails });
+  return await context.workQueue.enqueueXiaohongshuPublicNotesSearch({
+    browserBindingId, query, maximumDetails, comments
+  });
 }
 
 export async function enqueueXiaohongshuAccountPublicNotesWork(

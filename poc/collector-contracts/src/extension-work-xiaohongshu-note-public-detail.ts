@@ -1,3 +1,8 @@
+import {
+  isXiaohongshuNotePublicCommentsProjection,
+  type XiaohongshuNotePublicCommentsProjection
+} from './extension-work-xiaohongshu-note-public-comments.js';
+
 export const XIAOHONGSHU_NOTE_PUBLIC_DETAIL_CAPABILITY = 'xiaohongshu.note.public_detail.v1' as const;
 export const XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET = Object.freeze({
   maximumPlatformNavigations: 0 as const,
@@ -23,6 +28,7 @@ export interface XiaohongshuNotePublicDetailProjection {
   interactionText: string;
   visibleMediaCount: number;
   commentEntryVisible: boolean;
+  comments?: XiaohongshuNotePublicCommentsProjection;
   rawPayloadStored: false;
   responseUrlsStored: false;
 }
@@ -103,16 +109,15 @@ export function isXiaohongshuNotePublicDetailWorkItem(
 export function isXiaohongshuNotePublicDetailProjection(
   value: unknown
 ): value is XiaohongshuNotePublicDetailProjection {
-  return record(value) && exactKeys(value, [
-    'schemaVersion', 'sourceRank', 'captureMode', 'network', 'publicText', 'authorNickname', 'interactionText',
-    'visibleMediaCount', 'commentEntryVisible', 'rawPayloadStored', 'responseUrlsStored'
-  ]) && value.schemaVersion === 1 && rank(value.sourceRank) &&
+  return record(value) && detailProjectionKeys(value) && value.schemaVersion === 1 && rank(value.sourceRank) &&
     (value.captureMode === 'network_projection' || value.captureMode === 'dom_fallback') &&
     record(value.network) && exactKeys(value.network, ['matchedPayloadCount', 'bodyBytesRead']) &&
     boundedInteger(value.network.matchedPayloadCount, 0, 4) && boundedInteger(value.network.bodyBytesRead, 0, 8 * 1024 * 1024) &&
     boundedText(value.publicText, 1, 12_000) && boundedText(value.authorNickname, 0, 200) &&
     boundedText(value.interactionText, 0, 1_000) && boundedInteger(value.visibleMediaCount, 0, 20) &&
-    typeof value.commentEntryVisible === 'boolean' && value.rawPayloadStored === false && value.responseUrlsStored === false;
+    typeof value.commentEntryVisible === 'boolean' &&
+    (value.comments === undefined || isXiaohongshuNotePublicCommentsProjection(value.comments)) &&
+    value.rawPayloadStored === false && value.responseUrlsStored === false;
 }
 
 export function isXiaohongshuNotePublicDetailWorkResult(
@@ -194,4 +199,12 @@ function record(value: unknown): value is Record<string, unknown> {
 function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
   const actual = Object.keys(value);
   return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+function detailProjectionKeys(value: Record<string, unknown>): boolean {
+  const base = [
+    'schemaVersion', 'sourceRank', 'captureMode', 'network', 'publicText', 'authorNickname', 'interactionText',
+    'visibleMediaCount', 'commentEntryVisible', 'rawPayloadStored', 'responseUrlsStored'
+  ] as const;
+  return exactKeys(value, base) || exactKeys(value, [...base.slice(0, 9), 'comments', ...base.slice(9)]);
 }

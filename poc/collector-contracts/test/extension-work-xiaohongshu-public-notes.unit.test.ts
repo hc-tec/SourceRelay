@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
   extensionWorkSigningPayload,
   extensionWorkTargetUrl,
   isExtensionWorkItem,
@@ -146,5 +147,16 @@ describe('signed Xiaohongshu public-notes work contract', () => {
     };
     expect(isExtensionWorkResultForItem(depthResult, depthItem)).toBe(true);
     expect(isExtensionWorkResultForItem({ ...depthResult, detailActions: { ...depthResult.detailActions, completedCount: 1 } }, depthItem)).toBe(false);
+  });
+
+  test('admits optional comments only with bounded detail depth and validates the nested projection', () => {
+    const commentsItem = {
+      ...item,
+      input: { query: '咖啡', maximumDetails: 1, comments: { maximumScrolls: 2 } },
+      budget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET
+    };
+    expect(isExtensionWorkItem(commentsItem)).toBe(true);
+    expect(isExtensionWorkItem({ ...commentsItem, input: { query: '咖啡', comments: { maximumScrolls: 2 } } })).toBe(false);
+    expect(isExtensionWorkItem({ ...commentsItem, input: { query: '咖啡', maximumDetails: 1, comments: { maximumScrolls: 4 } } })).toBe(false);
   });
 });

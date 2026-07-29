@@ -15,6 +15,7 @@ import {
   normaliseBilibiliNativeSearchRoute,
   canonicalXiaohongshuPublicProfileUrl,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
@@ -133,6 +134,7 @@ export interface EnqueueXiaohongshuPublicNotesSearchWorkInput {
   browserBindingId: string;
   query: string;
   maximumDetails?: number;
+  comments?: { maximumScrolls: 1 | 2 | 3 };
 }
 
 export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
@@ -176,7 +178,9 @@ interface RedactedXiaohongshuPublicNotesSearchWorkItem {
   issuedAt: string;
   expiresAt: string;
   input: { queryDigest: string };
-  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET | typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET;
+  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET |
+    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET |
+    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET;
 }
 
 interface RedactedXiaohongshuAccountPublicNotesWorkItem {
@@ -723,7 +727,10 @@ export class ExtensionWorkQueue {
   ): Promise<ExtensionWorkOperationSummary> {
     if (!isUuid(input.browserBindingId) || !isXiaohongshuQuery(input.query) ||
       (input.maximumDetails !== undefined && (!Number.isSafeInteger(input.maximumDetails) ||
-        input.maximumDetails < 0 || input.maximumDetails > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS))) {
+        input.maximumDetails < 0 || input.maximumDetails > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS)) ||
+      (input.comments !== undefined && (input.maximumDetails === undefined || input.maximumDetails < 1 ||
+        !Number.isSafeInteger(input.comments.maximumScrolls) || input.comments.maximumScrolls < 1 ||
+        input.comments.maximumScrolls > 3))) {
       throw new Error('xiaohongshu_public_notes_search_input_invalid');
     }
     const expired = this.#expire(now);
@@ -741,11 +748,15 @@ export class ExtensionWorkQueue {
       executionTarget: 'existing_public_explore_tab',
       issuedAt,
       expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
-      input: input.maximumDetails === undefined
-        ? { query: input.query }
-        : { query: input.query, maximumDetails: input.maximumDetails },
+      input: {
+        query: input.query,
+        ...(input.maximumDetails === undefined ? {} : { maximumDetails: input.maximumDetails }),
+        ...(input.comments === undefined ? {} : { comments: input.comments })
+      },
       budget: input.maximumDetails && input.maximumDetails > 0
-        ? XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET
+        ? input.comments
+          ? XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET
+          : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET
         : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET
     };
     return await this.#enqueueSigned(unsigned, issuedAt);

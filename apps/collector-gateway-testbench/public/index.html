@@ -70,7 +70,7 @@
               <span class="step">X</span>
               <div>
                 <h3>小红书公开笔记站内搜索</h3>
-                <p>仅接收查询词；要求日常浏览器已经存在唯一公开 Explore tab。零 URL 跳转、零刷新、零新 tab，只执行一次可信输入和 Enter。</p>
+                <p>仅接收查询词；可选深挖详情与评论区。要求日常浏览器已经存在唯一公开 Explore tab；零 URL 跳转、零刷新、零新 tab。</p>
               </div>
             </div>
             <label>
@@ -80,6 +80,26 @@
             <label>
               查询词
               <input name="query" autocomplete="off" maxlength="80" placeholder="例如 咖啡豆" required disabled>
+            </label>
+            <label>
+              详情数量（0=只收集广度）
+              <select name="maximumDetails" disabled>
+                <option value="0" selected>0 · 只收集卡片</option>
+                <option value="1">1 · 深挖 1 条</option>
+                <option value="2">2 · 深挖 2 条</option>
+                <option value="5">5 · 深挖 5 条</option>
+                <option value="10">10 · 深挖 10 条</option>
+                <option value="20">20 · 深挖 20 条</option>
+              </select>
+            </label>
+            <label>
+              评论区（仅详情开启时生效）
+              <select name="commentsScrolls" disabled>
+                <option value="0" selected>关闭</option>
+                <option value="1">开启 · 1 次滚动</option>
+                <option value="2">开启 · 2 次滚动</option>
+                <option value="3">开启 · 3 次滚动</option>
+              </select>
             </label>
             <button type="submit" disabled>提交一次小红书搜索测试</button>
           </form>

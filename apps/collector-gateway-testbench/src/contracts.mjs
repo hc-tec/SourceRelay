@@ -80,10 +80,18 @@ export function parseTestbenchSubmission(value) {
   }
 
   if (value.kind === 'xiaohongshu_search') {
-    if ((!hasExactKeys(value.input, ['query']) && !hasExactKeys(value.input, ['query', 'maximumDetails'])) ||
+    const keys = Object.keys(value.input);
+    if (!keys.every((key) => ['query', 'maximumDetails', 'comments'].includes(key)) ||
+      !Object.hasOwn(value.input, 'query') ||
       typeof value.input.query !== 'string' ||
       (Object.hasOwn(value.input, 'maximumDetails') &&
-        (!Number.isInteger(value.input.maximumDetails) || value.input.maximumDetails < 0 || value.input.maximumDetails > 20))) {
+        (!Number.isInteger(value.input.maximumDetails) || value.input.maximumDetails < 0 || value.input.maximumDetails > 20)) ||
+      (Object.hasOwn(value.input, 'comments') &&
+        (!value.input.comments || typeof value.input.comments !== 'object' || Array.isArray(value.input.comments) ||
+          !Object.hasOwn(value.input.comments, 'maximumScrolls') ||
+          Object.keys(value.input.comments).length !== 1 ||
+          ![1, 2, 3].includes(value.input.comments.maximumScrolls) ||
+          !Object.hasOwn(value.input, 'maximumDetails') || value.input.maximumDetails < 1))) {
       throw new TestbenchInputError('testbench_request_invalid');
     }
     const query = normaliseSearchQuery(value.input.query);
@@ -93,9 +101,11 @@ export function parseTestbenchSubmission(value) {
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
       executionTarget: 'existing_public_explore_tab',
-      input: Object.hasOwn(value.input, 'maximumDetails')
-        ? { query, maximumDetails: value.input.maximumDetails }
-        : { query }
+      input: {
+        query,
+        ...(Object.hasOwn(value.input, 'maximumDetails') ? { maximumDetails: value.input.maximumDetails } : {}),
+        ...(Object.hasOwn(value.input, 'comments') ? { comments: { maximumScrolls: value.input.comments.maximumScrolls } } : {})
+      }
     };
   }
 

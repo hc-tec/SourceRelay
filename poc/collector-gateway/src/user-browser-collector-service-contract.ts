@@ -116,7 +116,7 @@ export interface UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest 
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.search.public_notes.v1';
   executionTarget: 'existing_public_explore_tab';
-  input: { query: string; maximumDetails?: number };
+  input: { query: string; maximumDetails?: number; comments?: { maximumScrolls: 1 | 2 | 3 } };
 }
 
 export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest {
@@ -247,12 +247,9 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
     }
     if (candidate.capability !== 'xiaohongshu.search.public_notes.v1' ||
       executionTarget !== 'existing_public_explore_tab' ||
-      (!exactKeys(input, ['query']) && !exactKeys(input, ['query', 'maximumDetails'])) ||
+      !validXiaohongshuSearchInput(input) ||
       typeof input.query !== 'string' || input.query !== input.query.trim() || input.query.length < 1 ||
-      input.query.length > 80 || /[\u0000-\u001f\u007f]/.test(input.query) ||
-      (Object.hasOwn(input, 'maximumDetails') &&
-        (!Number.isSafeInteger(input.maximumDetails) || Number(input.maximumDetails) < 0 ||
-          Number(input.maximumDetails) > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS))) {
+      input.query.length > 80 || /[\u0000-\u001f\u007f]/.test(input.query)) {
       throw new Error('user_browser_collector_service_request_invalid');
     }
     const maximumDetails = Object.hasOwn(input, 'maximumDetails') ? Number(input.maximumDetails) : undefined;
@@ -262,7 +259,11 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
       executionTarget: 'existing_public_explore_tab',
-      input: maximumDetails === undefined ? { query: input.query } : { query: input.query, maximumDetails }
+      input: {
+        query: input.query,
+        ...(maximumDetails === undefined ? {} : { maximumDetails }),
+        ...(input.comments === undefined ? {} : { comments: input.comments })
+      }
     };
   }
   if (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab') {
@@ -428,4 +429,25 @@ export function userBrowserCollectorServiceRequestInput(value: unknown): UserBro
 function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
   const actual = Object.keys(value);
   return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+function validXiaohongshuSearchInput(
+  input: Record<string, unknown>
+): input is Record<string, unknown> & {
+  query: string;
+  maximumDetails?: number;
+  comments?: { maximumScrolls: 1 | 2 | 3 };
+} {
+  const keys = Object.keys(input);
+  if (!keys.every((key) => key === 'query' || key === 'maximumDetails' || key === 'comments')) return false;
+  if (Object.hasOwn(input, 'maximumDetails') &&
+    (!Number.isSafeInteger(input.maximumDetails) || Number(input.maximumDetails) < 0 ||
+      Number(input.maximumDetails) > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS)) return false;
+  if (!Object.hasOwn(input, 'comments')) return true;
+  return typeof input.maximumDetails === 'number' && input.maximumDetails > 0 &&
+    Boolean(input.comments) && typeof input.comments === 'object' && !Array.isArray(input.comments) &&
+    exactKeys(input.comments as Record<string, unknown>, ['maximumScrolls']) &&
+    ((input.comments as Record<string, unknown>).maximumScrolls === 1 ||
+      (input.comments as Record<string, unknown>).maximumScrolls === 2 ||
+      (input.comments as Record<string, unknown>).maximumScrolls === 3);
 }

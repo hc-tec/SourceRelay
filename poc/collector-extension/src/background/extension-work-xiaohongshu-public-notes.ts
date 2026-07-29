@@ -21,6 +21,7 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
 ): Promise<XiaohongshuPublicNotesSearchWorkResult> {
   const projectionBox: { value: XiaohongshuManagedSearchProjectionResult | null } = { value: null };
   const detailActions = { requestedCount: 0, attemptedCount: 0, completedCount: 0, stoppedReason: null as string | null };
+  const commentsPlan = item.input.comments;
   let observedTabId: number | null = null;
   const action = await executeXiaohongshuTrustedInputSearch({
     schemaVersion: 1,
@@ -55,12 +56,12 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
       // search action.
       await clearXiaohongshuWorkObserver(document.tabId, item.workId);
       const details = [...(projectionBox.value.details ?? [])];
-      const known = new Set(details.map((detail) => detail.noteId));
       for (let rank = 1; rank <= requestedCount; rank += 1) {
         detailActions.attemptedCount = rank;
         const detailItem = createDepthDetailWorkItem(item, rank);
         const detailResult = await executeXiaohongshuNotePublicDetailExtensionWork(detailItem, {
           closeOverlayAfterCapture: true,
+          collectComments: commentsPlan,
           debuggee: { tabId: document.tabId }
         });
         if (detailResult.state !== 'completed' || !detailResult.projection) {
@@ -68,14 +69,19 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
           throw new Error(detailActions.stoppedReason);
         }
         const noteId = projectionBox.value.items[rank - 1]?.noteId;
-        if (noteId && !known.has(noteId)) {
-          known.add(noteId);
-          details.push({
+        if (noteId) {
+          const enriched = {
             noteId,
             publicText: detailResult.projection.publicText,
             authorNickname: detailResult.projection.authorNickname,
             interactionText: detailResult.projection.interactionText
-          });
+          } as (typeof details)[number];
+          if (detailResult.projection.comments) enriched.comments = detailResult.projection.comments;
+          const existingIndex = details.findIndex((detail) => detail.noteId === noteId);
+          if (existingIndex >= 0) details[existingIndex] = { ...details[existingIndex], ...enriched };
+          else {
+            details.push(enriched);
+          }
         }
         detailActions.completedCount = rank;
         if (rank < requestedCount) await delay(1_500);

@@ -1,7 +1,9 @@
 import {
   classifyXiaohongshuCurrentPageRisk,
   xiaohongshuCurrentPageNetworkPublicSurface,
+  XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
   type XiaohongshuNotePublicDetailProjection,
+  type XiaohongshuNotePublicCommentsWorkItem,
   type XiaohongshuNotePublicDetailTerminalReason,
   type XiaohongshuNotePublicDetailWorkItem,
   type XiaohongshuNotePublicDetailWorkResult
@@ -17,6 +19,7 @@ import {
   prepareXiaohongshuNoteDetailClick,
   recordXiaohongshuNoteDetailClickIntent
 } from './xiaohongshu-note-detail-click-ledger';
+import { executeXiaohongshuNotePublicCommentsExtensionWork } from './extension-work-xiaohongshu-note-public-comments';
 
 interface SearchDocument { tabId: number; windowId: number; documentId: string }
 interface Target { x: number; y: number; noteId: string }
@@ -36,6 +39,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
   item: XiaohongshuNotePublicDetailWorkItem,
   options: {
     closeOverlayAfterCapture?: boolean;
+    collectComments?: { maximumScrolls: 1 | 2 | 3 };
     /** Reuse a debugger lease already owned by the enclosing search action. */
     debuggee?: chrome.debugger.Debuggee;
   } = {}
@@ -98,6 +102,21 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
       rawPayloadStored: false,
       responseUrlsStored: false
     };
+    if (options.collectComments) {
+      const commentsResult = await executeXiaohongshuNotePublicCommentsExtensionWork(
+        createComposedCommentsWorkItem(item, options.collectComments.maximumScrolls),
+        {
+          page: pageDocument,
+          debuggee,
+          observerWorkId: item.workId,
+          allowSearchOverlay: true
+        }
+      );
+      if (commentsResult.state !== 'completed' || !commentsResult.projection) {
+        throw new Error(commentsResult.errorCode ?? 'xiaohongshu_note_comments_postcondition_unmet');
+      }
+      projection = { ...projection, comments: commentsResult.projection };
+    }
     if (options.closeOverlayAfterCapture) {
       await closeDetailOverlay(pageDocument, debuggee, continuity.timeOrigin);
     }
@@ -137,6 +156,27 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     rawPayloadStored: false,
     responseUrlsStored: false,
     debuggerDetached
+  };
+}
+
+function createComposedCommentsWorkItem(
+  detailItem: XiaohongshuNotePublicDetailWorkItem,
+  maximumScrolls: 1 | 2 | 3
+): XiaohongshuNotePublicCommentsWorkItem {
+  return {
+    schemaVersion: 1,
+    protocolVersion: 1,
+    workId: crypto.randomUUID(),
+    operationId: detailItem.operationId,
+    browserBindingId: detailItem.browserBindingId,
+    platform: 'xiaohongshu',
+    capability: 'xiaohongshu.note.public_comments.v1',
+    executionTarget: 'existing_public_note_overlay',
+    issuedAt: new Date().toISOString(),
+    expiresAt: detailItem.expiresAt,
+    input: { maximumScrolls },
+    budget: XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_BUDGET,
+    gatewaySignature: 'a'.repeat(64)
   };
 }
 

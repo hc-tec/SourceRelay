@@ -273,7 +273,7 @@ export async function readXiaohongshuExistingNoteCommentsNetworkProjection(
 }> {
   const record = await loadActiveRecord();
   if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId ||
-    record.publicSurface !== 'public_note_detail') {
+    (record.publicSurface !== 'public_note_detail' && record.publicSurface !== 'search')) {
     throw new Error('xiaohongshu_note_comments_network_projection_binding_mismatch');
   }
   const results = await chrome.scripting.executeScript({

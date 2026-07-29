@@ -23,6 +23,10 @@ const validatePublicReplies = process.argv.includes('--replies');
 const validateAccountNotes = process.argv.includes('--account-notes');
 const suppliedProfileUrl = process.env.COLLECTOR_XIAOHONGSHU_PROFILE_URL?.trim() || null;
 const requestedDepthDetails = parseBoundedDepthDetails(process.env.COLLECTOR_XIAOHONGSHU_MAX_DETAILS);
+const requestedCommentScrolls = parseBoundedCommentScrolls(process.env.COLLECTOR_XIAOHONGSHU_COMMENTS_SCROLLS);
+if (requestedCommentScrolls > 0 && requestedDepthDetails < 1) {
+  throw new Error('xiaohongshu_comments_require_maximum_details');
+}
 const replyCanaryQuery = '奉劝各位咖啡爱好者选好一点的咖啡豆';
 const query = process.env.COLLECTOR_XIAOHONGSHU_CANARY_QUERY ??
   (validatePublicReplies || validateAccountNotes ? replyCanaryQuery : '咖啡豆');
@@ -158,7 +162,11 @@ try {
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
       executionTarget: 'existing_public_explore_tab',
-      input: requestedDepthDetails > 0 ? { query, maximumDetails: requestedDepthDetails } : { query }
+      input: requestedDepthDetails > 0 ? {
+        query,
+        maximumDetails: requestedDepthDetails,
+        ...(requestedCommentScrolls > 0 ? { comments: { maximumScrolls: requestedCommentScrolls } } : {})
+      } : { query }
     })
   }, 201);
   const operationId = dispatch.result?.operationId;
@@ -204,6 +212,10 @@ try {
       ? artifact.result.projection.details.length : 0,
     publicTextCount: Array.isArray(artifact.result?.projection?.details)
       ? artifact.result.projection.details.filter((detail) => typeof detail?.publicText === 'string' && detail.publicText.length > 0).length
+      : 0,
+    commentCount: Array.isArray(artifact.result?.projection?.details)
+      ? artifact.result.projection.details.reduce((total, detail) =>
+        total + (Array.isArray(detail?.comments?.comments) ? detail.comments.comments.length : 0), 0)
       : 0,
     queryDigest: artifact.queryDigest,
     rawPayloadStored: false,
@@ -481,7 +493,10 @@ try {
         ? reportedArtifact.result.projection.details.filter((detail) => typeof detail?.publicText === 'string' && detail.publicText.length > 0).length
         : 0,
       queryDigest: reportedArtifact.queryDigest ?? null,
-      commentCount: reportedArtifact.summary.commentCount ?? null,
+      commentCount: Array.isArray(reportedArtifact.result.projection?.details)
+        ? reportedArtifact.result.projection.details.reduce((total, detail) =>
+          total + (Array.isArray(detail?.comments?.comments) ? detail.comments.comments.length : 0), 0)
+        : reportedArtifact.summary.commentCount ?? null,
       replyCount: reportedArtifact.summary.replyCount ?? null,
       networkMatchedPayloadCount: reportedArtifact.result.projection?.network?.matchedPayloadCount ?? null,
       networkBodyBytesRead: reportedArtifact.result.projection?.network?.bodyBytesRead ?? null,
@@ -650,6 +665,14 @@ function assertArtifact(artifact, operationId) {
       !Array.isArray(artifact.result?.projection?.details) ||
       artifact.result.projection.details.length < requestedDepthDetails) {
       throw new Error('xiaohongshu_gateway_e2e_depth_artifact_invalid');
+    }
+    if (requestedCommentScrolls > 0) {
+      const detailsWithComments = artifact.result.projection.details.filter((detail) =>
+        detail && detail.comments && Array.isArray(detail.comments.comments) && detail.comments.comments.length > 0
+      ).length;
+      if (detailsWithComments < requestedDepthDetails) {
+        throw new Error('xiaohongshu_gateway_e2e_comments_depth_artifact_invalid');
+      }
     }
   }
   const serialized = JSON.stringify(artifact);
@@ -950,6 +973,15 @@ function parseBoundedDepthDetails(value) {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 20) {
     throw new Error('xiaohongshu_gateway_e2e_depth_details_invalid');
+  }
+  return parsed;
+}
+
+function parseBoundedCommentScrolls(value) {
+  if (value === undefined || value === '') return 0;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 3) {
+    throw new Error('xiaohongshu_comments_scrolls_invalid');
   }
   return parsed;
 }

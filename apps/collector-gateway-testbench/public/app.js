@@ -21,6 +21,7 @@ element('video-form').addEventListener('submit', (event) => void submitVideo(eve
 element('search-form').addEventListener('submit', (event) => void submitSearch(event, 'native_search'));
 element('search-batch-form').addEventListener('submit', (event) => void submitSearch(event, 'native_search_batch'));
 element('xiaohongshu-search-form').addEventListener('submit', (event) => void submitSearch(event, 'xiaohongshu_search'));
+element('xiaohongshu-search-form').elements.maximumDetails.addEventListener('change', syncXiaohongshuSearchMode);
 element('xiaohongshu-account-notes-form').addEventListener('submit', (event) => void submitXiaohongshuAccountNotes(event));
 element('xiaohongshu-account-notes-form').elements.executionTarget.addEventListener('change', syncXiaohongshuAccountMode);
 element('xiaohongshu-note-detail-form').addEventListener('submit', (event) => void submitXiaohongshuNoteDetail(event));
@@ -152,6 +153,16 @@ function renderBindings() {
     control.disabled = !enabled;
   }
   syncXiaohongshuAccountMode();
+  syncXiaohongshuSearchMode();
+}
+
+function syncXiaohongshuSearchMode() {
+  const form = element('xiaohongshu-search-form');
+  if (!form) return;
+  const maximumDetails = Number(form.elements.maximumDetails.value);
+  const comments = form.elements.commentsScrolls;
+  comments.disabled = state.bindings.length === 0 || maximumDetails < 1;
+  if (maximumDetails < 1) comments.value = '0';
 }
 
 function syncXiaohongshuAccountMode() {
@@ -198,12 +209,19 @@ async function submitSearch(event, kind) {
   const button = form.querySelector('button');
   button.disabled = true;
   try {
+    const input = { query: form.elements.query.value };
+    if (kind === 'xiaohongshu_search') {
+      const maximumDetails = Number(form.elements.maximumDetails.value);
+      const commentsScrolls = Number(form.elements.commentsScrolls.value);
+      if (maximumDetails > 0) input.maximumDetails = maximumDetails;
+      if (commentsScrolls > 0) input.comments = { maximumScrolls: commentsScrolls };
+    }
     const payload = await api('/api/operations', {
       method: 'POST',
       body: {
         browserBindingId: form.elements.browserBindingId.value,
         kind,
-        input: { query: form.elements.query.value }
+        input
       }
     });
     form.elements.query.value = '';

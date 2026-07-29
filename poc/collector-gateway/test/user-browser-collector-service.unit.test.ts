@@ -81,6 +81,27 @@ describe('user-owned browser collector service', () => {
       executionTarget: 'existing_public_explore_tab',
       input: { query: '咖啡豆', maximumDetails: 3 }
     })).toMatchObject({ input: { query: '咖啡豆', maximumDetails: 3 } });
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      input: { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2 } }
+    })).toMatchObject({ input: { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2 } } });
+    for (const input of [
+      { query: '咖啡豆', comments: { maximumScrolls: 1 } },
+      { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 0 } },
+      { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 4 } },
+      { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, extra: true } }
+    ]) expect(() => userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.search.public_notes.v1',
+      executionTarget: 'existing_public_explore_tab',
+      input
+    })).toThrow('user_browser_collector_service_request_invalid');
     for (const invalidDepth of [-1, 21, 1.5]) expect(() => userBrowserCollectorServiceRequestInput({
       schemaVersion: 2,
       browserBindingId,

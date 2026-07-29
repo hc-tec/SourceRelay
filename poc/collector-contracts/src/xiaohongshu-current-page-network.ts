@@ -1,3 +1,5 @@
+import type { XiaohongshuNotePublicCommentsProjection } from './extension-work-xiaohongshu-note-public-comments.js';
+
 /**
  * The first Xiaohongshu surface is intentionally a policy/contract boundary,
  * not a generic network interceptor.  It can describe only an explicitly
@@ -36,6 +38,21 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET = Object.freeze({
   maximumSemanticActions: 41,
   maximumNetworkResponseBodies: 8,
   maximumProjectedItems: 40,
+  maximumRawPayloadBytesStored: 0
+} as const);
+/**
+ * Optional detail-plus-comments mode. The bound covers one search action,
+ * twenty detail clicks, three bounded comment scrolls and one close action per
+ * detail. Response/projected-item ceilings are aggregate safety ceilings for
+ * the composed operation; raw payloads are still never stored.
+ */
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET = Object.freeze({
+  maximumPlatformNavigations: 0,
+  maximumPageReloads: 0,
+  maximumPageInitiatedNewDocuments: 0,
+  maximumSemanticActions: 101,
+  maximumNetworkResponseBodies: 168,
+  maximumProjectedItems: 1640,
   maximumRawPayloadBytesStored: 0
 } as const);
 export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET = Object.freeze({
@@ -251,6 +268,8 @@ export interface XiaohongshuPublicNoteDetailProjection {
   publicText: string;
   authorNickname: string;
   interactionText: string;
+  /** Present only when the caller explicitly enables comment collection. */
+  comments?: XiaohongshuNotePublicCommentsProjection;
 }
 
 export interface XiaohongshuManagedSearchProjectionResult {
@@ -530,12 +549,44 @@ function projectionKeys(value: Record<string, unknown>): boolean {
 function optionalPublicNoteDetails(value: unknown, maximumItems: 40 | 200): boolean {
   if (value === undefined) return true;
   return Array.isArray(value) && value.length <= maximumItems && value.every((entry) => {
-    if (!record(entry) || !exactKeys(entry, ['noteId', 'publicText', 'authorNickname', 'interactionText'])) return false;
+    if (!record(entry) || !detailProjectionKeys(entry)) return false;
     return boundedProjectionText(entry.noteId, 80, true) &&
       boundedProjectionText(entry.publicText, 12_000, true) &&
       boundedProjectionText(entry.authorNickname, 200) &&
-      boundedProjectionText(entry.interactionText, 1_000);
+      boundedProjectionText(entry.interactionText, 1_000) &&
+      (entry.comments === undefined || isXiaohongshuNotePublicCommentsProjection(entry.comments));
   });
+}
+
+function detailProjectionKeys(value: Record<string, unknown>): boolean {
+  const base = ['noteId', 'publicText', 'authorNickname', 'interactionText'] as const;
+  return exactKeys(value, base) || exactKeys(value, [...base, 'comments']);
+}
+
+function isXiaohongshuNotePublicCommentsProjection(value: unknown): value is XiaohongshuNotePublicCommentsProjection {
+  if (!record(value) || !exactKeys(value, [
+    'schemaVersion', 'captureMode', 'network', 'renderedCommentCount', 'comments', 'rawPayloadStored', 'responseUrlsStored'
+  ])) return false;
+  return value.schemaVersion === 1 &&
+    (value.captureMode === 'network_projection' || value.captureMode === 'dom_fallback' || value.captureMode === 'hybrid') &&
+    record(value.network) && exactKeys(value.network, ['matchedPayloadCount', 'bodyBytesRead', 'hasMore', 'cursorObserved']) &&
+    boundedProjectionCount(value.network.matchedPayloadCount, 8) &&
+    boundedProjectionCount(value.network.bodyBytesRead, 16 * 1024 * 1024) &&
+    (value.network.hasMore === null || typeof value.network.hasMore === 'boolean') &&
+    typeof value.network.cursorObserved === 'boolean' && boundedProjectionCount(value.renderedCommentCount, 200) &&
+    Array.isArray(value.comments) && value.comments.length <= 80 && value.comments.every(isPublicCommentProjection) &&
+    value.rawPayloadStored === false && value.responseUrlsStored === false;
+}
+
+function isPublicCommentProjection(value: unknown): boolean {
+  return record(value) && exactKeys(value, [
+    'rank', 'commentId', 'publicText', 'authorNickname', 'likedCountText', 'subCommentCountText',
+    'createdAtText', 'locationText', 'source'
+  ]) && boundedProjectionCount(value.rank, 80) && boundedProjectionText(value.commentId, 100, true) &&
+    boundedProjectionText(value.publicText, 2_000, true) && boundedProjectionText(value.authorNickname, 200) &&
+    boundedProjectionText(value.likedCountText, 40) && boundedProjectionText(value.subCommentCountText, 40) &&
+    boundedProjectionText(value.createdAtText, 100) && boundedProjectionText(value.locationText, 100) &&
+    (value.source === 'network' || value.source === 'dom');
 }
 
 function boundedProjectionText(value: unknown, maximum: number, required = false): value is string {

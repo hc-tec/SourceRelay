@@ -32,8 +32,16 @@ function noteSurface(value: string): boolean {
 }
 
 export async function executeXiaohongshuNotePublicCommentsExtensionWork(
-  item: XiaohongshuNotePublicCommentsWorkItem
+  item: XiaohongshuNotePublicCommentsWorkItem,
+  options: {
+    /** Reuse the detail action's page and debugger lease in composed mode. */
+    page?: NoteDocument;
+    debuggee?: chrome.debugger.Debuggee;
+    observerWorkId?: string;
+    allowSearchOverlay?: boolean;
+  } = {}
 ): Promise<XiaohongshuNotePublicCommentsWorkResult> {
+  const observerWorkId = options.observerWorkId ?? item.workId;
   let page: NoteDocument | null = null;
   let attached = false;
   let debuggerDetached = true;
@@ -43,15 +51,15 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
   let pageReady = false;
   let errorCode: string | null = null;
   try {
-    page = await findUniqueNoteDocument();
+    page = options.page ?? await findUniqueNoteDocument();
     await foreground(page);
-    await requireSameDocument(page);
+    await requireSameDocument(page, options.allowSearchOverlay === true);
     assertRisk(await readRisk(page));
-    await armXiaohongshuExistingNoteOverlayWorkObserver(page.tabId, item.workId);
+    await armXiaohongshuExistingNoteOverlayWorkObserver(page.tabId, observerWorkId);
     await prepareXiaohongshuNoteCommentsScroll(item.workId);
     await delay(4_500);
     let dom = await readDomProbe(page);
-    let network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, item.workId);
+    let network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, observerWorkId);
     // Keep the Network-first fast path: a complete archive needs no page
     // action.  If the page only exposed a partial DOM sample, however, the
     // platform may defer the remaining comments until the panel is scrolled.
@@ -63,14 +71,16 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
         throw new Error('xiaohongshu_comment_scroll_container_unavailable');
       }
       if (dom.scrollTarget) {
-        const debuggee: chrome.debugger.Debuggee = { tabId: page.tabId };
-        await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
-        attached = true;
-        debuggerDetached = false;
+        const debuggee: chrome.debugger.Debuggee = options.debuggee ?? { tabId: page.tabId };
+        if (!options.debuggee) {
+          await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
+          attached = true;
+          debuggerDetached = false;
+        }
         let previousCommentCount = mergeComments(network.comments, dom.comments).length;
         let noProgressRounds = 0;
         for (let ordinal = 1; ordinal <= item.input.maximumScrolls; ordinal += 1) {
-          await requireSameDocument(page);
+          await requireSameDocument(page, options.allowSearchOverlay === true);
           assertRisk(await readRisk(page));
           const scrollTarget = dom.scrollTarget;
           if (!scrollTarget) throw new Error('xiaohongshu_comment_scroll_container_unavailable');
@@ -79,11 +89,11 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
           attemptedCount = count;
           await dispatchWheel(debuggee, scrollTarget).catch(() => { throw new Error('debugger_input_failed'); });
           await delay(3_000);
-          await requireSameDocument(page);
+          await requireSameDocument(page, options.allowSearchOverlay === true);
           await completeXiaohongshuNoteCommentsScroll(item.workId, count);
           completedCount = count;
           dom = await readDomProbe(page);
-          network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, item.workId);
+          network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, observerWorkId);
           const currentCommentCount = mergeComments(network.comments, dom.comments).length;
           if (currentCommentCount > previousCommentCount) {
             previousCommentCount = currentCommentCount;
@@ -125,7 +135,7 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
         errorCode = 'xiaohongshu_note_comments_debugger_detach_failed';
       }
     }
-    if (page) await clearXiaohongshuWorkObserver(page.tabId, item.workId).catch(() => undefined);
+    if (page) await clearXiaohongshuWorkObserver(page.tabId, observerWorkId).catch(() => undefined);
   }
   const completed = errorCode === null && pageReady && projection !== null && debuggerDetached;
   return {
@@ -162,10 +172,10 @@ async function foreground(page: NoteDocument): Promise<void> {
   await chrome.tabs.update(page.tabId, { active: true });
   await delay(350);
 }
-async function requireSameDocument(page: NoteDocument): Promise<void> {
+async function requireSameDocument(page: NoteDocument, allowSearchOverlay = false): Promise<void> {
   const frame = await chrome.webNavigation.getFrame({ tabId: page.tabId, frameId: 0 }).catch(() => null);
   if (!frame || frame.documentId !== page.documentId ||
-    !noteSurface(frame.url)) {
+    (!noteSurface(frame.url) && !(allowSearchOverlay && baseXiaohongshuCurrentPageNetworkPublicSurface(frame.url) === 'search'))) {
     throw new Error('xiaohongshu_public_note_document_changed');
   }
 }

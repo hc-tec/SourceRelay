@@ -1,5 +1,6 @@
 import {
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY,
@@ -22,8 +23,14 @@ export interface XiaohongshuPublicNotesSearchWorkItem {
   executionTarget: 'existing_public_explore_tab';
   issuedAt: string;
   expiresAt: string;
-  input: { query: string; maximumDetails?: number };
-  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET | typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET;
+  input: {
+    query: string;
+    maximumDetails?: number;
+    comments?: { maximumScrolls: 1 | 2 | 3 };
+  };
+  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET |
+    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET |
+    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET;
   gatewaySignature: string;
 }
 
@@ -137,24 +144,42 @@ export function isXiaohongshuPublicNotesSearchWorkResultForItem(
 
 function validInput(value: unknown): value is XiaohongshuPublicNotesSearchWorkItem['input'] {
   if (!record(value) || !query(value.query)) return false;
-  if (Object.keys(value).length === 1) return true;
-  return Object.keys(value).length === 2 && Number.isSafeInteger(value.maximumDetails) &&
-    Number(value.maximumDetails) >= 0 && Number(value.maximumDetails) <= XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS;
+  const keys = Object.keys(value);
+  if (keys.some((key) => key !== 'query' && key !== 'maximumDetails' && key !== 'comments')) return false;
+  if (Object.hasOwn(value, 'maximumDetails') &&
+    (!Number.isSafeInteger(value.maximumDetails) || Number(value.maximumDetails) < 0 ||
+      Number(value.maximumDetails) > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS)) return false;
+  if (!Object.hasOwn(value, 'comments')) return true;
+  return record(value.comments) && exactKeys(value.comments, ['maximumScrolls']) &&
+    (value.comments.maximumScrolls === 1 || value.comments.maximumScrolls === 2 || value.comments.maximumScrolls === 3) &&
+    Number(value.maximumDetails ?? 0) > 0;
 }
 
 function isBudget(
   value: unknown,
   input: XiaohongshuPublicNotesSearchWorkItem['input']
 ): value is XiaohongshuPublicNotesSearchWorkItem['budget'] {
-  return record(value) && exactKeys(value, [
+  if (!record(value) || !exactKeys(value, [
     'maximumPlatformNavigations', 'maximumPageReloads', 'maximumPageInitiatedNewDocuments',
     'maximumSemanticActions', 'maximumNetworkResponseBodies', 'maximumProjectedItems',
     'maximumRawPayloadBytesStored'
-  ]) && value.maximumPlatformNavigations === 0 && value.maximumPageReloads === 0 &&
-    value.maximumPageInitiatedNewDocuments === 0 &&
-    value.maximumNetworkResponseBodies === 8 && value.maximumProjectedItems === 40 &&
-    value.maximumRawPayloadBytesStored === 0 &&
-    (Number(input.maximumDetails ?? 0) > 0 ? value.maximumSemanticActions === 41 : value.maximumSemanticActions === 1);
+  ])) return false;
+  const maximumPlatformNavigations = Number(value.maximumPlatformNavigations);
+  const maximumPageReloads = Number(value.maximumPageReloads);
+  const maximumPageInitiatedNewDocuments = Number(value.maximumPageInitiatedNewDocuments);
+  const maximumSemanticActions = Number(value.maximumSemanticActions);
+  const maximumNetworkResponseBodies = Number(value.maximumNetworkResponseBodies);
+  const maximumProjectedItems = Number(value.maximumProjectedItems);
+  const maximumRawPayloadBytesStored = Number(value.maximumRawPayloadBytesStored);
+  if (maximumPlatformNavigations !== 0 || maximumPageReloads !== 0 || maximumPageInitiatedNewDocuments !== 0 ||
+    maximumRawPayloadBytesStored !== 0) return false;
+  if (Number(input.maximumDetails ?? 0) <= 0) {
+    return maximumSemanticActions === 1 && maximumNetworkResponseBodies === 8 && maximumProjectedItems === 40;
+  }
+  if (Object.hasOwn(input, 'comments')) {
+    return maximumSemanticActions === 101 && maximumNetworkResponseBodies === 168 && maximumProjectedItems === 1640;
+  }
+  return maximumSemanticActions === 41 && maximumNetworkResponseBodies === 8 && maximumProjectedItems === 40;
 }
 
 function terminalReason(value: unknown): value is XiaohongshuPublicNotesSearchTerminalReason {

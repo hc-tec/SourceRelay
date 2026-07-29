@@ -13,7 +13,7 @@ const SHA256 = /^[a-f0-9]{64}$/;
 // Search can now carry the already-observed public description projection for
 // each card. Keep the cap bounded, but large enough that a high-coverage page
 // does not fail merely because its public text is longer than a card title.
-const MAX_ARTIFACT_BYTES = 2 * 1024 * 1024;
+const MAX_ARTIFACT_BYTES = 8 * 1024 * 1024;
 
 export interface XiaohongshuPublicNotesArtifactSummary {
   schemaVersion: 1;

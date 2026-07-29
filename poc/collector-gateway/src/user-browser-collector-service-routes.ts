@@ -113,7 +113,8 @@ export async function handleUserBrowserCollectorServiceRoute(
           context,
           collection.browserBindingId,
           collection.input.query,
-          collection.input.maximumDetails
+          collection.input.maximumDetails,
+          collection.input.comments
         )
         : collection.capability === 'bilibili.video_detail'
         ? await enqueueBilibiliVideoDetailWork(
