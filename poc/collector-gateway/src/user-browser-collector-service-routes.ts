@@ -99,7 +99,8 @@ export async function handleUserBrowserCollectorServiceRoute(
         ? await enqueueXiaohongshuNotePublicDetailWork(
           context,
           collection.browserBindingId,
-          collection.input.resultRank
+          collection.input.resultRank,
+          collection.executionTarget
         )
         : collection.capability === 'xiaohongshu.account.public_notes.v1'
         ? await enqueueXiaohongshuAccountPublicNotesWork(

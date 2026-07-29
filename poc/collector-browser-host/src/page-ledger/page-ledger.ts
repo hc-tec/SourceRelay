@@ -365,7 +365,8 @@ export class PageLedger {
       request.handoffFromPageAlias!,
       request.handoffFromPageLeaseId!
     );
-    if (source.ownershipSource !== 'direct_created' || source.platform !== 'xiaohongshu' ||
+    if ((source.ownershipSource !== 'direct_created' && source.ownershipSource !== 'action_created') ||
+      source.platform !== 'xiaohongshu' ||
       (source.pageRole !== 'public_search' && source.pageRole !== 'public_profile')) {
       throw hostError({
         code: 'xiaohongshu_validation_profile_handoff_source_ineligible',

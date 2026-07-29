@@ -638,4 +638,26 @@ describe('extension work queue state machine', () => {
       await rm(stateDirectory, { recursive: true, force: true });
     }
   });
+
+  test('signs profile-tab note-detail work without accepting a note URL', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-xiaohongshu-profile-detail-'));
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const queued = await queue.enqueueXiaohongshuNotePublicDetail({
+        browserBindingId: bindingId,
+        resultRank: 1,
+        executionTarget: 'existing_public_profile_tab'
+      }, base);
+      const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
+      expect(claimed).toMatchObject({
+        operationId: queued.operationId,
+        capability: 'xiaohongshu.note.public_detail.v1',
+        executionTarget: 'existing_public_profile_tab',
+        input: { resultRank: 1 },
+        budget: { maximumPlatformNavigations: 0, maximumSemanticActions: 1 }
+      });
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
 });

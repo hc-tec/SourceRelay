@@ -123,6 +123,37 @@ automaticPlatformRetries: 0
 
 验证器此前出现过一次 `managed_page_extension_binding_missing`，根因是交接目标页没有稳定的扩展 tab 映射，而视觉证据接口错误地强制要求 extension binding。现已改为：视觉证据仍要求精确 page lease/run/record version，但不把扩展 tab binding 当作截图前置条件；交接后先释放为 `retained_for_review`，再走 retained-page 只读截图。该修复不扩大上层 API 的浏览器控制能力。
 
+## 主页笔记详情 live canary
+
+在上述入口稳定后，继续用同一真实验证浏览器完成了主页详情闭环（不重新导航主页、不接受 note URL）：
+
+```yaml
+runId: bb0c5034-761c-46eb-a6e3-7cee1f22f1a1
+sourceSurface: explore
+profileLinkDiscovery:
+  targetMode: new_tab
+  tokenObserved: true
+profileNotesItemCount: 30
+detailExecutionTarget: existing_public_profile_tab
+detailRank: 1
+detailSemanticActionCount: 1
+detailCaptureMode: dom_fallback
+detailPublicTextLength: 1215
+detailNetworkMatchedPayloadCount: 0
+detailNetworkBodyBytesRead: 0
+sameDocumentOverlay: true
+overlayClosed: true
+productPlatformNavigations: 0
+validationBaselineNavigations: 1
+rawPayloadStored: false
+responseUrlsStored: false
+debuggerDetached: true
+finalPageState: retained_for_review
+automaticPlatformRetries: 0
+```
+
+这证明了“主页卡片 → 同一主页 document 的详情浮层 → 投影 → 可信关闭”的 DOM fallback 路径。该次响应没有可确认的 Network 正文（仍为 `0/0`），所以 Network-first 仍然是待进一步研究的增强路径；当前能力不会把 DOM 成功冒充为 Network 成功。详情入口已经登记为同一 `xiaohongshu.note.public_detail.v1` capability 的 `existing_public_profile_tab` execution target，输入仍只有 `resultRank`，不携带 note identity 或 URL。评论/回复暂不从 profile overlay 复用搜索页专用 runner，避免在未完成真实验证前扩大声明。
+
 ## 明确留待后续：媒体物化
 
 小红书图片和视频通常使用短时 CDN 链接，不能把页面里看到的媒体 URL 当成长期可用地址。后续若要保留媒体，应单独设计“采集时立即下载”的受限媒体物化能力：在同一次页面文档和任务预算内下载、校验 MIME/大小、写入本地对象并以内容摘要关联笔记；不得把原始 CDN URL、请求头、Cookie 或签名写入长期 artifact。本 v0.1 只保存公开笔记卡片投影，不下载图片/视频，也不把媒体能力混入主页链接的 live canary。

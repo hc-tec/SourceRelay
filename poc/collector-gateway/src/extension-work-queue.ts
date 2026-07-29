@@ -161,6 +161,7 @@ export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
 export interface EnqueueXiaohongshuNotePublicDetailWorkInput {
   browserBindingId: string;
   resultRank: number;
+  executionTarget?: 'existing_public_search_tab' | 'existing_public_profile_tab';
 }
 export interface EnqueueXiaohongshuNotePublicCommentsWorkInput {
   browserBindingId: string;
@@ -885,7 +886,7 @@ export class ExtensionWorkQueue {
       browserBindingId: input.browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.note.public_detail.v1',
-      executionTarget: 'existing_public_search_tab',
+      executionTarget: input.executionTarget ?? 'existing_public_search_tab',
       issuedAt,
       expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
       input: { resultRank: input.resultRank },

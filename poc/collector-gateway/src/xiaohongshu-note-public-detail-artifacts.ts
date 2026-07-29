@@ -27,7 +27,7 @@ export interface XiaohongshuNotePublicDetailArtifactView {
   summary: XiaohongshuNotePublicDetailArtifactSummary;
   provenance: {
     environment: 'user_owned_browser_extension';
-    executionTarget: 'existing_public_search_tab';
+    executionTarget: 'existing_public_search_tab' | 'existing_public_profile_tab';
     platformNavigations: 0;
     pageReloads: 0;
     pageInitiatedNewTabs: 0;
@@ -94,7 +94,7 @@ export class XiaohongshuNotePublicDetailArtifactStore {
       schemaVersion: 1 as const,
       provenance: {
         environment: 'user_owned_browser_extension' as const,
-        executionTarget: 'existing_public_search_tab' as const,
+        executionTarget: input.result.executionTarget,
         platformNavigations: 0 as const,
         pageReloads: 0 as const,
         pageInitiatedNewTabs: 0 as const,

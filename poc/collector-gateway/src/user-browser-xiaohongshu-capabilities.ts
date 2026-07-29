@@ -89,7 +89,7 @@ export interface UserBrowserXiaohongshuNotePublicDetailCapabilityDescriptor {
   platform: 'xiaohongshu';
   title: string;
   inputMode: 'result_rank_only_no_caller_url';
-  executionTarget: 'existing_public_search_tab';
+  executionTarget: 'existing_public_search_tab' | 'existing_public_profile_tab';
   accountScopedSurfaces: 'forbidden';
   dispatchState: 'direct_ready';
   managedValidationState: 'gateway_extension_real_e2e_passed';

@@ -721,14 +721,14 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserXiaohongshuNotePublicDetailCollectRequest: {
           type: 'object', additionalProperties: false,
-          description: 'Opens one ranked result from the unique existing public search tab in the proved same-document detail overlay. No URL, note ID, tab ID, selector, coordinate, script, refresh, or new tab can be supplied.',
+          description: 'Opens one ranked visible note card from the unique existing public search or profile tab in the proved same-document detail overlay. No URL, note ID, tab ID, selector, coordinate, script, refresh, or new tab can be supplied.',
           required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'xiaohongshu' },
             capability: { type: 'string', const: 'xiaohongshu.note.public_detail.v1' },
-            executionTarget: { type: 'string', const: 'existing_public_search_tab' },
+            executionTarget: { type: 'string', enum: ['existing_public_search_tab', 'existing_public_profile_tab'] },
             input: {
               type: 'object', additionalProperties: false,
               required: ['resultRank'],

@@ -78,4 +78,36 @@ describe('signed Xiaohongshu note public-detail work contract', () => {
     expect(isExtensionWorkResultForItem({ ...result, navigation: { attempted: true, attemptCount: 1 } }, item)).toBe(false);
     expect(isExtensionWorkResultForItem({ ...result, projection: { ...result.projection, sourceRank: 2 } }, item)).toBe(false);
   });
+
+  test('accepts the same rank-only detail work on an existing public profile tab', () => {
+    const profileItem = { ...item, executionTarget: 'existing_public_profile_tab' as const };
+    const profileResult = {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: profileItem.workId,
+      operationId: profileItem.operationId,
+      browserBindingId: profileItem.browserBindingId,
+      platform: 'xiaohongshu' as const,
+      capability: 'xiaohongshu.note.public_detail.v1' as const,
+      executionTarget: 'existing_public_profile_tab' as const,
+      state: 'completed' as const,
+      errorCode: null,
+      terminalReason: 'note_detail_ready' as const,
+      completedAt: '2026-07-28T12:00:20.000Z',
+      navigation: { attempted: false as const, attemptCount: 0 as const },
+      semanticAction: { attempted: true, attemptCount: 1 as const },
+      page: { publicSurface: 'note_detail_overlay' as const, sameDocument: true as const },
+      projection: {
+        schemaVersion: 1 as const, sourceRank: 1, captureMode: 'dom_fallback' as const,
+        network: { matchedPayloadCount: 0, bodyBytesRead: 0 }, publicText: '公开正文',
+        authorNickname: '公开作者', interactionText: '', visibleMediaCount: 1,
+        commentEntryVisible: true, rawPayloadStored: false as const, responseUrlsStored: false as const
+      },
+      rawPayloadStored: false as const,
+      responseUrlsStored: false as const,
+      debuggerDetached: true
+    };
+    expect(isExtensionWorkItem(profileItem)).toBe(true);
+    expect(isExtensionWorkResultForItem(profileResult, profileItem)).toBe(true);
+  });
 });

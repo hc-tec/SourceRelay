@@ -22,10 +22,14 @@ const validateCommentRecon = process.argv.includes('--comment-recon');
 const validateReplyRecon = process.argv.includes('--reply-recon');
 const validatePublicReplies = process.argv.includes('--replies');
 const validateAccountNotes = process.argv.includes('--account-notes');
+const validateAccountNoteDetail = process.argv.includes('--account-note-detail');
 const suppliedProfileUrl = process.env.COLLECTOR_XIAOHONGSHU_PROFILE_URL?.trim() || null;
 const discoverAccountCanary = validateAccountNotes && process.argv.includes('--account-notes-discover');
 if (discoverAccountCanary && suppliedProfileUrl) {
   throw new Error('xiaohongshu_discovery_canary_does_not_accept_profile_url');
+}
+if (validateAccountNoteDetail && !validateAccountNotes) {
+  throw new Error('xiaohongshu_account_note_detail_requires_account_notes');
 }
 // A supplied short-lived profile URL is its own live canary.  Do not spend
 // platform actions on the unrelated search/detail chain before exercising the
@@ -54,6 +58,7 @@ const validatePublicComments = process.argv.includes('--comments') || validateRe
 const validateExistingPublicComments = process.argv.includes('--comments-existing');
 const validateNoteDetail = validateCommentRecon || validatePublicComments ||
   (validateAccountNotes && !directAccountCanary) ||
+  validateAccountNoteDetail ||
   process.argv.includes('--note-detail');
 const timeline = [];
 let client = null;
@@ -236,9 +241,43 @@ try {
       } : null,
       rawPayloadStored: false,
       responseUrlsStored: false,
-        validationMode: discoverAccountCanary
+      validationMode: discoverAccountCanary
         ? 'natural_author_avatar_profile_discovery' : 'direct_profile_link_only'
     });
+    if (validateAccountNoteDetail) {
+      const detailDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
+        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
+          browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+          capability: 'xiaohongshu.note.public_detail.v1',
+          executionTarget: 'existing_public_profile_tab', input: { resultRank: 1 } })
+      }, 201);
+      const detailOperationId = detailDispatch.result?.operationId;
+      if (!uuid(detailOperationId)) throw new Error('xiaohongshu_profile_note_detail_operation_missing');
+      record('profile_note_detail_operation_dispatched', {
+        operationId: detailOperationId,
+        resultRank: 1,
+        executionTarget: 'existing_public_profile_tab'
+      });
+      const detailOperation = await waitForOperation(gatewayOrigin, token, detailOperationId, 90_000);
+      if (detailOperation.state !== 'completed' || detailOperation.terminalReason !== 'note_detail_ready' ||
+        !uuid(detailOperation.artifact?.artifactId) || typeof detailOperation.artifact?.retrievalPath !== 'string') {
+        throw new Error(detailOperation.errorCode ?? 'xiaohongshu_profile_note_detail_operation_not_completed');
+      }
+      const detailArtifactPayload = await apiJson(
+        `${gatewayOrigin}${detailOperation.artifact.retrievalPath}`,
+        { headers: { authorization: `Bearer ${token}` } },
+        200
+      );
+      assertNoteDetailArtifact(detailArtifactPayload.artifact, detailOperationId);
+      record('profile_note_detail_artifact_retrieved', {
+        captureMode: detailArtifactPayload.artifact.summary.captureMode,
+        publicTextLength: detailArtifactPayload.artifact.result.projection.publicText.length,
+        rawPayloadStored: false,
+        responseUrlsStored: false
+      });
+      reportedOperation = detailOperation;
+      reportedArtifact = detailArtifactPayload.artifact;
+    }
     if (discoverAccountCanary) {
       const handoff = await client.command({
         type: 'adopt_xiaohongshu_validation_public_page',
@@ -607,7 +646,8 @@ try {
     ok: true,
     runId,
     gatewayPath: 'user_browser_api_to_signed_queue_to_production_extension',
-    validatedCapability: validateAccountNotes ? 'xiaohongshu.account.public_notes.v1' :
+    validatedCapability: validateAccountNoteDetail ? 'xiaohongshu.note.public_detail.v1' :
+      validateAccountNotes ? 'xiaohongshu.account.public_notes.v1' :
       validatePublicReplies ? 'xiaohongshu.note.public_comment_replies.v1' :
       validateReplyRecon ? 'xiaohongshu.note.public_comment_replies.recon' :
       validatePublicComments ? 'xiaohongshu.note.public_comments.v1' :

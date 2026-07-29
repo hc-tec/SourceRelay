@@ -392,10 +392,11 @@ export async function enqueueXiaohongshuAccountPublicNotesWork(
 export async function enqueueXiaohongshuNotePublicDetailWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  resultRank: number
+  resultRank: number,
+  executionTarget: 'existing_public_search_tab' | 'existing_public_profile_tab' = 'existing_public_search_tab'
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
-  return await context.workQueue.enqueueXiaohongshuNotePublicDetail({ browserBindingId, resultRank });
+  return await context.workQueue.enqueueXiaohongshuNotePublicDetail({ browserBindingId, resultRank, executionTarget });
 }
 export async function enqueueXiaohongshuNotePublicCommentsWork(
   context: ExtensionWorkRouteContext, browserBindingId: string, maximumScrolls: 1 | 2 | 3

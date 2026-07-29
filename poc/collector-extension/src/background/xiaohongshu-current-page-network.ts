@@ -407,7 +407,8 @@ export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
 }> {
   const record = await loadActiveRecord();
   if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId ||
-    (record.publicSurface !== 'search' && record.publicSurface !== 'public_note_detail')) {
+    (record.publicSurface !== 'search' && record.publicSurface !== 'public_note_detail' &&
+      record.publicSurface !== 'public_profile')) {
     throw new Error('xiaohongshu_note_detail_network_projection_binding_mismatch');
   }
   const results = await chrome.scripting.executeScript({

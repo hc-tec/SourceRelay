@@ -241,8 +241,19 @@ describe('user-owned browser collector service', () => {
     expect(document.components.schemas.UserBrowserXiaohongshuNotePublicDetailCollectRequest.properties).toMatchObject({
       platform: { const: 'xiaohongshu' },
       capability: { const: 'xiaohongshu.note.public_detail.v1' },
-      executionTarget: { const: 'existing_public_search_tab' },
+      executionTarget: { type: 'string', enum: ['existing_public_search_tab', 'existing_public_profile_tab'] },
       input: { required: ['resultRank'], additionalProperties: false }
+    });
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 2,
+      browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.note.public_detail.v1',
+      executionTarget: 'existing_public_profile_tab',
+      input: { resultRank: 1 }
+    })).toMatchObject({
+      executionTarget: 'existing_public_profile_tab',
+      input: { resultRank: 1 }
     });
     expect(document.components.schemas.UserBrowserXiaohongshuNotePublicCommentsCollectRequest.properties).toMatchObject({
       platform: { const: 'xiaohongshu' }, capability: { const: 'xiaohongshu.note.public_comments.v1' },

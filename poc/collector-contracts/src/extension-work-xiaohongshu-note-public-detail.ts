@@ -47,7 +47,7 @@ export interface XiaohongshuNotePublicDetailWorkItem {
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: typeof XIAOHONGSHU_NOTE_PUBLIC_DETAIL_CAPABILITY;
-  executionTarget: 'existing_public_search_tab';
+  executionTarget: 'existing_public_search_tab' | 'existing_public_profile_tab';
   issuedAt: string;
   expiresAt: string;
   input: { resultRank: number };
@@ -62,6 +62,8 @@ export type XiaohongshuNotePublicDetailTerminalReason =
   | 'note_detail_ready'
   | 'existing_public_search_tab_required'
   | 'existing_public_search_tab_ambiguous'
+  | 'existing_public_profile_tab_required'
+  | 'existing_public_profile_tab_ambiguous'
   | 'search_result_rank_unavailable'
   | 'note_detail_target_new_tab'
   | 'document_context_changed'
@@ -83,7 +85,7 @@ export interface XiaohongshuNotePublicDetailWorkResult {
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: typeof XIAOHONGSHU_NOTE_PUBLIC_DETAIL_CAPABILITY;
-  executionTarget: 'existing_public_search_tab';
+  executionTarget: 'existing_public_search_tab' | 'existing_public_profile_tab';
   state: 'completed' | 'stopped';
   errorCode: string | null;
   terminalReason: XiaohongshuNotePublicDetailTerminalReason;
@@ -106,7 +108,8 @@ export function isXiaohongshuNotePublicDetailWorkItem(
   ]) && value.schemaVersion === 1 && value.protocolVersion === 1 && uuid(value.workId) && uuid(value.operationId) &&
     uuid(value.browserBindingId) && value.platform === 'xiaohongshu' &&
     value.capability === XIAOHONGSHU_NOTE_PUBLIC_DETAIL_CAPABILITY &&
-    value.executionTarget === 'existing_public_search_tab' && timestamp(value.issuedAt) && timestamp(value.expiresAt) &&
+    (value.executionTarget === 'existing_public_search_tab' || value.executionTarget === 'existing_public_profile_tab') &&
+    timestamp(value.issuedAt) && timestamp(value.expiresAt) &&
     Date.parse(value.expiresAt as string) > Date.parse(value.issuedAt as string) && record(value.input) &&
     exactKeys(value.input, ['resultRank']) && rank(value.input.resultRank) && budget(value.budget) &&
     typeof value.gatewaySignature === 'string' && SIGNATURE.test(value.gatewaySignature);
@@ -140,7 +143,8 @@ export function isXiaohongshuNotePublicDetailWorkResult(
   if (value.schemaVersion !== 1 || value.protocolVersion !== 1 || !uuid(value.workId) || !uuid(value.operationId) ||
     !uuid(value.browserBindingId) || value.platform !== 'xiaohongshu' ||
     value.capability !== XIAOHONGSHU_NOTE_PUBLIC_DETAIL_CAPABILITY ||
-    value.executionTarget !== 'existing_public_search_tab' || (value.state !== 'completed' && value.state !== 'stopped') ||
+    (value.executionTarget !== 'existing_public_search_tab' && value.executionTarget !== 'existing_public_profile_tab') ||
+    (value.state !== 'completed' && value.state !== 'stopped') ||
     !(value.errorCode === null || (typeof value.errorCode === 'string' && SAFE_ERROR.test(value.errorCode))) ||
     !terminalReason(value.terminalReason) || !timestamp(value.completedAt) || !zeroNavigation(value.navigation) ||
     !semanticAction(value.semanticAction) || !page(value.page) ||
@@ -171,6 +175,7 @@ function budget(value: unknown): value is typeof XIAOHONGSHU_NOTE_PUBLIC_DETAIL_
 function terminalReason(value: unknown): value is XiaohongshuNotePublicDetailTerminalReason {
   return typeof value === 'string' && [
     'note_detail_ready', 'existing_public_search_tab_required', 'existing_public_search_tab_ambiguous',
+    'existing_public_profile_tab_required', 'existing_public_profile_tab_ambiguous',
     'search_result_rank_unavailable', 'note_detail_target_new_tab', 'document_context_changed', 'postcondition_unmet',
     'login_required', 'verification_required', 'rate_limited', 'source_unavailable', 'debugger_attach_failed',
     'debugger_input_failed', 'debugger_detach_failed', 'extension_worker_interrupted'

@@ -12,6 +12,7 @@ import {
   type XiaohongshuNotePublicDetailWorkResult
 } from '@intelligence/collector-contracts';
 import {
+  armXiaohongshuExistingPublicProfileWorkObserver,
   armXiaohongshuExistingSearchWorkObserver,
   bindXiaohongshuObserverSelectedNote,
   clearXiaohongshuWorkObserver,
@@ -25,7 +26,7 @@ import {
 import { executeXiaohongshuNotePublicCommentsExtensionWork } from './extension-work-xiaohongshu-note-public-comments';
 import { executeXiaohongshuNotePublicCommentRepliesExtensionWork } from './extension-work-xiaohongshu-note-public-comment-replies';
 
-interface SearchDocument { tabId: number; windowId: number; documentId: string }
+interface DetailDocument { tabId: number; windowId: number; documentId: string }
 interface Target { x: number; y: number; noteId: string }
 interface DocumentContinuity {
   documentId: string;
@@ -49,18 +50,19 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     debuggee?: chrome.debugger.Debuggee;
   } = {}
 ): Promise<XiaohongshuNotePublicDetailWorkResult> {
-  let pageDocument: SearchDocument | null = null;
+  let pageDocument: DetailDocument | null = null;
   let attached = false;
   let debuggerDetached = true;
   let attempted = false;
   let projection: XiaohongshuNotePublicDetailProjection | null = null;
   let pageReady = false;
   let errorCode: string | null = null;
+  const profileDocument = item.executionTarget === 'existing_public_profile_tab';
   try {
-    pageDocument = await findUniqueSearchDocument();
+    pageDocument = profileDocument ? await findUniqueProfileDocument() : await findUniqueSearchDocument();
     await foreground(pageDocument);
     try {
-      await requireSameDocument(pageDocument);
+      await requireSameDocument(pageDocument, profileDocument);
     } catch {
       throw new Error('xiaohongshu_public_search_document_changed_before_detail');
     }
@@ -68,7 +70,11 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     assertRisk(baseline);
     const continuity = await readDocumentContinuity(pageDocument);
     const target = await findRankedDetailTarget(pageDocument, item.input.resultRank);
-    await armXiaohongshuExistingSearchWorkObserver(pageDocument.tabId, item.workId);
+    if (profileDocument) {
+      await armXiaohongshuExistingPublicProfileWorkObserver(pageDocument.tabId, item.workId);
+    } else {
+      await armXiaohongshuExistingSearchWorkObserver(pageDocument.tabId, item.workId);
+    }
     await bindXiaohongshuObserverSelectedNote(pageDocument.tabId, item.workId, target.noteId);
     await prepareXiaohongshuNoteDetailClick(item.workId);
     const debuggee: chrome.debugger.Debuggee = options.debuggee ?? { tabId: pageDocument.tabId };
@@ -144,8 +150,8 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
           : { replyThread: repliesResult.projection! })
       };
     }
-    if (options.closeOverlayAfterCapture) {
-      await closeDetailOverlay(pageDocument, debuggee, continuity.timeOrigin);
+    if (options.closeOverlayAfterCapture || profileDocument) {
+      await closeDetailOverlay(pageDocument, debuggee, continuity.timeOrigin, profileDocument ? 'profile' : 'search');
     }
     pageReady = true;
   } catch (error) {
@@ -171,7 +177,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     browserBindingId: item.browserBindingId,
     platform: 'xiaohongshu',
     capability: 'xiaohongshu.note.public_detail.v1',
-    executionTarget: 'existing_public_search_tab',
+    executionTarget: item.executionTarget,
     state: completed ? 'completed' : 'stopped',
     errorCode: completed ? null : errorCode ?? 'xiaohongshu_note_detail_postcondition_unmet',
     terminalReason: completed ? 'note_detail_ready' : terminalReason(errorCode),
@@ -238,9 +244,10 @@ function createComposedRepliesWorkItem(
  * run, never a reason to click another card.
  */
 async function closeDetailOverlay(
-  pageDocument: SearchDocument,
+  pageDocument: DetailDocument,
   debuggee: chrome.debugger.Debuggee,
-  timeOriginBefore: number
+  timeOriginBefore: number,
+  expectedSurface: 'search' | 'profile'
 ): Promise<void> {
   const closeTarget = await findDetailCloseTarget(pageDocument);
   if (!closeTarget) throw new Error('xiaohongshu_note_detail_close_target_unavailable');
@@ -251,13 +258,13 @@ async function closeDetailOverlay(
     if (state && state.timeOrigin !== timeOriginBefore) {
       throw new Error('xiaohongshu_public_search_document_changed_during_close');
     }
-    if (state?.surface === 'search' && state.overlayVisible === false && state.renderedCardCount > 0) return;
+    if (state && state.surface === expectedSurface && state.overlayVisible === false && state.renderedCardCount > 0) return;
     await delay(150);
   }
   throw new Error('xiaohongshu_note_detail_overlay_close_postcondition_unmet');
 }
 
-async function findDetailCloseTarget(pageDocument: SearchDocument): Promise<Target | null> {
+async function findDetailCloseTarget(pageDocument: DetailDocument): Promise<Target | null> {
   const results = await chrome.scripting.executeScript({
     target: { tabId: pageDocument.tabId, documentIds: [pageDocument.documentId] },
     func: () => {
@@ -312,7 +319,7 @@ async function findDetailCloseTarget(pageDocument: SearchDocument): Promise<Targ
     Number.isFinite((value as { y?: unknown }).y) ? value as Target : null;
 }
 
-async function readDocumentContinuity(pageDocument: SearchDocument): Promise<DocumentContinuity> {
+async function readDocumentContinuity(pageDocument: DetailDocument): Promise<DocumentContinuity> {
   const result = await chrome.scripting.executeScript({
     target: { tabId: pageDocument.tabId, documentIds: [pageDocument.documentId] },
     func: () => ({ timeOrigin: performance.timeOrigin })
@@ -325,7 +332,7 @@ async function readDocumentContinuity(pageDocument: SearchDocument): Promise<Doc
 async function readCloseContinuity(tabId: number): Promise<{
   documentId: string;
   timeOrigin: number;
-  surface: 'search' | 'other';
+  surface: 'search' | 'profile' | 'other';
   overlayVisible: boolean;
   renderedCardCount: number;
 }> {
@@ -345,7 +352,9 @@ async function readCloseContinuity(tabId: number): Promise<{
       )).filter(visible);
       return {
         timeOrigin: performance.timeOrigin,
-        surface: /^\/search_result(?:_ai)?\/?$/.test(location.pathname) ? 'search' as const : 'other' as const,
+        surface: /^\/search_result(?:_ai)?\/?$/.test(location.pathname) ? 'search' as const
+          : /^\/user\/profile\/[A-Za-z0-9_-]+\/?$/.test(location.pathname) ? 'profile' as const
+          : 'other' as const,
         overlayVisible: roots.some((element) => (element.textContent ?? '').trim().length > 0),
         renderedCardCount: Array.from(document.querySelectorAll('section.note-item')).filter(visible).length
       };
@@ -356,7 +365,7 @@ async function readCloseContinuity(tabId: number): Promise<{
   return { documentId: frame.documentId, ...value };
 }
 
-async function findUniqueSearchDocument(): Promise<SearchDocument> {
+async function findUniqueSearchDocument(): Promise<DetailDocument> {
   const tabs = await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/search_result*'] });
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
     !tab.incognito && tab.status === 'complete' &&
@@ -371,16 +380,32 @@ async function findUniqueSearchDocument(): Promise<SearchDocument> {
   return { tabId: tab.id!, windowId: tab.windowId!, documentId: frame.documentId };
 }
 
-async function foreground(pageDocument: SearchDocument): Promise<void> {
+async function findUniqueProfileDocument(): Promise<DetailDocument> {
+  const tabs = await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/user/profile/*'] });
+  const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
+    !tab.incognito && tab.status === 'complete' &&
+    xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '') === 'public_profile');
+  if (eligible.length === 0) throw new Error('xiaohongshu_public_profile_tab_required');
+  if (eligible.length !== 1) throw new Error('xiaohongshu_public_profile_tab_ambiguous');
+  const tab = eligible[0]!;
+  const frame = await chrome.webNavigation.getFrame({ tabId: tab.id!, frameId: 0 }).catch(() => null);
+  if (!frame?.documentId || xiaohongshuCurrentPageNetworkPublicSurface(frame.url) !== 'public_profile') {
+    throw new Error('xiaohongshu_public_profile_document_unavailable');
+  }
+  return { tabId: tab.id!, windowId: tab.windowId!, documentId: frame.documentId };
+}
+
+async function foreground(pageDocument: DetailDocument): Promise<void> {
   await chrome.windows.update(pageDocument.windowId, { focused: true }).catch(() => undefined);
   await chrome.tabs.update(pageDocument.tabId, { active: true });
   await delay(350);
 }
 
-async function requireSameDocument(pageDocument: SearchDocument): Promise<void> {
+async function requireSameDocument(pageDocument: DetailDocument, profileDocument: boolean): Promise<void> {
   const frame = await chrome.webNavigation.getFrame({ tabId: pageDocument.tabId, frameId: 0 }).catch(() => null);
+  const surface = xiaohongshuCurrentPageNetworkPublicSurface(frame?.url ?? '');
   if (!frame || frame.documentId !== pageDocument.documentId ||
-    !isSearchContinuitySurface(xiaohongshuCurrentPageNetworkPublicSurface(frame.url))) {
+    (profileDocument ? surface !== 'public_profile' : !isSearchContinuitySurface(surface))) {
     throw new Error('xiaohongshu_public_search_document_changed');
   }
 }
@@ -391,7 +416,7 @@ function isSearchContinuitySurface(
   return surface === 'search' || surface === 'public_note_detail';
 }
 
-async function readRisk(pageDocument: SearchDocument): Promise<ReturnType<typeof classifyXiaohongshuCurrentPageRisk>> {
+async function readRisk(pageDocument: DetailDocument): Promise<ReturnType<typeof classifyXiaohongshuCurrentPageRisk>> {
   const results = await chrome.scripting.executeScript({
     target: { tabId: pageDocument.tabId, documentIds: [pageDocument.documentId] },
     func: () => ({
@@ -412,7 +437,7 @@ function assertRisk(risk: ReturnType<typeof classifyXiaohongshuCurrentPageRisk>)
   if (risk.loginRequired) throw new Error('xiaohongshu_login_required');
 }
 
-async function findRankedDetailTarget(pageDocument: SearchDocument, rank: number): Promise<Target> {
+async function findRankedDetailTarget(pageDocument: DetailDocument, rank: number): Promise<Target> {
   const results = await chrome.scripting.executeScript({
     target: { tabId: pageDocument.tabId, documentIds: [pageDocument.documentId] },
     args: [rank],
@@ -481,7 +506,7 @@ async function dispatchClick(debuggee: chrome.debugger.Debuggee, target: Target)
   });
 }
 
-async function waitForDomProjection(pageDocument: SearchDocument, timeoutMs: number): Promise<DomProjection> {
+async function waitForDomProjection(pageDocument: DetailDocument, timeoutMs: number): Promise<DomProjection> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const results = await chrome.scripting.executeScript({
@@ -548,6 +573,8 @@ function terminalReason(errorCode: string | null): XiaohongshuNotePublicDetailTe
   switch (errorCode) {
     case 'xiaohongshu_public_search_tab_required': return 'existing_public_search_tab_required';
     case 'xiaohongshu_public_search_tab_ambiguous': return 'existing_public_search_tab_ambiguous';
+    case 'xiaohongshu_public_profile_tab_required': return 'existing_public_profile_tab_required';
+    case 'xiaohongshu_public_profile_tab_ambiguous': return 'existing_public_profile_tab_ambiguous';
     case 'xiaohongshu_search_result_rank_unavailable': return 'search_result_rank_unavailable';
     case 'xiaohongshu_note_detail_target_new_tab': return 'note_detail_target_new_tab';
     case 'xiaohongshu_public_search_document_unavailable':

@@ -253,7 +253,7 @@ async function interruptedResult(active: ActiveExtensionWork): Promise<Extension
       browserBindingId: active.item.browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.note.public_detail.v1',
-      executionTarget: 'existing_public_search_tab',
+      executionTarget: active.item.executionTarget,
       state: 'stopped',
       errorCode: 'xiaohongshu_extension_worker_interrupted',
       terminalReason: 'extension_worker_interrupted',
