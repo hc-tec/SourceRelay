@@ -30,4 +30,27 @@ describe('Xiaohongshu validation-page adoption contract', () => {
       leaseDurationMs: XIAOHONGSHU_VALIDATION_PAGE_ADOPTION_MAX_LEASE_MS + 1
     })).toBe(false);
   });
+
+  test('admits only a Host-issued source lease for natural profile handoff', () => {
+    expect(isXiaohongshuValidationPageAdoptionRequest({
+      ...request,
+      handoffFromPageAlias: 'page-1',
+      handoffFromPageLeaseId: '22222222-2222-4222-8222-222222222222'
+    })).toBe(true);
+    expect(isXiaohongshuValidationPageAdoptionRequest({
+      ...request,
+      handoffFromPageAlias: 'page-1'
+    })).toBe(false);
+    expect(isXiaohongshuValidationPageAdoptionRequest({
+      ...request,
+      handoffFromPageAlias: 'page-1',
+      handoffFromPageLeaseId: 'not-a-lease'
+    })).toBe(false);
+    expect(isXiaohongshuValidationPageAdoptionRequest({
+      ...request,
+      handoffFromPageAlias: 'page-1',
+      handoffFromPageLeaseId: '22222222-2222-4222-8222-222222222222',
+      tabId: 7
+    })).toBe(false);
+  });
 });

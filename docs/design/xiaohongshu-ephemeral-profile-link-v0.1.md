@@ -65,7 +65,7 @@ Remove-Item Env:COLLECTOR_XIAOHONGSHU_PROFILE_URL
 
 验证脚本不会把该环境变量写入运行摘要；没有提供时仍执行原有的“自然 profile tab 前置条件”侦察。
 
-## 短链的自然发现入口（设计待 live canary）
+## 短链的自然发现入口（已完成 live canary）
 
 短时主页链接不一定由上层人工复制提供。小红书主页或站内搜索结果中的公开笔记卡通常同时显示作者头像；产品可以把“作者头像 → 公开主页”作为一个独立、受限的自然入口：
 
@@ -90,7 +90,38 @@ Remove-Item Env:COLLECTOR_XIAOHONGSHU_PROFILE_URL
 - 主页 work 仍使用固定一次性 TTL，不因等待 token 或滚动而续租；
 - 没有在 deadline 内得到规范主页和 token 时，终止为 `profile_url_token_unavailable`，不得自动再次点击头像。
 
-该入口需要独立 live canary，不能继承“搜索卡作者入口会打开新 tab”的旧结论，也不能把人工看到 URL 当作生产扩展已经通过。canary 至少要记录：头像的真实交互父节点、点击前后的 tab 数、目标 document 是否变化、URL token 出现时间、主页视觉/DOM 后置条件，以及动作后 Network/XHR 是否有可确认的公开主页投影。
+该入口已经完成独立的真实 Gateway → Extension → artifact canary，不能把它与旧的人工 recon 或搜索能力混为一谈。2026-07-30（北京时间）最近一次去敏结果如下：
+
+```yaml
+runId: 19589c76-0e61-405c-8f0d-f65b4cca85f2
+sourceSurface: explore
+validationBrowser: xiaohongshu_validation
+extensionInteractionLoaded: true
+existingPlatformRunnerUsed: false
+validationBaselineNavigations: 1
+productPlatformNavigations: 0
+profileLinkDiscovery:
+  attempted: true
+  attemptCount: 1
+  targetMode: new_tab
+  tokenObserved: true
+scrollCount: 0
+profileNoteItemCount: 2
+networkMatchedPayloadCount: 0
+networkBodyBytesRead: 0
+rawPayloadStored: false
+responseUrlsStored: false
+browserHostHandoff: adopted_existing_page
+finalPageState: retained_for_review
+unmanagedPagesAfterCleanup: 1
+automaticPlatformRetries: 0
+```
+
+事实结论：作者头像的可信浏览器级点击一次后，平台自然打开了新 tab；扩展只在内存中确认规范主页 URL 出现 `xsec_token`，随后主页目录 work 成功返回公开笔记卡片。该 canary 没有读取到可确认的主页 Network 正文（`0/0`），因此结果仍标记为 Network 未证明、DOM/页面投影成功，不能把它宣传成 Network-first 已通过。
+
+生命周期结论：自然新 tab 最初会被 Browser Host 视为 unmanaged。验证器随后只使用 Host 已签发的来源 page alias/lease 做一次内部 handoff，关闭测试创建的来源页，把目标主页变为唯一 managed retained page；handoff 不接受 URL、tabId、selector，也不创建第二个 tab。最终 unmanaged 数回到启动基线的 `1`（仅保留验证浏览器自身的空白页），没有遗留额外 profile tab。
+
+验证器此前出现过一次 `managed_page_extension_binding_missing`，根因是交接目标页没有稳定的扩展 tab 映射，而视觉证据接口错误地强制要求 extension binding。现已改为：视觉证据仍要求精确 page lease/run/record version，但不把扩展 tab binding 当作截图前置条件；交接后先释放为 `retained_for_review`，再走 retained-page 只读截图。该修复不扩大上层 API 的浏览器控制能力。
 
 ## 明确留待后续：媒体物化
 

@@ -23,6 +23,10 @@ const validateReplyRecon = process.argv.includes('--reply-recon');
 const validatePublicReplies = process.argv.includes('--replies');
 const validateAccountNotes = process.argv.includes('--account-notes');
 const suppliedProfileUrl = process.env.COLLECTOR_XIAOHONGSHU_PROFILE_URL?.trim() || null;
+const discoverAccountCanary = validateAccountNotes && process.argv.includes('--account-notes-discover');
+if (discoverAccountCanary && suppliedProfileUrl) {
+  throw new Error('xiaohongshu_discovery_canary_does_not_accept_profile_url');
+}
 // A supplied short-lived profile URL is its own live canary.  Do not spend
 // platform actions on the unrelated search/detail chain before exercising the
 // single-navigation account capability; that would both waste a real run and
@@ -175,22 +179,28 @@ try {
   let commentRecon = null;
   let replyRecon = null;
   let profileEntryRecon = null;
-  if (directAccountCanary) {
+  if (directAccountCanary || discoverAccountCanary) {
     const accountMaximumScrolls = 20;
+    const accountExecutionTarget = discoverAccountCanary
+      ? 'discover_public_profile_from_note' : 'ephemeral_public_profile_url';
+    const accountInput = discoverAccountCanary
+      ? { maximumScrolls: accountMaximumScrolls }
+      : { maximumScrolls: accountMaximumScrolls, profileUrl: suppliedProfileUrl };
     const accountDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
       method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
         browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
         capability: 'xiaohongshu.account.public_notes.v1',
-        executionTarget: 'ephemeral_public_profile_url',
-        input: { maximumScrolls: accountMaximumScrolls, profileUrl: suppliedProfileUrl } })
+        executionTarget: accountExecutionTarget,
+        input: accountInput })
     }, 201);
     const accountOperationId = accountDispatch.result?.operationId;
     if (!uuid(accountOperationId)) throw new Error('xiaohongshu_account_notes_e2e_operation_missing');
     record('account_notes_operation_dispatched', {
       operationId: accountOperationId,
       maximumScrolls: accountMaximumScrolls,
-      executionTarget: 'ephemeral_public_profile_url',
-      validationMode: 'direct_profile_link_only'
+      executionTarget: accountExecutionTarget,
+      validationMode: discoverAccountCanary
+        ? 'natural_author_avatar_profile_discovery' : 'direct_profile_link_only'
     });
     const accountOperation = await waitForOperation(gatewayOrigin, token, accountOperationId, 150_000);
     const accountCompleted = accountOperation.state === 'completed' && accountOperation.terminalReason === 'profile_notes_ready';
@@ -207,7 +217,8 @@ try {
       200
     );
     assertAccountNotesArtifact(
-      accountArtifactPayload.artifact, accountOperationId, true, accountMaximumScrolls
+      accountArtifactPayload.artifact, accountOperationId, !discoverAccountCanary,
+      accountMaximumScrolls, discoverAccountCanary
     );
     reportedOperation = accountOperation;
     reportedArtifact = accountArtifactPayload.artifact;
@@ -217,10 +228,38 @@ try {
       networkBodyBytesRead: reportedArtifact.result.projection.bodyBytesRead,
       semanticActionCount: reportedArtifact.result.semanticAction.attemptCount,
       completedScrolls: reportedArtifact.result.scroll.completedCount,
+      profileLinkDiscovery: reportedArtifact.result.profileLinkDiscovery ? {
+        attempted: reportedArtifact.result.profileLinkDiscovery.attempted,
+        attemptCount: reportedArtifact.result.profileLinkDiscovery.attemptCount,
+        targetMode: reportedArtifact.result.profileLinkDiscovery.targetMode,
+        tokenObserved: reportedArtifact.result.profileLinkDiscovery.tokenObserved
+      } : null,
       rawPayloadStored: false,
       responseUrlsStored: false,
-      validationMode: 'direct_profile_link_only'
+        validationMode: discoverAccountCanary
+        ? 'natural_author_avatar_profile_discovery' : 'direct_profile_link_only'
     });
+    if (discoverAccountCanary) {
+      const handoff = await client.command({
+        type: 'adopt_xiaohongshu_validation_public_page',
+        request: {
+          schemaVersion: 1,
+          profileId,
+          taskId: 'xiaohongshu-gateway-e2e-natural-profile-handoff',
+          runId,
+          leaseDurationMs: validationLeaseDurationMs,
+          handoffFromPageAlias: acquired.page.pageAlias,
+          handoffFromPageLeaseId: acquired.lease.pageLeaseId
+        }
+      }, { timeoutMs: 30_000 });
+      acquired = handoff;
+      record('natural_profile_page_handoff', {
+        selection: handoff.selection,
+        pageRole: handoff.page.pageRole,
+        state: handoff.page.state,
+        documentGeneration: handoff.page.documentGeneration
+      });
+    }
   } else {
   const dispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
     method: 'POST',
@@ -545,12 +584,24 @@ try {
   }
 
   const after = await leasedPage();
-  const afterVisual = await capture(after, runId);
+  let afterVisual;
+  let retained;
+  if (discoverAccountCanary) {
+    retained = await release('retained_for_review');
+    if (retained.state !== 'retained_for_review') throw new Error('xiaohongshu_gateway_e2e_page_not_retained');
+    const retainedPage = profileFrom(await snapshot()).pages.find((candidate) =>
+      candidate.pageAlias === acquired.page.pageAlias
+    );
+    if (!retainedPage) throw new Error('xiaohongshu_gateway_e2e_retained_page_missing');
+    afterVisual = await captureRetained(retainedPage);
+  } else {
+    afterVisual = await capture(after, runId);
+    retained = await release('retained_for_review');
+    if (retained.state !== 'retained_for_review') throw new Error('xiaohongshu_gateway_e2e_page_not_retained');
+  }
   record('visual_postcondition', { visualEvidenceId: afterVisual.evidenceId });
   const persistedQueryCopies = await countTextInGatewayMetadataFiles(stateDirectory, query);
   if (persistedQueryCopies !== 0) throw new Error('xiaohongshu_gateway_e2e_query_persisted');
-  const retained = await release('retained_for_review');
-  if (retained.state !== 'retained_for_review') throw new Error('xiaohongshu_gateway_e2e_page_not_retained');
 
   writeJson({
     ok: true,
@@ -857,7 +908,7 @@ function assertNoteRepliesArtifact(artifact, operationId, expectedThreads = 1) {
   }
 }
 
-function assertAccountNotesArtifact(artifact, operationId, navigated, maximumScrolls) {
+function assertAccountNotesArtifact(artifact, operationId, navigated, maximumScrolls, discovered = false) {
   const actionCount = artifact?.result?.semanticAction?.attemptCount;
   const completed = artifact?.result?.state === 'completed' && artifact?.result?.terminalReason === 'profile_notes_ready';
   const budgetPartial = artifact?.result?.state === 'stopped' &&
@@ -875,6 +926,11 @@ function assertAccountNotesArtifact(artifact, operationId, navigated, maximumScr
     artifact.provenance?.rawPayloadStored !== false || artifact.provenance?.responseUrlsStored !== false ||
     artifact.provenance?.debuggerDetached !== true) {
     throw new Error('xiaohongshu_account_notes_e2e_artifact_invalid');
+  }
+  const discovery = artifact.result?.profileLinkDiscovery;
+  if (discovered && (!discovery || discovery.attempted !== true || discovery.attemptCount !== 1 ||
+    discovery.tokenObserved !== true || !['same_tab', 'new_tab'].includes(discovery.targetMode))) {
+    throw new Error('xiaohongshu_account_notes_e2e_discovery_evidence_invalid');
   }
   if (/"(?:url|responseUrl|route|query|header|cookie|token|rawPayload|tabId|documentId|profileId|selector|script)"\s*:/i
     .test(JSON.stringify(artifact))) {
@@ -945,6 +1001,17 @@ async function capture(page, runId) {
       pageLeaseId: acquired.lease.pageLeaseId,
       expectedRecordVersion: page.recordVersion,
       runId
+    }
+  });
+}
+
+async function captureRetained(page) {
+  return await client.command({
+    type: 'capture_retained_page_visual_evidence',
+    request: {
+      profileId,
+      pageAlias: page.pageAlias,
+      expectedRecordVersion: page.recordVersion
     }
   });
 }

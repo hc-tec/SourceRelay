@@ -74,6 +74,18 @@ export interface LeasedExtensionPageContext {
   routeGeneration: number;
 }
 
+function isNaturalXiaohongshuProfilePage(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname === 'www.xiaohongshu.com' &&
+      !url.port && !url.username && !url.password && !url.hash &&
+      /^\/user\/profile\/[A-Za-z0-9_-]+\/?$/.test(url.pathname) &&
+      Boolean(url.searchParams.get('xsec_token'));
+  } catch {
+    return false;
+  }
+}
+
 export class PageLedger {
   readonly #context: BrowserContext;
   readonly #profileId: string;
@@ -216,6 +228,9 @@ export class PageLedger {
     if (request.profileId !== this.#profileId) {
       throw hostError({ code: 'profile_id_mismatch', category: 'protocol', scope: 'profile' });
     }
+    if (request.handoffFromPageAlias && request.handoffFromPageLeaseId) {
+      return await this.#handoffXiaohongshuNaturalProfilePage(request, controllerGeneration);
+    }
     const managedRecords = [...this.#records.values()].filter((record) => record.state !== 'closed');
     const managedPages = new Set(managedRecords.map((record) => record.page));
     if (managedRecords.length === 1) {
@@ -332,6 +347,105 @@ export class PageLedger {
     this.#targetAliases.set(targetId, pageAlias);
     attachManagedPageEvents(this.#profileId, record, this.#onEvent);
     this.#emit('page_adopted', record, 'session_restored', null);
+    return { page: recordSummary(record), lease, selection: 'adopted_existing_page' };
+  }
+
+  /**
+   * Validation-only lifecycle handoff for a platform-created profile tab.
+   * The source alias/lease must have been issued by this Host, and the target
+   * is selected only from the single unmanaged public profile page carrying a
+   * live xsec_token. The caller never supplies a URL, tab ID or selector.
+   */
+  async #handoffXiaohongshuNaturalProfilePage(
+    request: XiaohongshuValidationPageAdoptionRequest,
+    controllerGeneration: string
+  ): Promise<AcquirePageResult> {
+    const source = this.#leasedRecord(
+      request.profileId,
+      request.handoffFromPageAlias!,
+      request.handoffFromPageLeaseId!
+    );
+    if (source.ownershipSource !== 'direct_created' || source.platform !== 'xiaohongshu' ||
+      (source.pageRole !== 'public_search' && source.pageRole !== 'public_profile')) {
+      throw hostError({
+        code: 'xiaohongshu_validation_profile_handoff_source_ineligible',
+        category: 'validation',
+        scope: 'page',
+        retryClass: 'never'
+      });
+    }
+    const managedPages = new Set([...this.#records.values()]
+      .filter((record) => record.state !== 'closed')
+      .map((record) => record.page));
+    const candidates = this.#context.pages().filter((page) => !page.isClosed() &&
+      !managedPages.has(page) && isNaturalXiaohongshuProfilePage(page.url()));
+    if (candidates.length !== 1) {
+      throw hostError({
+        code: candidates.length === 0
+          ? 'xiaohongshu_validation_profile_handoff_target_missing'
+          : 'xiaohongshu_validation_profile_handoff_target_ambiguous',
+        category: 'validation',
+        scope: 'page',
+        retryClass: 'never',
+        safeDetails: { candidateCount: candidates.length }
+      });
+    }
+    const target = candidates[0]!;
+    const targetId = await targetIdForPage(target);
+    // The source page was created by this validation Host. Close only after
+    // the target postcondition is proven; the naturally opened target becomes
+    // the single managed page retained for review.
+    await source.page.close().catch(() => {
+      throw hostError({
+        code: 'xiaohongshu_validation_profile_handoff_source_close_failed',
+        category: 'validation',
+        scope: 'page',
+        retryClass: 'never',
+        pageDisposition: 'retained_for_review'
+      });
+    });
+    const now = new Date();
+    const pageAlias = `page-${this.#nextPageSequence++}`;
+    const lease = createLease({
+      controllerGeneration,
+      profileId: this.#profileId,
+      taskId: request.taskId,
+      runId: request.runId,
+      stageLeaseId: null,
+      platform: 'xiaohongshu',
+      pageRole: 'public_profile',
+      leaseDurationMs: request.leaseDurationMs,
+      now
+    });
+    const record: ManagedPageRecord = {
+      schemaVersion: 1,
+      recordVersion: 1,
+      pageAlias,
+      targetId,
+      targetIdentityDigest: digestUrl(targetId),
+      page: target,
+      extensionTabId: null,
+      ownershipSource: 'action_created',
+      platform: 'xiaohongshu',
+      pageRole: 'public_profile',
+      state: 'leased',
+      expectedIdentity: { platform: 'xiaohongshu', pageRole: 'public_profile', targetUrlDigest: digestUrl(target.url()) },
+      documentGeneration: 1,
+      routeGeneration: 0,
+      extensionGeneration: this.#extensionGeneration,
+      maxIdleTrustMs: DEFAULT_MAX_IDLE_TRUST_MS,
+      activeLease: lease,
+      attemptedActionIds: new Set(),
+      createdAt: now.toISOString(),
+      lastUsedAt: now.toISOString(),
+      lastReconciledAt: now.toISOString(),
+      stateChangedAt: now.toISOString(),
+      quarantineReason: null
+    };
+    this.#records.set(pageAlias, record);
+    this.#targetAliases.set(targetId, pageAlias);
+    attachManagedPageEvents(this.#profileId, record, this.#onEvent);
+    this.#emit('page_handoff', record, 'natural_profile_target', null);
     return { page: recordSummary(record), lease, selection: 'adopted_existing_page' };
   }
 
@@ -557,13 +671,16 @@ export class PageLedger {
     request: CapturePageVisualEvidenceRequest,
     directory: string
   ): Promise<PageVisualEvidence> {
-    const context = this.extensionCommandContext(request);
-    const record = this.#record(request.profileId, request.pageAlias);
+    // Visual evidence is a Browser Host read on an already-leased page. It
+    // does not need an extension-tab binding: a platform-created natural tab
+    // may be handed off before the extension can expose a stable tab mapping.
+    // The page lease, run and record version remain the complete boundary.
+    const record = this.#leasedRunRecord(request);
     return await captureManagedPageVisualEvidence({
       page: record.page,
       pageAlias: record.pageAlias,
-      documentGeneration: context.documentGeneration,
-      routeGeneration: context.routeGeneration,
+      documentGeneration: record.documentGeneration,
+      routeGeneration: record.routeGeneration,
       directory
     });
   }
