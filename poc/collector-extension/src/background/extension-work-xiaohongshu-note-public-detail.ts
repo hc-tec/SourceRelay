@@ -441,11 +441,16 @@ async function findRankedDetailTarget(pageDocument: SearchDocument, rank: number
       const anchor = hit?.closest('a[href]');
       const noteAnchor = Array.from(section.querySelectorAll('a[href]')).find((element) => {
         if (!(element instanceof HTMLAnchorElement)) return false;
-        try { return /^\/explore\/[A-Za-z0-9_-]+\/?$/.test(new URL(element.href).pathname); } catch { return false; }
+        try {
+          return /^\/(?:explore|discovery\/item)\/[A-Za-z0-9_-]+\/?$/.test(new URL(element.href).pathname);
+        } catch { return false; }
       }) as HTMLAnchorElement | undefined;
       let noteId = '';
       if (noteAnchor) {
-        try { noteId = new URL(noteAnchor.href).pathname.match(/^\/explore\/([A-Za-z0-9_-]+)\/?$/)?.[1] ?? ''; }
+        try {
+          noteId = new URL(noteAnchor.href).pathname
+            .match(/^\/(?:explore|discovery\/item)\/([A-Za-z0-9_-]+)\/?$/)?.[1] ?? '';
+        }
         catch { noteId = ''; }
       }
       if (!hit || !section.contains(hit)) return null;

@@ -76,9 +76,20 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
     projections = projectArchivedReplyThreads(networkBefore, item.input.maximumThreads);
     completedCount = projections.length as 0 | 1 | 2 | 3;
     const expandedParentTexts = new Set(projections.map((thread) => normaliseParentText(thread.parentComment.publicText)));
+    const visibleThreads = await readVisibleReplyThreads(
+      page,
+      [...expandedParentTexts],
+      item.input.maximumThreads - projections.length as 1 | 2 | 3
+    );
+    for (const thread of visibleThreads) {
+      projections.push(projectVisibleReplyThread(thread, networkBefore));
+      expandedParentTexts.add(normaliseParentText(thread.parent.publicText));
+    }
+    completedCount = projections.length as 0 | 1 | 2 | 3;
     const debuggee: chrome.debugger.Debuggee = options.debuggee ?? { tabId: page.tabId };
-    for (let ordinal = (projections.length + 1) as 1 | 2 | 3;
-      ordinal <= item.input.maximumThreads; ordinal = (ordinal + 1) as 1 | 2 | 3) {
+    for (let threadOrdinal = (projections.length + 1) as 1 | 2 | 3;
+      threadOrdinal <= item.input.maximumThreads;
+      threadOrdinal = (threadOrdinal + 1) as 1 | 2 | 3) {
       const target = await findReplyExpansionTarget(page, [...expandedParentTexts]);
       if (!target) {
         if (projections.length === 0) throw new Error('xiaohongshu_reply_thread_target_unavailable');
@@ -93,8 +104,9 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
       }
 
       const existingChildTabIds = await readChildTabIds(page.tabId);
-      await recordXiaohongshuCommentRepliesClickIntent(item.workId, ordinal);
-      attemptedCount = ordinal;
+      const actionOrdinal = (attemptedCount + 1) as 1 | 2 | 3;
+      await recordXiaohongshuCommentRepliesClickIntent(item.workId, actionOrdinal);
+      attemptedCount = actionOrdinal;
       await dispatchTrustedClick(debuggee, target).catch(() => {
         throw new Error('debugger_input_failed');
       });
@@ -113,8 +125,8 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
       const expandedProjection = mergeReplyEvidence(target, domAfter, networkBefore, networkAfter);
       projections.push(expandedProjection);
       expandedParentTexts.add(normaliseParentText(expandedProjection.parentComment.publicText));
-      await completeXiaohongshuCommentRepliesClick(item.workId, ordinal);
-      completedCount = ordinal;
+      await completeXiaohongshuCommentRepliesClick(item.workId, actionOrdinal);
+      completedCount = threadOrdinal;
     }
     if (projections.length === 0) {
       throw new Error('xiaohongshu_comment_replies_postcondition_unmet');
@@ -199,6 +211,140 @@ function projectArchivedReplyThreads(
 
 function normaliseParentText(value: string): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
+function projectVisibleReplyThread(
+  thread: DomReplyThread,
+  network: ReplyNetworkProjection
+): XiaohongshuPublicReplyThreadProjection {
+  return {
+    schemaVersion: 1,
+    captureMode: 'dom_fallback',
+    network: {
+      matchedPayloadCount: network.matchedPayloadCount,
+      bodyBytesRead: network.bodyBytesRead,
+      cursorObserved: network.cursorObserved,
+      actionTriggeredResponseCount: 0
+    },
+    expandedLabelText: 'already_expanded_dom',
+    parentComment: { ...thread.parent, rank: 1 },
+    replies: thread.replies.slice(0, 40).map((comment, index) => ({ ...comment, rank: index + 1 })),
+    rawPayloadStored: false,
+    responseUrlsStored: false
+  };
+}
+
+async function readVisibleReplyThreads(
+  page: BoundPage,
+  excludedParentTexts: string[],
+  maximumThreads: 1 | 2 | 3
+): Promise<DomReplyThread[]> {
+  if (maximumThreads < 1) return [];
+  const result = await chrome.scripting.executeScript({
+    target: { tabId: page.tabId, documentIds: [page.documentId] },
+    args: [excludedParentTexts, maximumThreads],
+    func: (excludedTexts: string[], maximum: number) => {
+      const visible = (element: Element): boolean => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+          style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+      };
+      const clean = (value: string, limit: number): string => value
+        .replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, limit);
+      const hashText = (value: string): string => {
+        let hash = 2_166_136_261;
+        for (const character of value) {
+          hash ^= character.charCodeAt(0);
+          hash = Math.imul(hash, 16_777_619);
+        }
+        return (hash >>> 0).toString(16).padStart(8, '0');
+      };
+      const parentAlreadyCollected = (text: string): boolean => {
+        const normalised = clean(text, 160);
+        return excludedTexts.some((excluded) => typeof excluded === 'string' && excluded.length > 0 &&
+          (normalised.includes(excluded) || excluded.includes(normalised.slice(0, 40))));
+      };
+      const project = (anchor: HTMLElement, index: number, root: HTMLElement) => {
+        let node = anchor.parentElement;
+        while (node && node !== root) {
+          const rect = node.getBoundingClientRect();
+          const text = clean(node.textContent ?? '', 2_000);
+          const author = clean(anchor.innerText ?? '', 200);
+          if (rect.width >= 180 && rect.height >= 30 && text.length > author.length + 2) {
+            return {
+              rank: index + 1,
+              commentId: `dom-${hashText(text)}`,
+              publicText: text,
+              authorNickname: author,
+              likedCountText: '',
+              createdAtText: '',
+              locationText: '',
+              source: 'dom' as const
+            };
+          }
+          node = node.parentElement;
+        }
+        return null;
+      };
+      const candidateRoots = Array.from(document.querySelectorAll('a[href*="/user/profile/"]'))
+        .filter(visible)
+        .map((anchor) => {
+          let root = anchor.parentElement;
+          for (let depth = 0; root && depth < 6; depth += 1, root = root.parentElement) {
+            const rect = root.getBoundingClientRect();
+            const style = getComputedStyle(root);
+            const anchors = root.querySelectorAll('a[href*="/user/profile/"]');
+            if (rect.width >= 220 && rect.width <= window.innerWidth * 0.92 && rect.height >= 38 &&
+              rect.height <= 700 && anchors.length >= 2 && anchors.length <= 40 &&
+              !(style.overflowY !== 'visible' && root.scrollHeight > root.clientHeight + 80)) return root;
+          }
+          return null;
+        })
+        .filter((value): value is HTMLElement => value !== null)
+        .filter((root, index, all) => all.indexOf(root) === index &&
+          !all.some((other) => other !== root && root.contains(other)))
+        .sort((left, right) => left.getBoundingClientRect().top - right.getBoundingClientRect().top ||
+          left.getBoundingClientRect().height - right.getBoundingClientRect().height);
+      type ProjectedComment = Exclude<ReturnType<typeof project>, null>;
+      const threads: Array<{ parent: ProjectedComment; replies: ProjectedComment[] }> = [];
+      for (const root of candidateRoots) {
+        const anchors = Array.from(root.querySelectorAll('a[href*="/user/profile/"]'))
+          .filter(visible) as HTMLElement[];
+        const comments = anchors.map((anchor, index) => project(anchor, index, root))
+          .filter((value): value is NonNullable<ReturnType<typeof project>> => value !== null);
+        if (comments.length < 2 || parentAlreadyCollected(comments[0]!.publicText)) continue;
+        const unique = comments.filter((comment, index, all) =>
+          all.findIndex((candidate) => candidate.commentId === comment.commentId) === index);
+        if (unique.length < 2) continue;
+        threads.push({ parent: unique[0]!, replies: unique.slice(1, 41) });
+        if (threads.length >= maximum) break;
+      }
+      return threads;
+    }
+  });
+  const value: unknown = result[0]?.result;
+  if (!Array.isArray(value)) return [];
+  return value.filter(isDomReplyThread).slice(0, maximumThreads);
+}
+
+function isDomReplyThread(value: unknown): value is DomReplyThread {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    'parent' in value && isPublicReplyProjection(value.parent) &&
+    'replies' in value && Array.isArray(value.replies) && value.replies.length > 0 &&
+    value.replies.every(isPublicReplyProjection);
+}
+
+function isPublicReplyProjection(value: unknown): value is XiaohongshuPublicReplyProjection {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    typeof (value as { rank?: unknown }).rank === 'number' &&
+    typeof (value as { commentId?: unknown }).commentId === 'string' &&
+    typeof (value as { publicText?: unknown }).publicText === 'string' &&
+    typeof (value as { authorNickname?: unknown }).authorNickname === 'string' &&
+    typeof (value as { likedCountText?: unknown }).likedCountText === 'string' &&
+    typeof (value as { createdAtText?: unknown }).createdAtText === 'string' &&
+    typeof (value as { locationText?: unknown }).locationText === 'string' &&
+    ((value as { source?: unknown }).source === 'dom' || (value as { source?: unknown }).source === 'network');
 }
 
 function projectArchivedComment(

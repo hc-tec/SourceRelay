@@ -8,6 +8,10 @@ export async function recordXiaohongshuCommentRepliesClickIntent(workId:string,o
 export async function completeXiaohongshuCommentRepliesClick(workId:string,ordinal:1|2|3=1){const entries=await load();const entry=entries.find((value)=>value.workId===workId);
   if(!entry||ordinal>entry.attemptCount||ordinal!==entry.completedCount+1)throw new Error('xiaohongshu_comment_replies_ledger_missing');entry.completedCount=ordinal;entry.updatedAt=new Date().toISOString();await save(entries);}
 export async function xiaohongshuCommentRepliesClickAttempted(workId:string){return ((await load()).find((value)=>value.workId===workId)?.attemptCount ?? 0)>0;}
+export async function xiaohongshuCommentRepliesClickCounts(workId:string):Promise<{attemptCount:0|1|2|3;completedCount:0|1|2|3}>{
+  const entry=(await load()).find((value)=>value.workId===workId);
+  return {attemptCount:entry?.attemptCount??0,completedCount:entry?.completedCount??0};
+}
 async function load():Promise<Entry[]>{const value=(await chrome.storage.local.get(KEY))[KEY];return Array.isArray(value)?value.filter(valid).slice(-MAX):[];}
 async function save(entries:Entry[]){await chrome.storage.local.set({[KEY]:entries.slice(-MAX)});}
 function valid(value:unknown):value is Entry{if(!value||typeof value!=='object'||Array.isArray(value))return false;const e=value as Partial<Entry>;

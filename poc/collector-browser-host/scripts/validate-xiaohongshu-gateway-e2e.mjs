@@ -760,7 +760,7 @@ function assertNoteRepliesArtifact(artifact, operationId, expectedThreads = 1) {
     artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
     !Number.isInteger(actionCount) || actionCount < 0 || actionCount > expectedThreads ||
     artifact.result.semanticAction.attempted !== (actionCount > 0) ||
-    (actionCount === 0 && captureMode !== 'network_projection') ||
+    (actionCount === 0 && !['network_projection', 'dom_fallback', 'hybrid'].includes(captureMode)) ||
     artifact.result?.thread?.requestedCount !== expectedThreads ||
     artifact.result.thread.completedCount < 1 || artifact.result.thread.completedCount > expectedThreads ||
     artifact.result?.page?.publicSurface !== 'note_detail_overlay' ||
