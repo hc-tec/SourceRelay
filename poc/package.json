@@ -35,6 +35,7 @@
     "validate:xiaohongshu-gateway-e2e": "npm run validate:xiaohongshu-gateway-e2e --workspace @intelligence/collector-browser-host --",
     "validate:xiaohongshu-gateway-replies-e2e": "npm run validate:xiaohongshu-gateway-replies-e2e --workspace @intelligence/collector-browser-host --",
     "validate:xiaohongshu-gateway-account-notes-e2e": "npm run validate:xiaohongshu-gateway-account-notes-e2e --workspace @intelligence/collector-browser-host --",
+    "validate:xiaohongshu-gateway-account-profile-tab-e2e": "npm run validate:xiaohongshu-gateway-account-profile-tab-e2e --workspace @intelligence/collector-browser-host",
     "validate:xiaohongshu-gateway-note-detail-e2e": "npm run validate:xiaohongshu-gateway-note-detail-e2e --workspace @intelligence/collector-browser-host --",
     "recon:xiaohongshu-note-comments": "npm run recon:xiaohongshu-note-comments --workspace @intelligence/collector-browser-host",
     "recon:xiaohongshu-public-profile-entry": "npm run recon:xiaohongshu-public-profile-entry --workspace @intelligence/collector-browser-host",

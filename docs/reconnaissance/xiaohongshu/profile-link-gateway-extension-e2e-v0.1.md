@@ -113,4 +113,4 @@ dispatchState: direct_ready
 managedValidationState: gateway_extension_real_e2e_passed
 ```
 
-这只表示短时链接路径的 Gateway→Extension 闭环已经有真实证据。浏览器中自然存在的 `existing_public_profile_tab` 零导航路径仍需要独立 canary；主页 Network/XHR 正文投影也仍需另一条新的短时链接单独研究，不能用本 run 的 DOM fallback 结果替代。
+这只表示短时链接路径的 Gateway→Extension 闭环已经有真实证据。浏览器中自然存在的 `existing_public_profile_tab` 零导航路径随后也已独立通过，详情见 [`profile-tab-gateway-extension-e2e-v0.1.md`](profile-tab-gateway-extension-e2e-v0.1.md)。主页 Network/XHR 正文投影仍需另一条新的短时链接单独研究，不能用本 run 的 DOM fallback 结果替代。

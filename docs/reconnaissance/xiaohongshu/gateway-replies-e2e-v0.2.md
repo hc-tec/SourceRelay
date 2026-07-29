@@ -101,7 +101,7 @@ automaticPlatformRetries: 0
 
 - 四项公开内容能力已在当前构建完成真实 Gateway → Extension → artifact 闭环，可继续作为 direct-ready 能力使用。
 - 本 run 只证明一条公开搜索到同文档详情/评论/回复链，不证明从作者入口自动进入主页；作者入口已被真实侦察证明会打开新 tab，因此仍禁止自动点击。
-- `xiaohongshu.account.public_notes.v1` 的短时主页链接路径已通过独立 live canary，但本 run 不提供该能力证据；浏览器中自然存在的已有主页 tab 零导航路径仍需独立 live canary。短链样本为 DOM fallback（Network matched payload 为 0），不能把它解释为主页 Network/XHR 正文投影已通过。
+- `xiaohongshu.account.public_notes.v1` 的短时主页链接路径和浏览器中自然存在的已有主页 tab 零导航路径都已通过独立 live canary，但本 run 不提供主页能力证据。两个主页样本均为 DOM fallback（Network matched payload 为 0），不能把它们解释为主页 Network/XHR 正文投影已通过。
 - 图片/视频短时 CDN 链接的下载和媒体物化不在本 run 内，继续保持独立后续能力边界。
 
 ## 清理

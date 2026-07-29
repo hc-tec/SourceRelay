@@ -31,7 +31,7 @@ networkResponseCount: 0
 automaticRetries: 0
 ```
 
-本轮没有点击、没有新 tab、没有刷新、没有直接跳转 profile URL。作者入口路径仍然禁止自动点击；已有主页 tab 的零导航路径仍要求浏览器中自然存在唯一公开主页 tab，并尚未完成独立 live canary。短时链接路径已由后续独立 run 完成正式 canary，要求上层应用提供真实仍有效的主页链接。
+本轮没有点击、没有新 tab、没有刷新、没有直接跳转 profile URL。作者入口路径仍然禁止自动点击；后续独立 canary 已证明已有主页 tab 的零导航路径和短时链接路径均可在各自固定边界内完成。短时链接仍要求上层应用提供真实仍有效的主页链接；已有 tab 路径仍要求浏览器中自然存在唯一公开主页 document。
 
 ## Run 摘要
 
@@ -177,7 +177,7 @@ already-existing public profile tab
 - 多候选 tab 不接管后台页；只允许唯一 active 候选；
 - 验证 Gateway 停止超时会强制清理本地子进程和管道，避免测试进程长时间悬挂。
 
-短时链接入口的最终 live 回归已由新的链接完成；原链接和本次新链接都已经实际尝试过导航，后续不得重放。短链 canary 详情见 [`profile-link-gateway-extension-e2e-v0.1.md`](profile-link-gateway-extension-e2e-v0.1.md)。
+短时链接入口的最终 live 回归已由新的链接完成；原链接和本次新链接都已经实际尝试过导航，后续不得重放。已有主页 tab 零导航 canary 也已完成，详情见 [`profile-tab-gateway-extension-e2e-v0.1.md`](profile-tab-gateway-extension-e2e-v0.1.md)。主页 Network/XHR 正文仍未获得 confirmed projection，需要另一条新的短时链接做独立 Network-focused run。
 
 ## 残留
 
