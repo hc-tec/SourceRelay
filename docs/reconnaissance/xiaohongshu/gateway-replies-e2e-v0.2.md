@@ -143,3 +143,30 @@ replyOperationId: 1b36fe09-d8bf-4641-8897-3e6cf3239055
 独立评论 operation 在同一公开样本上也真实完成，采用 `dom_fallback`，收集 6 条评论并执行 2 次有界滚动。独立回复 operation 则按严格契约停止：页面视觉上已有多条带“回复”文本的内容，但没有可见“展开 N 条回复”控件，也没有可证明的稳定 parent id；不得把相邻 DOM 节点强行拼成线程。该失败属于 `xiaohongshu_comment_replies_postcondition_unmet`，不是 lease、闪退、验证码或风控。
 
 最终 Browser Host 状态：`ready`、扩展页 `0`、受管目标页 `1`、`livePlatformRequests: 0`；journal 以 `page_released → retained_for_review` 结束，没有 `lease_expired`、`controller_disconnected` 或 `quarantined`。
+
+## 2026-07-29 Network archive 连续性修复回归
+
+前一轮的 standalone 回复失败根因已定位为本地 observer 代际切换：组合搜索完成后，standalone 详情重新注入同一 document 的 observer 时错误清空了仍在 3 分钟 bounded TTL 内的 `commentArchive`。修复后只重置当前 work 的计数和临时 comments，保留 archive，并在后续 operation 重新绑定 `selectedNoteId` 后再次按笔记过滤。
+
+真实连续 run 已通过：`a03858b0-8b9d-4d1f-b7cb-54d7d5bf5c84`，构建指纹 `69876fbca6245f4b4df7ce27f26ad9a025693ef6cfbc95f41edc46c7ec951cf7`。
+
+```yaml
+searchItemCount: 18
+searchDetailCount: 1
+searchCommentCount: 10
+searchReplyThreadCount: 1
+standaloneCommentCaptureMode: hybrid
+standaloneCommentCount: 10
+standaloneCommentSemanticActions: 0
+standaloneReplyCaptureMode: network_projection
+standaloneReplyCount: 1
+standaloneReplySemanticActions: 0
+networkMatchedPayloadCount: 1
+networkBodyBytesRead: 3984
+networkCursorObserved: true
+actionTriggeredResponseCount: 0
+automaticPlatformRetries: 0
+finalPageState: retained_for_review
+```
+
+这证明 standalone comments/replies 可以复用同一 document 的短时 Network archive，不需要再次滚动或点击，也没有跨 tab、跨 document 或重放平台动作。最终 journal 仍以 `page_released → retained_for_review` 结束。
