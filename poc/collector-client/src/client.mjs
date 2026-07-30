@@ -6,6 +6,7 @@ import {
 } from './constants.mjs';
 import { CollectorClientError } from './errors.mjs';
 import { JsonTransport } from './transport.mjs';
+import { Artifact, CollectionResult, Operation } from './models.mjs';
 import {
   artifactPathFromOperation,
   assertUuid,
@@ -69,6 +70,10 @@ export class CollectorClient {
     return structuredClone(operation);
   }
 
+  async collectModel(request, options = {}) {
+    return new Operation(await this.collect(request, options));
+  }
+
   async getOperation(operationId, options = {}) {
     assertUuid(operationId, 'collector_client_operation_id_invalid');
     const payload = await this.#transport.requestJson(`/v2/collect/operations/${operationId}`, {
@@ -80,6 +85,10 @@ export class CollectorClient {
       throw new CollectorClientError('collector_client_operation_invalid', 502);
     }
     return structuredClone(operation);
+  }
+
+  async getOperationModel(operationId, options = {}) {
+    return new Operation(await this.getOperation(operationId, options));
   }
 
   async waitOperation(operationId, options = {}) {
@@ -120,9 +129,17 @@ export class CollectorClient {
     return operation;
   }
 
+  async waitOperationModel(operationId, options = {}) {
+    return new Operation(await this.waitOperation(operationId, options));
+  }
+
   async readArtifact(operationId, options = {}) {
     const operation = await this.getOperation(operationId, { signal: options.signal });
     return await this.readArtifactFromOperation(operation, options);
+  }
+
+  async readArtifactModel(operationId, options = {}) {
+    return new Artifact(await this.readArtifact(operationId, options));
   }
 
   async readArtifactFromOperation(operation, options = {}) {
@@ -145,6 +162,10 @@ export class CollectorClient {
     const operation = await this.waitOperation(queued.operationId, options);
     if (!operation.artifact) return { operation, artifact: null };
     return await this.readArtifactFromOperation(operation, options);
+  }
+
+  async collectAndWaitModel(request, options = {}) {
+    return new CollectionResult(await this.collectAndWait(request, options));
   }
 }
 

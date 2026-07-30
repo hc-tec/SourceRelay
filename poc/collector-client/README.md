@@ -7,7 +7,10 @@ URL、tab、selector、脚本、CDP 或 Network 接口。
 ## 最小用法
 
 ```js
-import { CollectorClient } from '@intelligence/collector-client';
+import {
+  CollectorClient,
+  xiaohongshuPublicNotesSearch
+} from '@intelligence/collector-client';
 
 const collector = new CollectorClient({
   origin: 'http://127.0.0.1:43127',
@@ -18,14 +21,12 @@ const bindings = await collector.listBrowserBindings();
 const binding = bindings.find((value) => value.state === 'online');
 if (!binding) throw new Error('no_online_browser_binding');
 
-const { operation, artifact } = await collector.collectAndWait({
-  schemaVersion: 2,
+const request = xiaohongshuPublicNotesSearch({
   browserBindingId: binding.browserBindingId,
-  platform: 'xiaohongshu',
-  capability: 'xiaohongshu.search.public_notes.v1',
-  executionTarget: 'existing_public_explore_tab',
-  input: { query: '人工智能', maximumDetails: 3 }
+  query: '人工智能',
+  maximumDetails: 3
 });
+const { operation, artifact } = await collector.collectAndWait(request);
 
 if (operation.state !== 'completed' && operation.state !== 'partial') {
   throw new Error(operation.errorCode ?? 'collector_operation_not_successful');
@@ -44,6 +45,45 @@ console.log(artifact?.artifact);
 - `waitOperation(operationId)`：只轮询本地 operation，不重新提交任务；
 - `readArtifact(operationId)`：重新读取 operation，并从 capability 匹配的受控 path 读取 artifact；
 - `collectAndWait(request)`：组合提交、等待和 artifact 读取。
+- `collectModel(request)`、`getOperationModel(operationId)`、`waitOperationModel(operationId)`、
+  `readArtifactModel(operationId)`、`collectAndWaitModel(request)`：返回稳定字段投影并
+  保留 detached `raw` 的结构化模型。
+
+## 能力化请求 builders
+
+上层应用优先使用 builder，而不是复制 wire-level JSON。builder 会固定
+`schemaVersion`、平台、能力和 execution target，并在本地校验 B 站规范 BV/MID、合集
+ID、搜索词，小红书短时 profile URL、详情序号以及评论/回复/滚动预算。Gateway 仍是
+最终权限和输入边界。
+
+```js
+import {
+  bilibiliNativeSearch,
+  xiaohongshuAccountPublicNotes
+} from '@intelligence/collector-client';
+
+const searchRequest = bilibiliNativeSearch({
+  browserBindingId: bindingId,
+  query: 'DeepSeek'
+});
+
+const profileRequest = xiaohongshuAccountPublicNotes({
+  browserBindingId: bindingId,
+  maximumScrolls: 20,
+  executionTarget: 'ephemeral_public_profile_url',
+  profileUrl: shortLivedProfileUrl
+});
+```
+
+当前 builder 覆盖全部 15 项 `direct_ready` 能力。小红书搜索/详情不接受调用方 URL；
+短时主页链接只允许进入 `ephemeral_public_profile_url`，并保留签名 URL 原文。所有
+builder 都拒绝 selector、脚本、tab ID、CDP 和任意 Network 控制字段。
+
+## 结构化结果
+
+`Operation`、`ArtifactReference`、`Artifact` 和 `CollectionResult` 只投影稳定包络字段，
+同时保留 detached `raw`/`payload`。上层可以使用 `result.operation.state`、
+`result.artifact.summary` 和 `result.result`，未来扩展字段仍可从 raw projection 读取。
 
 客户端会拒绝非 loopback origin、非法 token、未知 direct capability、额外顶层字段和
 不符合 operation capability 的 artifact path。Gateway 仍是最终的请求校验和权限边界。
@@ -58,6 +98,8 @@ console.log(artifact?.artifact);
 src/
 ├─ transport.mjs   loopback HTTP、token、超时和有界 JSON
 ├─ validation.mjs  capability、request、operation、artifact path 校验
+├─ requests.mjs    15 项能力化 request builder 与 URL/预算边界
+├─ models.mjs      operation / artifact / collection 结构化 raw-first 模型
 ├─ client.mjs      collect / wait / artifact 工作流
 ├─ public.mjs      稳定公共 allowlist 导出
 └─ index.mjs       包入口兼容导出
