@@ -24,7 +24,7 @@
 ```
 
 该模式只会在一个已有的小红书 tab 内导航一次，不刷新、不创建新 tab、不重试；公开主页响应优先进入受限 Network/XHR 投影，再用可见 DOM 补齐，最多 20 次可信滚动和 200 条笔记。主页链接 work 的 TTL 固定为 120 秒，不续租；连续两次滚动没有新增时返回 `profile_notes_ready`；达到滚动或投影上限但仍有结果时返回 `profile_notes_budget_exhausted`，并保留部分 artifact，不能把它解释成账号历史全量。终态 operation summary 和 artifact 不包含完整主页 URL、签名、响应 URL 或原始正文。`maximumScrolls: 1–3` 仍可用于已有主页 tab；`4–20` 只允许和 `ephemeral_public_profile_url` 一起提交。
-- API：`/v2/openapi.json`、`/v2/capabilities`、`/v2/collector-service/browser-bindings`、`/v2/collect`、`/v2/collect/operations/{operationId}`
+- API：`/v2/release`、`/v2/openapi.json`、`/v2/capabilities`、`/v2/collector-service/browser-bindings`、`/v2/collect`、`/v2/collect/operations/{operationId}`
 - 不属于本 runbook 的旧通道：`profileId`、Browser Host、Playwright persistent context、受管 Collection Profile、`POST /v1/collect`
 
 ## 1. 这条路径到底做什么
@@ -124,6 +124,16 @@ http://127.0.0.1:43127
 npm run check:user-browser
 ```
 
+确认 Core 与扩展、Gateway、Browser Host 的兼容版本：
+
+```powershell
+npm run collector-user-browser-client -- release
+```
+
+该接口只返回 Core release manifest、服务 schema 和本地进程协议版本，不返回浏览器
+Profile、Cookie、Token 或平台会话信息。上层应用启动时可以先读取它，再决定是否继续
+调用 `/v2/collect`。
+
 ## 5. 配对一次
 
 1. 在 Gateway Console 的“日常浏览器连接”区域创建一次性配对会话；
@@ -214,10 +224,11 @@ npm run collector-user-browser-client -- artifact /v1/collect/artifacts/bilibili
 
 将 `capability` 替换为 `bilibili.account_inventory` 即可请求同一 UP 主的投稿视频首屏；终态 artifact 路径分别以 `bilibili.account_profile` 或 `bilibili.account_inventory` 作为 capability 段。两项已完成真实 user-browser canary，因此 `/v2/capabilities` 显示为 `direct_ready`；这不扩大其固定输入、单页和只读边界。
 
-也可先读取 machine-readable 约束：
+也可先读取 machine-readable 约束和 Core release manifest：
 
 ```powershell
 npm run collector-user-browser-client -- openapi
+npm run collector-user-browser-client -- release
 ```
 
 `POST /v2/collect` 会快速返回 `queued` 的 `operationId`；它不把任务伪装成同步完成。扩展在低频、受认证的 loopback 轮询中最多 claim 一次，Gateway 将工作项标为 `claimed`，扩展只允许一次平台导航，之后把固定 DOM 投影回传为本地产物。上层应用应读取 `/v2/collect/operations/{operationId}` 直到终态，再通过返回的 artifact path 读取结果。

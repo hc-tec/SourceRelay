@@ -1,10 +1,10 @@
-import { BROWSER_HOST_PROTOCOL_VERSION } from './ipc';
+import { BROWSER_HOST_PROTOCOL_VERSION } from './ipc.js';
 import {
   COLLECTOR_CONTROL_SURFACE_REVISION,
   COLLECTOR_EXTENSION_VERSION
-} from './extension-runtime';
-import { EXTENSION_WORK_PROTOCOL_VERSION, EXTENSION_WORK_SCHEMA_VERSION } from './extension-work';
-import { NATIVE_BRIDGE_PROTOCOL_VERSION } from './native-bridge';
+} from './extension-runtime.js';
+import { EXTENSION_WORK_PROTOCOL_VERSION, EXTENSION_WORK_SCHEMA_VERSION } from './extension-work.js';
+import { NATIVE_BRIDGE_PROTOCOL_VERSION } from './native-bridge.js';
 
 /** Public wire version for the user-owned-browser Local Collector Service. */
 export const USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION = 2 as const;
@@ -67,4 +67,3 @@ const RELEASE_MANIFEST: CollectorCoreReleaseManifest = {
 export function collectorCoreReleaseManifest(): CollectorCoreReleaseManifest {
   return structuredClone(RELEASE_MANIFEST);
 }
-

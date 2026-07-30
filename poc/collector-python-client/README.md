@@ -81,6 +81,7 @@ GET /v2/openapi.json
 ```text
 list_direct_capabilities()
 list_capabilities()
+read_release()
 read_openapi()
 list_browser_bindings()
 collect(request)

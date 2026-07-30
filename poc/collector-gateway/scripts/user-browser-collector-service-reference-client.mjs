@@ -5,6 +5,9 @@ const origin = serviceOrigin(process.env.COLLECTOR_SERVICE_ORIGIN ?? 'http://127
 
 try {
   switch (command) {
+    case 'release':
+      print(await request('/v2/release'));
+      break;
     case 'openapi':
       print(await request('/v2/openapi.json'));
       break;
