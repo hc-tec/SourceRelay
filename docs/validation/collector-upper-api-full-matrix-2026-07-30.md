@@ -158,6 +158,7 @@ poc/collector-gateway/test/user-browser-direct-capability-matrix.unit.test.ts
 | 层级 | 命令 | 结果 |
 | --- | --- | --- |
 | CollectorClient Node tests | `npm test --workspace @intelligence/collector-client` | 4 / 4 通过；覆盖提交一次、轮询不重提、artifact capability 绑定、任意控制字段拒绝 |
+| Python SDK tests | `Set-Location poc/collector-python-client; python -m pytest -q` | 5 / 5 通过；覆盖 Python transport、契约校验、一次提交、轮询超时和 artifact 绑定 |
 | Vitest 单元/领域/契约 | `Set-Location poc; npm run test:unit` | 84 个测试文件、298 项通过 |
 | 真实 MV3 integration/E2E | `Set-Location poc; npm run test:real-local` | 8 / 8 通过；包含扩展启动、版本漂移拒绝、Profile 隔离、配对、端口占用、Gateway/Browser Host 生命周期 |
 | 完整本地门禁 | `Set-Location poc; npm run test:all-local` | 单元与真实本地 8/8 均通过 |
@@ -167,7 +168,8 @@ poc/collector-gateway/test/user-browser-direct-capability-matrix.unit.test.ts
 
 ## 上层应用可依赖的 API 面
 
-上层应用应使用 `@intelligence/collector-client` 的窄接口：
+上层应用应使用 `@intelligence/collector-client`（JavaScript）或
+`intelligence-collector-client`（Python）的窄接口：
 
 ```text
 listCapabilities()
@@ -189,6 +191,9 @@ collectAndWait(request)
 
 上层应用仍必须根据 `/v2/capabilities` 的 `dispatchState`、execution target 和预算选择请求，不能把 `direct_ready` 理解为无限制爬取，也不能自行增加分页、selector、脚本、tab 控制或 Network body 参数。
 
+Python SDK 位于 `poc/collector-python-client`，使用 `asyncio` 和 snake_case 方法；它与
+JS SDK 分包、分测试、分依赖，但共享同一份 `/v2` OpenAPI 与能力矩阵协议。
+
 ## 清理与风险边界
 
 - 当前构建 live canary 的临时 Gateway、临时 Profile、扩展 context 和调试资源均在 `finally` 中关闭并删除。
@@ -205,7 +210,10 @@ collectAndWait(request)
 ```text
 c338dd0 test(local): align extension lifecycle assertions with revision 16
 1a2ee35 test(collector): lock direct capability matrix and batch canary
+b72f573 docs(validation): record complete upper API capability matrix
 230fa29 docs(client): document direct capability allowlist
+b5f5b6c docs(validation): include client contract checkpoint
+6be226a feat(sdk): add layered Python SDK and split JavaScript client
 ```
 
 上一阶段上层客户端提交：
