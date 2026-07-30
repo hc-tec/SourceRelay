@@ -3,23 +3,25 @@
 这个仓库正在建设一个“需要时才启动”的本地个人情报系统。当前正式产品路线不是传统爬虫、私有 API 模拟器或提前囤积所有平台数据，而是：
 
 ```text
-Other Local Applications (revocable local API token) / Local Research Console
+External Local Applications (revocable local API token)
   -> Local Collector Service API (registered capabilities only)
-  -> paired MV3 Collector Core
-  -> dedicated visible Collection Window
-  -> persistent Collection Browser Profile
-  -> static, versioned, live-validated platform strategies
-  -> raw-first local artifact
+  -> paired MV3 Collector Core installed in the user's existing browser
+  -> bounded DOM / trusted-input / Network observation in the selected tab
+  -> operation and raw-first local artifact
 ```
 
-浏览器 Profile 自然持有用户正常登录状态。系统不设计 Cookie 导入、导出、注入或跨进程分发，不索要密码、Token、二维码、验证码、Profile 路径或代理凭据，也不授权绕过登录、付费限制、限流和平台安全措施。
+宿主浏览器自然持有用户正常登录状态；Core 不创建、接管或复制生产 Profile。系统不设计 Cookie 导入、导出、注入或跨进程分发，不索要密码、Token、二维码、验证码、Profile 路径或代理凭据，也不授权绕过登录、付费限制、限流和平台安全措施。
 
 ## 当前产品组件
 
 ```text
+poc/collector-contracts/   版本化 Core wire contracts
 poc/collector-extension/  单一最小权限 MV3 Collector Core
-poc/collector-gateway/    只监听 127.0.0.1 的本地 Collector Service / Console / 控制面
-docs/design/              1–100 题决策账本、产品规格、审计和实现状态
+poc/collector-gateway/    只监听 127.0.0.1 的本地 Collector Service / 控制面
+poc/collector-browser-host/ 仅用于 Core 本地真实测试和受控生命周期验证
+poc/collector-client/     JS SDK
+poc/collector-python-client/ Python SDK
+docs/design/              决策账本、产品规格、审计和实现状态
 skills/recon-live-web-interactions/  真实网页人类视角交互侦察 Skill
 ```
 
@@ -43,11 +45,11 @@ API/OpenAPI/SDK 使用 Collector Core；当前仓库内的 `apps/` 仅用于 smo
 - 不向普通用户页面常驻注册平台脚本，只允许有效 stage lease 的专用任务 tab 动态注入固定文件；
 - Gateway ECDSA P-256 固定身份、一次性配对 Session、八位配对码、扩展 challenge、签名与 pairing authorization；
 - 配对后的 HMAC 请求认证、nonce 防重放、Gateway 签名 work item、EvidencePlan preflight 和 Console 计划展示；
-- Gateway 管理的持久 Collection / Validation Profile、可见 Playwright Chromium 启动器、生产扩展自动加载、运行状态与逻辑账号绑定；
-- 版本化 Local Collector Service API：外部应用只能调用已登记 capability，不能传任意 URL、selector、脚本、坐标或 Network route；`/v1/openapi.json` 同时发布机器可读 OpenAPI 3.1 与 capability input JSON Schema；
+- 测试通道的临时 Profile、可见 Playwright Chromium 生命周期门禁和生产扩展自动加载；生产模式只绑定用户常用浏览器，不由 Core 创建或管理 Profile；
+- 版本化 Local Collector Service API：外部应用只能调用已登记 capability，不能传任意 URL、selector、脚本、坐标或 Network route；`/v2/openapi.json` 发布机器可读 OpenAPI 3.1 与 capability input JSON Schema；
 - `/v2/release` Core compatibility manifest：公开 user-owned-browser service schema、Extension/Browser Host/Native Bridge 协议版本和“上层应用必须在仓库外”的边界；JS/Python SDK 均可读取该 manifest；
 - 可撤销 Local API token、显式最小权限 scope（Profile / collect / artifact）、去敏持久化调用审计，以及不持有浏览器控制权的独立本地 Reference Client；
-- Research Task 按平台绑定同平台 Collection Profile；Validation Profile、任意磁盘路径和匿名 Profile 不能混入正式采集任务；
+- 测试任务与生产 user-owned-browser binding 分层；测试 Profile、任意磁盘路径和匿名 Profile 不能混入正式生产 API；
 - 独立的短时 Validation Run、真实 Chrome 权限、终态恢复、字段白名单、人工 review 与显式源码 admission；
 - B站匿名 `breadth_search + visible_dom` 的精确策略 `v1.1.0` 已完成真实验证；其他 `build_ready` 能力仍不能批准。
 
@@ -55,27 +57,20 @@ API/OpenAPI/SDK 使用 Collector Core；当前仓库内的 `apps/` 仅用于 smo
 
 ## 当前平台能力真相
 
-注册表里存在 B站、知乎、微博和小红书的 `breadth_search + visible_dom` 策略。目前只有 B站的精确版本通过真实验证：
+`/v2/capabilities` 是唯一的运行时能力真相：当前 catalog 共 18 项，其中 15 项
+`direct_ready` 可以通过 `/v2/collect` 执行，3 项仍是 catalog-only/migration-required。
+Gateway Registry、Artifact Reader、OpenAPI、JavaScript SDK 和 Python SDK 由
+`npm run verify:core-capability-matrix` 强制保持同一组 15 项 direct capability。
 
-```text
-B站 bilibili.search.breadth.dom.v1 @ 1.1.0
-  maturity = live_anonymous_verified
-  liveValidation.recordId = bb91e996-7758-4447-ba94-486bc99b7872
-
-知乎 / 微博 / 小红书
-  maturity = build_ready
-  liveValidation = null
-
-所有平台 production response routes = []
-```
-
-B站 admission 只覆盖匿名关键词搜索、首个渲染页面、最多 20 条可见视频标题和规范 BV URL；不覆盖登录、翻页、穷尽排序、详情、评论、账号归档或 response observation。脱敏 admission 记录见 [B站 v1.1.0 验证记录](docs/validation/bilibili-search-breadth-dom-v1.1.0.json)。`build_ready` 仍只表示代码能编译、打包、满足批准权限清单并自动加载。
-
-生产 response route 当前为空，因此不会 arm 或注入 MAIN-world observer。第三方平台爬虫仓库只能作为页面与产品调研参考，不能复制、集成、执行或成为采集后端。
+当前直接能力覆盖 B 站公开详情、站内搜索、账号主页与投稿首屏、动态、合集/系列、
+弹幕和用户已选评论页，以及小红书公开搜索、博主笔记列表、笔记详情、评论和评论回复。
+字幕、B 站视频投稿翻页和小红书当前页网络元数据仍不会因为“存在旧实现”而自动开放。
+第三方平台爬虫仓库只能作为页面与产品调研参考，不能复制、集成、执行或成为采集后端。
 
 ## 历史 POC 与正式产品隔离
 
-以下目录保存早期数据源研究和可行性证据，不属于当前 Collector 产品运行时：
+以下目录保存早期数据源研究和可行性证据，不属于当前 Collector 产品运行时，也不进入
+Core workspace、构建、发布候选或 SDK：
 
 ```text
 poc/browserwing/

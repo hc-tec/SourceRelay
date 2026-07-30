@@ -39,3 +39,6 @@ jobs:
       # Canary or loads a user-managed browser Profile.
       - name: Run layered Collector validation
         run: npm run verify:collector
+
+      - name: Verify clean Core release candidate
+        run: npm run verify:release-candidate

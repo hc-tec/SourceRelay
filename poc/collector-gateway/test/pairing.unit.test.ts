@@ -117,6 +117,50 @@ describe('user-owned browser binding pairing', () => {
     }
   });
 
+  test('keeps two browser bindings isolated across persistence and restart', async () => {
+    const stateDirectory = await temporaryState();
+    try {
+      const broker = await PairingBroker.create(identity(), stateDirectory);
+      const firstSession = broker.createSession(BASE_TIME);
+      const first = await broker.claim({
+        schemaVersion: 1,
+        pairingSessionId: firstSession.pairingSessionId,
+        pairingCode: firstSession.pairingCode,
+        extensionId: EXTENSION_ID,
+        extensionInstanceId: EXTENSION_INSTANCE_ID,
+        extensionChallenge: 'i'.repeat(43)
+      }, BASE_TIME + 1);
+      const secondSession = broker.createSession(BASE_TIME + 2);
+      const second = await broker.claim({
+        schemaVersion: 1,
+        pairingSessionId: secondSession.pairingSessionId,
+        pairingCode: secondSession.pairingCode,
+        extensionId: 'b'.repeat(32),
+        extensionInstanceId: '33333333-3333-4333-8333-333333333333',
+        extensionChallenge: 'j'.repeat(43)
+      }, BASE_TIME + 3);
+
+      expect(first.browserBindingId).not.toBe(second.browserBindingId);
+      expect(broker.listBrowserBindings(BASE_TIME + 4)).toHaveLength(2);
+      expect(broker.getBrowserBinding(first.browserBindingId, BASE_TIME + 4)).toMatchObject({
+        browserBindingId: first.browserBindingId,
+        extensionId: EXTENSION_ID
+      });
+      expect(broker.getBrowserBinding(second.browserBindingId, BASE_TIME + 4)).toMatchObject({
+        browserBindingId: second.browserBindingId,
+        extensionId: 'b'.repeat(32)
+      });
+
+      const restarted = await PairingBroker.create(identity(), stateDirectory);
+      expect(restarted.listBrowserBindings(BASE_TIME + 5).map((binding) => binding.browserBindingId).sort())
+        .toEqual([first.browserBindingId, second.browserBindingId].sort());
+      expect(restarted.getBrowserBinding(first.browserBindingId, BASE_TIME + 5)?.extensionId).toBe(EXTENSION_ID);
+      expect(restarted.getBrowserBinding(second.browserBindingId, BASE_TIME + 5)?.extensionId).toBe('b'.repeat(32));
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
   test('migrates old pairing state into a new browser binding without retaining a Profile field', async () => {
     const stateDirectory = await temporaryState();
     try {
