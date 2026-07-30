@@ -44,13 +44,13 @@ try {
   const release = await readJson(origin + '/v2/release');
   const capabilities = await readJson(origin + '/v2/capabilities');
   const openapi = await readJson(origin + '/v2/openapi.json');
-  if (release?.deployment?.mode !== 'user_owned_browser_only' || release?.deployment?.arbitraryBrowserControl !== 'not_exposed') {
+  if (release?.boundaries?.browserMode !== 'user_owned_browser_only' || release?.boundaries?.arbitraryBrowserControl !== 'not_exposed') {
     throw new Error('release_candidate_deployment_boundary_invalid');
   }
   if (!Array.isArray(capabilities?.capabilities) || capabilities.capabilities.filter((entry) => entry?.dispatchState === 'direct_ready').length !== 15) {
     throw new Error('release_candidate_capability_catalog_invalid');
   }
-  if (openapi?.info?.['x-collector-release-version'] !== release.releaseVersion) {
+  if (openapi?.info?.version !== release?.service?.openApiVersion) {
     throw new Error('release_candidate_openapi_release_mismatch');
   }
   await assertNoLegacyProfileState(stateDirectory);
