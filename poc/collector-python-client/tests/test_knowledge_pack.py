@@ -128,6 +128,7 @@ def test_bilibili_pack_keeps_raw_artifacts_and_provenance(tmp_path: Path) -> Non
         "partialOperations": 0,
         "failedOperations": 0,
         "resources": 2,
+        "discoveredResources": 1,
         "mediaAssets": 0,
         "processingArtifacts": 0,
     }
@@ -142,6 +143,10 @@ def test_bilibili_pack_keeps_raw_artifacts_and_provenance(tmp_path: Path) -> Non
     resources = [json.loads(line) for line in resource_lines]
     assert {resource["resourceType"] for resource in resources} == {"account", "video"}
     assert next(resource for resource in resources if resource["resourceType"] == "video")["title"] == "第一条视频详情"
+    discovered = json.loads(
+        (pack.root / "sources/bilibili/discovered-videos.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
+    assert discovered["captureState"] == "discovered"
     provenance_lines = (pack.root / "evidence/provenance.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(provenance_lines) == 3
     assert json.loads(provenance_lines[-1])["capability"] == "bilibili.video_detail"

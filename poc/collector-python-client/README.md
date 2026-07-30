@@ -168,12 +168,15 @@ print(pack.state, pack.root)
 <pack-id>/
   manifest.json
   sources/bilibili/<capability>/<artifact-id>.json
+  sources/bilibili/discovered-videos.jsonl
   sources/bilibili/resources.jsonl
   evidence/provenance.jsonl
   media/  derived/
 ```
 
-这是一个有界的编排器，不是任意平台爬虫：每个底层能力最多提交一次；manifest 的
+inventory 首屏卡片会先以 `captureState: discovered` 保存，详情只对预算内资源追加
+enrichment；因此可以同时满足广度和有限深度。它是一个有界的编排器，不是任意平台爬虫：
+每个底层能力最多提交一次；manifest 的
 `coverage.completeness` 会明确标记首屏和详情前缀的 `bounded_partial`，不会把首屏
 结果冒充账号全量。遇到失败、登录
 失效、验证码或风险终止时保留已经完成的文件并停止，不自动重放。媒体下载、字幕、OCR、

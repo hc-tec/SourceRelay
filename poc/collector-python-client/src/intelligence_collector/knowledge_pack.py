@@ -100,6 +100,7 @@ class KnowledgePackWriter:
                 "partialOperations": 0,
                 "failedOperations": 0,
                 "resources": 0,
+                "discoveredResources": 0,
                 "mediaAssets": 0,
                 "processingArtifacts": 0,
             },
@@ -176,6 +177,16 @@ class KnowledgePackWriter:
             raise ValueError("knowledge_pack_resource_platform_invalid")
         self.append_jsonl(f"sources/{platform}/resources.jsonl", resource)
         self._manifest["counts"]["resources"] += 1
+        self._persist_manifest()
+
+    def record_discovered_resources(self, resources: list[Mapping[str, Any]]) -> None:
+        """Persist broad inventory cards separately from detailed resources."""
+
+        for resource in resources:
+            if resource.get("platform") != "bilibili":
+                raise ValueError("knowledge_pack_discovered_resource_platform_invalid")
+            self.append_jsonl("sources/bilibili/discovered-videos.jsonl", resource)
+        self._manifest["counts"]["discoveredResources"] += len(resources)
         self._persist_manifest()
 
     def record_failure(self, code: str, *, capability: str | None = None) -> None:
@@ -261,6 +272,9 @@ async def build_bilibili_account_knowledge_pack(
 
     inventory = results[-1]
     video_items = _inventory_items(inventory)
+    writer.record_discovered_resources(
+        [_bilibili_discovered_video_resource(inventory, item) for item in video_items]
+    )
     writer.set_coverage(
         {
             "inventory": {
@@ -329,6 +343,24 @@ def _bilibili_video_resource(
             "artifactId": result.artifact.artifact_id if result.artifact else None,
         },
         "rawProjection": detail if detail is not None else payload,
+    }
+
+
+def _bilibili_discovered_video_resource(
+    result: CollectionResult, item: Mapping[str, Any]
+) -> dict[str, Any]:
+    return {
+        "schemaVersion": 1,
+        "resourceId": f"bilibili-video-{item.get('bvid', result.operation.operation_id)}",
+        "platform": "bilibili",
+        "resourceType": "video",
+        "captureState": "discovered",
+        "title": item.get("title") if isinstance(item.get("title"), str) else None,
+        "bvid": item.get("bvid"),
+        "canonicalVideoUrl": item.get("canonicalVideoUrl"),
+        "visibleText": item.get("visibleText") if isinstance(item.get("visibleText"), str) else None,
+        "thumbnailUrl": item.get("thumbnailUrl") if isinstance(item.get("thumbnailUrl"), str) else None,
+        "artifactRef": {"operationId": result.operation.operation_id},
     }
 
 

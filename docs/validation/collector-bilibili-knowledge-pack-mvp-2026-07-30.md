@@ -77,6 +77,11 @@ outcome: proved_for_pack_partial_for_harness
 }
 ```
 
+当前代码会让 inventory 的 40 张卡片同时写入 `sources/bilibili/discovered-videos.jsonl`，
+详情预算只对首条视频生成 enrichment；因此下一次独立 run 将同时保留广度和有限深度。
+本次已保存的真实 pack 仍以原始 inventory artifact 中的 40 张卡片作为广度证据；新文件
+由离线单元测试验证，未为了验证它而重复平台动作。
+
 三个 artifact 的 action ledger 均为单次尝试：
 
 ```text
