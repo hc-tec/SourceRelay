@@ -1,5 +1,6 @@
 export * from './bilibili-account-video-pagination.js';
 export * from './browser-binding.js';
+export * from './core-release.js';
 export * from './extension-work.js';
 export * from './extension-work-bilibili-passive.js';
 export * from './extension-work-bilibili-discussion-user-selected-tab.js';

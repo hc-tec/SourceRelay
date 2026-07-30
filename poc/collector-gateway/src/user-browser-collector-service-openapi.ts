@@ -1,4 +1,7 @@
-import { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION } from './user-browser-collector-service-contract';
+import {
+  USER_BROWSER_COLLECTOR_SERVICE_OPENAPI_VERSION,
+  USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION
+} from '@intelligence/collector-contracts';
 
 /** Machine-readable production contract; it deliberately omits the legacy Profile lane. */
 export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: string): Record<string, unknown> {
@@ -7,11 +10,19 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
     openapi: '3.1.0',
     info: {
       title: 'Local Collector Service — User-Owned Browser Mode',
-      version: '2.0.0-experimental',
+      version: USER_BROWSER_COLLECTOR_SERVICE_OPENAPI_VERSION,
       description: 'Loopback-only registered-capability API for a paired user-owned browser extension. It is not a generic browser-control API.'
     },
     servers: [{ url: origin }],
     paths: {
+      '/v2/release': {
+        get: {
+          operationId: 'readCollectorCoreRelease',
+          summary: 'Read the Core compatibility manifest for external applications.',
+          'x-collector-browser-control': 'not_exposed',
+          responses: { '200': jsonResponse({ $ref: '#/components/schemas/CoreReleaseManifest' }) }
+        }
+      },
       '/v2/capabilities': {
         get: {
           operationId: 'listUserBrowserCapabilities',
@@ -103,6 +114,46 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         }
       },
       schemas: {
+        CoreReleaseManifest: {
+          type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'releaseVersion', 'product', 'channel', 'service', 'protocols', 'boundaries'],
+          properties: {
+            schemaVersion: { type: 'integer', const: 1 },
+            releaseVersion: { type: 'string', pattern: '^\\d+\\.\\d+\\.\\d+$' },
+            product: { type: 'string', const: 'collector-core' },
+            channel: { type: 'string', const: 'source-compatible' },
+            service: {
+              type: 'object', additionalProperties: false, required: ['schemaVersion', 'openApiVersion'],
+              properties: {
+                schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+                openApiVersion: { type: 'string', const: USER_BROWSER_COLLECTOR_SERVICE_OPENAPI_VERSION }
+              }
+            },
+            protocols: {
+              type: 'object', additionalProperties: false,
+              required: [
+                'extensionControlSurfaceRevision', 'extensionWorkSchemaVersion',
+                'extensionWorkProtocolVersion', 'browserHostProtocolVersion', 'nativeBridgeProtocolVersion'
+              ],
+              properties: {
+                extensionControlSurfaceRevision: { type: 'integer', minimum: 1 },
+                extensionWorkSchemaVersion: { type: 'integer', minimum: 1 },
+                extensionWorkProtocolVersion: { type: 'integer', minimum: 1 },
+                browserHostProtocolVersion: { type: 'integer', minimum: 1 },
+                nativeBridgeProtocolVersion: { type: 'integer', minimum: 1 }
+              }
+            },
+            boundaries: {
+              type: 'object', additionalProperties: false,
+              required: ['browserMode', 'arbitraryBrowserControl', 'upperApplications'],
+              properties: {
+                browserMode: { type: 'string', const: 'user_owned_browser_only' },
+                arbitraryBrowserControl: { type: 'string', const: 'not_exposed' },
+                upperApplications: { type: 'string', const: 'external_projects_only' }
+              }
+            }
+          }
+        },
         ErrorResponse: {
           type: 'object', additionalProperties: false,
           required: ['schemaVersion', 'ok', 'error'],

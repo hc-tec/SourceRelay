@@ -106,6 +106,30 @@ def test_artifact_path_must_match_operation_capability() -> None:
 
 
 @pytest.mark.asyncio
+async def test_read_release_returns_core_compatibility_manifest() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v2/release"
+        return httpx.Response(200, json={
+            "schemaVersion": 1,
+            "releaseVersion": "0.7.17",
+            "product": "collector-core",
+            "channel": "source-compatible",
+            "service": {"schemaVersion": 2, "openApiVersion": "2.0.0-experimental"},
+            "protocols": {},
+            "boundaries": {},
+        })
+
+    client, http_client = await with_client(handler)
+    try:
+        manifest = await client.read_release()
+    finally:
+        await http_client.aclose()
+
+    assert manifest["product"] == "collector-core"
+    assert manifest["service"]["schemaVersion"] == 2
+
+
+@pytest.mark.asyncio
 async def test_collect_rejects_extra_control_fields_before_http() -> None:
     called = False
 

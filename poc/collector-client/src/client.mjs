@@ -44,6 +44,14 @@ export class CollectorClient {
     return structuredClone(await this.#transport.requestJson('/v2/openapi.json', { signal: options.signal }));
   }
 
+  async readRelease(options = {}) {
+    const payload = await this.#transport.requestJson('/v2/release', { signal: options.signal });
+    if (!isRecord(payload) || payload.product !== 'collector-core' || typeof payload.releaseVersion !== 'string') {
+      throw new CollectorClientError('collector_client_release_manifest_invalid', 502);
+    }
+    return structuredClone(payload);
+  }
+
   async listBrowserBindings(options = {}) {
     const payload = await this.#transport.requestJson('/v2/collector-service/browser-bindings', {
       requiresToken: true,

@@ -78,6 +78,27 @@ test('artifact path must match the operation capability', () => {
   assert.equal(artifactPathFromOperation(value), null);
 });
 
+test('readRelease returns the Core compatibility manifest', async () => {
+  const client = new CollectorClient({
+    token,
+    fetchImpl: async (url) => {
+      assert.ok(url.endsWith('/v2/release'));
+      return response({
+        schemaVersion: 1,
+        releaseVersion: '0.7.17',
+        product: 'collector-core',
+        channel: 'source-compatible',
+        service: { schemaVersion: 2, openApiVersion: '2.0.0-experimental' },
+        protocols: {},
+        boundaries: {}
+      });
+    }
+  });
+  const manifest = await client.readRelease();
+  assert.equal(manifest.product, 'collector-core');
+  assert.equal(manifest.service.schemaVersion, 2);
+});
+
 test('collect rejects unsupported or arbitrary-control requests before POST', async () => {
   const client = new CollectorClient({ token, fetchImpl: async () => { throw new Error('must_not_call'); } });
   await assert.rejects(

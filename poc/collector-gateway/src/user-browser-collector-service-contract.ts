@@ -5,10 +5,11 @@ import {
   canonicalBilibiliAccountProfileUrl,
   canonicalBilibiliPassiveVideoWorkUrl,
   canonicalBilibiliVideoWorkUrl,
-  normaliseBilibiliNativeSearchRoute
+  normaliseBilibiliNativeSearchRoute,
+  USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION
 } from '@intelligence/collector-contracts';
 
-export const USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION = 2 as const;
+export { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION };
 
 interface UserBrowserCollectorServiceRequestBase {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;

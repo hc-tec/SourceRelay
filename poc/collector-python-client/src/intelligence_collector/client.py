@@ -83,6 +83,12 @@ class CollectorClient:
     async def read_openapi(self) -> dict[str, Any]:
         return clone(await self._transport.request_json("GET", "/v2/openapi.json"))
 
+    async def read_release(self) -> dict[str, Any]:
+        payload = await self._transport.request_json("GET", "/v2/release")
+        if payload.get("product") != "collector-core" or not isinstance(payload.get("releaseVersion"), str):
+            raise CollectorClientError("collector_client_release_manifest_invalid", 502)
+        return clone(payload)
+
     async def list_browser_bindings(self) -> list[dict[str, Any]]:
         payload = await self._transport.request_json(
             "GET",

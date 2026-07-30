@@ -31,6 +31,8 @@ describe('user-owned browser direct capability matrix', () => {
     expect(asSet(listDirectCapabilities())).toEqual(asSet(directNames));
 
     const document = userBrowserCollectorServiceOpenApiDocument(ORIGIN) as Record<string, any>;
+    expect(document.paths['/v2/release']).toBeDefined();
+    expect(document.components.schemas.CoreReleaseManifest).toBeDefined();
     const schemas = document.components.schemas as Record<string, any>;
     const requestCapabilities = document.components.schemas.UserBrowserCollectRequest.oneOf
       .map((reference: { $ref: string }) => schemas[schemaName(reference)].properties.capability.const);

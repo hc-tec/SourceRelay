@@ -20,6 +20,7 @@ import {
 } from './user-browser-collector-service-access';
 import { dispatchUserBrowserCapability } from './user-browser-capability-registry';
 import { listUserBrowserCapabilities } from './user-browser-capabilities';
+import { collectorCoreReleaseManifest } from '@intelligence/collector-contracts';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 
@@ -41,6 +42,10 @@ export async function handleUserBrowserCollectorServiceRoute(
 ): Promise<boolean> {
   if (request.method === 'GET' && url.pathname === '/v2/openapi.json') {
     sendJson(response, 200, userBrowserCollectorServiceOpenApiDocument(context.identity.publicIdentity.loopbackOrigin));
+    return true;
+  }
+  if (request.method === 'GET' && url.pathname === '/v2/release') {
+    sendJson(response, 200, collectorCoreReleaseManifest());
     return true;
   }
   if (request.method === 'GET' && url.pathname === '/v2/capabilities') {
