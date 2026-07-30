@@ -177,6 +177,20 @@ print(pack.state, pack.root)
 失效、验证码或风险终止时保留已经完成的文件并停止，不自动重放。媒体下载、字幕、OCR、
 ASR 和 DeepResearch 证据适配会在原始知识包闭环稳定后作为独立阶段加入。
 
+真实闭环 smoke 使用独立命令并且不会进入默认测试：
+
+```powershell
+$env:COLLECTOR_SERVICE_ORIGIN = 'http://127.0.0.1:43127'
+$env:COLLECTOR_SERVICE_TOKEN = 'cst_...'
+$env:COLLECTOR_KNOWLEDGE_PACK_PROFILE_URL = 'https://space.bilibili.com/7481602'
+$env:COLLECTOR_KNOWLEDGE_PACK_OUTPUT_DIR = 'D:\AIProject\inteligence\runtime\knowledge-packs'
+python .\scripts\real_knowledge_pack_smoke.py
+```
+
+该命令要求 Gateway 和已配对的浏览器绑定已经由外部真实 canary 启动；它只读取
+`/v2` 状态、提交一次 profile/inventory/detail 链路并写本地 pack，不读取或打印
+Cookie、Profile、Storage 或 Token。
+
 一个只负责上层能力门禁和命令行调用的参考应用位于
 [`apps/collector-python-sdk-smoke`](../../apps/collector-python-sdk-smoke/README.md)。
 
