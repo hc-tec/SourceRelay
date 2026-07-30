@@ -27,7 +27,7 @@ poc/runtime/validation/bilibili-knowledge-pack-live-20260730/
 
 ```yaml
 runId: python-knowledge-pack-canary-20260730
-objective: 验证 Python SDK 高层 B站知识包编排不破坏 direct Gateway 闭环
+objective: 验证独立上层知识包项目通过 Python SDK 不破坏 direct Gateway 闭环
 platform: bilibili
 targetRole: account + detail
 targetIdentity: space.bilibili.com/7481602

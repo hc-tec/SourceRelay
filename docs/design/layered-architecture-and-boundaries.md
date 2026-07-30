@@ -12,9 +12,9 @@
 > 多模态处理和具体业务场景耦合到一起。
 
 当前系统已经有一些正确的边界，但仍处于“能力闭环先跑起来、长期分层随后补齐”的阶段。
-最明显的越界是当前的 `knowledge_pack.py`：它同时导入 B站 request builder、调用
-Collector client、解析平台 artifact、投影资源、写本地目录和维护 provenance。它适合
-MVP 验证，但不能继续作为 Collector Core 的正式业务入口；知识包属于仓库外的上层应用。
+此前的 `knowledge_pack.py` 同时导入 B站 request builder、调用 Collector client、解析
+平台 artifact、投影资源、写本地目录和维护 provenance。它曾用于 MVP 验证，现已迁移到
+仓库外的上层项目；Collector Core 不再保留这个业务模块。
 
 目标不是为了形式上的类和目录而抽象，而是确保未来替换以下任一部分时，其余层不需要
 跟着修改：
@@ -44,7 +44,7 @@ MVP 验证，但不能继续作为 Collector Core 的正式业务入口；知识
 
 | 位置 | 当前问题 | 长期风险 | 处理方向 |
 |---|---|---|---|
-| `knowledge_pack.py` | 请求构造、B站语义、任务编排、本地写盘混在一个模块 | 污染 Core 并把上层业务绑死在 SDK | 迁移到仓库外的知识包项目，Core 只保留协议兼容边界 |
+| 历史 `knowledge_pack.py` | 请求构造、B站语义、任务编排、本地写盘混在一个模块 | 污染 Core 并把上层业务绑死在 SDK | 已迁移到仓库外的知识包项目，Core 只保留协议边界 |
 | Python/JS SDK | 两种语言分别镜像 capability 输入契约 | 契约更新时可能漂移 | 保持 SDK 独立，但增加协议一致性门禁；后续再考虑机器契约生成 |
 | Gateway `/v2/collect` route | route 内有很长的 capability 条件分支 | 每增加平台都修改核心路由 | 改为 capability registry + handler |
 | artifact retrieval route | 通过 capability 条件选择具体 artifact store | 存储实现泄漏到 HTTP 路由 | 改为 artifact reader registry |
@@ -96,7 +96,11 @@ Domain → nothing
 
 ## 5. 每层的职责
 
-### 5.1 Domain / Contract 层
+本节描述完整产品链路，不表示每一层都属于当前 Core 仓库。当前仓库只实现采集
+Contracts、Gateway、Browser Host、Extension、SDK 和平台策略；`Resource`、
+`KnowledgePack`、媒体处理及下方的业务 Application/Storage 属于仓库外的上层项目。
+
+### 5.1 Domain / Contract 层（Core 合同 + 上层公共值）
 
 只定义跨实现稳定的值和结果，不执行 IO：
 
@@ -190,9 +194,8 @@ client
 SDK 可以提供 capability builder 和 raw-first model，因为它们属于协议适配；但不应拥有
 `build_knowledge_pack`、OCR、媒体下载或本地知识库业务。
 
-当前已经加入 SDK 的 knowledge-pack 入口属于 MVP 过渡实现。后续应迁移到仓库外的
-上层知识包项目，并保留一个明确标记为 deprecated 的兼容 facade；Core 不再增加新的
-知识包、汇总或 DeepResearch 场景方法。
+此前加入 SDK 的 knowledge-pack 入口已经移出 Core。Core 不再增加新的知识包、汇总或
+DeepResearch 场景方法；上层项目通过版本化 SDK 调用 Gateway。
 
 ### 5.5 Storage / Processing 层
 
@@ -295,10 +298,10 @@ Core 只负责：
 - Gateway 鉴权、预算、Profile 绑定、生命周期和审计；
 - 稳定的 operation/artifact/API/SDK 合同。
 
-### 第一步：冻结 Core 内的过渡入口
+### 第一步：完成上层业务迁移
 
-当前 `knowledge_pack.py` 和 SDK 中的 knowledge-pack 入口只作为迁移兼容层维护，暂不扩展
-新的平台或汇总字段。新业务代码不得继续导入它们。
+知识包实现已经位于仓库外的 `D:\AIProject\inteligence-apps`，Core 内不再保留
+`knowledge_pack.py`、知识包测试或真实 smoke 脚本。新业务代码必须在上层项目中实现。
 
 ```text
 独立上层仓库/
@@ -310,8 +313,7 @@ Core 只负责：
     storage/filesystem.py UTF-8 manifest / JSONL / raw artifact
 ```
 
-`CollectorClient` 保持只负责 Gateway 协议；旧入口可暂时从 SDK re-export，标记为迁移
-兼容层，不再在 SDK 内增加新的场景业务。外部上层项目通过已发布版本依赖 SDK，不允许
+`CollectorClient` 保持只负责 Gateway 协议。外部上层项目通过已发布版本依赖 SDK，不允许
 通过相对路径直接 import Core 内部模块。
 
 ### 第二步：分别加依赖规则门禁

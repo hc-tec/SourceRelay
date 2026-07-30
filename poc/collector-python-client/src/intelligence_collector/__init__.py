@@ -1,11 +1,6 @@
 from .client import CollectorClient
 from .constants import DIRECT_CAPABILITY_NAMES
 from .errors import CollectorClientError
-from .knowledge_pack import (
-    KnowledgePack,
-    KnowledgePackWriter,
-    build_bilibili_account_knowledge_pack,
-)
 from .models import Artifact, ArtifactReference, CollectionResult, Operation
 from .requests import (
     bilibili_account_inventory,
@@ -36,9 +31,6 @@ def list_direct_capabilities() -> list[str]:
 __all__ = [
     "CollectorClient",
     "CollectorClientError",
-    "KnowledgePack",
-    "KnowledgePackWriter",
-    "build_bilibili_account_knowledge_pack",
     "Operation",
     "ArtifactReference",
     "Artifact",

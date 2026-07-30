@@ -359,9 +359,9 @@ DeepResearch 需要的不是一堆 URL，而是：
 - 任意单项失败不覆盖已完成资源；
 - 可以从 artifact 重新构造结构化资源列表。
 
-### 8.2 SDK 验收
+### 8.2 上层项目验收
 
-上层 SDK 应支持两层调用：
+Collector Core 的 SDK 只负责底层已登记能力；任务级知识包由仓库外的上层项目负责：
 
 ```python
 # 底层能力：需要精确控制某一个已登记能力
@@ -370,12 +370,13 @@ request = bilibili_native_search(
     query="人工智能"
 )
 
-# 任务级能力：把多个底层能力组合成知识包
-pack = await collector.build_knowledge_pack(...)
+# 上层项目：通过 Core SDK 组合多个底层能力
+source = BilibiliGatewaySource(collector)
+pack = await build_bilibili_account_knowledge_pack(source, ...)
 ```
 
-第一阶段先完成底层 request builder 和结构化 artifact 模型；知识包编排器在真实 B站
-canary 通过后实现。
+Core 只验收底层 request builder、结构化 artifact 和真实 Gateway→扩展→浏览器闭环；
+知识包编排器、资源投影、provenance 和本地存储在仓库外的上层项目中单独验收。
 
 ### 8.3 不在 MVP 内
 
@@ -390,11 +391,11 @@ canary 通过后实现。
 ## 9. 下一步执行顺序
 
 1. 完成 Python SDK 的能力化 request builder 和结构化 operation/artifact/result 模型；
-2. 用一条真实 B站搜索 canary 验证 builder 不破坏 Gateway→扩展→浏览器闭环；
-3. 实现 B站 UP 主知识包的本地 manifest、raw artifact 和 provenance 编排器；
-4. 在同一资源模型上实现小红书博主笔记包，优先处理短时媒体落盘；
-5. 再研究知乎、公众号、新闻网站的页面流程和能力登记；
-6. 最后为 DeepResearch 提供只读证据包适配器。
+2. 用真实 B站 canary 验证 builder 不破坏 Gateway→扩展→浏览器闭环；
+3. 在仓库外的上层项目中实现 B站 UP 主知识包的 manifest、raw artifact 和 provenance 编排；
+4. 上层项目再实现小红书博主笔记包，优先处理短时媒体落盘；
+5. Core 继续研究知乎、公众号、新闻网站的页面流程和能力登记；
+6. DeepResearch 作为另一个上层消费者接入，只读取 Core 交付的证据包。
 
 任何新平台或新能力都必须先进入平台能力研究和真实验证，不得因为上层“想支持”就直接
 进入公共 SDK allowlist。
