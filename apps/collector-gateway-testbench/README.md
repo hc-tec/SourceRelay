@@ -2,6 +2,9 @@
 
 一个独立的、loopback-only 的本地测试应用。它把自己当作未来 Deep Research、分析服务、桌面应用或 CLI 的代表消费者：只调用正式的 user-owned-browser `/v2` API，绝不导入 Gateway 内部模块。
 
+测试台的 Gateway 调用现在复用 workspace package `@intelligence/collector-client`；它只额外保留
+测试台自己的输入映射、已提交 operation 目录和 UI 安全边界，不再维护第二套 Gateway HTTP 协议。
+
 ```text
 浏览器中的已配对 MV3 扩展
   ↕ 受认证的 loopback work protocol

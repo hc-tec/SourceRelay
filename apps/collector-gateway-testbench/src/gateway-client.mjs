@@ -1,7 +1,14 @@
-import { artifactPathFromOperation, safeErrorCode } from './contracts.mjs';
+import {
+  CollectorClient,
+  CollectorClientError,
+  artifactPathFromOperation
+} from '@intelligence/collector-client';
 
-const MAX_GATEWAY_JSON_BYTES = 2 * 1024 * 1024;
-
+/**
+ * The Testbench keeps its small UI-facing response envelope, but delegates
+ * all direct Gateway protocol work to the same client that upper applications
+ * use. This prevents the test lane from becoming a second API implementation.
+ */
 export class GatewayClientError extends Error {
   constructor(code, status = 502) {
     super(code);
@@ -12,90 +19,69 @@ export class GatewayClientError extends Error {
 }
 
 export async function readGatewayStatus(config) {
-  return await gatewayJson(config, '/v1/status');
+  return await call(config, (client) => client.readStatus());
 }
 
 export async function readGatewayOpenApi(config) {
-  return await gatewayJson(config, '/v2/openapi.json');
+  return await call(config, (client) => client.readOpenApi());
 }
 
 export async function readGatewayCapabilities(config) {
-  return await gatewayJson(config, '/v2/capabilities');
+  const capabilities = await call(config, (client) => client.listCapabilities());
+  return { schemaVersion: 2, capabilities };
 }
 
 export async function readBrowserBindings(config) {
-  return await gatewayJson(config, '/v2/collector-service/browser-bindings', { requiresToken: true });
+  const bindings = await call(config, (client) => client.listBrowserBindings());
+  return { schemaVersion: 2, bindings };
 }
 
 export async function enqueueOperation(config, request) {
-  return await gatewayJson(config, '/v2/collect', {
-    method: 'POST',
-    requiresToken: true,
-    body: request
-  });
+  const operation = await call(config, (client) => client.collect(request));
+  return { schemaVersion: 2, result: operation };
 }
 
 export async function readOperation(config, operationId) {
-  return await gatewayJson(config, `/v2/collect/operations/${operationId}`, { requiresToken: true });
+  const operation = await call(config, (client) => client.getOperation(operationId));
+  return { schemaVersion: 2, result: operation };
 }
 
 /**
- * The browser may only retrieve an artifact after this server has re-read a
- * known operation and derived its fixed retrieval path. No browser-supplied
- * Gateway path can reach this function.
+ * The client re-reads the operation and derives the capability-bound artifact
+ * path. No browser-supplied Gateway path can reach this function.
  */
 export async function readOperationArtifact(config, operationId) {
-  const operationPayload = await readOperation(config, operationId);
-  const operation = operationPayload?.result;
-  const retrievalPath = artifactPathFromOperation(operation);
-  if (!retrievalPath) throw new GatewayClientError('testbench_operation_artifact_unavailable', 409);
-  const artifact = await gatewayJson(config, retrievalPath, { requiresToken: true });
-  return { operation, artifact };
+  return await call(config, (client) => client.readArtifact(operationId));
 }
 
-async function gatewayJson(config, pathname, options = {}) {
-  if (options.requiresToken && !config.token) {
-    throw new GatewayClientError('testbench_token_not_configured', 503);
-  }
-  const headers = { accept: 'application/json' };
-  if (options.requiresToken) headers.authorization = `Bearer ${config.token}`;
-  if (options.body !== undefined) headers['content-type'] = 'application/json';
+/** Exported for the contract tests and for callers that need path validation. */
+export { artifactPathFromOperation };
 
-  let response;
+async function call(config, action) {
   try {
-    response = await fetch(`${config.gatewayOrigin}${pathname}`, {
-      method: options.method ?? 'GET',
-      headers,
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-      redirect: 'error',
-      signal: AbortSignal.timeout(config.requestTimeoutMs)
-    });
-  } catch {
-    throw new GatewayClientError('testbench_gateway_unreachable', 503);
+    return await action(new CollectorClient({
+      origin: config.gatewayOrigin,
+      token: config.token,
+      requestTimeoutMs: config.requestTimeoutMs
+    }));
+  } catch (error) {
+    throw toGatewayClientError(error);
   }
-
-  const payload = await boundedJson(response);
-  if (!response.ok) {
-    const gatewayCode = payload && typeof payload.error === 'string'
-      ? safeErrorCode(payload.error, 'gateway_rejected')
-      : 'gateway_rejected';
-    throw new GatewayClientError(gatewayCode, response.status);
-  }
-  return payload;
 }
 
-async function boundedJson(response) {
-  const length = response.headers.get('content-length');
-  if (length !== null && (!/^\d+$/.test(length) || Number(length) > MAX_GATEWAY_JSON_BYTES)) {
-    throw new GatewayClientError('testbench_gateway_response_too_large');
+function toGatewayClientError(error) {
+  if (error instanceof GatewayClientError) return error;
+  if (error instanceof CollectorClientError) {
+    const mappedCode = {
+      collector_client_token_required: 'testbench_token_not_configured',
+      collector_client_gateway_unreachable: 'testbench_gateway_unreachable',
+      collector_client_request_timeout: 'testbench_gateway_timeout',
+      collector_client_response_too_large: 'testbench_gateway_response_too_large',
+      collector_client_response_invalid: 'testbench_gateway_response_invalid',
+      collector_client_artifact_unavailable: 'testbench_operation_artifact_unavailable',
+      collector_client_artifact_invalid: 'testbench_gateway_response_invalid'
+    }[error.code] ?? error.code;
+    return new GatewayClientError(mappedCode, error.status);
   }
-  const text = await response.text();
-  if (Buffer.byteLength(text, 'utf8') > MAX_GATEWAY_JSON_BYTES) {
-    throw new GatewayClientError('testbench_gateway_response_too_large');
-  }
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new GatewayClientError('testbench_gateway_response_invalid');
-  }
+  return new GatewayClientError('testbench_gateway_unreachable', 503);
 }

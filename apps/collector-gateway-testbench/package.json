@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Loopback-only test application for the user-owned browser Collector Gateway.",
+  "dependencies": {
+    "@intelligence/collector-client": "file:../../poc/collector-client"
+  },
   "engines": {
     "node": ">=22"
   },

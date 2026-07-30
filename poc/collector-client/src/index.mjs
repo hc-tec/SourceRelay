@@ -98,6 +98,14 @@ export class CollectorClient {
     return structuredClone(payload.capabilities);
   }
 
+  async readStatus(options = {}) {
+    return structuredClone(await this.#requestJson('/v1/status', { signal: options.signal }));
+  }
+
+  async readOpenApi(options = {}) {
+    return structuredClone(await this.#requestJson('/v2/openapi.json', { signal: options.signal }));
+  }
+
   async listBrowserBindings(options = {}) {
     const payload = await this.#requestJson('/v2/collector-service/browser-bindings', {
       requiresToken: true,
