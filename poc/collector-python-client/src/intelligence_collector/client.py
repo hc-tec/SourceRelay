@@ -16,6 +16,7 @@ from .constants import (
     TERMINAL_STATES,
 )
 from .errors import CollectorClientError
+from .models import Artifact, CollectionResult, Operation
 from .transport import JsonTransport
 from .validation import (
     artifact_path_from_operation,
@@ -106,6 +107,11 @@ class CollectorClient:
             raise CollectorClientError("collector_client_queued_operation_invalid", 502)
         return clone(operation)
 
+    async def collect_model(self, request: Mapping[str, Any]) -> Operation:
+        """Submit one request and return its structured queued operation."""
+
+        return Operation.from_mapping(await self.collect(request))
+
     async def get_operation(self, operation_id: str) -> dict[str, Any]:
         assert_uuid(operation_id, "collector_client_operation_id_invalid")
         payload = await self._transport.request_json(
@@ -117,6 +123,11 @@ class CollectorClient:
         if not is_operation(operation):
             raise CollectorClientError("collector_client_operation_invalid", 502)
         return clone(operation)
+
+    async def get_operation_model(self, operation_id: str) -> Operation:
+        """Read one operation as a structured, raw-preserving model."""
+
+        return Operation.from_mapping(await self.get_operation(operation_id))
 
     async def wait_operation(
         self,
@@ -144,9 +155,33 @@ class CollectorClient:
             delay = min(max(delay * 2.0, 0.001), max_delay)
         return operation
 
+    async def wait_operation_model(
+        self,
+        operation_id: str,
+        *,
+        timeout: float = DEFAULT_WAIT_TIMEOUT_SECONDS,
+        initial_delay: float = DEFAULT_POLL_INITIAL_DELAY_SECONDS,
+        max_delay: float = DEFAULT_POLL_MAX_DELAY_SECONDS,
+    ) -> Operation:
+        """Wait without resubmitting and return a structured operation."""
+
+        return Operation.from_mapping(
+            await self.wait_operation(
+                operation_id,
+                timeout=timeout,
+                initial_delay=initial_delay,
+                max_delay=max_delay,
+            )
+        )
+
     async def read_artifact(self, operation_id: str) -> dict[str, Any]:
         operation = await self.get_operation(operation_id)
         return await self.read_artifact_from_operation(operation)
+
+    async def read_artifact_model(self, operation_id: str) -> Artifact:
+        """Read a capability-bound artifact as a structured model."""
+
+        return Artifact.from_mapping(await self.read_artifact(operation_id))
 
     async def read_artifact_from_operation(self, operation: Mapping[str, Any]) -> dict[str, Any]:
         retrieval_path = artifact_path_from_operation(operation)
@@ -167,6 +202,11 @@ class CollectorClient:
         if operation.get("artifact") is None:
             return {"operation": operation, "artifact": None}
         return await self.read_artifact_from_operation(operation)
+
+    async def collect_and_wait_model(self, request: Mapping[str, Any]) -> CollectionResult:
+        """Run one workflow and return structured envelope plus raw projection."""
+
+        return CollectionResult.from_mapping(await self.collect_and_wait(request))
 
 
 def _bounded_number(value: float, minimum: float, maximum: float, code: str) -> None:

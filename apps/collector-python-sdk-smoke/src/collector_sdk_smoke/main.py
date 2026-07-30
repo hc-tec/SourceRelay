@@ -27,6 +27,26 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="UTF-8 JSON file containing one registered /v2 collect request",
     )
+    bilibili_search = subparsers.add_parser(
+        "bilibili-search",
+        help="run the typed Bilibili native-search builder",
+    )
+    bilibili_search.add_argument("query", help="Bilibili search phrase")
+    bilibili_search.add_argument(
+        "--batch",
+        action="store_true",
+        help="use the registered fixed two-page search capability",
+    )
+    bilibili_search.add_argument("--browser-binding-id", default=None)
+    xhs_search = subparsers.add_parser(
+        "xiaohongshu-search",
+        help="run the typed public Xiaohongshu search builder",
+    )
+    xhs_search.add_argument("query", help="public search phrase")
+    xhs_search.add_argument("--maximum-details", type=int, default=None)
+    xhs_search.add_argument("--comments-maximum-scrolls", type=int, default=None)
+    xhs_search.add_argument("--replies-maximum-threads", type=int, default=None)
+    xhs_search.add_argument("--browser-binding-id", default=None)
     return parser
 
 
@@ -45,6 +65,22 @@ async def execute(args: argparse.Namespace) -> dict[str, Any] | list[dict[str, A
             if not isinstance(request, dict):
                 raise ValueError("request file must contain one JSON object")
             return await app.collect(request)
+        if args.command == "bilibili-search":
+            result = await app.bilibili_search(
+                args.query,
+                browser_binding_id=args.browser_binding_id,
+                batch=args.batch,
+            )
+            return result.to_dict()
+        if args.command == "xiaohongshu-search":
+            result = await app.xiaohongshu_search(
+                args.query,
+                browser_binding_id=args.browser_binding_id,
+                maximum_details=args.maximum_details,
+                comments_maximum_scrolls=args.comments_maximum_scrolls,
+                replies_maximum_threads=args.replies_maximum_threads,
+            )
+            return result.to_dict()
         raise ValueError(f"unknown_command:{args.command}")
 
 

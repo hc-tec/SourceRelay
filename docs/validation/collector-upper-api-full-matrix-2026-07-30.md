@@ -103,6 +103,20 @@ npx playwright test --config playwright.live-canary.config.ts --project live-can
 - 真实公开 B 站搜索至少返回一条受控公开视频卡片；
 - 只执行一次平台搜索导航，没有读取原始 response body。
 
+### Python SDK 本轮能力化 builder 与模型回归
+
+在上述 live canary 之后，本轮把 Python SDK 从“通用 JSON 客户端”上移为能力化请求
+构造器和 raw-first 结构化结果模型。新增 `requests.py` 覆盖全部 15 项
+`direct_ready` 能力，固定 schema/platform/capability/execution target，并在提交前
+校验 B 站规范 BV/MID、合集 ID、搜索词，小红书短时 profile URL、详情序号以及评论/
+回复/滚动预算。新增 `models.py` 的 `Operation`、`ArtifactReference`、`Artifact` 和
+`CollectionResult` 只投影稳定包络，保留 detached `raw`/`payload`。
+
+新的独立真实 run 仍使用 `COLLECTOR_LIVE_CANARY_SCOPE=python_sdk`，通过 builder 构造
+`bilibili.native_search` 请求，再由 `collect_and_wait_model()` 完成真实投递、轮询和
+artifact 读取，结果 `1 passed`。因此这次变更没有扩大平台动作边界：真实搜索仍只有
+一次导航，operation/artifact capability 一致，页面保持可见，response body 未读取。
+
 ### B 站其余能力
 
 此前持久 Gateway 中已完成的真实 artifact 逐项读取覆盖：
@@ -175,15 +189,16 @@ poc/collector-gateway/test/user-browser-direct-capability-matrix.unit.test.ts
 | 层级 | 命令 | 结果 |
 | --- | --- | --- |
 | CollectorClient Node tests | `npm test --workspace @intelligence/collector-client` | 4 / 4 通过；覆盖提交一次、轮询不重提、artifact capability 绑定、任意控制字段拒绝 |
-| Python SDK tests | `Set-Location poc/collector-python-client; python -m pytest -q` | 5 / 5 通过；覆盖 Python transport、契约校验、一次提交、轮询超时和 artifact 绑定 |
+| Python SDK tests | `Set-Location poc/collector-python-client; python -m pytest -q` | 15 / 15 通过；覆盖 transport、15 项 builder、URL/预算边界、raw-first 模型、一次提交、轮询超时和 artifact 绑定 |
 | Python SDK 真实 Gateway canary | `COLLECTOR_LIVE_CANARY_SCOPE=python_sdk` | 1 / 1 通过；真实 MV3、Gateway、B站搜索和 artifact |
-| Python 上层参考应用 | `Set-Location apps/collector-python-sdk-smoke; python -m pytest -q` | 2 / 2 通过；覆盖 direct-ready 门禁和不可调度能力不投递 |
+| Python 上层参考应用 | `Set-Location apps/collector-python-sdk-smoke; python -m pytest -q` | 3 / 3 通过；覆盖 direct-ready 门禁、不可调度能力不投递和 typed B站搜索 facade |
 | Vitest 单元/领域/契约 | `Set-Location poc; npm run test:unit` | 84 个测试文件、298 项通过 |
 | 真实 MV3 integration/E2E | `Set-Location poc; npm run test:real-local` | 8 / 8 通过；包含扩展启动、版本漂移拒绝、Profile 隔离、配对、端口占用、Gateway/Browser Host 生命周期 |
 | 完整本地门禁 | `Set-Location poc; npm run test:all-local` | 单元与真实本地 8/8 均通过 |
 | Testbench | `Set-Location apps/collector-gateway-testbench; npm run check` | 16 / 16 通过；包含全部 direct 输入映射和任意控制面拒绝 |
 | 生产构建 | `Set-Location poc; npm run build:collector-runtime` | contracts、MV3 extension、Browser Host、Gateway 全部构建通过 |
 | 当前构建 B 站 batch live canary | 见上方命令 | 1 / 1 通过 |
+| 当前构建 Python builder live canary | `COLLECTOR_LIVE_CANARY_SCOPE=python_sdk` | 1 / 1 通过；真实 builder → Gateway → MV3 → B站搜索 → artifact |
 
 ## 上层应用可依赖的 API 面
 

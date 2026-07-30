@@ -9,6 +9,8 @@ from typing import Any
 from intelligence_collector import (
     CollectorClient,
     CollectorClientError,
+    CollectionResult,
+    bilibili_native_search,
     list_direct_capabilities,
 )
 
@@ -71,26 +73,22 @@ async def run() -> dict[str, Any]:
         else:
             raise AssertionError("catalog_only_capability_was_accepted")
 
-        result = await client.collect_and_wait({
-            "schemaVersion": 2,
-            "browserBindingId": binding["browserBindingId"],
-            "platform": "bilibili",
-            "capability": "bilibili.native_search",
-            "executionTarget": "collector_work_tab",
-            "input": {"query": "DeepSeek"},
-        })
-        operation = result["operation"]
-        artifact_response = result["artifact"]
-        if operation.get("state") != "completed":
-            raise AssertionError(f"python_sdk_real_operation_not_completed:{operation.get('state')}")
-        if operation.get("capability") != "bilibili.native_search":
+        request = bilibili_native_search(
+            browser_binding_id=binding["browserBindingId"],
+            query="DeepSeek",
+        )
+        result = await client.collect_and_wait_model(request)
+        if not isinstance(result, CollectionResult):
+            raise AssertionError("python_sdk_real_result_model_missing")
+        operation = result.operation
+        artifact = result.artifact
+        if operation.state != "completed":
+            raise AssertionError(f"python_sdk_real_operation_not_completed:{operation.state}")
+        if operation.capability != "bilibili.native_search":
             raise AssertionError("python_sdk_real_operation_capability_mismatch")
-        if not isinstance(artifact_response, dict) or artifact_response.get("capability") != operation.get("capability"):
+        if artifact is None or artifact.capability != operation.capability:
             raise AssertionError("python_sdk_real_artifact_capability_mismatch")
-        artifact = artifact_response.get("artifact")
-        if not isinstance(artifact, dict):
-            raise AssertionError("python_sdk_real_artifact_missing")
-        summary = artifact.get("summary")
+        summary = artifact.summary
         if not isinstance(summary, dict):
             raise AssertionError("python_sdk_real_artifact_summary_missing")
 
@@ -100,9 +98,9 @@ async def run() -> dict[str, Any]:
             "onlineBinding": True,
             "openapiPathCount": len(openapi_paths),
             "catalogOnlyRejected": True,
-            "operationState": operation.get("state"),
-            "operationCapability": operation.get("capability"),
-            "artifactCapability": artifact_response.get("capability"),
+            "operationState": operation.state,
+            "operationCapability": operation.capability,
+            "artifactCapability": artifact.capability,
             "capturedItems": summary.get("capturedItems"),
             "visibleVideoCardCount": summary.get("visibleVideoCardCount"),
         }

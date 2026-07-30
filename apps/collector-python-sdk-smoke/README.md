@@ -27,6 +27,9 @@ collector-python-sdk capabilities
 collector-python-sdk openapi
 collector-python-sdk bindings
 collector-python-sdk collect .\request.json
+collector-python-sdk bilibili-search "DeepSeek"
+collector-python-sdk bilibili-search "DeepSeek" --batch
+collector-python-sdk xiaohongshu-search "人工智能" --maximum-details 3
 ```
 
 `request.json` 必须是一个 UTF-8 JSON 对象。应用会先读取运行时能力目录，只允许
@@ -51,11 +54,26 @@ collector-python-sdk collect .\request.json
 上层应用不能通过本示例传入任意 URL、tab ID、selector、脚本、坐标、CDP 或 Network
 body；Gateway 仍是最终的权限和输入边界。
 
+`bilibili-search` 和 `xiaohongshu-search` 是推荐的 typed builder 示例。它们自动从
+在线 browser binding 摘取 `browserBindingId`（也可用 `--browser-binding-id` 明确指定），
+调用 Python SDK 的能力化 builder，并以结构化 `CollectionResult` 的 raw projection
+输出结果。评论/回复预算只能通过小红书 builder 的有界参数开启：
+
+```powershell
+collector-python-sdk xiaohongshu-search "人工智能" `
+  --maximum-details 3 `
+  --comments-maximum-scrolls 2 `
+  --replies-maximum-threads 1
+```
+
+旧的 `collect request.json` 命令仍保留，适合调试已登记协议字典；新上层业务应直接
+使用 `intelligence_collector` 的 builder，不要复制 wire-level JSON。
+
 ## 分层
 
 ```text
 main.py
-  → service.py       上层能力状态门禁
+  → service.py       上层能力状态门禁 + typed builder facade
   → intelligence_collector  Python SDK
   → local Gateway / paired extension
 ```

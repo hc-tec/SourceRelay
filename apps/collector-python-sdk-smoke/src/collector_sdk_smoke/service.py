@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from intelligence_collector import CollectorClient, CollectorClientError
+from intelligence_collector import (
+    CollectionResult,
+    CollectorClient,
+    CollectorClientError,
+    bilibili_native_search,
+    bilibili_native_search_batch,
+    xiaohongshu_public_notes_search,
+)
 
 
 class CollectorApplication:
@@ -39,3 +46,55 @@ class CollectorApplication:
                 {"capability": request.get("capability"), "dispatchState": descriptor.get("dispatchState")},
             )
         return await self.client.collect_and_wait(request)
+
+    async def _resolve_binding_id(self, browser_binding_id: str | None) -> str:
+        if browser_binding_id is not None:
+            return browser_binding_id
+        bindings = await self.client.list_browser_bindings()
+        binding = next(
+            (
+                item
+                for item in bindings
+                if item.get("state") == "online" and isinstance(item.get("browserBindingId"), str)
+            ),
+            None,
+        )
+        if binding is None:
+            raise CollectorClientError("collector_app_online_binding_missing", 409)
+        return binding["browserBindingId"]
+
+    async def bilibili_search(
+        self,
+        query: str,
+        *,
+        browser_binding_id: str | None = None,
+        batch: bool = False,
+    ) -> CollectionResult:
+        """Run the typed Bilibili search builder without exposing wire fields."""
+
+        binding_id = await self._resolve_binding_id(browser_binding_id)
+        request = (
+            bilibili_native_search_batch if batch else bilibili_native_search
+        )(browser_binding_id=binding_id, query=query)
+        return CollectionResult.from_mapping(await self.client.collect_and_wait(request))
+
+    async def xiaohongshu_search(
+        self,
+        query: str,
+        *,
+        browser_binding_id: str | None = None,
+        maximum_details: int | None = None,
+        comments_maximum_scrolls: int | None = None,
+        replies_maximum_threads: int | None = None,
+    ) -> CollectionResult:
+        """Run the typed public-note search builder with bounded enrichment."""
+
+        binding_id = await self._resolve_binding_id(browser_binding_id)
+        request = xiaohongshu_public_notes_search(
+            browser_binding_id=binding_id,
+            query=query,
+            maximum_details=maximum_details,
+            comments_maximum_scrolls=comments_maximum_scrolls,  # type: ignore[arg-type]
+            replies_maximum_threads=replies_maximum_threads,  # type: ignore[arg-type]
+        )
+        return CollectionResult.from_mapping(await self.client.collect_and_wait(request))

@@ -35,16 +35,15 @@ async def main() -> None:
         bindings = await collector.list_browser_bindings()
         binding = next(item for item in bindings if item.get("state") == "online")
 
-        result = await collector.collect_and_wait({
-            "schemaVersion": 2,
-            "browserBindingId": binding["browserBindingId"],
-            "platform": "bilibili",
-            "capability": "bilibili.native_search",
-            "executionTarget": "collector_work_tab",
-            "input": {"query": "DeepSeek"},
-        })
-        print(result["operation"]["state"])
-        print(result["artifact"])
+        from intelligence_collector import bilibili_native_search
+
+        request = bilibili_native_search(
+            browser_binding_id=binding["browserBindingId"],
+            query="DeepSeek",
+        )
+        result = await collector.collect_and_wait_model(request)
+        print(result.operation.state)
+        print(result.result)
 
 
 asyncio.run(main())
@@ -56,6 +55,8 @@ asyncio.run(main())
 intelligence_collector
 ├─ transport.py   loopback origin、token、超时、JSON 大小和 HTTP 错误
 ├─ validation.py  exact request、direct allowlist、operation 和 artifact path
+├─ requests.py    15 项能力化请求 builder 与 URL/预算边界
+├─ models.py      operation / artifact / collection 结构化 raw-first 模型
 ├─ client.py      collect / wait / artifact workflow
 └─ __init__.py    稳定公共导出
 ```
@@ -88,7 +89,55 @@ wait_operation(operation_id)
 read_artifact(operation_id)
 read_artifact_from_operation(operation)
 collect_and_wait(request)
+collect_model(request)
+get_operation_model(operation_id)
+wait_operation_model(operation_id)
+read_artifact_model(operation_id)
+collect_and_wait_model(request)
 ```
+
+## 能力化请求 builders
+
+上层应用优先使用 `intelligence_collector` 导出的 builder，而不是手写协议字典。
+builder 会固定 `schemaVersion`、平台、能力和 execution target，并在本地校验
+URL、搜索词、结果序号和评论/滚动预算；Gateway 仍会再次校验。
+
+```python
+from intelligence_collector import (
+    bilibili_video_detail,
+    xiaohongshu_public_notes_search,
+)
+
+bilibili_request = bilibili_video_detail(
+    browser_binding_id=binding_id,
+    canonical_video_url="https://www.bilibili.com/video/BV1qZSLBYEpa",
+)
+
+xiaohongshu_request = xiaohongshu_public_notes_search(
+    browser_binding_id=binding_id,
+    query="人工智能",
+    maximum_details=3,
+    comments_maximum_scrolls=2,
+    replies_maximum_threads=1,
+)
+```
+
+可用 builder 覆盖全部 15 项 `direct_ready` 能力：
+
+- B站：视频详情、站内搜索/固定两页搜索、账号资料、投稿首屏、动态、合集/系列概览与详情、弹幕、用户已选页评论；
+- 小红书：公开搜索、公开博主笔记、公开笔记详情、评论和评论回复。
+
+小红书账号 builder 只有在 `execution_target="ephemeral_public_profile_url"` 时才
+接受短时 `profile_url`，并保留签名链接原文；搜索和详情 builder 不接受调用方 URL。
+所有 builder 都拒绝 selector、脚本、tab ID、CDP 和任意 Network 控制字段。
+
+## 结构化结果
+
+`Operation`、`ArtifactReference`、`Artifact` 和 `CollectionResult` 只投影稳定的包络
+字段，同时保留 detached `raw`/`payload`。因此上层可直接使用
+`result.operation.state`、`result.artifact.summary`、`result.result`，而 Gateway
+未来新增的业务字段仍可从 `result.raw` 或 `result.artifact.payload` 读取，不会因为
+SDK 尚未升级而丢失。
 
 Python 使用 snake_case；JavaScript 使用 camelCase。二者的协议字段仍保持 Gateway
 定义的 camelCase，例如 `browserBindingId`、`executionTarget`、`operationId`。
