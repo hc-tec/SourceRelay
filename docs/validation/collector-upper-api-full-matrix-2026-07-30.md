@@ -205,6 +205,7 @@ collectAndWait(request)
 ```text
 c338dd0 test(local): align extension lifecycle assertions with revision 16
 1a2ee35 test(collector): lock direct capability matrix and batch canary
+230fa29 docs(client): document direct capability allowlist
 ```
 
 上一阶段上层客户端提交：
