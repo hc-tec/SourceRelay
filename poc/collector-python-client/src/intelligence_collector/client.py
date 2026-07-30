@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable, Mapping
 import httpx
 
 from .constants import (
+    CORE_RELEASE_VERSION,
     DEFAULT_GATEWAY_ORIGIN,
     DEFAULT_POLL_INITIAL_DELAY_SECONDS,
     DEFAULT_POLL_MAX_DELAY_SECONDS,
@@ -85,7 +86,7 @@ class CollectorClient:
 
     async def read_release(self) -> dict[str, Any]:
         payload = await self._transport.request_json("GET", "/v2/release")
-        if payload.get("product") != "collector-core" or not isinstance(payload.get("releaseVersion"), str):
+        if payload.get("product") != "collector-core" or payload.get("releaseVersion") != CORE_RELEASE_VERSION:
             raise CollectorClientError("collector_client_release_manifest_invalid", 502)
         return clone(payload)
 

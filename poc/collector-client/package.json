@@ -1,6 +1,7 @@
 {
   "name": "@intelligence/collector-client",
-  "version": "0.1.0",
+  "version": "0.7.17",
+  "files": ["src"],
   "private": true,
   "type": "module",
   "description": "Small, safety-preserving client for the user-owned-browser Collector Gateway API.",

@@ -1,6 +1,6 @@
 [project]
 name = "intelligence-collector-client"
-version = "0.1.0"
+version = "0.7.17"
 description = "Safety-preserving Python SDK for the user-owned-browser Collector Gateway API."
 requires-python = ">=3.11"
 dependencies = [

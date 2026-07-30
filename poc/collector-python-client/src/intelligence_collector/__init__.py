@@ -1,5 +1,5 @@
 from .client import CollectorClient
-from .constants import DIRECT_CAPABILITY_NAMES
+from .constants import CORE_RELEASE_VERSION, DIRECT_CAPABILITY_NAMES
 from .errors import CollectorClientError
 from .models import Artifact, ArtifactReference, CollectionResult, Operation
 from .requests import (
@@ -30,6 +30,7 @@ def list_direct_capabilities() -> list[str]:
 
 __all__ = [
     "CollectorClient",
+    "CORE_RELEASE_VERSION",
     "CollectorClientError",
     "Operation",
     "ArtifactReference",

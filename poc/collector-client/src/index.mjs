@@ -18,5 +18,5 @@ export {
   xiaohongshuNotePublicDetail,
   xiaohongshuPublicNotesSearch
 } from './requests.mjs';
-export { DIRECT_CAPABILITY_NAMES, listDirectCapabilities } from './public.mjs';
+export { CORE_RELEASE_VERSION, DIRECT_CAPABILITY_NAMES, listDirectCapabilities } from './public.mjs';
 export { artifactPathFromOperation, isTerminalOperationState } from './validation.mjs';

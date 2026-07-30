@@ -130,6 +130,20 @@ async def test_read_release_returns_core_compatibility_manifest() -> None:
 
 
 @pytest.mark.asyncio
+async def test_read_release_rejects_gateway_outside_sdk_compatibility_anchor() -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"product": "collector-core", "releaseVersion": "0.7.16"})
+
+    client, http_client = await with_client(handler)
+    try:
+        with pytest.raises(CollectorClientError) as failure:
+            await client.read_release()
+    finally:
+        await http_client.aclose()
+    assert failure.value.code == "collector_client_release_manifest_invalid"
+
+
+@pytest.mark.asyncio
 async def test_collect_rejects_extra_control_fields_before_http() -> None:
     called = False
 

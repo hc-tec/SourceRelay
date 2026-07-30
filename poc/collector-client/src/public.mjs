@@ -1,6 +1,6 @@
-import { DIRECT_CAPABILITY_NAMES } from './constants.mjs';
+import { CORE_RELEASE_VERSION, DIRECT_CAPABILITY_NAMES } from './constants.mjs';
 
-export { DIRECT_CAPABILITY_NAMES };
+export { CORE_RELEASE_VERSION, DIRECT_CAPABILITY_NAMES };
 
 /**
  * Returns the capability names this client is allowed to submit through the

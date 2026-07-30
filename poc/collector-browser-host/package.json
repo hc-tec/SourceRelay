@@ -1,8 +1,9 @@
 {
   "name": "@intelligence/collector-browser-host",
-  "version": "0.1.0",
+  "version": "0.7.17",
   "private": true,
   "type": "module",
+  "files": ["dist"],
   "description": "Long-lived local owner of Collector Chromium profiles and managed page leases.",
   "exports": {
     ".": "./dist/main.js",
@@ -39,7 +40,7 @@
     "canary:discussion-user-selected": "node scripts/validate-bilibili-discussion-e2e.mjs"
   },
   "dependencies": {
-    "@intelligence/collector-contracts": "0.1.0",
+    "@intelligence/collector-contracts": "0.7.17",
     "playwright": "^1.61.1"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 {
   "name": "@intelligence/collector-contracts",
-  "version": "0.1.0",
+  "version": "0.7.17",
   "private": true,
   "type": "module",
   "description": "Dependency-free contracts shared by the Collector Gateway, Browser Host, and extension.",
@@ -8,6 +8,7 @@
     ".": "./dist/index.js"
   },
   "types": "./dist/index.d.ts",
+  "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit"

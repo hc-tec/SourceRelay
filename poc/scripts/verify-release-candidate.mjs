@@ -1,4 +1,4 @@
-import { access, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -29,6 +29,15 @@ try {
   await runNpm(['run', 'verify:core-capability-matrix'], sourceRootIn(checkout), environment);
   await runNpm(['run', 'build:user-browser-runtime'], sourceRootIn(checkout), environment);
   await runNpm(['run', 'prepare:user-browser-deployment'], sourceRootIn(checkout), environment);
+  const releaseOutput = join(sourceRootIn(checkout), 'runtime', 'release-candidate');
+  await runNpm(['run', 'package:core-release', '--', '--output', releaseOutput], sourceRootIn(checkout), environment);
+  const releaseBundle = JSON.parse(await readFile(join(releaseOutput, 'release-manifest.json'), 'utf8'));
+  if (releaseBundle.releaseVersion !== '0.7.17' ||
+    typeof releaseBundle.packages?.javascriptSdk !== 'string' ||
+    typeof releaseBundle.packages?.pythonSdk !== 'string' ||
+    releaseBundle.extension?.runtimeBuild?.collectorVersion !== '0.7.17') {
+    throw new Error('release_candidate_package_manifest_invalid');
+  }
 
   gateway = spawn(process.execPath, ['collector-gateway/dist/user-browser-server.js'], {
     cwd: sourceRootIn(checkout),
@@ -60,6 +69,7 @@ try {
     gate: 'collector-core-release-candidate',
     branch,
     releaseVersion: release.releaseVersion,
+    packagedSdkArtifacts: true,
     directCapabilities: 15,
     browserProfileCreated: false,
     livePlatformRequests: 0

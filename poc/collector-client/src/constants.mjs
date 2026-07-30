@@ -1,4 +1,6 @@
 export const DEFAULT_GATEWAY_ORIGIN = 'http://127.0.0.1:43127';
+/** Compatibility anchor for the published JS SDK release. */
+export const CORE_RELEASE_VERSION = '0.7.17';
 export const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
 export const DEFAULT_WAIT_TIMEOUT_MS = 120_000;
 export const DEFAULT_POLL_INITIAL_DELAY_MS = 500;

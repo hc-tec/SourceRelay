@@ -162,6 +162,12 @@ Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git
 3. 已为独立本地客户端补充 Console 签发、仅摘要持久化、可即时撤销的 Local API token，以及显式 scope 和去敏调用审计；不放宽 loopback、Profile 或平台安全边界；
 4. 后续只按同一 API capability 模型逐个平台增加经过真实页面侦察验证的能力；不开放任意浏览器控制接口。
 
+当前 Core 版本化发布与用户常用浏览器部署入口见：
+
+- [Core 版本化发布](docs/core-release.md)
+- [用户常用浏览器部署 runbook](docs/runbooks/core-user-browser-deployment-v0.7.md)
+- [Core Release Candidate 验证](docs/core-release-candidate.md)
+
 权威产品文档：
 
 - [受管浏览器采集开发规范](docs/development/managed-browser-collection-development-standard-v0.1.md)

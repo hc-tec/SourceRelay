@@ -1,6 +1,6 @@
 {
   "name": "@intelligence/collector-workspace",
-  "version": "0.1.0",
+  "version": "0.7.17",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -21,9 +21,14 @@
     "verify:core-boundaries": "node scripts/verify-core-boundaries.mjs",
     "verify:core-capability-matrix": "node scripts/verify-core-capability-matrix.mjs",
     "verify:release-candidate": "node scripts/verify-release-candidate.mjs",
+    "package:core-release": "node scripts/package-core-release.mjs",
+    "verify:sdk-release-installation": "node scripts/verify-sdk-release-installation.mjs",
     "build:collector-runtime": "npm run build:contracts && npm run build:extension && npm run build --workspace @intelligence/collector-browser-host && npm run build --workspace @intelligence/collector-gateway",
     "build:user-browser-runtime": "npm run build:contracts && npm run build:extension && npm run build:user-browser --workspace @intelligence/collector-gateway",
     "prepare:user-browser-deployment": "npm run build:user-browser-runtime && npm run prepare:user-browser-extension --workspace @intelligence/collector-gateway --",
+    "update:user-browser-deployment": "npm run build:user-browser-runtime && npm run prepare:user-browser-extension --workspace @intelligence/collector-gateway -- --replace",
+    "verify:user-browser-deployment": "node scripts/verify-user-browser-deployment.mjs",
+    "verify:user-browser-api-smoke": "npm run build:user-browser-runtime && node scripts/verify-user-browser-api-smoke.mjs",
     "start:user-browser": "npm run build:user-browser-runtime && npm run start:user-browser --workspace @intelligence/collector-gateway",
     "check:user-browser": "npm run check:user-browser --workspace @intelligence/collector-gateway --",
     "start:validation-browser": "npm run validation-browser --workspace @intelligence/collector-browser-host -- start",

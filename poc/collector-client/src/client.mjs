@@ -2,6 +2,7 @@ import {
   DEFAULT_POLL_INITIAL_DELAY_MS,
   DEFAULT_POLL_MAX_DELAY_MS,
   DEFAULT_WAIT_TIMEOUT_MS,
+  CORE_RELEASE_VERSION,
   TERMINAL_STATES
 } from './constants.mjs';
 import { CollectorClientError } from './errors.mjs';
@@ -46,7 +47,7 @@ export class CollectorClient {
 
   async readRelease(options = {}) {
     const payload = await this.#transport.requestJson('/v2/release', { signal: options.signal });
-    if (!isRecord(payload) || payload.product !== 'collector-core' || typeof payload.releaseVersion !== 'string') {
+    if (!isRecord(payload) || payload.product !== 'collector-core' || payload.releaseVersion !== CORE_RELEASE_VERSION) {
       throw new CollectorClientError('collector_client_release_manifest_invalid', 502);
     }
     return structuredClone(payload);

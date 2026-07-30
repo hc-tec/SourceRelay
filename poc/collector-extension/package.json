@@ -17,7 +17,7 @@
     "verify:build": "npm run typecheck && npm run build && npm run verify:artifacts && npm run verify:extension-load"
   },
   "dependencies": {
-    "@intelligence/collector-contracts": "0.1.0"
+    "@intelligence/collector-contracts": "0.7.17"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.330",

@@ -84,6 +84,21 @@ const lanes = Object.freeze([
     npmArgs: ['run', 'verify:research-contracts', '--workspace', '@intelligence/collector-gateway']
   },
   {
+    id: 'user-browser-deployment-lifecycle',
+    scope: 'production user-browser extension prepare, idempotence, stale-build detection and atomic replacement',
+    npmArgs: ['run', 'verify:user-browser-deployment']
+  },
+  {
+    id: 'user-browser-api-smoke',
+    scope: 'real local Gateway SDK compatibility, scope, operation admission and artifact boundary',
+    npmArgs: ['run', 'verify:user-browser-api-smoke']
+  },
+  {
+    id: 'sdk-release-installation',
+    scope: 'versioned JS tarball and Python wheel installation outside the Core source checkout',
+    npmArgs: ['run', 'verify:sdk-release-installation']
+  },
+  {
     id: 'gateway-host-integration',
     scope: 'real local Gateway to Browser Host reconnect lifecycle',
     npmArgs: ['run', 'verify:host-integration', '--workspace', '@intelligence/collector-gateway'],

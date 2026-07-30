@@ -99,6 +99,16 @@ test('readRelease returns the Core compatibility manifest', async () => {
   assert.equal(manifest.service.schemaVersion, 2);
 });
 
+test('readRelease rejects a Gateway outside the SDK compatibility anchor', async () => {
+  const client = new CollectorClient({
+    fetchImpl: async () => response({ product: 'collector-core', releaseVersion: '0.7.16' })
+  });
+  await assert.rejects(
+    client.readRelease(),
+    (error) => error instanceof CollectorClientError && error.code === 'collector_client_release_manifest_invalid'
+  );
+});
+
 test('collect rejects unsupported or arbitrary-control requests before POST', async () => {
   const client = new CollectorClient({ token, fetchImpl: async () => { throw new Error('must_not_call'); } });
   await assert.rejects(
