@@ -37,6 +37,7 @@ console.log(artifact?.artifact);
 
 - `listDirectCapabilities()`：读取客户端当前允许提交的 direct capability 名称；它不能替代 Gateway 的 `dispatchState`、预算和绑定状态检查；
 - `listCapabilities()`：读取能力目录；上层应只提交 `dispatchState: direct_ready` 的能力；
+- `readOpenApi()`：读取当前 `/v2` OpenAPI 3.1 机器契约，构造请求前应优先使用它核对输入边界；
 - `listBrowserBindings()`：读取已配对浏览器绑定的安全摘要；
 - `collect(request)`：只提交一次 `POST /v2/collect`，不会自动重试平台任务；
 - `getOperation(operationId)`：读取一次 operation；

@@ -1,9 +1,9 @@
 # 日常浏览器扩展模式：安装、配对与本地 API
 
 - 状态：可用的 direct-mode MVP
-- 已有真实 direct canary：`bilibili.video_detail`、`bilibili.native_search`、`bilibili.native_search_batch`、`bilibili.account_profile`、`bilibili.account_inventory`、`bilibili.discussion`
-- 已登记 B站能力：`GET /v2/capabilities` 会列出 12 项已有实现及其 direct-mode 迁移状态；登记不等于自动开放旧 Browser Host fallback。
-- 小红书 direct 能力：公开搜索、公开笔记详情、公开评论、公开评论回复、已有公开主页 tab 和短时公开主页链接入口均已有真实 Gateway→Extension 闭环。主页链接 canary 证明了单次导航、低频可信滚动和去敏 artifact 交付；已有主页 tab canary 证明了零导航路径。两个主页样本的 Network 投影都没有匹配正文，笔记由 DOM fallback 完成，因此不能把主页 Network/XHR route 解释成已验收。后续多主页候选回归暴露的 tab 绑定修复已完成本地门禁，仍需另一条全新短链完成真实复验。
+- 已完成真实 direct 闭环的 B站能力：`bilibili.native_search`、`bilibili.native_search_batch`、`bilibili.account_profile`、`bilibili.account_inventory`、`bilibili.video_detail`、`bilibili.discussion`、`bilibili.danmaku`、`bilibili.dynamic`、`bilibili.collection_series.overview`、`bilibili.collection_series.detail`。
+- 已登记 B站能力：`GET /v2/capabilities` 会列出 12 项已有实现，其中 10 项为 `direct_ready`，`bilibili.account_inventory.pagination` 与 `bilibili.transcript` 仍为迁移边界；登记不等于自动开放旧 Browser Host fallback。
+- 小红书 direct 能力：公开搜索、公开笔记详情、公开评论、公开评论回复、已有公开主页 tab、短时公开主页链接和笔记头像自然发现均已有真实 Gateway→Extension 闭环。最新组合 run 已覆盖搜索、详情、评论和回复；主页三种 execution target 分别验证了零导航、一次导航和一次自然发现尝试。Network/XHR 只保留受控投影，不保存原始正文、响应 URL 或短时 token；前置条件不满足时会记录 `prerequisite_unmet`，不点击、不刷新、不重试。
 
 ### 小红书临时主页链接入口
 

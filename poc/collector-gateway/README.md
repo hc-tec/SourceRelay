@@ -2,7 +2,7 @@
 
 这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度。
 
-> **重要的生产边界（2026-07-27）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。直接模式已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab → 一次公开 B站详情、固定首页搜索、固定两页搜索、UP 主资料或 UP 主投稿视频首屏导航 → 固定 DOM 投影 → HMAC result → raw-first local artifact。`bilibili.account_profile`、`bilibili.account_inventory` 与 `bilibili.native_search_batch` 都已完成真实 direct canary；它们与详情、固定首页搜索一样显示为 `direct_ready`，但不会因此放宽到任意 URL、分页、筛选、滚动或 Browser Host fallback。`GET /v2/capabilities` 会列出 12 项 B站既有实现的 direct-mode 迁移状态，避免把“仓库已有旧实现”误报成“日常浏览器已可安全 dispatch”。它不读取登录凭据、Cookie、Token、Profile 文件或 Network response body。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
+> **重要的生产边界（2026-07-30）。** 正式产品部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。当前 `/v2` 目录共有 18 项能力：15 项 `direct_ready`（B站 10 项、小红书 5 项），另有 3 项明确迁移/路由准入边界。直接模式已真实验证：`/v2/collect` 的 scoped local API → 签名工作项 → 扩展自有 work tab 或用户已选 document → 固定 DOM/Network 投影 → HMAC result → capability-bound local artifact。它不会放宽到任意 URL、分页、筛选、滚动、脚本、selector 或 Browser Host fallback。`GET /v2/capabilities` 是运行时能力真相，`GET /v2/openapi.json` 是机器可读输入/响应契约；二者应由上层应用在启动或能力变更时读取。它们不读取登录凭据、Cookie、Token、Profile 文件或原始 Network response body。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)，全面验收见[上层 API 能力矩阵报告](../../docs/validation/collector-upper-api-full-matrix-2026-07-30.md)。
 
 ## 日常浏览器 Direct API（当前生产 MVP）
 
@@ -212,7 +212,7 @@ npm run collector-client -- artifact /v1/collect/artifacts/bilibili.video_detail
 
 需要在应用代码中调用 direct API 时，优先使用 workspace package
 `@intelligence/collector-client`，而不是复制 testbench 的请求流程。它提供
-`listCapabilities()`、`listBrowserBindings()`、`collect()`、`waitOperation()`、
+`listDirectCapabilities()`、`listCapabilities()`、`readOpenApi()`、`listBrowserBindings()`、`collect()`、`waitOperation()`、
 `readArtifact()` 和 `collectAndWait()`，只在本地轮询 operation，不会在网络异常后重放
 平台任务。artifact path 仍由已读取 operation 的 capability 绑定结果推导，调用方不能传
 任意 Gateway path。使用说明见 [`poc/collector-client/README.md`](../collector-client/README.md)。
