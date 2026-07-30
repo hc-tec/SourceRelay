@@ -143,9 +143,14 @@ SDK 尚未升级而丢失。
 Python 使用 snake_case；JavaScript 使用 camelCase。二者的协议字段仍保持 Gateway
 定义的 camelCase，例如 `browserBindingId`、`executionTarget`、`operationId`。
 
-## B站 UP 主知识包 MVP
+## B站 UP 主知识包 MVP（迁移兼容入口）
 
-`build_bilibili_account_knowledge_pack()` 是第一条任务级能力。它只组合已经登记的
+知识包属于 Collector Core 之外的上层业务。当前 SDK 中的
+`build_bilibili_account_knowledge_pack()` 仅作为已经验证过的迁移兼容入口保留；新的
+知识包、跨平台汇总、媒体处理和 DeepResearch 代码不得继续加入本 SDK。正式上层实现位于
+仓库外的 `D:\AIProject\inteligence-apps` 项目，通过本 SDK 的 Gateway 协议调用 Core。
+
+兼容入口只组合已经登记的
 `bilibili.account_profile`、`bilibili.account_inventory` 和有界数量的
 `bilibili.video_detail`，把每个 artifact、资源投影和 provenance 写入本地 UTF-8 目录：
 
@@ -180,7 +185,7 @@ enrichment；因此可以同时满足广度和有限深度。它是一个有界�
 `coverage.completeness` 会明确标记首屏和详情前缀的 `bounded_partial`，不会把首屏
 结果冒充账号全量。遇到失败、登录
 失效、验证码或风险终止时保留已经完成的文件并停止，不自动重放。媒体下载、字幕、OCR、
-ASR 和 DeepResearch 证据适配会在原始知识包闭环稳定后作为独立阶段加入。
+ASR 和 DeepResearch 证据适配不在 Core SDK 内加入。
 
 真实闭环 smoke 使用独立命令并且不会进入默认测试：
 
