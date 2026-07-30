@@ -33,6 +33,18 @@ test('a real installed MV3 extension pairs with the direct Gateway without creat
       deploymentMode: 'user_owned_browser_extension',
       browserProcessControl: 'not_available'
     });
+    const release = await (await fetch(gatewayOrigin + '/v2/release')).json() as {
+      product?: string;
+      releaseVersion?: string;
+      service?: { schemaVersion?: number; openApiVersion?: string };
+      boundaries?: { upperApplications?: string; arbitraryBrowserControl?: string };
+    };
+    expect(release).toMatchObject({
+      product: 'collector-core',
+      service: { schemaVersion: 2, openApiVersion: '2.0.0-experimental' },
+      boundaries: { upperApplications: 'external_projects_only', arbitraryBrowserControl: 'not_exposed' }
+    });
+    expect(release.releaseVersion).toMatch(/^\d+\.\d+\.\d+$/);
     launched = await launchProductionExtension(extensionPath, 'collector-user-browser-extension-', {
       forceHeaded: true,
       onContext(context: { on(event: 'request', listener: (request: { url(): string }) => void): void }) {
