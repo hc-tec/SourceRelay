@@ -36,7 +36,7 @@ interface OverlayProbe {
     tag: string;
     role: string | null;
     labelClass: 'close_like' | 'icon_only' | 'unclassified';
-    insideOverlay: true;
+    insideOverlay: boolean;
     bounds: { x: number; y: number; width: number; height: number };
     pointerHitTarget: boolean;
   };
@@ -381,9 +381,12 @@ async function readOverlayProbe(page: Page, timeoutMs: number): Promise<OverlayP
         insideOverlay: boolean;
         topLeft: boolean;
         pointerHitTarget: boolean;
-      } => Boolean(candidate) && candidate.rect.top >= 0 && candidate.rect.left >= 0 &&
-        candidate.rect.right <= window.innerWidth && candidate.rect.bottom <= window.innerHeight &&
-        candidate.pointerHitTarget && candidate.labelClass !== 'unclassified')
+      } => {
+        if (!candidate) return false;
+        return candidate.rect.top >= 0 && candidate.rect.left >= 0 &&
+          candidate.rect.right <= window.innerWidth && candidate.rect.bottom <= window.innerHeight &&
+          candidate.pointerHitTarget && candidate.labelClass !== 'unclassified';
+      })
         .sort((left, right) => Number(right.insideOverlay) - Number(left.insideOverlay) ||
           Number(right.topLeft) - Number(left.topLeft) ||
           (left.labelClass === 'close_like' ? 0 : 1) - (right.labelClass === 'close_like' ? 0 : 1) ||
