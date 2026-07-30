@@ -128,7 +128,7 @@ async function visit(root, current, result) {
 }
 
 function startScript() {
-  return `$ErrorActionPreference = 'Stop'\nparam(\n  [int]$Port = 43127,\n  [string]$UserBrowserHome = (Join-Path $env:LOCALAPPDATA 'PersonalIntelligenceCollector')\n)\n$env:COLLECTOR_GATEWAY_PORT = [string]$Port\n$env:COLLECTOR_USER_BROWSER_HOME = $UserBrowserHome\n$env:COLLECTOR_USER_BROWSER_STATE_DIR = (Join-Path $UserBrowserHome 'gateway')\nnode (Join-Path $PSScriptRoot 'dist\\user-browser-server.js')\n`;
+  return `param(\n  [int]$Port = 43127,\n  [string]$UserBrowserHome = (Join-Path $env:LOCALAPPDATA 'PersonalIntelligenceCollector')\n)\n$ErrorActionPreference = 'Stop'\n$env:COLLECTOR_GATEWAY_PORT = [string]$Port\n$env:COLLECTOR_USER_BROWSER_HOME = $UserBrowserHome\n$env:COLLECTOR_USER_BROWSER_STATE_DIR = (Join-Path $UserBrowserHome 'gateway')\nnode (Join-Path $PSScriptRoot 'dist\\user-browser-server.js')\n`;
 }
 
 function runNpm(args, cwd) {
