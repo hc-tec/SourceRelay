@@ -32,6 +32,17 @@ export interface ValidationCatalogEntry {
  */
 export const collectorValidationCatalog = [
   {
+    id: 'collector-core-import-boundaries',
+    tier: 'static',
+    owner: 'collector-core',
+    runner: 'npm',
+    command: 'npm run verify:core-boundaries',
+    timeoutMs: 30_000,
+    platformPolicy: 'forbidden',
+    ci: 'pull_request',
+    capabilities: ['layer-boundary', 'upper-application-isolation', 'dependency-direction']
+  },
+  {
     id: 'collector-production-build',
     tier: 'static',
     owner: 'collector-core',
