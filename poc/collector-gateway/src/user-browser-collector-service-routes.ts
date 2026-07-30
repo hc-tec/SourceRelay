@@ -5,26 +5,7 @@ import type {
   CollectorServiceAuditOutcome
 } from './collector-service-audit';
 import type { CollectorServiceClientRegistry } from './collector-service-clients';
-import {
-  enqueueBilibiliAccountInventoryWork,
-  enqueueBilibiliAccountInventoryUserSelectedTabWork,
-  enqueueBilibiliAccountProfileWork,
-  enqueueBilibiliCollectionSeriesDetailWork,
-  enqueueBilibiliCollectionSeriesOverviewWork,
-  enqueueBilibiliDanmakuWork,
-  enqueueBilibiliDiscussionUserSelectedTabWork,
-  enqueueBilibiliDynamicWork,
-  enqueueBilibiliNativeSearchBatchWork,
-  enqueueBilibiliNativeSearchWork,
-  enqueueBilibiliVideoDetailWork,
-  enqueueXiaohongshuPublicNotesSearchWork,
-  enqueueXiaohongshuAccountPublicNotesWork,
-  enqueueXiaohongshuNotePublicDetailWork,
-  enqueueXiaohongshuNotePublicCommentsWork,
-  enqueueXiaohongshuReplyWork,
-  reconcileExpiredExtensionWork,
-  type ExtensionWorkRouteContext
-} from './extension-work-routes';
+import { reconcileExpiredExtensionWork, type ExtensionWorkRouteContext } from './extension-work-routes';
 import { readJsonBody, safeErrorCode, sendJson } from './gateway-http';
 import {
   USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
@@ -37,6 +18,7 @@ import {
   sendUserBrowserServiceAccessDenied,
   type UserBrowserServicePrincipal
 } from './user-browser-collector-service-access';
+import { dispatchUserBrowserCapability } from './user-browser-capability-registry';
 import { listUserBrowserCapabilities } from './user-browser-capabilities';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
@@ -91,100 +73,7 @@ export async function handleUserBrowserCollectorServiceRoute(
     let operationId: string | null = null;
     try {
       const collection = userBrowserCollectorServiceRequestInput(await readJsonBody(request));
-      const operation = collection.capability === 'xiaohongshu.note.public_comment_replies.v1'
-        ? await enqueueXiaohongshuReplyWork(context,collection.browserBindingId,collection.input.maximumThreads)
-        : collection.capability === 'xiaohongshu.note.public_comments.v1'
-        ? await enqueueXiaohongshuNotePublicCommentsWork(context, collection.browserBindingId, collection.input.maximumScrolls)
-        : collection.capability === 'xiaohongshu.note.public_detail.v1'
-        ? await enqueueXiaohongshuNotePublicDetailWork(
-          context,
-          collection.browserBindingId,
-          collection.input.resultRank,
-          collection.executionTarget
-        )
-        : collection.capability === 'xiaohongshu.account.public_notes.v1'
-        ? await enqueueXiaohongshuAccountPublicNotesWork(
-          context,
-          collection.browserBindingId,
-          collection.input.maximumScrolls,
-          collection.executionTarget === 'ephemeral_public_profile_url' ? collection.input.profileUrl : undefined,
-          collection.executionTarget === 'discover_public_profile_from_note'
-        )
-        : collection.capability === 'xiaohongshu.search.public_notes.v1'
-        ? await enqueueXiaohongshuPublicNotesSearchWork(
-          context,
-          collection.browserBindingId,
-          collection.input.query,
-          collection.input.maximumDetails,
-          collection.input.comments
-        )
-        : collection.capability === 'bilibili.video_detail'
-        ? await enqueueBilibiliVideoDetailWork(
-          context,
-          collection.browserBindingId,
-          collection.input.canonicalVideoUrl
-        )
-        : collection.capability === 'bilibili.native_search'
-          ? await enqueueBilibiliNativeSearchWork(
-            context,
-            collection.browserBindingId,
-            collection.input.query
-          )
-          : collection.capability === 'bilibili.native_search_batch'
-            ? await enqueueBilibiliNativeSearchBatchWork(
-              context,
-              collection.browserBindingId,
-              collection.input.query
-            )
-          : collection.capability === 'bilibili.account_profile'
-            ? await enqueueBilibiliAccountProfileWork(
-              context,
-              collection.browserBindingId,
-              collection.input.canonicalProfileUrl
-            )
-            : collection.capability === 'bilibili.account_inventory'
-              ? collection.executionTarget === 'user_selected_tab'
-                ? await enqueueBilibiliAccountInventoryUserSelectedTabWork(
-                  context,
-                  collection.browserBindingId,
-                  collection.input.canonicalProfileUrl
-                )
-                : await enqueueBilibiliAccountInventoryWork(
-                  context,
-                  collection.browserBindingId,
-                  collection.input.canonicalProfileUrl
-                )
-              : collection.capability === 'bilibili.discussion'
-                  ? await enqueueBilibiliDiscussionUserSelectedTabWork(
-                    context,
-                    collection.browserBindingId,
-                    collection.input.canonicalVideoUrl
-                  )
-                  : collection.capability === 'bilibili.dynamic'
-                    ? await enqueueBilibiliDynamicWork(
-                  context,
-                  collection.browserBindingId,
-                  collection.input.canonicalProfileUrl
-                )
-                    : collection.capability === 'bilibili.collection_series.overview'
-                      ? await enqueueBilibiliCollectionSeriesOverviewWork(
-                        context,
-                        collection.browserBindingId,
-                        collection.input.canonicalProfileUrl
-                      )
-                      : collection.capability === 'bilibili.collection_series.detail'
-                        ? await enqueueBilibiliCollectionSeriesDetailWork(
-                          context,
-                          collection.browserBindingId,
-                          collection.input.canonicalProfileUrl,
-                          collection.input.stableSeriesId,
-                          collection.input.listType
-                        )
-                        : await enqueueBilibiliDanmakuWork(
-                          context,
-                          collection.browserBindingId,
-                          collection.input.canonicalVideoUrl
-                        );
+      const operation = await dispatchUserBrowserCapability(context, collection);
       operationId = operation.operationId;
       await audit(context, access.principal, 'collect', collection.capability, operationId, 'queued', null);
       sendJson(response, 201, {

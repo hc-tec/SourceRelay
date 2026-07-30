@@ -4,10 +4,7 @@ import type { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-acco
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
 import type { ExtensionWorkNativeSearchBatchArtifactStore } from './extension-work-native-search-batch-artifacts';
-import {
-  ExtensionWorkPassiveArtifactStore,
-  type PassiveDirectCapability
-} from './extension-work-passive-artifacts';
+import { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-artifacts';
 import { collectorServiceClientCreateInput, type CollectorServiceClientRegistry } from './collector-service-clients';
 import type { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-artifacts';
 import type { XiaohongshuAccountPublicNotesArtifactStore } from './xiaohongshu-account-public-notes-artifacts';
@@ -18,16 +15,17 @@ import type { CollectorServiceAuditLog } from './collector-service-audit';
 import { readJsonBody, requireSameOrigin, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
 import {
+  isUserBrowserArtifactCapability,
+  readUserBrowserArtifact
+} from './user-browser-artifact-reader-registry';
+import {
   authoriseUserBrowserServiceRequest,
   recordUserBrowserServiceAudit,
   sendUserBrowserServiceAccessDenied
 } from './user-browser-collector-service-access';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
-const DIRECT_ARTIFACT = new RegExp(
-  `^/v1/collect/artifacts/(bilibili\\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\\.overview|collection_series\\.detail|danmaku|discussion)|xiaohongshu\\.(?:(?:search|account)\\.public_notes|note\\.public_(?:detail|comments|comment_replies))\\.v1)/(${UUID})$`,
-  'i'
-);
+const DIRECT_ARTIFACT = new RegExp(`^/v1/collect/artifacts/([^/]+)/(${UUID})$`, 'i');
 
 export interface UserBrowserGatewayAdminRouteContext {
   identity: LoadedGatewayIdentity;
@@ -84,20 +82,9 @@ export async function handleUserBrowserGatewayAdminRoute(
   }
 
   const artifact = url.pathname.match(DIRECT_ARTIFACT);
-  if (request.method === 'GET' && artifact) {
+  if (request.method === 'GET' && artifact && isUserBrowserArtifactCapability(artifact[1]!)) {
     const access = await authoriseUserBrowserServiceRequest(request, context, 'artifacts:read');
-    const capability = artifact[1]! as
-      | 'bilibili.video_detail'
-      | 'bilibili.native_search'
-      | 'bilibili.native_search_batch'
-      | 'bilibili.account_profile'
-      | 'bilibili.account_inventory'
-      | 'xiaohongshu.search.public_notes.v1'
-      | 'xiaohongshu.account.public_notes.v1'
-      | 'xiaohongshu.note.public_detail.v1'
-      | 'xiaohongshu.note.public_comments.v1'
-      | 'xiaohongshu.note.public_comment_replies.v1'
-      | PassiveDirectCapability;
+    const capability = artifact[1]!;
     const artifactId = artifact[2]!;
     if (!access.granted) {
       await recordUserBrowserServiceAudit(context, null, 'artifact_read', {
@@ -111,27 +98,7 @@ export async function handleUserBrowserGatewayAdminRoute(
       sendUserBrowserServiceAccessDenied(response, access);
       return true;
     }
-    const view = capability === 'bilibili.video_detail'
-      ? await context.videoDetailArtifacts.get(artifactId)
-      : capability === 'bilibili.native_search'
-        ? await context.nativeSearchArtifacts.get(artifactId)
-        : capability === 'bilibili.native_search_batch'
-          ? await context.nativeSearchBatchDirectArtifacts.get(artifactId)
-        : capability === 'bilibili.account_profile'
-          ? await context.accountProfileArtifacts.get(artifactId)
-          : capability === 'bilibili.account_inventory'
-            ? await context.accountVideoInventoryArtifacts.get(artifactId)
-            : capability === 'xiaohongshu.search.public_notes.v1'
-              ? await context.xiaohongshuPublicNotesArtifacts.get(artifactId)
-              : capability === 'xiaohongshu.account.public_notes.v1'
-                ? await context.xiaohongshuAccountPublicNotesArtifacts.get(artifactId)
-                : capability === 'xiaohongshu.note.public_detail.v1'
-                  ? await context.xiaohongshuNotePublicDetailArtifacts.get(artifactId)
-                  : capability === 'xiaohongshu.note.public_comments.v1'
-                    ? await context.xiaohongshuNotePublicCommentsArtifacts.get(artifactId)
-                    : capability === 'xiaohongshu.note.public_comment_replies.v1'
-                      ? await context.xiaohongshuReplyArtifacts.get(artifactId)
-                  : await context.passiveDirectArtifacts.get(capability, artifactId);
+    const view = await readUserBrowserArtifact(context, capability, artifactId);
     if (!view) {
       await recordUserBrowserServiceAudit(context, access.principal, 'artifact_read', {
         capability,
