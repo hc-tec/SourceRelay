@@ -93,6 +93,9 @@ collect_and_wait(request)
 Python 使用 snake_case；JavaScript 使用 camelCase。二者的协议字段仍保持 Gateway
 定义的 camelCase，例如 `browserBindingId`、`executionTarget`、`operationId`。
 
+一个只负责上层能力门禁和命令行调用的参考应用位于
+[`apps/collector-python-sdk-smoke`](../../apps/collector-python-sdk-smoke/README.md)。
+
 ## 安全行为
 
 - 只允许 `http://127.0.0.1:<port>` loopback Gateway；

@@ -37,6 +37,9 @@ JavaScript 包内部进一步拆分为 `transport.mjs`、`validation.mjs`、`cli
 `public.mjs` 和 `index.mjs`；Python 包对应拆分为 `transport.py`、`validation.py`、
 `client.py`、`constants.py`、`errors.py` 和 `__init__.py`。
 
+上层 Python 参考应用位于 `apps/collector-python-sdk-smoke`，只做能力状态门禁、请求
+文件读取和结果输出，不复制 SDK 的 transport 或平台逻辑。
+
 ## 每个 SDK 内部的四层
 
 ### Transport

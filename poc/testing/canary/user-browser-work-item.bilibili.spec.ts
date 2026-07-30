@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { delimiter, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { approveExactExtensionPermission } from '../../collector-extension/scripts/native-permission-harness.mjs';
 import { launchProductionExtension } from '../../collector-extension/scripts/extension-test-harness.mjs';
@@ -115,6 +115,18 @@ test('direct extension work items read one real Bilibili detail and fixed native
         launched,
         platformNavigations,
         testInfo
+      });
+      await controlPage.close();
+      await consolePage.close();
+      return;
+    }
+
+    if (process.env.COLLECTOR_LIVE_CANARY_SCOPE === 'python_sdk') {
+      await runPythonSdkCanary({
+        gatewayOrigin,
+        clientToken: clientToken!,
+        bindingId: bindingId!,
+        platformNavigations
       });
       await controlPage.close();
       await consolePage.close();
@@ -486,4 +498,59 @@ async function runNativeSearchBatchCanary(input: {
   expect((await retainedSearchTab.screenshot({
     path: input.testInfo.outputPath('bilibili-native-search-batch-page-two-visible.png')
   })).byteLength).toBeGreaterThan(0);
+}
+
+async function runPythonSdkCanary(input: {
+  gatewayOrigin: string;
+  clientToken: string;
+  bindingId: string;
+  platformNavigations: string[];
+}): Promise<void> {
+  const pythonScript = resolve(pocRoot, 'collector-python-client', 'scripts', 'real_gateway_smoke.py');
+  const pythonSource = resolve(pocRoot, 'collector-python-client', 'src');
+  const pythonExecutable = process.env.PYTHON_EXECUTABLE ?? 'python';
+  const child = spawn(pythonExecutable, [pythonScript], {
+    cwd: resolve(pocRoot, 'collector-python-client'),
+    env: {
+      ...process.env,
+      COLLECTOR_SERVICE_ORIGIN: input.gatewayOrigin,
+      COLLECTOR_SERVICE_TOKEN: input.clientToken,
+      PYTHONPATH: [pythonSource, process.env.PYTHONPATH].filter(Boolean).join(delimiter)
+    },
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout?.setEncoding('utf8');
+  child.stderr?.setEncoding('utf8');
+  child.stdout?.on('data', (chunk: string) => { stdout += chunk; });
+  child.stderr?.on('data', (chunk: string) => { stderr += chunk; });
+  const exitCode = await new Promise<number>((resolvePromise, reject) => {
+    child.once('error', reject);
+    child.once('exit', (code) => resolvePromise(code ?? 1));
+  });
+  expect(exitCode, stderr || stdout).toBe(0);
+  const lastLine = stdout.trim().split(/\r?\n/).at(-1);
+  if (!lastLine) throw new Error('python_sdk_real_smoke_output_missing');
+  let summary: Record<string, unknown>;
+  try {
+    summary = JSON.parse(lastLine) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(`python_sdk_real_smoke_output_invalid:${String(error)}:${stdout}`);
+  }
+  expect(summary).toMatchObject({
+    capabilityCount: 18,
+    directReadyCount: 15,
+    onlineBinding: true,
+    catalogOnlyRejected: true,
+    operationState: 'completed',
+    operationCapability: 'bilibili.native_search',
+    artifactCapability: 'bilibili.native_search'
+  });
+  expect(summary.openapiPathCount).toBeGreaterThanOrEqual(5);
+  expect(summary.capturedItems).toBeGreaterThan(0);
+  const searchNavigations = input.platformNavigations
+    .filter((value) => new URL(value).hostname === 'search.bilibili.com');
+  expect(searchNavigations.length).toBeGreaterThanOrEqual(1);
 }

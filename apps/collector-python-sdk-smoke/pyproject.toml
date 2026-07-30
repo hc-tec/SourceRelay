@@ -1,0 +1,27 @@
+[project]
+name = "collector-python-sdk-smoke"
+version = "0.1.0"
+description = "Reference upper-layer application for the Intelligence Collector Python SDK."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9",
+]
+
+[project.scripts]
+collector-python-sdk = "collector_sdk_smoke.main:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["collector_sdk_smoke*"]
+namespaces = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
