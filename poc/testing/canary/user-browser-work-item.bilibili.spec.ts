@@ -133,6 +133,19 @@ test('direct extension work items read one real Bilibili detail and fixed native
       return;
     }
 
+    if (process.env.COLLECTOR_LIVE_CANARY_SCOPE === 'python_knowledge_pack') {
+      await runPythonKnowledgePackCanary({
+        gatewayOrigin,
+        clientToken: clientToken!,
+        bindingId: bindingId!,
+        platformNavigations,
+        testInfo
+      });
+      await controlPage.close();
+      await consolePage.close();
+      return;
+    }
+
     if (process.env.COLLECTOR_LIVE_CANARY_SCOPE === 'javascript_sdk') {
       await runJavaScriptSdkCanary({
         gatewayOrigin,
@@ -564,6 +577,80 @@ async function runPythonSdkCanary(input: {
   const searchNavigations = input.platformNavigations
     .filter((value) => new URL(value).hostname === 'search.bilibili.com');
   expect(searchNavigations.length).toBeGreaterThanOrEqual(1);
+}
+
+async function runPythonKnowledgePackCanary(input: {
+  gatewayOrigin: string;
+  clientToken: string;
+  bindingId: string;
+  platformNavigations: string[];
+  testInfo: { outputPath(path: string): string };
+}): Promise<void> {
+  const pythonScript = resolve(pocRoot, 'collector-python-client', 'scripts', 'real_knowledge_pack_smoke.py');
+  const pythonSource = resolve(pocRoot, 'collector-python-client', 'src');
+  const pythonExecutable = process.env.PYTHON_EXECUTABLE ?? 'python';
+  // Keep the pack root short on Windows. Playwright's evidence directory is
+  // intentionally descriptive and can exceed the filesystem path budget once
+  // capability and artifact names are appended.
+  const outputDirectory = await mkdtemp(resolve(tmpdir(), 'collector-live-kp-'));
+  const child = spawn(pythonExecutable, [pythonScript], {
+    cwd: resolve(pocRoot, 'collector-python-client'),
+    env: {
+      ...process.env,
+      COLLECTOR_SERVICE_ORIGIN: input.gatewayOrigin,
+      COLLECTOR_SERVICE_TOKEN: input.clientToken,
+      COLLECTOR_KNOWLEDGE_PACK_BINDING_ID: input.bindingId,
+      COLLECTOR_KNOWLEDGE_PACK_PROFILE_URL: 'https://space.bilibili.com/7481602',
+      COLLECTOR_KNOWLEDGE_PACK_OUTPUT_DIR: outputDirectory,
+      COLLECTOR_KNOWLEDGE_PACK_MAX_DETAILS: '1',
+      PYTHONPATH: [pythonSource, process.env.PYTHONPATH].filter(Boolean).join(delimiter)
+    },
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout?.setEncoding('utf8');
+  child.stderr?.setEncoding('utf8');
+  child.stdout?.on('data', (chunk: string) => { stdout += chunk; });
+  child.stderr?.on('data', (chunk: string) => { stderr += chunk; });
+  const exitCode = await new Promise<number>((resolvePromise, reject) => {
+    child.once('error', reject);
+    child.once('exit', (code) => resolvePromise(code ?? 1));
+  });
+  expect(exitCode, stderr || stdout).toBe(0);
+  const lastLine = stdout.trim().split(/\r?\n/).at(-1);
+  if (!lastLine) throw new Error('python_knowledge_pack_smoke_output_missing');
+  let summary: Record<string, unknown>;
+  try {
+    summary = JSON.parse(lastLine) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(`python_knowledge_pack_smoke_output_invalid:${String(error)}:${stdout}`);
+  }
+  expect(summary).toMatchObject({
+    state: 'completed',
+    counts: {
+      collectionOperations: 3,
+      successfulOperations: 3,
+      partialOperations: 0,
+      failedOperations: 0,
+      resources: 2
+    },
+    capabilities: [
+      'bilibili.account_profile',
+      'bilibili.account_inventory',
+      'bilibili.video_detail'
+    ]
+  });
+  const bilibiliNavigations = input.platformNavigations.filter((value) => {
+    const url = new URL(value);
+    return url.hostname === 'space.bilibili.com' || url.hostname === 'www.bilibili.com';
+  });
+  // The inventory may reuse the account document already reached by the
+  // profile work item. Each capability's own artifact action ledger remains
+  // the authoritative at-most-once evidence; document events should only
+  // prove that the run reached the two required public roles.
+  expect(bilibiliNavigations.length).toBeGreaterThanOrEqual(2);
 }
 
 async function runJavaScriptSdkCanary(input: {
