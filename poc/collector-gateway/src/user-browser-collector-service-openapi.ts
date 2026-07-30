@@ -773,7 +773,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             capability: {
               type: 'string',
               enum: [
-                'bilibili.video_detail', 'bilibili.native_search',
+                'bilibili.video_detail', 'bilibili.native_search', 'bilibili.native_search_batch',
                 'bilibili.account_profile', 'bilibili.account_inventory',
                 'bilibili.dynamic', 'bilibili.collection_series.overview',
                 'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion',
@@ -805,7 +805,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             capability: {
               type: 'string',
               enum: [
-                'bilibili.video_detail', 'bilibili.native_search',
+                'bilibili.video_detail', 'bilibili.native_search', 'bilibili.native_search_batch',
                 'bilibili.account_profile', 'bilibili.account_inventory',
                 'bilibili.dynamic', 'bilibili.collection_series.overview',
                 'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion',

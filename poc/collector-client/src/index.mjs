@@ -8,7 +8,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const TOKEN_PATTERN = /^cst_[A-Za-z0-9_-]{43}$/;
 const SAFE_ERROR_PATTERN = /^[a-z0-9_.-]{1,120}$/i;
 const TERMINAL_STATES = new Set(['completed', 'partial', 'stopped', 'failed']);
-const DIRECT_CAPABILITIES = new Set([
+const DIRECT_CAPABILITY_NAMES = Object.freeze([
   'bilibili.video_detail',
   'bilibili.native_search',
   'bilibili.native_search_batch',
@@ -25,6 +25,7 @@ const DIRECT_CAPABILITIES = new Set([
   'xiaohongshu.note.public_comments.v1',
   'xiaohongshu.note.public_comment_replies.v1'
 ]);
+const DIRECT_CAPABILITIES = new Set(DIRECT_CAPABILITY_NAMES);
 const DIRECT_EXECUTION_TARGETS = new Set([
   'collector_work_tab',
   'user_selected_tab',
@@ -52,6 +53,15 @@ export class CollectorClientError extends Error {
     this.status = status;
     if (details !== undefined) this.details = details;
   }
+}
+
+/**
+ * Returns the capability names this client is allowed to submit through the
+ * direct user-owned-browser API. The returned array is detached from the
+ * internal validator state so callers cannot mutate request validation.
+ */
+export function listDirectCapabilities() {
+  return [...DIRECT_CAPABILITY_NAMES];
 }
 
 /**

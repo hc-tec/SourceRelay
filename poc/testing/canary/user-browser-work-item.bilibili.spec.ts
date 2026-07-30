@@ -106,6 +106,21 @@ test('direct extension work items read one real Bilibili detail and fixed native
     const bindingPayload = await bindingResponse.json() as { bindings?: { browserBindingId?: string; state?: string }[] };
     const bindingId = bindingPayload.bindings?.find((candidate) => candidate.state === 'online')?.browserBindingId ?? null;
     expect(bindingId).toMatch(/^[0-9a-f-]{36}$/i);
+
+    if (process.env.COLLECTOR_LIVE_CANARY_SCOPE === 'native_search_batch') {
+      await runNativeSearchBatchCanary({
+        gatewayOrigin,
+        clientToken: clientToken!,
+        bindingId: bindingId!,
+        launched,
+        platformNavigations,
+        testInfo
+      });
+      await controlPage.close();
+      await consolePage.close();
+      return;
+    }
+
     const dispatchResponse = await fetch(`${gatewayOrigin}/v2/collect`, {
         method: 'POST',
         headers: {
@@ -319,4 +334,156 @@ async function stopGateway(child: ChildProcess): Promise<void> {
       resolvePromise();
     });
   });
+}
+
+async function runNativeSearchBatchCanary(input: {
+  gatewayOrigin: string;
+  clientToken: string;
+  bindingId: string;
+  launched: Awaited<ReturnType<typeof launchProductionExtension>>;
+  platformNavigations: string[];
+  testInfo: { outputPath(path: string): string };
+}): Promise<void> {
+  const dispatchResponse = await fetch(`${input.gatewayOrigin}/v2/collect`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${input.clientToken}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      schemaVersion: 2,
+      browserBindingId: input.bindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.native_search_batch',
+      executionTarget: 'collector_work_tab',
+      input: { query: nativeSearchQuery }
+    })
+  });
+  const dispatch = await dispatchResponse.json() as { result?: { operationId?: string } };
+  expect(dispatchResponse.status).toBe(201);
+  const operationId = dispatch.result?.operationId;
+  expect(operationId).toMatch(/^[0-9a-f-]{36}$/i);
+
+  await expect.poll(async () => {
+    const response = await fetch(`${input.gatewayOrigin}/v2/collect/operations/${operationId}`, {
+      headers: { authorization: `Bearer ${input.clientToken}` }
+    });
+    const payload = await response.json() as {
+      result?: { state?: string; errorCode?: string | null; terminalReason?: string | null };
+    };
+    return payload.result?.state === 'completed'
+      ? 'completed'
+      : `${payload.result?.state ?? 'missing'}:${payload.result?.errorCode ?? 'none'}:${payload.result?.terminalReason ?? 'none'}`;
+  }, { timeout: 120_000, intervals: [1_000, 2_000, 5_000] }).toBe('completed');
+
+  const finalResponse = await fetch(`${input.gatewayOrigin}/v2/collect/operations/${operationId}`, {
+    headers: { authorization: `Bearer ${input.clientToken}` }
+  });
+  const finalOperation = await finalResponse.json() as {
+    result?: {
+      state?: string;
+      terminalReason?: string | null;
+      artifact?: { artifactId?: string; retrievalPath?: string };
+    };
+  };
+  expect(finalOperation.result?.state).toBe('completed');
+  expect(finalOperation.result?.terminalReason).toBe('search_batch_ready');
+  expect(finalOperation.result?.artifact?.artifactId).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(finalOperation.result?.artifact?.retrievalPath).toMatch(/^\/v1\/collect\/artifacts\/bilibili\.native_search_batch\//);
+
+  const artifactResponse = await fetch(`${input.gatewayOrigin}${finalOperation.result?.artifact?.retrievalPath}`, {
+    headers: { authorization: `Bearer ${input.clientToken}` }
+  });
+  expect(artifactResponse.status).toBe(200);
+  const payload = await artifactResponse.json() as {
+    capability?: string;
+    artifact?: {
+      summary?: { capability?: string; itemCount?: number; capturedPages?: number };
+      provenance?: {
+        environment?: string;
+        executionTarget?: string;
+        captureMode?: string;
+        responseBodies?: string;
+        semanticActions?: number;
+        platformNavigations?: number;
+      };
+      search?: {
+        resultType?: string;
+        sort?: string;
+        requestedPages?: number[];
+        observedPages?: number[];
+        queryDigest?: string;
+      };
+      actions?: Array<{ page?: number; attempted?: boolean; attemptCount?: number; outcome?: string }>;
+      result?: {
+        navigation?: { attempted?: boolean; attemptCount?: number };
+        observation?: { pages?: Array<{ page?: number; cards?: unknown[] }> };
+      };
+    };
+  };
+  expect(payload.capability).toBe('bilibili.native_search_batch');
+  expect(payload.artifact?.summary).toMatchObject({
+    capability: 'bilibili.native_search_batch',
+    capturedPages: 2
+  });
+  expect(payload.artifact?.summary?.itemCount).toBeGreaterThan(0);
+  expect(payload.artifact?.provenance).toMatchObject({
+    environment: 'user_owned_browser_extension',
+    executionTarget: 'collector_work_tab',
+    captureMode: 'bounded_multi_page_dom_projection',
+    responseBodies: 'not_read',
+    semanticActions: 0,
+    platformNavigations: 2
+  });
+  expect(payload.artifact?.search).toMatchObject({
+    resultType: 'comprehensive',
+    sort: 'relevance',
+    requestedPages: [1, 2],
+    observedPages: [1, 2]
+  });
+  expect(payload.artifact?.search?.queryDigest).toMatch(/^[a-f0-9]{64}$/);
+  expect(payload.artifact?.actions).toEqual([
+    expect.objectContaining({
+      actionId: 'open_fixed_native_search_page_1',
+      page: 1,
+      attempted: true,
+      attemptCount: 1,
+      outcome: 'completed',
+      errorCode: null
+    }),
+    expect.objectContaining({
+      actionId: 'open_fixed_native_search_page_2',
+      page: 2,
+      attempted: true,
+      attemptCount: 1,
+      outcome: 'completed',
+      errorCode: null
+    })
+  ]);
+  expect(payload.artifact?.result?.navigation).toEqual({ attempted: true, attemptCount: 2 });
+  expect(payload.artifact?.result?.observation?.pages?.map((page) => page.page)).toEqual([1, 2]);
+
+  const pageKeys = new Set(input.platformNavigations
+    .filter((value) => new URL(value).hostname === 'search.bilibili.com')
+    .map((value) => {
+      const url = new URL(value);
+      return url.searchParams.get('page') ?? '1';
+    }));
+  expect(pageKeys).toEqual(new Set(['1', '2']));
+
+  const retainedSearchTab = input.launched.context.pages().find((page) => {
+    try {
+      const url = new URL(page.url());
+      return url.hostname === 'search.bilibili.com' && url.pathname === '/all' && url.searchParams.get('page') === '2';
+    } catch {
+      return false;
+    }
+  });
+  expect(retainedSearchTab).toBeTruthy();
+  expect(retainedSearchTab?.isClosed()).toBe(false);
+  if (!retainedSearchTab) throw new Error('live_canary_retained_batch_search_work_tab_missing');
+  await expect(retainedSearchTab.evaluate(() => document.visibilityState)).resolves.toBe('visible');
+  expect((await retainedSearchTab.screenshot({
+    path: input.testInfo.outputPath('bilibili-native-search-batch-page-two-visible.png')
+  })).byteLength).toBeGreaterThan(0);
 }
