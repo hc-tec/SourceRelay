@@ -14,7 +14,7 @@
 当前系统已经有一些正确的边界，但仍处于“能力闭环先跑起来、长期分层随后补齐”的阶段。
 最明显的越界是当前的 `knowledge_pack.py`：它同时导入 B站 request builder、调用
 Collector client、解析平台 artifact、投影资源、写本地目录和维护 provenance。它适合
-MVP 验证，但不能成为最终的包结构。
+MVP 验证，但不能继续作为 Collector Core 的正式业务入口；知识包属于仓库外的上层应用。
 
 目标不是为了形式上的类和目录而抽象，而是确保未来替换以下任一部分时，其余层不需要
 跟着修改：
@@ -44,7 +44,7 @@ MVP 验证，但不能成为最终的包结构。
 
 | 位置 | 当前问题 | 长期风险 | 处理方向 |
 |---|---|---|---|
-| `knowledge_pack.py` | 请求构造、B站语义、任务编排、本地写盘混在一个模块 | 换存储或换平台会改动用例 | 拆成 use case、source port、storage adapter |
+| `knowledge_pack.py` | 请求构造、B站语义、任务编排、本地写盘混在一个模块 | 污染 Core 并把上层业务绑死在 SDK | 迁移到仓库外的知识包项目，Core 只保留协议兼容边界 |
 | Python/JS SDK | 两种语言分别镜像 capability 输入契约 | 契约更新时可能漂移 | 保持 SDK 独立，但增加协议一致性门禁；后续再考虑机器契约生成 |
 | Gateway `/v2/collect` route | route 内有很长的 capability 条件分支 | 每增加平台都修改核心路由 | 改为 capability registry + handler |
 | artifact retrieval route | 通过 capability 条件选择具体 artifact store | 存储实现泄漏到 HTTP 路由 | 改为 artifact reader registry |
@@ -190,8 +190,9 @@ client
 SDK 可以提供 capability builder 和 raw-first model，因为它们属于协议适配；但不应拥有
 `build_knowledge_pack`、OCR、媒体下载或本地知识库业务。
 
-当前已经加入 SDK 的 knowledge-pack 入口属于 MVP 过渡实现，后续应迁移到独立的
-`collector-knowledge-pack` 包或上层应用包，并保留兼容 facade 一段时间。
+当前已经加入 SDK 的 knowledge-pack 入口属于 MVP 过渡实现。后续应迁移到仓库外的
+上层知识包项目，并保留一个明确标记为 deprecated 的兼容 facade；Core 不再增加新的
+知识包、汇总或 DeepResearch 场景方法。
 
 ### 5.5 Storage / Processing 层
 
@@ -269,36 +270,59 @@ registered work item
 
 插件策略不能向上层暴露底层观察器对象，也不能把任意页面控制能力塞回 Gateway。
 
-## 7. 当前知识包 MVP 的迁移方案
+## 7. 上层知识包不进入当前 Core 仓库
 
-不做一次性重写，按以下顺序拆：
-
-### 第一步：先保留行为，拆文件
-
-将当前 `knowledge_pack.py` 拆为：
+当前边界不是把 `poc` 再拆成更多子项目，而是把上层业务放到当前仓库之外：
 
 ```text
-collector-knowledge-pack/
-  domain.py             公共 Resource / Evidence / Coverage
-  ports.py              CollectionPort / StorePort
-  application.py        BuildBilibiliKnowledgePack use case
-  adapters/bilibili.py  B站 builder + artifact projector
-  storage/filesystem.py UTF-8 manifest / JSONL / raw artifact
+Collector Core（当前仓库）
+  → Local Collector Service API / OpenAPI / JS SDK / Python SDK
+  → 独立的知识包与汇总项目
+```
+
+上层项目负责：
+
+- B站、小红书等多次采集的任务编排；
+- `Resource`、`Evidence`、`KnowledgePack` 和 provenance 汇总；
+- 文件系统、数据库、全文索引和向量索引；
+- 图片/视频及时落盘、OCR、ASR、关键帧和摘要；
+- DeepResearch、CLI、FastAPI 或其他业务应用适配。
+
+Core 只负责：
+
+- 已登记的浏览器采集 capability；
+- 受控页面动作、DOM/XHR 投影和 raw artifact；
+- Gateway 鉴权、预算、Profile 绑定、生命周期和审计；
+- 稳定的 operation/artifact/API/SDK 合同。
+
+### 第一步：冻结 Core 内的过渡入口
+
+当前 `knowledge_pack.py` 和 SDK 中的 knowledge-pack 入口只作为迁移兼容层维护，暂不扩展
+新的平台或汇总字段。新业务代码不得继续导入它们。
+
+```text
+独立上层仓库/
+  knowledge-pack/
+    domain.py             公共 Resource / Evidence / Coverage
+    ports.py              CollectionPort / StorePort
+    application.py        BuildBilibiliKnowledgePack use case
+    adapters/bilibili.py  B站 builder + artifact projector
+    storage/filesystem.py UTF-8 manifest / JSONL / raw artifact
 ```
 
 `CollectorClient` 保持只负责 Gateway 协议；旧入口可暂时从 SDK re-export，标记为迁移
-兼容层，不再在 SDK 内增加新的场景业务。
+兼容层，不再在 SDK 内增加新的场景业务。外部上层项目通过已发布版本依赖 SDK，不允许
+通过相对路径直接 import Core 内部模块。
 
-### 第二步：加依赖规则门禁
+### 第二步：分别加依赖规则门禁
 
-- Python 使用 import-linter 或自定义 AST 检查；
-- TypeScript 使用 eslint/import graph 或构建脚本检查；
-- domain 层禁止 `httpx`、`pathlib`、Playwright、Chrome API；
-- application 层禁止平台 URL、selector、tab ID 和浏览器模块；
-- storage 层禁止导入 B站、小红书或扩展代码；
-- extension/Gateway 禁止导入知识包和 DeepResearch 代码。
+- Core 使用 TypeScript import graph 和构建门禁；
+- 上层项目使用 Python/TypeScript 自己的 import-linter、类型检查和测试门禁；
+- Core 的 domain/contract 不得导入上层项目；
+- 上层项目不得导入 Core 的 Extension、Browser Host、Profile 或平台策略内部模块；
+- 两个项目之间只允许走版本化 API/SDK 合同。
 
-### 第三步：再拆 Gateway registry
+### 第三步：继续完善 Core 内部 registry
 
 先迁移已有 15 项 direct-ready capability，保持 wire contract 和 artifact path 不变；
 确认 unit、integration、real canary 都通过后，再允许新平台以 registry 方式加入。
@@ -335,4 +359,3 @@ collector-knowledge-pack/
   → 再接媒体与多模态
   → 最后扩展小红书、知乎、公众号和 DeepResearch
 ```
-

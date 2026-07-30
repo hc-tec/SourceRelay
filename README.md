@@ -23,6 +23,17 @@ docs/design/              1–100 题决策账本、产品规格、审计和实�
 skills/recon-live-web-interactions/  真实网页人类视角交互侦察 Skill
 ```
 
+## 开源仓库边界
+
+本仓库是 Collector Core：负责 MV3 浏览器插件、必要的本地 Browser Host/Gateway、
+Contracts、JS/Python SDK 以及经过真实验证的平台注册采集能力。它的交付物是受控的
+operation、raw artifact 和稳定的 Local Collector Service API。
+
+知识包编排、跨平台汇总、媒体处理、OCR/ASR、DeepResearch、CLI、研究控制台和其他
+产品级上层应用不属于本仓库。未来这些内容应在仓库外的独立项目中实现，只通过版本化
+API/OpenAPI/SDK 使用 Collector Core；当前仓库内的 `apps/` 仅用于 smoke、验证和开发，
+不作为上层产品目录。
+
 当前已经完成：
 
 - P0 产品契约、生产 bundle、MV3 Manifest、权限和自动扩展加载门禁；
