@@ -1,4 +1,14 @@
 import {
+  canonicalBilibiliAccountProfileUrl,
+  canonicalBilibiliPassiveVideoWorkUrl,
+  canonicalBilibiliVideoWorkUrl,
+  canonicalXiaohongshuPublicProfileUrl,
+  normaliseBilibiliNativeSearchRoute,
+  USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
+  type XiaohongshuProfileScrollCount
+} from '@intelligence/collector-contracts';
+import {
   enqueueBilibiliAccountInventoryUserSelectedTabWork,
   enqueueBilibiliAccountInventoryWork,
   enqueueBilibiliAccountProfileWork,
@@ -16,19 +26,54 @@ import {
   enqueueXiaohongshuPublicNotesSearchWork,
   enqueueXiaohongshuReplyWork,
   type ExtensionWorkRouteContext
-} from './extension-work-routes';
-import type { ExtensionWorkOperationSummary } from './extension-work-queue';
-import type { UserBrowserCollectorServiceRequest } from './user-browser-collector-service-contract';
+} from './extension-work-routes.js';
+import type { ExtensionWorkOperationSummary } from './extension-work-queue.js';
+import type {
+  UserBrowserAccountInventoryCollectorServiceRequest,
+  UserBrowserAccountProfileCollectorServiceRequest,
+  UserBrowserCollectionSeriesDetailCollectorServiceRequest,
+  UserBrowserCollectionSeriesOverviewCollectorServiceRequest,
+  UserBrowserCollectorServiceRequest,
+  UserBrowserDanmakuCollectorServiceRequest,
+  UserBrowserVideoDiscussionCollectorServiceRequest,
+  UserBrowserDynamicCollectorServiceRequest,
+  UserBrowserNativeSearchBatchCollectorServiceRequest,
+  UserBrowserNativeSearchCollectorServiceRequest,
+  UserBrowserVideoDetailCollectorServiceRequest,
+  UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest,
+  UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest,
+  UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest,
+  UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest,
+  UserBrowserXiaohongshuReplyCollectorServiceRequest
+} from './user-browser-collector-service-contract.js';
 
 export type UserBrowserExecutableCapability = UserBrowserCollectorServiceRequest['capability'];
+type RequestFor<C extends UserBrowserExecutableCapability> = Extract<UserBrowserCollectorServiceRequest, { capability: C }>;
+type Platform = 'bilibili' | 'xiaohongshu';
+type ExecutionTarget = UserBrowserCollectorServiceRequest['executionTarget'];
 
-type RequestFor<C extends UserBrowserExecutableCapability> = Extract<
-  UserBrowserCollectorServiceRequest,
-  { capability: C }
->;
+interface ValidRequestEnvelope {
+  schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  browserBindingId: string;
+  platform: Platform;
+  capability: string;
+  executionTarget: ExecutionTarget;
+  input: Record<string, unknown>;
+}
+
+export type UserBrowserCapabilityBudgetPolicy =
+  | 'fixed_queue_budget'
+  | 'input_bounded_queue_budget'
+  | 'fixed_observation_budget';
 
 export interface UserBrowserCapabilityRegistryEntry<C extends UserBrowserExecutableCapability> {
   capability: C;
+  /** Validates the common envelope and normalises the capability input. */
+  validate: (envelope: ValidRequestEnvelope) => RequestFor<C>;
+  /** Declares the only execution targets admitted by this capability. */
+  executionTargets: readonly ExecutionTarget[];
+  /** Queue-side budget policy; no caller supplied budget is accepted. */
+  budgetPolicy: UserBrowserCapabilityBudgetPolicy;
   dispatch: (
     context: ExtensionWorkRouteContext,
     request: RequestFor<C>
@@ -39,162 +84,240 @@ type UserBrowserCapabilityRegistry = {
   [C in UserBrowserExecutableCapability]: UserBrowserCapabilityRegistryEntry<C>;
 };
 
-/**
- * The only executable dispatch table for the user-owned-browser `/v2` lane.
- * Request validation remains in the wire-contract parser; this registry owns
- * the capability-to-enqueue mapping and does not expose a generic fallback.
- */
+const INVALID_REQUEST = 'user_browser_collector_service_request_invalid';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function invalid(): never {
+  throw new Error(INVALID_REQUEST);
+}
+
+function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+function envelope(value: unknown): ValidRequestEnvelope {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();
+  const candidate = value as Record<string, unknown>;
+  const allowed = new Set(['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input']);
+  if (Object.keys(candidate).some((key) => !allowed.has(key)) ||
+    candidate.schemaVersion !== USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION ||
+    typeof candidate.browserBindingId !== 'string' || !UUID_PATTERN.test(candidate.browserBindingId) ||
+    (candidate.platform !== 'bilibili' && candidate.platform !== 'xiaohongshu') ||
+    typeof candidate.capability !== 'string' ||
+    !isExecutionTarget(candidate.executionTarget) ||
+    !candidate.input || typeof candidate.input !== 'object' || Array.isArray(candidate.input)) return invalid();
+  return {
+    schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+    browserBindingId: candidate.browserBindingId,
+    platform: candidate.platform,
+    capability: candidate.capability,
+    executionTarget: candidate.executionTarget,
+    input: candidate.input as Record<string, unknown>
+  };
+}
+
+function isExecutionTarget(value: unknown): value is ExecutionTarget {
+  return value === 'collector_work_tab' || value === 'user_selected_tab' ||
+    value === 'existing_public_explore_tab' || value === 'existing_public_profile_tab' ||
+    value === 'ephemeral_public_profile_url' || value === 'discover_public_profile_from_note' ||
+    value === 'existing_public_search_tab' || value === 'existing_public_note_overlay';
+}
+
+function requirePlatform(value: ValidRequestEnvelope, platform: Platform): void {
+  if (value.platform !== platform) invalid();
+}
+
+function requireTarget<T extends ExecutionTarget>(value: ValidRequestEnvelope, target: T): void {
+  if (value.executionTarget !== target) invalid();
+}
+
+function parseBilibiliVideoDetail(value: ValidRequestEnvelope): UserBrowserVideoDetailCollectorServiceRequest {
+  requirePlatform(value, 'bilibili');
+  requireTarget(value, 'collector_work_tab');
+  if (value.capability !== 'bilibili.video_detail' || !exactKeys(value.input, ['canonicalVideoUrl']) ||
+    typeof value.input.canonicalVideoUrl !== 'string') return invalid();
+  const canonicalVideoUrl = canonicalBilibiliVideoWorkUrl(value.input.canonicalVideoUrl);
+  if (!canonicalVideoUrl) return invalid();
+  return { ...base(value, 'bilibili'), capability: 'bilibili.video_detail', executionTarget: 'collector_work_tab', input: { canonicalVideoUrl } };
+}
+
+function parseBilibiliNativeSearch(value: ValidRequestEnvelope): UserBrowserNativeSearchCollectorServiceRequest {
+  requirePlatform(value, 'bilibili');
+  requireTarget(value, 'collector_work_tab');
+  if (value.capability !== 'bilibili.native_search' || !exactKeys(value.input, ['query']) || typeof value.input.query !== 'string') return invalid();
+  const route = normaliseBilibiliNativeSearchRoute({ query: value.input.query, resultType: 'comprehensive', sort: 'relevance', page: 1 });
+  if (!route) return invalid();
+  return { ...base(value, 'bilibili'), capability: 'bilibili.native_search', executionTarget: 'collector_work_tab', input: { query: route.query } };
+}
+
+function parseBilibiliNativeSearchBatch(value: ValidRequestEnvelope): UserBrowserNativeSearchBatchCollectorServiceRequest {
+  requirePlatform(value, 'bilibili');
+  requireTarget(value, 'collector_work_tab');
+  if (value.capability !== 'bilibili.native_search_batch' || !exactKeys(value.input, ['query']) || typeof value.input.query !== 'string') return invalid();
+  const route = normaliseBilibiliNativeSearchRoute({ query: value.input.query, resultType: 'comprehensive', sort: 'relevance', page: 1 });
+  if (!route) return invalid();
+  return { ...base(value, 'bilibili'), capability: 'bilibili.native_search_batch', executionTarget: 'collector_work_tab', input: { query: route.query } };
+}
+
+function parseBilibiliAccountProfile(value: ValidRequestEnvelope): UserBrowserAccountProfileCollectorServiceRequest {
+  requirePlatform(value, 'bilibili');
+  requireTarget(value, 'collector_work_tab');
+  if (value.capability !== 'bilibili.account_profile' || !exactKeys(value.input, ['canonicalProfileUrl']) || typeof value.input.canonicalProfileUrl !== 'string') return invalid();
+  const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(value.input.canonicalProfileUrl, 'strict_input');
+  if (!canonicalProfileUrl) return invalid();
+  return { ...base(value, 'bilibili'), capability: 'bilibili.account_profile', executionTarget: 'collector_work_tab', input: { canonicalProfileUrl } };
+}
+
+function parseBilibiliAccountInventory(value: ValidRequestEnvelope): UserBrowserAccountInventoryCollectorServiceRequest {
+  requirePlatform(value, 'bilibili');
+  if ((value.executionTarget !== 'collector_work_tab' && value.executionTarget !== 'user_selected_tab') ||
+    value.capability !== 'bilibili.account_inventory' || !exactKeys(value.input, ['canonicalProfileUrl']) || typeof value.input.canonicalProfileUrl !== 'string') return invalid();
+  const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(value.input.canonicalProfileUrl, 'strict_input');
+  if (!canonicalProfileUrl) return invalid();
+  return { ...base(value, 'bilibili'), capability: 'bilibili.account_inventory', executionTarget: value.executionTarget, input: { canonicalProfileUrl } };
+}
+
+function parseBilibiliProfileCapability(value: ValidRequestEnvelope, capability: 'bilibili.dynamic' | 'bilibili.collection_series.overview'): UserBrowserDynamicCollectorServiceRequest | UserBrowserCollectionSeriesOverviewCollectorServiceRequest {
+  requirePlatform(value, 'bilibili');
+  requireTarget(value, 'collector_work_tab');
+  if (value.capability !== capability || !exactKeys(value.input, ['canonicalProfileUrl']) || typeof value.input.canonicalProfileUrl !== 'string') return invalid();
+  const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(value.input.canonicalProfileUrl, 'strict_input');
+  if (!canonicalProfileUrl) return invalid();
+  return { ...base(value, 'bilibili'), capability, executionTarget: 'collector_work_tab', input: { canonicalProfileUrl } } as UserBrowserDynamicCollectorServiceRequest | UserBrowserCollectionSeriesOverviewCollectorServiceRequest;
+}
+
+function parseBilibiliSeriesDetail(value: ValidRequestEnvelope): UserBrowserCollectionSeriesDetailCollectorServiceRequest {
+  requirePlatform(value, 'bilibili');
+  requireTarget(value, 'collector_work_tab');
+  if (value.capability !== 'bilibili.collection_series.detail' || !exactKeys(value.input, ['canonicalProfileUrl', 'stableSeriesId', 'listType']) ||
+    typeof value.input.canonicalProfileUrl !== 'string' || typeof value.input.stableSeriesId !== 'string' ||
+    (value.input.listType !== 'series' && value.input.listType !== 'season')) return invalid();
+  const canonicalProfileUrl = canonicalBilibiliAccountProfileUrl(value.input.canonicalProfileUrl, 'strict_input');
+  if (!canonicalProfileUrl || !/^\d{1,20}$/.test(value.input.stableSeriesId) || value.input.stableSeriesId === '0') return invalid();
+  return { ...base(value, 'bilibili'), capability: 'bilibili.collection_series.detail', executionTarget: 'collector_work_tab', input: { canonicalProfileUrl, stableSeriesId: value.input.stableSeriesId, listType: value.input.listType } };
+}
+
+function parseBilibiliVideoPassive(value: ValidRequestEnvelope, capability: 'bilibili.danmaku' | 'bilibili.discussion'): UserBrowserDanmakuCollectorServiceRequest | UserBrowserVideoDiscussionCollectorServiceRequest {
+  requirePlatform(value, 'bilibili');
+  const target = capability === 'bilibili.discussion' ? 'user_selected_tab' : 'collector_work_tab';
+  requireTarget(value, target);
+  if (value.capability !== capability || !exactKeys(value.input, ['canonicalVideoUrl']) || typeof value.input.canonicalVideoUrl !== 'string') return invalid();
+  const canonicalVideoUrl = canonicalBilibiliPassiveVideoWorkUrl(value.input.canonicalVideoUrl);
+  if (!canonicalVideoUrl) return invalid();
+  return { ...base(value, 'bilibili'), capability, executionTarget: target, input: { canonicalVideoUrl } } as UserBrowserDanmakuCollectorServiceRequest | UserBrowserVideoDiscussionCollectorServiceRequest;
+}
+
+function parseXiaohongshuSearch(value: ValidRequestEnvelope): UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest {
+  requirePlatform(value, 'xiaohongshu');
+  requireTarget(value, 'existing_public_explore_tab');
+  if (value.capability !== 'xiaohongshu.search.public_notes.v1' || !validXiaohongshuSearchInput(value.input) ||
+    value.input.query !== value.input.query.trim() || value.input.query.length < 1 || value.input.query.length > 80 || /[\u0000-\u001f\u007f]/.test(value.input.query)) return invalid();
+  const maximumDetails = Object.hasOwn(value.input, 'maximumDetails') ? Number(value.input.maximumDetails) : undefined;
+  return { ...base(value, 'xiaohongshu'), capability: 'xiaohongshu.search.public_notes.v1', executionTarget: 'existing_public_explore_tab', input: { query: value.input.query, ...(maximumDetails === undefined ? {} : { maximumDetails }), ...(value.input.comments === undefined ? {} : { comments: value.input.comments }) } };
+}
+
+function parseXiaohongshuAccount(value: ValidRequestEnvelope): UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest {
+  requirePlatform(value, 'xiaohongshu');
+  if (value.capability !== 'xiaohongshu.account.public_notes.v1') return invalid();
+  const existing = value.executionTarget === 'existing_public_profile_tab' && exactKeys(value.input, ['maximumScrolls']);
+  const discovered = value.executionTarget === 'discover_public_profile_from_note' && exactKeys(value.input, ['maximumScrolls']);
+  const canonicalProfileUrl = typeof value.input.profileUrl === 'string' ? canonicalXiaohongshuPublicProfileUrl(value.input.profileUrl) : null;
+  const ephemeral = value.executionTarget === 'ephemeral_public_profile_url' && exactKeys(value.input, ['maximumScrolls', 'profileUrl']) && canonicalProfileUrl !== null;
+  const maximumScrolls = typeof value.input.maximumScrolls === 'number' ? value.input.maximumScrolls : null;
+  if ((!existing && !ephemeral && !discovered) || maximumScrolls === null || !Number.isSafeInteger(maximumScrolls) || maximumScrolls < 1 || maximumScrolls > (ephemeral || discovered ? 20 : 3)) return invalid();
+  const boundedMaximumScrolls = maximumScrolls as XiaohongshuProfileScrollCount;
+  return { ...base(value, 'xiaohongshu'), capability: 'xiaohongshu.account.public_notes.v1', executionTarget: ephemeral ? 'ephemeral_public_profile_url' : discovered ? 'discover_public_profile_from_note' : 'existing_public_profile_tab', input: ephemeral ? { maximumScrolls: boundedMaximumScrolls, profileUrl: canonicalProfileUrl! } : { maximumScrolls: boundedMaximumScrolls } };
+}
+
+function parseXiaohongshuDetail(value: ValidRequestEnvelope): UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest {
+  requirePlatform(value, 'xiaohongshu');
+  if (value.capability !== 'xiaohongshu.note.public_detail.v1' || (value.executionTarget !== 'existing_public_search_tab' && value.executionTarget !== 'existing_public_profile_tab') ||
+    !exactKeys(value.input, ['resultRank']) || !Number.isSafeInteger(value.input.resultRank) || Number(value.input.resultRank) < 1 || Number(value.input.resultRank) > 20) return invalid();
+  return { ...base(value, 'xiaohongshu'), capability: 'xiaohongshu.note.public_detail.v1', executionTarget: value.executionTarget, input: { resultRank: Number(value.input.resultRank) } };
+}
+
+function parseXiaohongshuComments(value: ValidRequestEnvelope): UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest {
+  requirePlatform(value, 'xiaohongshu');
+  requireTarget(value, 'existing_public_note_overlay');
+  if (value.capability !== 'xiaohongshu.note.public_comments.v1' || !exactKeys(value.input, ['maximumScrolls']) || !oneToThree(value.input.maximumScrolls)) return invalid();
+  return { ...base(value, 'xiaohongshu'), capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay', input: { maximumScrolls: value.input.maximumScrolls } };
+}
+
+function parseXiaohongshuReplies(value: ValidRequestEnvelope): UserBrowserXiaohongshuReplyCollectorServiceRequest {
+  requirePlatform(value, 'xiaohongshu');
+  requireTarget(value, 'existing_public_note_overlay');
+  if (value.capability !== 'xiaohongshu.note.public_comment_replies.v1' || !exactKeys(value.input, ['maximumThreads']) || !oneToThree(value.input.maximumThreads)) return invalid();
+  return { ...base(value, 'xiaohongshu'), capability: 'xiaohongshu.note.public_comment_replies.v1', executionTarget: 'existing_public_note_overlay', input: { maximumThreads: value.input.maximumThreads } };
+}
+
+function oneToThree(value: unknown): value is 1 | 2 | 3 {
+  return value === 1 || value === 2 || value === 3;
+}
+
+function validXiaohongshuSearchInput(
+  input: Record<string, unknown>
+): input is Record<string, unknown> & { query: string; maximumDetails?: number; comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } } } {
+  const keys = Object.keys(input);
+  if (!keys.every((key) => key === 'query' || key === 'maximumDetails' || key === 'comments') || typeof input.query !== 'string') return false;
+  if (Object.hasOwn(input, 'maximumDetails') && (!Number.isSafeInteger(input.maximumDetails) || Number(input.maximumDetails) < 0 || Number(input.maximumDetails) > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS)) return false;
+  if (!Object.hasOwn(input, 'comments')) return true;
+  if (typeof input.maximumDetails !== 'number' || input.maximumDetails <= 0 || !input.comments || typeof input.comments !== 'object' || Array.isArray(input.comments)) return false;
+  const comments = input.comments as Record<string, unknown>;
+  const commentKeys = Object.keys(comments);
+  if ((commentKeys.length !== 1 && commentKeys.length !== 2) || !Object.hasOwn(comments, 'maximumScrolls') || !oneToThree(comments.maximumScrolls)) return false;
+  if (!Object.hasOwn(comments, 'replies')) return commentKeys.length === 1;
+  if (commentKeys.length !== 2 || !comments.replies || typeof comments.replies !== 'object' || Array.isArray(comments.replies)) return false;
+  const replies = comments.replies as Record<string, unknown>;
+  return exactKeys(replies, ['maximumThreads']) && oneToThree(replies.maximumThreads);
+}
+
+function base<P extends Platform>(value: ValidRequestEnvelope, platform: P): {
+  schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  browserBindingId: string;
+  platform: P;
+} {
+  return { schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION, browserBindingId: value.browserBindingId, platform };
+}
+
 export const USER_BROWSER_CAPABILITY_REGISTRY: UserBrowserCapabilityRegistry = {
-  'bilibili.video_detail': {
-    capability: 'bilibili.video_detail',
-    dispatch: (context, request) => enqueueBilibiliVideoDetailWork(
-      context,
-      request.browserBindingId,
-      request.input.canonicalVideoUrl
-    )
-  },
-  'bilibili.native_search': {
-    capability: 'bilibili.native_search',
-    dispatch: (context, request) => enqueueBilibiliNativeSearchWork(
-      context,
-      request.browserBindingId,
-      request.input.query
-    )
-  },
-  'bilibili.native_search_batch': {
-    capability: 'bilibili.native_search_batch',
-    dispatch: (context, request) => enqueueBilibiliNativeSearchBatchWork(
-      context,
-      request.browserBindingId,
-      request.input.query
-    )
-  },
-  'bilibili.account_profile': {
-    capability: 'bilibili.account_profile',
-    dispatch: (context, request) => enqueueBilibiliAccountProfileWork(
-      context,
-      request.browserBindingId,
-      request.input.canonicalProfileUrl
-    )
-  },
-  'bilibili.account_inventory': {
-    capability: 'bilibili.account_inventory',
-    dispatch: (context, request) => request.executionTarget === 'user_selected_tab'
-      ? enqueueBilibiliAccountInventoryUserSelectedTabWork(
-        context,
-        request.browserBindingId,
-        request.input.canonicalProfileUrl
-      )
-      : enqueueBilibiliAccountInventoryWork(
-        context,
-        request.browserBindingId,
-        request.input.canonicalProfileUrl
-      )
-  },
-  'bilibili.dynamic': {
-    capability: 'bilibili.dynamic',
-    dispatch: (context, request) => enqueueBilibiliDynamicWork(
-      context,
-      request.browserBindingId,
-      request.input.canonicalProfileUrl
-    )
-  },
-  'bilibili.collection_series.overview': {
-    capability: 'bilibili.collection_series.overview',
-    dispatch: (context, request) => enqueueBilibiliCollectionSeriesOverviewWork(
-      context,
-      request.browserBindingId,
-      request.input.canonicalProfileUrl
-    )
-  },
-  'bilibili.collection_series.detail': {
-    capability: 'bilibili.collection_series.detail',
-    dispatch: (context, request) => enqueueBilibiliCollectionSeriesDetailWork(
-      context,
-      request.browserBindingId,
-      request.input.canonicalProfileUrl,
-      request.input.stableSeriesId,
-      request.input.listType
-    )
-  },
-  'bilibili.danmaku': {
-    capability: 'bilibili.danmaku',
-    dispatch: (context, request) => enqueueBilibiliDanmakuWork(
-      context,
-      request.browserBindingId,
-      request.input.canonicalVideoUrl
-    )
-  },
-  'bilibili.discussion': {
-    capability: 'bilibili.discussion',
-    dispatch: (context, request) => enqueueBilibiliDiscussionUserSelectedTabWork(
-      context,
-      request.browserBindingId,
-      request.input.canonicalVideoUrl
-    )
-  },
-  'xiaohongshu.search.public_notes.v1': {
-    capability: 'xiaohongshu.search.public_notes.v1',
-    dispatch: (context, request) => enqueueXiaohongshuPublicNotesSearchWork(
-      context,
-      request.browserBindingId,
-      request.input.query,
-      request.input.maximumDetails,
-      request.input.comments
-    )
-  },
-  'xiaohongshu.account.public_notes.v1': {
-    capability: 'xiaohongshu.account.public_notes.v1',
-    dispatch: (context, request) => enqueueXiaohongshuAccountPublicNotesWork(
-      context,
-      request.browserBindingId,
-      request.input.maximumScrolls,
-      request.executionTarget === 'ephemeral_public_profile_url' ? request.input.profileUrl : undefined,
-      request.executionTarget === 'discover_public_profile_from_note'
-    )
-  },
-  'xiaohongshu.note.public_detail.v1': {
-    capability: 'xiaohongshu.note.public_detail.v1',
-    dispatch: (context, request) => enqueueXiaohongshuNotePublicDetailWork(
-      context,
-      request.browserBindingId,
-      request.input.resultRank,
-      request.executionTarget
-    )
-  },
-  'xiaohongshu.note.public_comments.v1': {
-    capability: 'xiaohongshu.note.public_comments.v1',
-    dispatch: (context, request) => enqueueXiaohongshuNotePublicCommentsWork(
-      context,
-      request.browserBindingId,
-      request.input.maximumScrolls
-    )
-  },
-  'xiaohongshu.note.public_comment_replies.v1': {
-    capability: 'xiaohongshu.note.public_comment_replies.v1',
-    dispatch: (context, request) => enqueueXiaohongshuReplyWork(
-      context,
-      request.browserBindingId,
-      request.input.maximumThreads
-    )
-  }
+  'bilibili.video_detail': { capability: 'bilibili.video_detail', validate: parseBilibiliVideoDetail, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliVideoDetailWork(context, request.browserBindingId, request.input.canonicalVideoUrl) },
+  'bilibili.native_search': { capability: 'bilibili.native_search', validate: parseBilibiliNativeSearch, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliNativeSearchWork(context, request.browserBindingId, request.input.query) },
+  'bilibili.native_search_batch': { capability: 'bilibili.native_search_batch', validate: parseBilibiliNativeSearchBatch, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliNativeSearchBatchWork(context, request.browserBindingId, request.input.query) },
+  'bilibili.account_profile': { capability: 'bilibili.account_profile', validate: parseBilibiliAccountProfile, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliAccountProfileWork(context, request.browserBindingId, request.input.canonicalProfileUrl) },
+  'bilibili.account_inventory': { capability: 'bilibili.account_inventory', validate: parseBilibiliAccountInventory, executionTargets: ['collector_work_tab', 'user_selected_tab'], budgetPolicy: 'fixed_observation_budget', dispatch: (context, request) => request.executionTarget === 'user_selected_tab' ? enqueueBilibiliAccountInventoryUserSelectedTabWork(context, request.browserBindingId, request.input.canonicalProfileUrl) : enqueueBilibiliAccountInventoryWork(context, request.browserBindingId, request.input.canonicalProfileUrl) },
+  'bilibili.dynamic': { capability: 'bilibili.dynamic', validate: (value) => parseBilibiliProfileCapability(value, 'bilibili.dynamic') as UserBrowserDynamicCollectorServiceRequest, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliDynamicWork(context, request.browserBindingId, request.input.canonicalProfileUrl) },
+  'bilibili.collection_series.overview': { capability: 'bilibili.collection_series.overview', validate: (value) => parseBilibiliProfileCapability(value, 'bilibili.collection_series.overview') as UserBrowserCollectionSeriesOverviewCollectorServiceRequest, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliCollectionSeriesOverviewWork(context, request.browserBindingId, request.input.canonicalProfileUrl) },
+  'bilibili.collection_series.detail': { capability: 'bilibili.collection_series.detail', validate: parseBilibiliSeriesDetail, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliCollectionSeriesDetailWork(context, request.browserBindingId, request.input.canonicalProfileUrl, request.input.stableSeriesId, request.input.listType) },
+  'bilibili.danmaku': { capability: 'bilibili.danmaku', validate: (value) => parseBilibiliVideoPassive(value, 'bilibili.danmaku') as UserBrowserDanmakuCollectorServiceRequest, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliDanmakuWork(context, request.browserBindingId, request.input.canonicalVideoUrl) },
+  'bilibili.discussion': { capability: 'bilibili.discussion', validate: (value) => parseBilibiliVideoPassive(value, 'bilibili.discussion') as UserBrowserVideoDiscussionCollectorServiceRequest, executionTargets: ['user_selected_tab'], budgetPolicy: 'fixed_observation_budget', dispatch: (context, request) => enqueueBilibiliDiscussionUserSelectedTabWork(context, request.browserBindingId, request.input.canonicalVideoUrl) },
+  'xiaohongshu.search.public_notes.v1': { capability: 'xiaohongshu.search.public_notes.v1', validate: parseXiaohongshuSearch, executionTargets: ['existing_public_explore_tab'], budgetPolicy: 'input_bounded_queue_budget', dispatch: (context, request) => enqueueXiaohongshuPublicNotesSearchWork(context, request.browserBindingId, request.input.query, request.input.maximumDetails, request.input.comments) },
+  'xiaohongshu.account.public_notes.v1': { capability: 'xiaohongshu.account.public_notes.v1', validate: parseXiaohongshuAccount, executionTargets: ['existing_public_profile_tab', 'ephemeral_public_profile_url', 'discover_public_profile_from_note'], budgetPolicy: 'input_bounded_queue_budget', dispatch: (context, request) => enqueueXiaohongshuAccountPublicNotesWork(context, request.browserBindingId, request.input.maximumScrolls, request.executionTarget === 'ephemeral_public_profile_url' ? request.input.profileUrl : undefined, request.executionTarget === 'discover_public_profile_from_note') },
+  'xiaohongshu.note.public_detail.v1': { capability: 'xiaohongshu.note.public_detail.v1', validate: parseXiaohongshuDetail, executionTargets: ['existing_public_search_tab', 'existing_public_profile_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueXiaohongshuNotePublicDetailWork(context, request.browserBindingId, request.input.resultRank, request.executionTarget) },
+  'xiaohongshu.note.public_comments.v1': { capability: 'xiaohongshu.note.public_comments.v1', validate: parseXiaohongshuComments, executionTargets: ['existing_public_note_overlay'], budgetPolicy: 'input_bounded_queue_budget', dispatch: (context, request) => enqueueXiaohongshuNotePublicCommentsWork(context, request.browserBindingId, request.input.maximumScrolls) },
+  'xiaohongshu.note.public_comment_replies.v1': { capability: 'xiaohongshu.note.public_comment_replies.v1', validate: parseXiaohongshuReplies, executionTargets: ['existing_public_note_overlay'], budgetPolicy: 'input_bounded_queue_budget', dispatch: (context, request) => enqueueXiaohongshuReplyWork(context, request.browserBindingId, request.input.maximumThreads) }
 };
 
 export function listUserBrowserExecutableCapabilities(): UserBrowserExecutableCapability[] {
   return Object.keys(USER_BROWSER_CAPABILITY_REGISTRY) as UserBrowserExecutableCapability[];
 }
 
-export function isUserBrowserExecutableCapability(
-  value: string
-): value is UserBrowserExecutableCapability {
+export function isUserBrowserExecutableCapability(value: string): value is UserBrowserExecutableCapability {
   return Object.prototype.hasOwnProperty.call(USER_BROWSER_CAPABILITY_REGISTRY, value);
+}
+
+export function parseUserBrowserCollectorServiceRequest(value: unknown): UserBrowserCollectorServiceRequest {
+  const parsed = envelope(value);
+  if (!isUserBrowserExecutableCapability(parsed.capability)) return invalid();
+  const entry = USER_BROWSER_CAPABILITY_REGISTRY[parsed.capability] as UserBrowserCapabilityRegistryEntry<UserBrowserExecutableCapability>;
+  return entry.validate(parsed) as UserBrowserCollectorServiceRequest;
 }
 
 export async function dispatchUserBrowserCapability(
   context: ExtensionWorkRouteContext,
   request: UserBrowserCollectorServiceRequest
 ): Promise<ExtensionWorkOperationSummary> {
-  const entry = USER_BROWSER_CAPABILITY_REGISTRY[request.capability] as UserBrowserCapabilityRegistryEntry<UserBrowserExecutableCapability>;
+  const entry = USER_BROWSER_CAPABILITY_REGISTRY[request.capability] as UserBrowserCapabilityRegistryEntry<UserBrowserExecutableCapability> | undefined;
   if (!entry) throw new Error('user_browser_capability_dispatch_unavailable');
   return await entry.dispatch(context, request as never);
 }
