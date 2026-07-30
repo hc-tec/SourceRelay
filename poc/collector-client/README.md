@@ -51,3 +51,19 @@ console.log(artifact?.artifact);
 `collect()` 的 POST 没有自动重试。如果调用方在网络超时后无法确认是否已经排队，应该先
 使用原 operation 追踪机制或人工检查，而不是盲目再次提交；幂等键会在后续协议版本中单独
 设计。
+
+## 源码分层
+
+```text
+src/
+├─ transport.mjs   loopback HTTP、token、超时和有界 JSON
+├─ validation.mjs  capability、request、operation、artifact path 校验
+├─ client.mjs      collect / wait / artifact 工作流
+├─ public.mjs      稳定公共 allowlist 导出
+└─ index.mjs       包入口兼容导出
+```
+
+Python 上层应用使用对应的独立包
+[`collector-python-client`](../collector-python-client/README.md)。两套 SDK 共享
+`/v2/capabilities` 与 `/v2/openapi.json` 协议真源，但不互相导入，也不共享平台抓取或
+浏览器控制代码。

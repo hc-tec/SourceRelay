@@ -222,6 +222,22 @@ npm run collector-user-browser-client -- openapi
 
 `POST /v2/collect` 会快速返回 `queued` 的 `operationId`；它不把任务伪装成同步完成。扩展在低频、受认证的 loopback 轮询中最多 claim 一次，Gateway 将工作项标为 `claimed`，扩展只允许一次平台导航，之后把固定 DOM 投影回传为本地产物。上层应用应读取 `/v2/collect/operations/{operationId}` 直到终态，再通过返回的 artifact path 读取结果。
 
+### Python 上层应用
+
+Python 使用独立的 `intelligence-collector-client` SDK，不要导入旧的
+`deepresearch_gateway.client.GatewayClient` 来调用当前 `/v2` API。安装和分层说明见
+[`poc/collector-python-client/README.md`](../../poc/collector-python-client/README.md)：
+
+```powershell
+Set-Location D:\AIProject\inteligence\poc\collector-python-client
+python -m pip install -e ".[dev]"
+```
+
+Python SDK 使用 `asyncio`，方法名采用 snake_case；协议字段仍保持 Gateway 的 camelCase。
+它和 JS SDK 共享 `/v2/capabilities`、`/v2/openapi.json`，但包、依赖、测试和源码完全
+分开。两套 SDK 都只允许 15 项 `direct_ready` capability，不接受任意 URL、tab、selector、
+脚本、CDP 或 Network body。
+
 ## 8. 停止、风险与恢复
 
 - 扩展、浏览器、Gateway 或工作标签页消失：当前任务停止，不自动重开浏览器或重放导航；

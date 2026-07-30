@@ -216,6 +216,9 @@ npm run collector-client -- artifact /v1/collect/artifacts/bilibili.video_detail
 `readArtifact()` 和 `collectAndWait()`，只在本地轮询 operation，不会在网络异常后重放
 平台任务。artifact path 仍由已读取 operation 的 capability 绑定结果推导，调用方不能传
 任意 Gateway path。使用说明见 [`poc/collector-client/README.md`](../collector-client/README.md)。
+Python 上层应用使用同协议的独立 `intelligence-collector-client` 包，见
+[`poc/collector-python-client/README.md`](../collector-python-client/README.md)；不要把旧
+`deepresearch_gateway.client.GatewayClient` 当作当前 `/v2` SDK。
 
 当前检查点实现：
 
