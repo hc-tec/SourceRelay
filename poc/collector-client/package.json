@@ -1,0 +1,16 @@
+{
+  "name": "@intelligence/collector-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Small, safety-preserving client for the user-owned-browser Collector Gateway API.",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/client.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

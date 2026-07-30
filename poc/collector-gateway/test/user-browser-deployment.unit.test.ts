@@ -29,6 +29,15 @@ describe('user-owned browser deployment surface', () => {
       expect.objectContaining({ name: 'capability' }),
       expect.objectContaining({ name: 'artifactId' })
     ]));
+    const capabilityParameter = artifactRoute.get.parameters.find((parameter: { name?: string }) =>
+      parameter.name === 'capability');
+    expect(capabilityParameter.schema.enum).toEqual(expect.arrayContaining([
+      'xiaohongshu.search.public_notes.v1',
+      'xiaohongshu.account.public_notes.v1',
+      'xiaohongshu.note.public_detail.v1',
+      'xiaohongshu.note.public_comments.v1',
+      'xiaohongshu.note.public_comment_replies.v1'
+    ]));
     expect(Object.keys(document.paths)).not.toContain('/v1/profiles');
     expect(Object.keys(document.paths)).not.toContain('/v1/collect');
     expect(JSON.stringify(artifactRoute.get.parameters)).not.toContain('profileId');

@@ -74,7 +74,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                   'bilibili.video_detail', 'bilibili.native_search', 'bilibili.native_search_batch',
                   'bilibili.account_profile', 'bilibili.account_inventory',
                   'bilibili.dynamic', 'bilibili.collection_series.overview',
-                  'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion'
+                  'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion',
+                  'xiaohongshu.search.public_notes.v1', 'xiaohongshu.account.public_notes.v1',
+                  'xiaohongshu.note.public_detail.v1', 'xiaohongshu.note.public_comments.v1',
+                  'xiaohongshu.note.public_comment_replies.v1'
                 ]
               }
             },

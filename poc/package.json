@@ -7,7 +7,8 @@
     "collector-contracts",
     "collector-browser-host",
     "collector-extension",
-    "collector-gateway"
+    "collector-gateway",
+    "collector-client"
   ],
   "scripts": {
     "build:contracts": "npm run build --workspace @intelligence/collector-contracts",
@@ -41,7 +42,8 @@
     "recon:xiaohongshu-public-profile-entry": "npm run recon:xiaohongshu-public-profile-entry --workspace @intelligence/collector-browser-host",
     "recon:xiaohongshu-note-overlay": "npm run recon:xiaohongshu-note-overlay --workspace @intelligence/collector-browser-host",
     "test:typecheck": "tsc --noEmit -p tsconfig.tests.json",
-    "test:unit": "npm run test:typecheck && vitest run --project governance --project contracts --project extension-domain --project browser-host-domain --project gateway-domain",
+    "test:client": "npm test --workspace @intelligence/collector-client",
+    "test:unit": "npm run test:typecheck && npm run test:client && vitest run --project governance --project contracts --project extension-domain --project browser-host-domain --project gateway-domain",
     "test:unit:coverage": "npm run test:typecheck && vitest run --project governance --project contracts --project extension-domain --project browser-host-domain --project gateway-domain --coverage",
     "test:integration": "npm run build:collector-runtime && playwright test --config playwright.real-local.config.ts --project integration",
     "test:e2e:local": "npm run build:collector-runtime && playwright test --config playwright.real-local.config.ts --project e2e-local",

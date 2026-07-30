@@ -208,6 +208,15 @@ npm run collector-client -- artifact /v1/collect/artifacts/bilibili.video_detail
 
 `openapi` 与 `capabilities` 不需要 token。OpenAPI 3.1 文档包含每个当前 capability 的 input JSON Schema、scope、错误语义和明确排除的控制面；应用应先读取它或 capability catalog，再构造请求。其余命令分别要求对应的 `profiles:read`、`collect:execute` 或 `artifacts:read` scope。`collect` 只读取 UTF-8 JSON 文件，并且每次命令最多发出一次 HTTP 调用、不做平台动作重试，单次本地请求有 50 秒 deadline。成功结果写到 stdout；失败只以 `{ ok, status, error }` 写到 stderr，不回显 token 或请求正文。`audit` 不存在于这个 client 的命令集合，因为审计只属于 Gateway Console 的同源控制面。
 
+### 上层应用薄客户端
+
+需要在应用代码中调用 direct API 时，优先使用 workspace package
+`@intelligence/collector-client`，而不是复制 testbench 的请求流程。它提供
+`listCapabilities()`、`listBrowserBindings()`、`collect()`、`waitOperation()`、
+`readArtifact()` 和 `collectAndWait()`，只在本地轮询 operation，不会在网络异常后重放
+平台任务。artifact path 仍由已读取 operation 的 capability 绑定结果推导，调用方不能传
+任意 Gateway path。使用说明见 [`poc/collector-client/README.md`](../collector-client/README.md)。
+
 当前检查点实现：
 
 - 首次启动生成 ECDSA P-256 Gateway 身份，并在本地 `runtime/` 持久保存；
