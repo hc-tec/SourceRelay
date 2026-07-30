@@ -44,7 +44,7 @@ const runtimeBuild = JSON.parse(await readFile(resolve(extensionPath, 'runtime-b
     expect(runtime.runtimeBootstrap).toEqual({
       schemaVersion: 1,
       collectorVersion: runtime.manifest.version,
-      controlSurfaceRevision: 15,
+      controlSurfaceRevision: 16,
       buildFingerprint: runtimeBuild.buildFingerprint
     });
     expect(runtime.nativeBridgeStatus?.state).toBe('unconfigured');

@@ -92,7 +92,7 @@ try {
   assert.ok(initialProfile.browserProcessId, 'real Chromium process id must be observable');
   assert.ok(initialProfile.extensionPages <= 1, 'Browser Session must not accumulate extension pages');
   assert.equal(initialProfile.extensionRuntime?.finalRuntimeVersion, extensionManifest.version);
-  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 15);
+  assert.equal(initialProfile.extensionRuntime?.finalControlSurfaceRevision, 16);
   assert.equal(initialProfile.extensionRuntime?.finalBuildFingerprint, runtimeBuild.buildFingerprint);
   assert.equal(initialProfile.extensionRuntime?.nativeBridgeConnected, true);
 
