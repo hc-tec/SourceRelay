@@ -57,6 +57,7 @@ intelligence_collector
 ├─ validation.py  exact request、direct allowlist、operation 和 artifact path
 ├─ requests.py    15 项能力化请求 builder 与 URL/预算边界
 ├─ models.py      operation / artifact / collection 结构化 raw-first 模型
+├─ knowledge_pack.py  本地 UTF-8 原始资源包与 B站 MVP 编排
 ├─ client.py      collect / wait / artifact workflow
 └─ __init__.py    稳定公共导出
 ```
@@ -141,6 +142,40 @@ SDK 尚未升级而丢失。
 
 Python 使用 snake_case；JavaScript 使用 camelCase。二者的协议字段仍保持 Gateway
 定义的 camelCase，例如 `browserBindingId`、`executionTarget`、`operationId`。
+
+## B站 UP 主知识包 MVP
+
+`build_bilibili_account_knowledge_pack()` 是第一条任务级能力。它只组合已经登记的
+`bilibili.account_profile`、`bilibili.account_inventory` 和有界数量的
+`bilibili.video_detail`，把每个 artifact、资源投影和 provenance 写入本地 UTF-8 目录：
+
+```python
+from intelligence_collector import build_bilibili_account_knowledge_pack
+
+pack = await build_bilibili_account_knowledge_pack(
+    collector,
+    browser_binding_id=binding["browserBindingId"],
+    canonical_profile_url="https://space.bilibili.com/7481602",
+    output_directory="./knowledge-packs",
+    maximum_video_details=3,
+)
+print(pack.state, pack.root)
+```
+
+输出目录包括：
+
+```text
+<pack-id>/
+  manifest.json
+  sources/bilibili/<capability>/<artifact-id>.json
+  sources/bilibili/resources.jsonl
+  evidence/provenance.jsonl
+  media/  derived/
+```
+
+这是一个有界的编排器，不是任意平台爬虫：每个底层能力最多提交一次；遇到失败、登录
+失效、验证码或风险终止时保留已经完成的文件并停止，不自动重放。媒体下载、字幕、OCR、
+ASR 和 DeepResearch 证据适配会在原始知识包闭环稳定后作为独立阶段加入。
 
 一个只负责上层能力门禁和命令行调用的参考应用位于
 [`apps/collector-python-sdk-smoke`](../../apps/collector-python-sdk-smoke/README.md)。
