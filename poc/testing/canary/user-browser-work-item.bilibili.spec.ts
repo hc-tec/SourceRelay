@@ -133,6 +133,17 @@ test('direct extension work items read one real Bilibili detail and fixed native
       return;
     }
 
+    if (process.env.COLLECTOR_LIVE_CANARY_SCOPE === 'javascript_sdk') {
+      await runJavaScriptSdkCanary({
+        gatewayOrigin,
+        clientToken: clientToken!,
+        platformNavigations
+      });
+      await controlPage.close();
+      await consolePage.close();
+      return;
+    }
+
     const dispatchResponse = await fetch(`${gatewayOrigin}/v2/collect`, {
         method: 'POST',
         headers: {
@@ -538,6 +549,57 @@ async function runPythonSdkCanary(input: {
     summary = JSON.parse(lastLine) as Record<string, unknown>;
   } catch (error) {
     throw new Error(`python_sdk_real_smoke_output_invalid:${String(error)}:${stdout}`);
+  }
+  expect(summary).toMatchObject({
+    capabilityCount: 18,
+    directReadyCount: 15,
+    onlineBinding: true,
+    catalogOnlyRejected: true,
+    operationState: 'completed',
+    operationCapability: 'bilibili.native_search',
+    artifactCapability: 'bilibili.native_search'
+  });
+  expect(summary.openapiPathCount).toBeGreaterThanOrEqual(5);
+  expect(summary.capturedItems).toBeGreaterThan(0);
+  const searchNavigations = input.platformNavigations
+    .filter((value) => new URL(value).hostname === 'search.bilibili.com');
+  expect(searchNavigations.length).toBeGreaterThanOrEqual(1);
+}
+
+async function runJavaScriptSdkCanary(input: {
+  gatewayOrigin: string;
+  clientToken: string;
+  platformNavigations: string[];
+}): Promise<void> {
+  const script = resolve(pocRoot, 'collector-client', 'scripts', 'real_gateway_smoke.mjs');
+  const child = spawn(process.execPath, [script], {
+    cwd: resolve(pocRoot, 'collector-client'),
+    env: {
+      ...process.env,
+      COLLECTOR_SERVICE_ORIGIN: input.gatewayOrigin,
+      COLLECTOR_SERVICE_TOKEN: input.clientToken
+    },
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout?.setEncoding('utf8');
+  child.stderr?.setEncoding('utf8');
+  child.stdout?.on('data', (chunk: string) => { stdout += chunk; });
+  child.stderr?.on('data', (chunk: string) => { stderr += chunk; });
+  const exitCode = await new Promise<number>((resolvePromise, reject) => {
+    child.once('error', reject);
+    child.once('exit', (code) => resolvePromise(code ?? 1));
+  });
+  expect(exitCode, stderr || stdout).toBe(0);
+  const lastLine = stdout.trim().split(/\r?\n/).at(-1);
+  if (!lastLine) throw new Error('javascript_sdk_real_smoke_output_missing');
+  let summary: Record<string, unknown>;
+  try {
+    summary = JSON.parse(lastLine) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(`javascript_sdk_real_smoke_output_invalid:${String(error)}:${stdout}`);
   }
   expect(summary).toMatchObject({
     capabilityCount: 18,

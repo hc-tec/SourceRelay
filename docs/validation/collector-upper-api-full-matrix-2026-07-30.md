@@ -117,6 +117,11 @@ npx playwright test --config playwright.live-canary.config.ts --project live-can
 artifact 读取，结果 `1 passed`。因此这次变更没有扩大平台动作边界：真实搜索仍只有
 一次导航，operation/artifact capability 一致，页面保持可见，response body 未读取。
 
+同一边界又用 `COLLECTOR_LIVE_CANARY_SCOPE=javascript_sdk` 做了独立 JS SDK run：
+`bilibiliNativeSearch()` 构造请求，`collectAndWaitModel()` 读取结构化结果，最终同样
+为 `1 passed`。两次 run 使用不同的测试浏览器会话，没有在本地失败收尾后重放原会话的
+平台动作。
+
 ### B 站其余能力
 
 此前持久 Gateway 中已完成的真实 artifact 逐项读取覆盖：
@@ -188,7 +193,7 @@ poc/collector-gateway/test/user-browser-direct-capability-matrix.unit.test.ts
 
 | 层级 | 命令 | 结果 |
 | --- | --- | --- |
-| CollectorClient Node tests | `npm test --workspace @intelligence/collector-client` | 4 / 4 通过；覆盖提交一次、轮询不重提、artifact capability 绑定、任意控制字段拒绝 |
+| CollectorClient Node tests | `npm test --workspace @intelligence/collector-client` | 8 / 8 通过；覆盖提交一次、轮询不重提、artifact capability 绑定、任意控制字段拒绝、15 项 JS builder 和 raw-first 模型 |
 | Python SDK tests | `Set-Location poc/collector-python-client; python -m pytest -q` | 15 / 15 通过；覆盖 transport、15 项 builder、URL/预算边界、raw-first 模型、一次提交、轮询超时和 artifact 绑定 |
 | Python SDK 真实 Gateway canary | `COLLECTOR_LIVE_CANARY_SCOPE=python_sdk` | 1 / 1 通过；真实 MV3、Gateway、B站搜索和 artifact |
 | Python 上层参考应用 | `Set-Location apps/collector-python-sdk-smoke; python -m pytest -q` | 3 / 3 通过；覆盖 direct-ready 门禁、不可调度能力不投递和 typed B站搜索 facade |
@@ -199,6 +204,7 @@ poc/collector-gateway/test/user-browser-direct-capability-matrix.unit.test.ts
 | 生产构建 | `Set-Location poc; npm run build:collector-runtime` | contracts、MV3 extension、Browser Host、Gateway 全部构建通过 |
 | 当前构建 B 站 batch live canary | 见上方命令 | 1 / 1 通过 |
 | 当前构建 Python builder live canary | `COLLECTOR_LIVE_CANARY_SCOPE=python_sdk` | 1 / 1 通过；真实 builder → Gateway → MV3 → B站搜索 → artifact |
+| 当前构建 JavaScript builder live canary | `COLLECTOR_LIVE_CANARY_SCOPE=javascript_sdk` | 1 / 1 通过；真实 builder → Gateway → MV3 → B站搜索 → artifact |
 
 ## 上层应用可依赖的 API 面
 
