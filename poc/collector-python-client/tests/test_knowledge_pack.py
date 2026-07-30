@@ -131,6 +131,13 @@ def test_bilibili_pack_keeps_raw_artifacts_and_provenance(tmp_path: Path) -> Non
         "mediaAssets": 0,
         "processingArtifacts": 0,
     }
+    assert manifest["coverage"]["inventory"] == {
+        "scope": "first_page_bounded",
+        "capturedItems": 1,
+        "reportedPublicVideoCount": None,
+        "paginationCapability": "not_direct_ready",
+        "completeness": "bounded_partial",
+    }
     resource_lines = (pack.root / "sources/bilibili/resources.jsonl").read_text(encoding="utf-8").splitlines()
     resources = [json.loads(line) for line in resource_lines]
     assert {resource["resourceType"] for resource in resources} == {"account", "video"}

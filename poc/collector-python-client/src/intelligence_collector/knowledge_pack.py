@@ -93,6 +93,7 @@ class KnowledgePackWriter:
             "updatedAt": now,
             "state": "running",
             "capabilities": [],
+            "coverage": {},
             "counts": {
                 "collectionOperations": 0,
                 "successfulOperations": 0,
@@ -187,6 +188,10 @@ class KnowledgePackWriter:
         self._manifest["source"] = _clone(dict(source))
         self._persist_manifest()
 
+    def set_coverage(self, coverage: Mapping[str, Any]) -> None:
+        self._manifest["coverage"] = _clone(dict(coverage))
+        self._persist_manifest()
+
     def finish(self, state: str) -> KnowledgePack:
         if state not in {"completed", "partial", "failed"}:
             raise ValueError("knowledge_pack_state_invalid")
@@ -256,6 +261,22 @@ async def build_bilibili_account_knowledge_pack(
 
     inventory = results[-1]
     video_items = _inventory_items(inventory)
+    writer.set_coverage(
+        {
+            "inventory": {
+                "scope": "first_page_bounded",
+                "capturedItems": len(video_items),
+                "reportedPublicVideoCount": _reported_inventory_total(results[0]),
+                "paginationCapability": "not_direct_ready",
+                "completeness": "bounded_partial",
+            },
+            "videoDetails": {
+                "requested": min(maximum_video_details, len(video_items)),
+                "scope": "bounded_inventory_prefix",
+                "completeness": "bounded_partial",
+            },
+        }
+    )
     for item in video_items[:maximum_video_details]:
         url = item.get("canonicalVideoUrl")
         if not isinstance(url, str):
@@ -331,6 +352,28 @@ def _bilibili_account_resource(
         },
         "rawProjection": snapshot,
     }
+
+
+def _reported_inventory_total(result: CollectionResult) -> int | None:
+    if result.artifact is None:
+        return None
+    payload = result.artifact.payload
+    snapshot = payload.get("snapshot")
+    if not isinstance(snapshot, Mapping):
+        return None
+    fields = snapshot.get("publicFields")
+    if not isinstance(fields, list):
+        return None
+    for field in fields:
+        if not isinstance(field, Mapping) or field.get("label") != "投稿":
+            continue
+        value = field.get("value")
+        if not isinstance(value, str):
+            continue
+        digits = re.sub(r"[^0-9]", "", value)
+        if digits:
+            return int(digits)
+    return None
 
 
 def _atomic_write(path: Path, value: Any) -> None:

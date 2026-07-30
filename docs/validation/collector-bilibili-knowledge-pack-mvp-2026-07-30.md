@@ -64,6 +64,15 @@ outcome: proved_for_pack_partial_for_harness
     "partialOperations": 0,
     "failedOperations": 0,
     "resources": 2
+  },
+  "coverage": {
+    "inventory": {
+      "scope": "first_page_bounded",
+      "capturedItems": 40,
+      "reportedPublicVideoCount": 745,
+      "paginationCapability": "not_direct_ready",
+      "completeness": "bounded_partial"
+    }
   }
 }
 ```
@@ -92,7 +101,8 @@ artifact 中，不能被解释为当前账号身份已验证。
 
 ## 产品含义
 
-这次验证证明了“资源搜索能力 → 原始 artifact → 本地知识包”这一纵向闭环，尚未证明：
+这次验证证明了“资源搜索能力 → 原始 artifact → 本地知识包”这一纵向闭环；它明确是
+首屏有界 partial，不是 745 条投稿的全量包。尚未证明：
 
 - 所有投稿页的全量详情；
 - 字幕、音频、视频下载或 OCR/ASR；
