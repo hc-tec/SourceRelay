@@ -86,6 +86,23 @@ npx playwright test --config playwright.live-canary.config.ts --project live-can
 
 当前构建的 detail + 单页 native search canary 也已通过（`1 passed`）；这两项使用真实公开 B 站页面、production MV3、临时 Gateway 和真实 artifact。
 
+### Python SDK 当前构建真实闭环
+
+本轮新增 `COLLECTOR_LIVE_CANARY_SCOPE=python_sdk` canary。Node harness 只负责创建独立
+验证浏览器、配对 production MV3 和签发最小 scope token；能力发现、OpenAPI 读取、binding
+发现、catalog-only 拒绝、任务投递、operation 轮询和 artifact 读取全部由 Python SDK 完成。
+
+最终结果为 `1 passed`，并满足：
+
+- 运行时目录 18 项，`direct_ready` 15 项；
+- Python 静态 allowlist 与运行时 direct-ready 集合一致；
+- OpenAPI 的 5 条业务 paths 完整；
+- `xiaohongshu.current_page.network_metadata` 在 Python SDK 本地校验层被拒绝；
+- 真实 `bilibili.native_search` operation 为 `completed`；
+- operation capability 与 artifact capability 均为 `bilibili.native_search`；
+- 真实公开 B 站搜索至少返回一条受控公开视频卡片；
+- 只执行一次平台搜索导航，没有读取原始 response body。
+
 ### B 站其余能力
 
 此前持久 Gateway 中已完成的真实 artifact 逐项读取覆盖：
@@ -159,6 +176,8 @@ poc/collector-gateway/test/user-browser-direct-capability-matrix.unit.test.ts
 | --- | --- | --- |
 | CollectorClient Node tests | `npm test --workspace @intelligence/collector-client` | 4 / 4 通过；覆盖提交一次、轮询不重提、artifact capability 绑定、任意控制字段拒绝 |
 | Python SDK tests | `Set-Location poc/collector-python-client; python -m pytest -q` | 5 / 5 通过；覆盖 Python transport、契约校验、一次提交、轮询超时和 artifact 绑定 |
+| Python SDK 真实 Gateway canary | `COLLECTOR_LIVE_CANARY_SCOPE=python_sdk` | 1 / 1 通过；真实 MV3、Gateway、B站搜索和 artifact |
+| Python 上层参考应用 | `Set-Location apps/collector-python-sdk-smoke; python -m pytest -q` | 2 / 2 通过；覆盖 direct-ready 门禁和不可调度能力不投递 |
 | Vitest 单元/领域/契约 | `Set-Location poc; npm run test:unit` | 84 个测试文件、298 项通过 |
 | 真实 MV3 integration/E2E | `Set-Location poc; npm run test:real-local` | 8 / 8 通过；包含扩展启动、版本漂移拒绝、Profile 隔离、配对、端口占用、Gateway/Browser Host 生命周期 |
 | 完整本地门禁 | `Set-Location poc; npm run test:all-local` | 单元与真实本地 8/8 均通过 |
@@ -214,6 +233,7 @@ b72f573 docs(validation): record complete upper API capability matrix
 230fa29 docs(client): document direct capability allowlist
 b5f5b6c docs(validation): include client contract checkpoint
 6be226a feat(sdk): add layered Python SDK and split JavaScript client
+eaccfbe test(sdk): verify Python client live and add smoke app
 ```
 
 上一阶段上层客户端提交：
