@@ -53,6 +53,7 @@ function installChromeTabsMock(input: { foregroundAvailable?: boolean } = {}) {
   const movedListeners: Array<(tabId: number) => void> = [];
   const updatedListeners: Array<(tabId: number, changeInfo: chrome.tabs.TabChangeInfo) => void> = [];
   let nextTabId = 2;
+  let windowFocused = false;
 
   const copy = (tab: MockTab): chrome.tabs.Tab => ({ ...tab } as unknown as chrome.tabs.Tab);
   const activate = (tabId: number) => {
@@ -76,6 +77,18 @@ function installChromeTabsMock(input: { foregroundAvailable?: boolean } = {}) {
     }
     return copy(tab);
   });
+  const windowsUpdate = vi.fn(async (windowId: number, properties: chrome.windows.UpdateInfo): Promise<chrome.windows.Window> => {
+    if (windowId !== 9) throw new Error('no_such_window');
+    if (properties.focused === true) {
+      if (input.foregroundAvailable === false) return { id: windowId, focused: false } as chrome.windows.Window;
+      windowFocused = true;
+    }
+    return { id: windowId, focused: windowFocused } as chrome.windows.Window;
+  });
+  const windowsGet = vi.fn(async (windowId: number): Promise<chrome.windows.Window> => ({
+    id: windowId,
+    focused: windowId === 9 && windowFocused
+  }) as chrome.windows.Window);
 
   Object.defineProperty(globalThis, 'chrome', {
     configurable: true,
@@ -104,13 +117,16 @@ function installChromeTabsMock(input: { foregroundAvailable?: boolean } = {}) {
         onUpdated: {
           addListener: (listener: (tabId: number, changeInfo: chrome.tabs.TabChangeInfo) => void) => updatedListeners.push(listener)
         }
-      }
+      },
+      windows: { update: windowsUpdate, get: windowsGet }
     } as unknown as typeof chrome
   });
 
   return {
     tabs,
     update,
+    windowsUpdate,
+    windowsGet,
     activate,
     remove(tabId: number) {
       tabs.delete(tabId);
@@ -175,6 +191,8 @@ describe('extension-owned work-tab foreground lifecycle', () => {
       { active: true },
       { url: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
     ]);
+    expect(browser.windowsUpdate).toHaveBeenCalledWith(9, { focused: true });
+    expect(browser.windowsGet).toHaveBeenCalledWith(9);
     await expect(readExtensionWorkTab(lease)).resolves.toMatchObject({
       id: lease.tabId,
       active: true,
@@ -192,8 +210,9 @@ describe('extension-owned work-tab foreground lifecycle', () => {
       .rejects.toThrow('work_tab_foreground_unavailable');
 
     expect(intent).not.toHaveBeenCalled();
-    expect(browser.update).toHaveBeenCalledTimes(1);
-    expect(browser.update).toHaveBeenLastCalledWith(lease.tabId, { active: true });
+    expect(browser.update).toHaveBeenCalledTimes(0);
+    expect(browser.windowsUpdate).toHaveBeenCalledTimes(1);
+    expect(browser.windowsUpdate).toHaveBeenLastCalledWith(9, { focused: true });
     expect(browser.tabs.get(lease.tabId)?.url).toBe('about:blank');
   });
 

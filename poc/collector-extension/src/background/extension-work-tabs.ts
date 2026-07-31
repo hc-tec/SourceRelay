@@ -46,6 +46,7 @@ const managedTabs = new Map<number, ManagedWorkTab>();
 const leaseLosses = new Map<string, Exclude<WorkTabDisposition, 'idle_reusable'>>();
 let listenersInitialised = false;
 const FOREGROUND_ACTIVATION_GRACE_MS = 2_000;
+const FOREGROUND_SETTLE_MS = 350;
 
 /**
  * Only tabs created by this module enter `managedTabs`.  There is no tab
@@ -246,21 +247,28 @@ function lease(record: ManagedWorkTab, acquisition: WorkTabAcquisition): Extensi
 /**
  * Page loading on several platforms is deliberately degraded for background
  * tabs. This is an internal precondition for an extension-owned lease, not a
- * caller-controlled tab-focus capability. It never focuses the browser
- * window and never attempts to reclaim focus after a user takeover.
+ * caller-controlled tab-focus capability. The requested work is allowed to
+ * bring its own managed window to the foreground once; it never reclaims
+ * focus after a user takeover.
  */
 async function ensureExtensionWorkTabForeground(workTab: ExtensionWorkTabLease): Promise<void> {
   const record = requireLease(workTab);
   record.expectedForegroundActivationUntil = Date.now() + FOREGROUND_ACTIVATION_GRACE_MS;
   try {
+    const focusedWindow = await chrome.windows.update(record.windowId, { focused: true });
+    if (!focusedWindow || focusedWindow.id !== record.windowId || focusedWindow.focused !== true) {
+      throw new Error('work_tab_foreground_unavailable');
+    }
     const activated = await chrome.tabs.update(workTab.tabId, { active: true });
     if (!activated || activated.windowId !== record.windowId || activated.active !== true) {
       throw new Error('work_tab_foreground_unavailable');
     }
     const verified = await chrome.tabs.get(workTab.tabId);
-    if (verified.windowId !== record.windowId || verified.active !== true) {
+    const verifiedWindow = await chrome.windows.get(record.windowId);
+    if (verified.windowId !== record.windowId || verified.active !== true || verifiedWindow.focused !== true) {
       throw new Error('work_tab_foreground_unavailable');
     }
+    await delay(FOREGROUND_SETTLE_MS);
   } catch (error) {
     record.expectedForegroundActivationUntil = null;
     const code = error instanceof Error ? error.message : '';
@@ -277,6 +285,10 @@ function requireLease(workTab: ExtensionWorkTabLease): ManagedWorkTab {
   if (record?.state === 'leased' && record.leaseId === workTab.leaseId) return record;
   const disposition = currentDisposition(workTab);
   throw new Error(disposition === 'closed_or_missing' ? 'work_tab_closed' : 'work_tab_user_taken_over');
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function forgetTab(tabId: number, disposition: Exclude<WorkTabDisposition, 'idle_reusable'>): void {
