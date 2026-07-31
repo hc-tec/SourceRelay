@@ -19,6 +19,27 @@ interface OverviewResponseIdentity {
   declaredItemCount: number;
 }
 
+// The outer Bilibili work item may live for two minutes so that the MV3
+// worker can survive its 30-second polling cadence.  A network arm is a
+// narrower, one-document observation and is deliberately capped below the
+// runtime's 60-second maximum.  Keep a margin for the time between computing
+// this value and the arm validation/storage call.
+const COLLECTION_OVERVIEW_NETWORK_ARM_MAX_LIFETIME_MS = 55_000;
+
+/**
+ * Convert the signed work lease into a bounded internal network-arm expiry.
+ * An earlier work expiry remains authoritative; a long work lease is clipped
+ * to the short-lived arm budget rather than weakening the runtime safety gate.
+ */
+export function boundedCollectionOverviewNetworkArmExpiry(
+  workExpiresAt: string,
+  now = Date.now()
+): number {
+  const workExpiry = Date.parse(workExpiresAt);
+  if (!Number.isFinite(workExpiry) || !Number.isFinite(now)) return Number.NaN;
+  return Math.min(workExpiry, now + COLLECTION_OVERVIEW_NETWORK_ARM_MAX_LIFETIME_MS);
+}
+
 /**
  * Arms precisely one already-reviewed collection-overview route before the
  * signed navigation. The bridge observes its exact next document only; it is
@@ -36,7 +57,7 @@ export async function armBilibiliCollectionOverviewNetworkObservation(input: {
     expectedRecordVersion: 1,
     runId: input.item.operationId,
     observerBindingId: input.item.workId,
-    expiresAt: input.item.expiresAt,
+    expiresAt: new Date(boundedCollectionOverviewNetworkArmExpiry(input.item.expiresAt)).toISOString(),
     // The temporary response is sanitised by the bridge and then immediately
     // reduced to stable public list identities below. It never enters a
     // Gateway artifact as a raw body.
