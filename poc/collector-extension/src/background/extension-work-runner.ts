@@ -159,7 +159,7 @@ async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
     return await executeBilibiliAccountInventoryExtensionWork(item, lifecycle);
   }
   if (item.capability === 'bilibili.discussion') {
-    return await executeBilibiliDiscussionUserSelectedTabExtensionWork(item);
+    return await executeBilibiliDiscussionUserSelectedTabExtensionWork(item, lifecycle);
   }
   if (item.capability === 'bilibili.dynamic' || item.capability === 'bilibili.collection_series.overview' ||
     item.capability === 'bilibili.collection_series.detail' || item.capability === 'bilibili.danmaku') {
@@ -353,25 +353,6 @@ async function interruptedResult(active: ActiveExtensionWork): Promise<Extension
       observation: null
     };
   }
-  if (active.item.capability === 'bilibili.discussion') {
-    return {
-      schemaVersion: 1,
-      protocolVersion: 1,
-      workId: active.item.workId,
-      operationId: active.item.operationId,
-      browserBindingId: active.item.browserBindingId,
-      platform: 'bilibili',
-      capability: 'bilibili.discussion',
-      executionTarget: 'user_selected_tab',
-      state: 'stopped',
-      errorCode: 'user_selected_tab_worker_interrupted',
-      terminalReason: 'user_selected_tab_worker_interrupted',
-      completedAt: new Date().toISOString(),
-      navigation: { attempted: false, attemptCount: 0 },
-      userSelectedTabDisposition: 'selection_unavailable',
-      observation: null
-    };
-  }
   const navigationAttempted = active.navigationIntentCount > 0;
   if (active.item.capability === 'bilibili.native_search_batch') {
     return {
@@ -436,6 +417,9 @@ async function interruptedResult(active: ActiveExtensionWork): Promise<Extension
   }
   if (active.item.capability === 'bilibili.account_inventory') {
     return { ...base, capability: 'bilibili.account_inventory', observation: null };
+  }
+  if (active.item.capability === 'bilibili.discussion') {
+    return { ...base, capability: 'bilibili.discussion', observation: null };
   }
   if (active.item.capability === 'bilibili.dynamic') {
     return { ...base, capability: 'bilibili.dynamic', observation: null };

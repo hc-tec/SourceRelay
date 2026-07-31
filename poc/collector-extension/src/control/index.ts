@@ -14,10 +14,6 @@ import {
   selectCurrentBilibiliAccountInventoryTab
 } from '../background/user-selected-tab';
 import {
-  getSelectedBilibiliVideoDiscussionTabSummary,
-  selectCurrentBilibiliVideoDiscussionTab
-} from '../background/user-selected-bilibili-video-discussion-tab';
-import {
   armNextXiaohongshuCurrentPageNetworkDocument,
   getXiaohongshuCurrentPageNetworkSelectionSummary
 } from '../background/xiaohongshu-current-page-network';
@@ -42,8 +38,6 @@ const directCapabilityState = element<HTMLDivElement>('direct-capability-state')
 const directCapabilityList = element<HTMLDivElement>('direct-capability-list');
 const userSelectedInventoryTabState = element<HTMLDivElement>('user-selected-inventory-tab-state');
 const selectCurrentInventoryTab = element<HTMLButtonElement>('select-current-bilibili-account-inventory');
-const userSelectedDiscussionTabState = element<HTMLDivElement>('user-selected-discussion-tab-state');
-const selectCurrentDiscussionTab = element<HTMLButtonElement>('select-current-bilibili-video-discussion');
 const xiaohongshuCurrentPageNetworkState = element<HTMLDivElement>('xiaohongshu-current-page-network-state');
 const armNextXiaohongshuCurrentPageNetwork = element<HTMLButtonElement>(
   'arm-next-xiaohongshu-current-page-network'
@@ -61,7 +55,6 @@ async function render(): Promise<void> {
   renderGatewayConnection(connection);
   await Promise.all([
     renderUserSelectedInventoryTab(connection),
-    renderUserSelectedDiscussionTab(connection),
     renderXiaohongshuCurrentPageNetwork()
   ]);
   await renderDirectCapabilities(connection);
@@ -106,20 +99,6 @@ async function renderUserSelectedInventoryTab(connection: UserBrowserGatewayConn
   userSelectedInventoryTabState.textContent = '尚未选择页面。请先切到一个已加载完成的 B 站 UP 主投稿视频首页，再打开此扩展 popup 点击选择。';
 }
 
-async function renderUserSelectedDiscussionTab(connection: UserBrowserGatewayConnection): Promise<void> {
-  const selection = await getSelectedBilibiliVideoDiscussionTabSummary();
-  selectCurrentDiscussionTab.disabled = connection.state !== 'online';
-  if (connection.state !== 'online') {
-    userSelectedDiscussionTabState.textContent = '需先完成本机 Gateway 配对并保持在线；选择不会缓存到 Gateway，也不会在离线后自行执行。';
-    return;
-  }
-  if (selection.state === 'available' && selection.expiresAt) {
-    userSelectedDiscussionTabState.textContent = `当前已加载评论的视频页已显式选择，短时有效至 ${new Date(selection.expiresAt).toLocaleTimeString('zh-CN')}。` +
-      ' 后续 work 只会在同一 document 内被动投影，不会滚动、排序、展开回复或刷新。';
-    return;
-  }
-  userSelectedDiscussionTabState.textContent = '尚未选择页面。请先由你自己打开 B 站视频并将评论区滚到可见区域，再打开此扩展 popup 点击选择。';
-}
 
 function renderGatewayConnection(connection: UserBrowserGatewayConnection): void {
   if (connection.state === 'unpaired') {
@@ -213,7 +192,7 @@ function directCapabilityFallbackTitle(capability: UserBrowserDirectWorkCapabili
     case 'bilibili.account_inventory':
       return 'UP 主视频首屏';
     case 'bilibili.discussion':
-      return '视频评论区（用户已选页面）';
+      return '视频评论区（自动 work-tab）';
     case 'xiaohongshu.search.public_notes.v1':
       return '小红书公开笔记站内搜索';
     case 'xiaohongshu.account.public_notes.v1':
@@ -290,20 +269,6 @@ selectCurrentInventoryTab.addEventListener('click', () => {
   }).finally(async () => {
     const connection = await getUserBrowserGatewayConnection();
     selectCurrentInventoryTab.disabled = connection.state !== 'online';
-  });
-});
-
-selectCurrentDiscussionTab.addEventListener('click', () => {
-  selectCurrentDiscussionTab.disabled = true;
-  controlError.hidden = true;
-  void selectCurrentBilibiliVideoDiscussionTab().then(async () => {
-    await render();
-  }).catch((error) => {
-    controlError.textContent = error instanceof Error ? error.message : 'user_selected_tab_selection_failed';
-    controlError.hidden = false;
-  }).finally(async () => {
-    const connection = await getUserBrowserGatewayConnection();
-    selectCurrentDiscussionTab.disabled = connection.state !== 'online';
   });
 });
 

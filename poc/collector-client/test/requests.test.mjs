@@ -47,7 +47,7 @@ test('Bilibili builders emit only registered wire shapes', () => {
   }
   assert.deepEqual(requests[0].input, { canonicalVideoUrl: videoUrl });
   assert.deepEqual(requests[1].input, { query: '人工 智能' });
-  assert.equal(requests.at(-1).executionTarget, 'user_selected_tab');
+  assert.equal(requests.at(-1).executionTarget, 'collector_work_tab');
 });
 test('Xiaohongshu builders preserve short-lived profile URL and budgets', () => {
   const search = xiaohongshuPublicNotesSearch({

@@ -62,7 +62,7 @@ def test_bilibili_builders_emit_only_registered_wire_shapes() -> None:
     assert requests[0]["input"] == {"canonicalVideoUrl": VIDEO_URL}
     assert requests[1]["input"] == {"query": "人工 智能"}
     assert requests[5]["executionTarget"] == "user_selected_tab"
-    assert requests[-1]["executionTarget"] == "user_selected_tab"
+    assert requests[-1]["executionTarget"] == "collector_work_tab"
 
 
 def test_xiaohongshu_builders_preserve_profile_signature_and_budget_shape() -> None:

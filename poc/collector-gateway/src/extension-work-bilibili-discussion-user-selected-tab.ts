@@ -6,9 +6,9 @@ import { ExtensionWorkPassiveArtifactStore } from './extension-work-passive-arti
 import type { ExtensionWorkArtifactReference } from './extension-work-queue';
 
 /**
- * Persist the zero-navigation comments projection in the direct-only artifact
- * lane. It deliberately has no dependency on the legacy discussion runner,
- * Browser Host, Profile, Playwright, or response-body storage.
+ * Persist the bounded managed-work-tab comments projection in the direct-only
+ * artifact lane. It deliberately has no dependency on the legacy discussion
+ * runner, Browser Host, Profile, Playwright, or response-body storage.
  */
 export async function recordBilibiliDiscussionUserSelectedTabExtensionWork(input: {
   item: BilibiliVideoDiscussionUserSelectedTabWorkItem;

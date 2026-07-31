@@ -16,7 +16,7 @@ const item: BilibiliVideoDiscussionUserSelectedTabWorkItem = {
   browserBindingId: '33333333-3333-4333-8333-333333333333',
   platform: 'bilibili',
   capability: 'bilibili.discussion',
-  executionTarget: 'user_selected_tab',
+  executionTarget: 'collector_work_tab',
   issuedAt: '2026-07-25T00:00:00.000Z',
   expiresAt: '2026-07-25T00:01:00.000Z',
   input: {
@@ -24,8 +24,8 @@ const item: BilibiliVideoDiscussionUserSelectedTabWorkItem = {
     bvid: 'BV1qZSLBYEpa'
   },
   budget: {
-    maximumPlatformNavigations: 0,
-    maximumSemanticActions: 0,
+    maximumPlatformNavigations: 1,
+    maximumSemanticActions: 1,
     maximumResponseObservations: 0,
     maximumPayloadBytes: 98_304
   },
@@ -40,13 +40,14 @@ const result: BilibiliVideoDiscussionUserSelectedTabWorkResult = {
   browserBindingId: item.browserBindingId,
   platform: 'bilibili',
   capability: 'bilibili.discussion',
-  executionTarget: 'user_selected_tab',
+  executionTarget: 'collector_work_tab',
   state: 'completed',
   errorCode: null,
   terminalReason: 'discussion_ready',
   completedAt: '2026-07-25T00:00:20.000Z',
-  navigation: { attempted: false, attemptCount: 0 },
-  userSelectedTabDisposition: 'observed',
+  navigation: { attempted: true, attemptCount: 1 },
+  workTabAcquisition: 'created',
+  workTabDisposition: 'idle_reusable',
   observation: {
     bvid: item.input.bvid,
     commentHostPresent: true,
@@ -61,7 +62,7 @@ const result: BilibiliVideoDiscussionUserSelectedTabWorkResult = {
 };
 
 describe('direct passive extension-work artifacts', () => {
-  test('keeps a user-selected discussion projection separate from work-tab provenance and browser identifiers', async () => {
+  test('records automatic discussion work-tab provenance without browser identifiers', async () => {
     const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-discussion-direct-artifact-'));
     try {
       const store = await ExtensionWorkPassiveArtifactStore.create(stateDirectory);
@@ -72,15 +73,16 @@ describe('direct passive extension-work artifacts', () => {
         capability: 'bilibili.discussion',
         provenance: {
           environment: 'user_owned_browser_extension',
-          executionTarget: 'user_selected_tab',
+          executionTarget: 'collector_work_tab',
           captureMode: 'passive_dom_projection',
           responseBodies: 'not_read',
-          semanticActions: 0,
-          platformNavigations: 0,
-          userSelectedTabDisposition: 'observed'
+          semanticActions: 1,
+          platformNavigations: 1,
+          workTabAcquisition: 'created',
+          workTabDisposition: 'idle_reusable'
         },
         result: {
-          navigation: { attempted: false, attemptCount: 0 },
+          navigation: { attempted: true, attemptCount: 1 },
           observation: { rootCommentTexts: ['公开可见的评论文本'] }
         }
       });

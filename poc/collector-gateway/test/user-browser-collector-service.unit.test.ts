@@ -361,20 +361,20 @@ describe('user-owned browser collector service', () => {
     ]));
   });
 
-  test('admits comments only as a canonical video bound to a popup-selected existing document', () => {
+  test('admits comments as a canonical video managed by the extension work-tab lane', () => {
     expect(userBrowserCollectorServiceRequestInput({
       schemaVersion: 2,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
-      executionTarget: 'user_selected_tab',
+      executionTarget: 'collector_work_tab',
       input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
     })).toEqual({
       schemaVersion: 2,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
-      executionTarget: 'user_selected_tab',
+      executionTarget: 'collector_work_tab',
       input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
     });
     expect(() => userBrowserCollectorServiceRequestInput({
@@ -382,7 +382,7 @@ describe('user-owned browser collector service', () => {
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
-      executionTarget: 'collector_work_tab',
+      executionTarget: 'user_selected_tab',
       input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
     })).toThrow('user_browser_collector_service_request_invalid');
     expect(() => userBrowserCollectorServiceRequestInput({
@@ -390,7 +390,7 @@ describe('user-owned browser collector service', () => {
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
-      executionTarget: 'user_selected_tab',
+      executionTarget: 'collector_work_tab',
       input: {
         canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa',
         tabId: 7
@@ -400,7 +400,7 @@ describe('user-owned browser collector service', () => {
     const document = userBrowserCollectorServiceOpenApiDocument('http://127.0.0.1:43127') as Record<string, any>;
     expect(document.components.schemas.UserBrowserVideoDiscussionCollectRequest.properties).toMatchObject({
       capability: { const: 'bilibili.discussion' },
-      executionTarget: { const: 'user_selected_tab' },
+      executionTarget: { const: 'collector_work_tab' },
       input: { required: ['canonicalVideoUrl'] }
     });
   });

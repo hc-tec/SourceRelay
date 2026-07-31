@@ -33,8 +33,8 @@ describe('user-owned browser Bilibili capability catalog', () => {
       expect.objectContaining({
         capability: 'bilibili.discussion',
         dispatchState: 'direct_ready',
-        inputMode: 'canonical_video_url_user_selected_tab',
-        captureMode: 'user_selected_tab_passive_dom_projection',
+        inputMode: 'canonical_video_url',
+        captureMode: 'bounded_scroll_dom_projection',
         browserHostFallback: 'forbidden'
       }),
       expect.objectContaining({

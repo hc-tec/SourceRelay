@@ -307,7 +307,7 @@ def bilibili_discussion(*, browser_binding_id: str, canonical_video_url: str) ->
         browser_binding_id,
         "bilibili",
         "bilibili.discussion",
-        "user_selected_tab",
+        "collector_work_tab",
         {"canonicalVideoUrl": _bilibili_video_url(canonical_video_url)},
     )
 

@@ -6,9 +6,10 @@ const SAFE_ERROR = /^[a-z0-9_]{1,100}$/;
 const SIGNATURE = /^[A-Za-z0-9_-]{32,256}$/;
 
 /**
- * A deliberately passive discussion slice. The user has already opened the
- * public video and scrolled the comments into view before creating the
- * one-time tab/document lease in the extension UI.
+ * A bounded discussion slice executed by the extension's managed work-tab
+ * lane. The Gateway signs the canonical video URL; the extension owns the
+ * one navigation, foreground activation and one bounded scroll to the public
+ * comment host, so callers never need to select a tab manually.
  */
 export interface BilibiliVideoDiscussionUserSelectedTabWorkInput {
   canonicalVideoUrl: string;
@@ -16,8 +17,8 @@ export interface BilibiliVideoDiscussionUserSelectedTabWorkInput {
 }
 
 export interface BilibiliVideoDiscussionUserSelectedTabWorkBudget {
-  maximumPlatformNavigations: 0;
-  maximumSemanticActions: 0;
+  maximumPlatformNavigations: 1;
+  maximumSemanticActions: 1;
   maximumResponseObservations: 0;
   maximumPayloadBytes: 98_304;
 }
@@ -30,7 +31,7 @@ export interface BilibiliVideoDiscussionUserSelectedTabWorkItem {
   browserBindingId: string;
   platform: 'bilibili';
   capability: 'bilibili.discussion';
-  executionTarget: 'user_selected_tab';
+  executionTarget: 'collector_work_tab';
   issuedAt: string;
   expiresAt: string;
   input: BilibiliVideoDiscussionUserSelectedTabWorkInput;
@@ -42,22 +43,21 @@ export type BilibiliVideoDiscussionUserSelectedTabState = 'completed' | 'partial
 
 export type BilibiliVideoDiscussionUserSelectedTabDisposition =
   | 'observed'
-  | 'selection_unavailable'
-  | 'closed_or_missing'
-  | 'document_changed'
-  | 'target_mismatch'
-  | 'foreground_unavailable';
+  | 'idle_reusable'
+  | 'retained_not_reusable'
+  | 'user_taken_over'
+  | 'closed_or_missing';
 
 export type BilibiliVideoDiscussionUserSelectedTabTerminalReason =
   | 'discussion_ready'
   | 'discussion_empty'
   | 'discussion_partial'
-  | 'user_selected_tab_required'
-  | 'user_selected_tab_closed'
-  | 'user_selected_tab_document_changed'
-  | 'user_selected_tab_target_mismatch'
-  | 'user_selected_tab_foreground_unavailable'
-  | 'user_selected_tab_worker_interrupted'
+  | 'work_tab_closed'
+  | 'work_tab_user_taken_over'
+  | 'work_tab_foreground_unavailable'
+  | 'navigation_outcome_unknown'
+  | 'gateway_restarted_before_completion'
+  | 'document_context_changed'
   | 'login_required'
   | 'verification_required'
   | 'rate_limited'
@@ -96,16 +96,14 @@ export interface BilibiliVideoDiscussionUserSelectedTabWorkResult {
   browserBindingId: string;
   platform: 'bilibili';
   capability: 'bilibili.discussion';
-  executionTarget: 'user_selected_tab';
+  executionTarget: 'collector_work_tab';
   state: BilibiliVideoDiscussionUserSelectedTabState;
   errorCode: string | null;
   terminalReason: BilibiliVideoDiscussionUserSelectedTabTerminalReason;
   completedAt: string;
-  navigation: {
-    attempted: false;
-    attemptCount: 0;
-  };
-  userSelectedTabDisposition: BilibiliVideoDiscussionUserSelectedTabDisposition;
+  navigation: { attempted: boolean; attemptCount: 0 | 1 };
+  workTabAcquisition: 'created' | 'reused' | 'not_acquired';
+  workTabDisposition: BilibiliVideoDiscussionUserSelectedTabDisposition;
   observation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null;
 }
 
@@ -118,7 +116,7 @@ export function isBilibiliVideoDiscussionUserSelectedTabWorkItem(
   ])) return false;
   return value.schemaVersion === 1 && value.protocolVersion === 1 && uuid(value.workId) && uuid(value.operationId) &&
     uuid(value.browserBindingId) && value.platform === 'bilibili' && value.capability === 'bilibili.discussion' &&
-    value.executionTarget === 'user_selected_tab' && timestamp(value.issuedAt) && timestamp(value.expiresAt) &&
+    value.executionTarget === 'collector_work_tab' && timestamp(value.issuedAt) && timestamp(value.expiresAt) &&
     Date.parse(value.expiresAt) > Date.parse(value.issuedAt) && typeof value.gatewaySignature === 'string' &&
     SIGNATURE.test(value.gatewaySignature) && isInput(value.input) && isBudget(value.budget);
 }
@@ -129,13 +127,13 @@ export function isBilibiliVideoDiscussionUserSelectedTabWorkResult(
   if (!record(value) || !exactKeys(value, [
     'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
     'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation',
-    'userSelectedTabDisposition', 'observation'
+    'workTabAcquisition', 'workTabDisposition', 'observation'
   ])) return false;
   return value.schemaVersion === 1 && value.protocolVersion === 1 && uuid(value.workId) && uuid(value.operationId) &&
     uuid(value.browserBindingId) && value.platform === 'bilibili' && value.capability === 'bilibili.discussion' &&
-    value.executionTarget === 'user_selected_tab' && isState(value.state) && nullableError(value.errorCode) &&
-    isTerminalReason(value.terminalReason) && timestamp(value.completedAt) && isZeroNavigation(value.navigation) &&
-    isDisposition(value.userSelectedTabDisposition) &&
+    value.executionTarget === 'collector_work_tab' && isState(value.state) && nullableError(value.errorCode) &&
+    isTerminalReason(value.terminalReason) && timestamp(value.completedAt) && isNavigation(value.navigation) &&
+    isWorkTabAcquisition(value.workTabAcquisition) && isDisposition(value.workTabDisposition) &&
     (value.observation === null || isObservation(value.observation));
 }
 
@@ -149,7 +147,8 @@ export function isBilibiliVideoDiscussionUserSelectedTabWorkResultForItem(
   ) return false;
   if (value.state !== 'completed') return true;
   const observation = value.observation;
-  if (value.errorCode !== null || value.userSelectedTabDisposition !== 'observed' || !observation ||
+  if (value.errorCode !== null || value.navigation.attempted !== true || value.navigation.attemptCount !== 1 ||
+    value.workTabDisposition !== 'idle_reusable' || !observation ||
     observation.bvid !== item.input.bvid || !observation.commentHostPresent || !observation.commentHostVisible ||
     !observation.commentHostInViewport || observation.loginGateVisible || observation.risk.verificationRequired ||
     observation.risk.rateLimited || observation.risk.sourceUnavailable
@@ -171,7 +170,7 @@ function isInput(value: unknown): value is BilibiliVideoDiscussionUserSelectedTa
 function isBudget(value: unknown): value is BilibiliVideoDiscussionUserSelectedTabWorkBudget {
   return record(value) && exactKeys(value, [
     'maximumPlatformNavigations', 'maximumSemanticActions', 'maximumResponseObservations', 'maximumPayloadBytes'
-  ]) && value.maximumPlatformNavigations === 0 && value.maximumSemanticActions === 0 &&
+  ]) && value.maximumPlatformNavigations === 1 && value.maximumSemanticActions === 1 &&
     value.maximumResponseObservations === 0 && value.maximumPayloadBytes === 98_304;
 }
 
@@ -202,9 +201,9 @@ function isRisk(value: unknown): value is BilibiliVideoDiscussionUserSelectedTab
     typeof value.sourceUnavailable === 'boolean';
 }
 
-function isZeroNavigation(value: unknown): boolean {
+function isNavigation(value: unknown): boolean {
   return record(value) && exactKeys(value, ['attempted', 'attemptCount']) &&
-    value.attempted === false && value.attemptCount === 0;
+    typeof value.attempted === 'boolean' && value.attemptCount === (value.attempted ? 1 : 0);
 }
 
 function isState(value: unknown): value is BilibiliVideoDiscussionUserSelectedTabState {
@@ -212,18 +211,21 @@ function isState(value: unknown): value is BilibiliVideoDiscussionUserSelectedTa
 }
 
 function isDisposition(value: unknown): value is BilibiliVideoDiscussionUserSelectedTabDisposition {
-  return value === 'observed' || value === 'selection_unavailable' || value === 'closed_or_missing' ||
-    value === 'document_changed' || value === 'target_mismatch' || value === 'foreground_unavailable';
+  return value === 'observed' || value === 'idle_reusable' || value === 'retained_not_reusable' ||
+    value === 'user_taken_over' || value === 'closed_or_missing';
 }
 
 function isTerminalReason(value: unknown): value is BilibiliVideoDiscussionUserSelectedTabTerminalReason {
   return value === 'discussion_ready' || value === 'discussion_empty' || value === 'discussion_partial' ||
-    value === 'user_selected_tab_required' || value === 'user_selected_tab_closed' ||
-    value === 'user_selected_tab_document_changed' || value === 'user_selected_tab_target_mismatch' ||
-    value === 'user_selected_tab_foreground_unavailable' ||
-    value === 'user_selected_tab_worker_interrupted' || value === 'login_required' || value === 'verification_required' ||
+    value === 'work_tab_closed' || value === 'work_tab_user_taken_over' ||
+    value === 'work_tab_foreground_unavailable' || value === 'navigation_outcome_unknown' ||
+    value === 'gateway_restarted_before_completion' || value === 'login_required' || value === 'verification_required' ||
     value === 'rate_limited' || value === 'source_unavailable' || value === 'dom_projection_failed' ||
     value === 'run_deadline_exceeded';
+}
+
+function isWorkTabAcquisition(value: unknown): boolean {
+  return value === 'created' || value === 'reused' || value === 'not_acquired';
 }
 
 function nullableError(value: unknown): boolean {

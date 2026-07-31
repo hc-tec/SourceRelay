@@ -628,13 +628,13 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         UserBrowserVideoDiscussionCollectRequest: {
           type: 'object', additionalProperties: false,
           required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
-          description: 'Requires a short-lived matching page/document selection made in the extension popup after the user manually makes comments visible. This API cannot name a tab, document, selector, script, or page action.',
+          description: 'The extension owns a managed work tab, performs one canonical video navigation and one bounded scroll to the public comment host. Callers cannot name a tab, document, selector, script, or page action.',
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.discussion' },
-            executionTarget: { type: 'string', const: 'user_selected_tab' },
+            executionTarget: { type: 'string', const: 'collector_work_tab' },
             input: {
               type: 'object', additionalProperties: false,
               required: ['canonicalVideoUrl'],

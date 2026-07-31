@@ -125,7 +125,7 @@ xiaohongshu_request = xiaohongshu_public_notes_search(
 
 可用 builder 覆盖全部 15 项 `direct_ready` 能力：
 
-- B站：视频详情、站内搜索/固定两页搜索、账号资料、投稿首屏、动态、合集/系列概览与详情、弹幕、用户已选页评论；
+- B站：视频详情、站内搜索/固定两页搜索、账号资料、投稿首屏、动态、合集/系列概览与详情、弹幕、自动 work-tab 评论；
 - 小红书：公开搜索、公开博主笔记、公开笔记详情、评论和评论回复。
 
 小红书账号 builder 只有在 `execution_target="ephemeral_public_profile_url"` 时才

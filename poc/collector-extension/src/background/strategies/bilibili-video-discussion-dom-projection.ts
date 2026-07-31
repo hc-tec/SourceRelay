@@ -309,3 +309,39 @@ export async function captureBilibiliVideoDiscussionDom(
   if (!result) throw new Error('video_discussion_strategy_document_context_changed');
   return result;
 }
+
+/**
+ * One bounded, DOM-derived scroll used by the managed discussion work tab.
+ * The host is selected by the fixed projection strategy; callers cannot pass
+ * a selector or arbitrary script. It returns only whether the public comment
+ * host was found and whether it is now in the viewport.
+ */
+export async function scrollBilibiliVideoDiscussionIntoView(
+  tabId: number,
+  documentId: string
+): Promise<{ found: boolean; inViewport: boolean }> {
+  let results: chrome.scripting.InjectionResult<{ found: boolean; inViewport: boolean }>[];
+  try {
+    results = await chrome.scripting.executeScript({
+      target: { tabId, documentIds: [documentId] },
+      world: 'ISOLATED',
+      func: () => {
+        const host = document.querySelector<HTMLElement>('#commentapp');
+        if (!host) return { found: false, inViewport: false };
+        const before = host.getBoundingClientRect();
+        const inViewport = before.bottom > 0 && before.top < window.innerHeight;
+        if (!inViewport) host.scrollIntoView({ behavior: 'auto', block: 'center' });
+        const after = host.getBoundingClientRect();
+        return {
+          found: true,
+          inViewport: after.bottom > 0 && after.top < window.innerHeight
+        };
+      }
+    });
+  } catch {
+    throw new Error('video_discussion_scroll_document_context_changed');
+  }
+  const result = results[0]?.result;
+  if (!result) throw new Error('video_discussion_scroll_document_context_changed');
+  return result;
+}

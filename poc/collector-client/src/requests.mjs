@@ -208,7 +208,7 @@ export function bilibiliDiscussion({ browserBindingId, canonicalVideoUrl }) {
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.discussion',
-    executionTarget: 'user_selected_tab',
+    executionTarget: 'collector_work_tab',
     input: { canonicalVideoUrl: bilibiliVideoUrl(canonicalVideoUrl) }
   });
 }

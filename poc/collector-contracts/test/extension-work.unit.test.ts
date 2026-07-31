@@ -132,7 +132,7 @@ const accountInventorySelectedTabItem: ExtensionWorkItem = {
   gatewaySignature: 'e'.repeat(86)
 };
 
-const discussionSelectedTabItem: ExtensionWorkItem = {
+const discussionWorkTabItem: ExtensionWorkItem = {
   schemaVersion: 1,
   protocolVersion: 1,
   workId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
@@ -140,7 +140,7 @@ const discussionSelectedTabItem: ExtensionWorkItem = {
   browserBindingId: '33333333-3333-4333-8333-333333333333',
   platform: 'bilibili',
   capability: 'bilibili.discussion',
-  executionTarget: 'user_selected_tab',
+  executionTarget: 'collector_work_tab',
   issuedAt: '2026-07-25T00:00:00.000Z',
   expiresAt: '2026-07-25T00:01:00.000Z',
   input: {
@@ -148,8 +148,8 @@ const discussionSelectedTabItem: ExtensionWorkItem = {
     bvid: 'BV1qZSLBYEpa'
   },
   budget: {
-    maximumPlatformNavigations: 0,
-    maximumSemanticActions: 0,
+    maximumPlatformNavigations: 1,
+    maximumSemanticActions: 1,
     maximumResponseObservations: 0,
     maximumPayloadBytes: 98_304
   },
@@ -401,33 +401,34 @@ describe('direct extension work contract', () => {
     }, accountInventorySelectedTabItem)).toBe(false);
   });
 
-  test('allows an explicitly selected loaded discussion document only as a bounded passive projection', () => {
-    expect(isExtensionWorkItem(discussionSelectedTabItem)).toBe(true);
+  test('allows an automatically managed discussion work tab with one bounded scroll', () => {
+    expect(isExtensionWorkItem(discussionWorkTabItem)).toBe(true);
     expect(isExtensionWorkItem({
-      ...discussionSelectedTabItem,
-      executionTarget: 'collector_work_tab'
+      ...discussionWorkTabItem,
+      executionTarget: 'user_selected_tab'
     })).toBe(false);
     expect(isExtensionWorkItem({
-      ...discussionSelectedTabItem,
-      budget: { ...discussionSelectedTabItem.budget, maximumSemanticActions: 1 }
+      ...discussionWorkTabItem,
+      budget: { ...discussionWorkTabItem.budget, maximumSemanticActions: 2 }
     })).toBe(false);
-    expect(isExtensionWorkItem({ ...discussionSelectedTabItem, tabId: 42 })).toBe(false);
+    expect(isExtensionWorkItem({ ...discussionWorkTabItem, tabId: 42 })).toBe(false);
 
     const result: ExtensionWorkResult = {
       schemaVersion: 1,
       protocolVersion: 1,
-      workId: discussionSelectedTabItem.workId,
-      operationId: discussionSelectedTabItem.operationId,
-      browserBindingId: discussionSelectedTabItem.browserBindingId,
+      workId: discussionWorkTabItem.workId,
+      operationId: discussionWorkTabItem.operationId,
+      browserBindingId: discussionWorkTabItem.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
-      executionTarget: 'user_selected_tab',
+      executionTarget: 'collector_work_tab',
       state: 'completed',
       errorCode: null,
       terminalReason: 'discussion_ready',
       completedAt: '2026-07-25T00:00:20.000Z',
-      navigation: { attempted: false, attemptCount: 0 },
-      userSelectedTabDisposition: 'observed',
+      navigation: { attempted: true, attemptCount: 1 },
+      workTabAcquisition: 'created',
+      workTabDisposition: 'idle_reusable',
       observation: {
         bvid: 'BV1qZSLBYEpa',
         commentHostPresent: true,
@@ -440,18 +441,18 @@ describe('direct extension work contract', () => {
         risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
       }
     };
-    expect(isExtensionWorkResultForItem(result, discussionSelectedTabItem)).toBe(true);
+    expect(isExtensionWorkResultForItem(result, discussionWorkTabItem)).toBe(true);
     expect(isExtensionWorkResultForItem({
       ...result,
-      navigation: { attempted: true, attemptCount: 1 }
-    }, discussionSelectedTabItem)).toBe(false);
+      navigation: { attempted: false, attemptCount: 0 }
+    }, discussionWorkTabItem)).toBe(false);
     expect(isExtensionWorkResultForItem({
       ...result,
       observation: { ...result.observation!, commentHostInViewport: false }
-    }, discussionSelectedTabItem)).toBe(false);
+    }, discussionWorkTabItem)).toBe(false);
     expect(isExtensionWorkResultForItem({
       ...result,
       observation: { ...result.observation!, bvid: 'BV1xx411c7mD' }
-    }, discussionSelectedTabItem)).toBe(false);
+    }, discussionWorkTabItem)).toBe(false);
   });
 });

@@ -33,12 +33,13 @@ type PassiveDirectArtifactProvenance =
   }
   | {
     environment: 'user_owned_browser_extension';
-    executionTarget: 'user_selected_tab';
+    executionTarget: 'collector_work_tab';
     captureMode: 'passive_dom_projection';
     responseBodies: 'not_read';
-    semanticActions: 0;
-    platformNavigations: 0;
-    userSelectedTabDisposition: BilibiliVideoDiscussionUserSelectedTabWorkResult['userSelectedTabDisposition'];
+    semanticActions: 1;
+    platformNavigations: 1;
+    workTabAcquisition: BilibiliVideoDiscussionUserSelectedTabWorkResult['workTabAcquisition'];
+    workTabDisposition: BilibiliVideoDiscussionUserSelectedTabWorkResult['workTabDisposition'];
   };
 
 export interface PassiveDirectArtifactSummary {
@@ -118,15 +119,16 @@ export class ExtensionWorkPassiveArtifactStore {
     }
     const artifactId = randomUUID();
     const observation = input.result.observation;
-    const provenance: PassiveDirectArtifactProvenance = input.item.executionTarget === 'user_selected_tab'
+    const provenance: PassiveDirectArtifactProvenance = input.item.capability === 'bilibili.discussion'
       ? {
         environment: 'user_owned_browser_extension' as const,
-        executionTarget: 'user_selected_tab' as const,
+        executionTarget: 'collector_work_tab' as const,
         captureMode: 'passive_dom_projection' as const,
         responseBodies: 'not_read' as const,
-        semanticActions: 0 as const,
-        platformNavigations: 0 as const,
-        userSelectedTabDisposition: (input.result as BilibiliVideoDiscussionUserSelectedTabWorkResult).userSelectedTabDisposition
+        semanticActions: 1 as const,
+        platformNavigations: 1 as const,
+        workTabAcquisition: (input.result as BilibiliVideoDiscussionUserSelectedTabWorkResult).workTabAcquisition,
+        workTabDisposition: (input.result as BilibiliVideoDiscussionUserSelectedTabWorkResult).workTabDisposition
       }
       : {
         environment: 'user_owned_browser_extension' as const,
@@ -248,7 +250,7 @@ function isRecord(value: unknown): value is Record<string, any> {
 }
 
 function isProvenance(value: Record<string, any>): value is PassiveDirectArtifactProvenance {
-  if (value.environment !== 'user_owned_browser_extension' || value.semanticActions !== 0) return false;
+  if (value.environment !== 'user_owned_browser_extension') return false;
   if (value.executionTarget === 'collector_work_tab') {
     return hasExactKeys(value, [
       'environment', 'executionTarget', 'captureMode', 'responseBodies', 'semanticActions', 'platformNavigations',
@@ -256,13 +258,10 @@ function isProvenance(value: Record<string, any>): value is PassiveDirectArtifac
     ]) && (value.captureMode === 'passive_dom_projection' || value.captureMode === 'fixed_network_metadata_projection') &&
       (value.responseBodies === 'not_read' || value.responseBodies === 'transient_allowlisted_projection') &&
       value.platformNavigations === 1 && isWorkTabAcquisition(value.workTabAcquisition) &&
-      isWorkTabDisposition(value.workTabDisposition);
+      isWorkTabDisposition(value.workTabDisposition) &&
+      (value.captureMode === 'passive_dom_projection' ? (value.semanticActions === 0 || value.semanticActions === 1) : value.semanticActions === 0);
   }
-  return value.executionTarget === 'user_selected_tab' && hasExactKeys(value, [
-    'environment', 'executionTarget', 'captureMode', 'responseBodies', 'semanticActions', 'platformNavigations',
-    'userSelectedTabDisposition'
-  ]) && value.captureMode === 'passive_dom_projection' && value.responseBodies === 'not_read' &&
-    value.platformNavigations === 0 && isUserSelectedTabDisposition(value.userSelectedTabDisposition);
+  return false;
 }
 
 function isWorkTabAcquisition(value: unknown): boolean {
@@ -272,11 +271,6 @@ function isWorkTabAcquisition(value: unknown): boolean {
 function isWorkTabDisposition(value: unknown): boolean {
   return value === 'idle_reusable' || value === 'retained_not_reusable' ||
     value === 'user_taken_over' || value === 'closed_or_missing';
-}
-
-function isUserSelectedTabDisposition(value: unknown): boolean {
-  return value === 'observed' || value === 'selection_unavailable' || value === 'closed_or_missing' ||
-    value === 'document_changed' || value === 'target_mismatch';
 }
 
 function containsForbiddenBrowserIdentifier(value: unknown): boolean {

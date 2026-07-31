@@ -617,11 +617,11 @@ export class ExtensionWorkQueue {
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
-      executionTarget: 'user_selected_tab',
+      executionTarget: 'collector_work_tab',
       issuedAt,
       expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
       input: { canonicalVideoUrl, bvid },
-      budget: userSelectedTabObservationBudget()
+      budget: discussionWorkTabBudget()
     };
     return await this.#enqueueSigned(unsigned, issuedAt);
   }
@@ -1404,6 +1404,20 @@ function userSelectedTabObservationBudget(): {
   return {
     maximumPlatformNavigations: 0,
     maximumSemanticActions: 0,
+    maximumResponseObservations: 0,
+    maximumPayloadBytes: 98_304
+  };
+}
+
+function discussionWorkTabBudget(): {
+  maximumPlatformNavigations: 1;
+  maximumSemanticActions: 1;
+  maximumResponseObservations: 0;
+  maximumPayloadBytes: 98_304;
+} {
+  return {
+    maximumPlatformNavigations: 1,
+    maximumSemanticActions: 1,
     maximumResponseObservations: 0,
     maximumPayloadBytes: 98_304
   };

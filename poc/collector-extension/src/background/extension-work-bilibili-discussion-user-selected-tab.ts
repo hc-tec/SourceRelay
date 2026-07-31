@@ -1,191 +1,118 @@
-import type {
-  BilibiliVideoDiscussionUserSelectedTabDomObservation,
-  BilibiliVideoDiscussionUserSelectedTabWorkItem,
-  BilibiliVideoDiscussionUserSelectedTabWorkResult
-} from '@intelligence/collector-contracts';
-import { captureBilibiliVideoDiscussionDom } from './strategies/bilibili-video-discussion-dom-projection';
 import {
-  takeSelectedBilibiliVideoDiscussionTab,
-  type TakenUserSelectedBilibiliVideoDiscussionTab
-} from './user-selected-bilibili-video-discussion-tab';
+  canonicalBilibiliPassiveVideoWorkUrl,
+  type BilibiliVideoDiscussionUserSelectedTabDomObservation,
+  type BilibiliVideoDiscussionUserSelectedTabWorkItem,
+  type BilibiliVideoDiscussionUserSelectedTabWorkResult,
+  type ExtensionWorkItem,
+  type ExtensionWorkResult
+} from '@intelligence/collector-contracts';
+import {
+  captureBilibiliVideoDiscussionDom,
+  scrollBilibiliVideoDiscussionIntoView
+} from './strategies/bilibili-video-discussion-dom-projection';
+import {
+  abandonExtensionWorkTab,
+  acquireExtensionWorkTab,
+  navigateExtensionWorkTabOnce,
+  readExtensionWorkTab,
+  releaseExtensionWorkTab,
+  type ExtensionWorkTabLease,
+  type WorkTabAcquisition,
+  type WorkTabDisposition
+} from './extension-work-tabs';
 
-const OBSERVATION_INTERVAL_MS = 350;
-const MAX_OBSERVATION_WINDOW_MS = 15_000;
 const PAGE_SETTLE_MS = 2_000;
-const FOREGROUND_SETTLE_MS = 750;
+const SCROLL_SETTLE_MS = 750;
+const MAX_OBSERVATION_WINDOW_MS = 30_000;
+const OBSERVATION_INTERVAL_MS = 350;
 
 /**
- * A zero-input public comments observation. The extension consumes only the
- * tab/document that the user explicitly chose after personally scrolling
- * comments into view. It performs no navigation, scroll, sort, reply
- * expansion, refresh, response-body read or Browser Host/CDP control action.
- * If the exact leased tab is no longer foreground, it may focus that one
- * leased tab once so Bilibili's lazy comment renderer can settle; it never
- * chooses another tab or exposes tab identifiers to the Gateway.
+ * Automatic Bilibili discussion collection. The Gateway supplies only the
+ * canonical video URL. The extension reuses or creates its managed work tab,
+ * navigates once, foregrounds it through the work-tab lifecycle, and performs
+ * one fixed scroll to the comment host before projecting visible root comments.
+ * No popup selection, caller selector, arbitrary script, refresh or retry is
+ * involved.
  */
 export async function executeBilibiliDiscussionUserSelectedTabExtensionWork(
-  item: BilibiliVideoDiscussionUserSelectedTabWorkItem
+  item: BilibiliVideoDiscussionUserSelectedTabWorkItem,
+  lifecycle: {
+    onWorkTabAcquired?(acquisition: WorkTabAcquisition): Promise<void>;
+    onNavigationIntent?(): Promise<void>;
+  } = {}
 ): Promise<BilibiliVideoDiscussionUserSelectedTabWorkResult> {
+  let workTab: ExtensionWorkTabLease | null = null;
+  let acquisition: WorkTabAcquisition | 'not_acquired' = 'not_acquired';
+  let navigationAttempted = false;
+  let observation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null = null;
   if (Date.parse(item.expiresAt) <= Date.now()) {
     return result(item, {
       state: 'stopped',
       errorCode: 'extension_work_expired',
       terminalReason: 'run_deadline_exceeded',
-      disposition: 'selection_unavailable',
+      navigationAttempted: false,
+      acquisition: 'not_acquired',
+      disposition: 'closed_or_missing',
       observation: null
     });
   }
-
-  const selected = await takeSelectedBilibiliVideoDiscussionTab(item.input.canonicalVideoUrl);
-  if (selected.kind === 'stopped') {
+  try {
+    workTab = await acquireExtensionWorkTab();
+    acquisition = workTab.acquisition;
+    await lifecycle.onWorkTabAcquired?.(acquisition);
+    await navigateExtensionWorkTabOnce(workTab, item as ExtensionWorkItem, async () => {
+      navigationAttempted = true;
+      await lifecycle.onNavigationIntent?.();
+    });
+    const observed = await observeDiscussion(workTab, item.input.bvid, item.expiresAt);
+    observation = observed.observation;
+    const disposition = observed.kind === 'ready' || observed.kind === 'empty' ||
+      observed.terminalReason === 'source_unavailable'
+      ? releaseExtensionWorkTab(workTab)
+      : abandonExtensionWorkTab(workTab);
+    workTab = null;
+    if (observed.kind === 'ready' || observed.kind === 'empty') {
+      return result(item, {
+        state: 'completed',
+        errorCode: null,
+        terminalReason: observed.terminalReason,
+        navigationAttempted,
+        acquisition,
+        disposition,
+        observation
+      });
+    }
     return result(item, {
-      state: 'stopped',
-      errorCode: selected.errorCode,
-      terminalReason: selected.errorCode,
-      disposition: selected.disposition,
-      observation: null
+      state: observed.kind === 'partial' ? 'partial' : 'stopped',
+      errorCode: observed.errorCode,
+      terminalReason: observed.terminalReason,
+      navigationAttempted,
+      acquisition,
+      disposition,
+      observation
+    });
+  } catch (error) {
+    const disposition = workTab
+      ? navigationAttempted
+        ? abandonExtensionWorkTab(workTab)
+        : releaseExtensionWorkTab(workTab)
+      : acquisition === 'not_acquired'
+        ? 'closed_or_missing'
+        : 'user_taken_over';
+    const code = safeErrorCode(error);
+    return result(item, {
+      state: 'failed',
+      errorCode: code,
+      terminalReason: terminalReasonForError(code, navigationAttempted),
+      navigationAttempted,
+      acquisition,
+      disposition,
+      observation
     });
   }
-
-  const deadline = Math.min(Date.parse(item.expiresAt), Date.now() + MAX_OBSERVATION_WINDOW_MS);
-  let firstCompleteAt: number | null = null;
-  let foregroundActivationAttempted = false;
-  let foregroundActivatedAt: number | null = null;
-  let lastObservation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null = null;
-  while (Date.now() < deadline) {
-    let tab: chrome.tabs.Tab;
-    try {
-      tab = await chrome.tabs.get(selected.lease.tabId);
-    } catch {
-      return result(item, {
-        state: 'stopped',
-        errorCode: 'user_selected_tab_closed',
-        terminalReason: 'user_selected_tab_closed',
-        disposition: 'closed_or_missing',
-        observation: lastObservation
-      });
-    }
-    const foreground = await ensureDiscussionTabForeground(selected.lease, tab, foregroundActivationAttempted);
-    foregroundActivationAttempted = foreground.attempted;
-    if (!foreground.ready) {
-      return result(item, {
-        state: 'stopped',
-        errorCode: 'user_selected_tab_foreground_unavailable',
-        terminalReason: 'user_selected_tab_foreground_unavailable',
-        disposition: 'foreground_unavailable',
-        observation: lastObservation
-      });
-    }
-    if (foreground.activated) {
-      foregroundActivatedAt ??= Date.now();
-    }
-    if (foregroundActivatedAt !== null && Date.now() - foregroundActivatedAt < FOREGROUND_SETTLE_MS) {
-      await delay(OBSERVATION_INTERVAL_MS);
-      continue;
-    }
-    if (tab.windowId !== selected.lease.windowId || tab.status !== 'complete') {
-      await delay(OBSERVATION_INTERVAL_MS);
-      continue;
-    }
-    firstCompleteAt ??= Date.now();
-    if (Date.now() - firstCompleteAt < PAGE_SETTLE_MS) {
-      await delay(OBSERVATION_INTERVAL_MS);
-      continue;
-    }
-
-    let dom: Awaited<ReturnType<typeof captureBilibiliVideoDiscussionDom>>;
-    try {
-      dom = await captureBilibiliVideoDiscussionDom(selected.lease.tabId, selected.lease.documentId);
-    } catch {
-      return result(item, {
-        state: 'stopped',
-        errorCode: 'user_selected_tab_document_changed',
-        terminalReason: 'user_selected_tab_document_changed',
-        disposition: 'document_changed',
-        observation: lastObservation
-      });
-    }
-    const observation = toObservation(dom);
-    lastObservation = observation;
-    if (observation.bvid !== item.input.bvid) {
-      return result(item, {
-        state: 'stopped',
-        errorCode: 'user_selected_tab_target_mismatch',
-        terminalReason: 'user_selected_tab_target_mismatch',
-        disposition: 'target_mismatch',
-        observation
-      });
-    }
-    if (observation.loginGateVisible) {
-      return result(item, {
-        state: 'stopped',
-        errorCode: 'bilibili_login_required',
-        terminalReason: 'login_required',
-        disposition: 'observed',
-        observation
-      });
-    }
-    if (observation.risk.verificationRequired) {
-      return result(item, {
-        state: 'stopped',
-        errorCode: 'bilibili_verification_required',
-        terminalReason: 'verification_required',
-        disposition: 'observed',
-        observation
-      });
-    }
-    if (observation.risk.rateLimited) {
-      return result(item, {
-        state: 'stopped',
-        errorCode: 'bilibili_rate_limited',
-        terminalReason: 'rate_limited',
-        disposition: 'observed',
-        observation
-      });
-    }
-    if (observation.risk.sourceUnavailable) {
-      return result(item, {
-        state: 'stopped',
-        errorCode: 'bilibili_source_unavailable',
-        terminalReason: 'source_unavailable',
-        disposition: 'observed',
-        observation
-      });
-    }
-    if (observation.commentContentState === 'ready' && observation.rootCommentTexts.length > 0 &&
-      observation.commentHostPresent && observation.commentHostVisible && observation.commentHostInViewport
-    ) {
-      return result(item, {
-        state: 'completed',
-        errorCode: null,
-        terminalReason: 'discussion_ready',
-        disposition: 'observed',
-        observation
-      });
-    }
-    if (observation.commentContentState === 'empty' && observation.rootCommentTexts.length === 0 &&
-      observation.commentHostPresent && observation.commentHostVisible && observation.commentHostInViewport
-    ) {
-      return result(item, {
-        state: 'completed',
-        errorCode: null,
-        terminalReason: 'discussion_empty',
-        disposition: 'observed',
-        observation
-      });
-    }
-    await delay(OBSERVATION_INTERVAL_MS);
-  }
-
-  return result(item, {
-    state: 'partial',
-    errorCode: 'bilibili_video_discussion_dom_not_ready',
-    terminalReason: Date.now() >= Date.parse(item.expiresAt) ? 'run_deadline_exceeded' : 'discussion_partial',
-    disposition: 'observed',
-    observation: lastObservation
-  });
 }
 
+/** Kept as a pure foreground predicate for the extension-domain test suite. */
 export function discussionTabNeedsForeground(
   tab: Pick<chrome.tabs.Tab, 'active'>,
   window: Pick<chrome.windows.Window, 'focused'> | null
@@ -193,34 +120,103 @@ export function discussionTabNeedsForeground(
   return tab.active !== true || window?.focused !== true;
 }
 
-async function ensureDiscussionTabForeground(
-  lease: Extract<TakenUserSelectedBilibiliVideoDiscussionTab, { kind: 'ready' }>['lease'],
-  tab: chrome.tabs.Tab,
-  activationAttempted: boolean
-): Promise<{ ready: boolean; attempted: boolean; activated: boolean }> {
-  const window = await chrome.windows.get(lease.windowId).catch(() => null);
-  if (!discussionTabNeedsForeground(tab, window)) {
-    return { ready: true, attempted: activationAttempted, activated: false };
-  }
-  if (activationAttempted) {
-    return { ready: false, attempted: true, activated: false };
-  }
-  try {
-    if (window?.focused !== true) {
-      await chrome.windows.update(lease.windowId, { focused: true });
+async function observeDiscussion(
+  workTab: ExtensionWorkTabLease,
+  expectedBvid: string,
+  expiresAt: string
+): Promise<
+  | { kind: 'ready'; observation: BilibiliVideoDiscussionUserSelectedTabDomObservation; terminalReason: 'discussion_ready'; errorCode: null }
+  | { kind: 'empty'; observation: BilibiliVideoDiscussionUserSelectedTabDomObservation; terminalReason: 'discussion_empty'; errorCode: null }
+  | { kind: 'stopped'; observation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null; terminalReason: BilibiliVideoDiscussionUserSelectedTabWorkResult['terminalReason']; errorCode: string }
+  | { kind: 'partial'; observation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null; terminalReason: 'discussion_partial' | 'run_deadline_exceeded' | 'dom_projection_failed'; errorCode: string }
+> {
+  const deadline = Math.min(Date.parse(expiresAt), Date.now() + MAX_OBSERVATION_WINDOW_MS);
+  const expectedCanonicalUrl = `https://www.bilibili.com/video/${expectedBvid}`;
+  let pageReadyAt: number | null = null;
+  let lastObservation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null = null;
+  let documentId: string | null = null;
+  let scrollAttempted = false;
+  let scrollSettledAt: number | null = null;
+  while (Date.now() < deadline) {
+    const tab = await readExtensionWorkTab(workTab);
+    if (tab.status !== 'complete') {
+      await delay(OBSERVATION_INTERVAL_MS);
+      continue;
     }
-    if (tab.active !== true) {
-      await chrome.tabs.update(lease.tabId, { active: true });
+    if (canonicalBilibiliPassiveVideoWorkUrl(tab.url ?? '', 'observed_document') !== expectedCanonicalUrl) {
+      return { kind: 'stopped', observation: null, errorCode: 'bilibili_discussion_target_not_reached', terminalReason: 'source_unavailable' };
     }
-  } catch {
-    return { ready: false, attempted: true, activated: false };
+    const frame = await chrome.webNavigation.getFrame({ tabId: workTab.tabId, frameId: 0 }).catch(() => null);
+    if (!frame?.documentId) {
+      await delay(OBSERVATION_INTERVAL_MS);
+      continue;
+    }
+    documentId ??= frame.documentId;
+    if (frame.documentId !== documentId) {
+      return { kind: 'stopped', observation: lastObservation, errorCode: 'video_discussion_document_context_changed', terminalReason: 'document_context_changed' };
+    }
+    pageReadyAt ??= Date.now();
+    if (Date.now() - pageReadyAt < PAGE_SETTLE_MS) {
+      await delay(OBSERVATION_INTERVAL_MS);
+      continue;
+    }
+    let dom: Awaited<ReturnType<typeof captureBilibiliVideoDiscussionDom>>;
+    try {
+      dom = await captureBilibiliVideoDiscussionDom(workTab.tabId, documentId);
+    } catch {
+      return { kind: 'partial', observation: lastObservation, errorCode: 'bilibili_video_discussion_dom_projection_failed', terminalReason: 'dom_projection_failed' };
+    }
+    const current = toObservation(dom);
+    lastObservation = current;
+    if (current.bvid !== expectedBvid) {
+      return { kind: 'stopped', observation: current, errorCode: 'bilibili_discussion_target_mismatch', terminalReason: 'document_context_changed' };
+    }
+    if (current.loginGateVisible) {
+      return { kind: 'stopped', observation: current, errorCode: 'bilibili_login_required', terminalReason: 'login_required' };
+    }
+    if (current.risk.verificationRequired) {
+      return { kind: 'stopped', observation: current, errorCode: 'bilibili_verification_required', terminalReason: 'verification_required' };
+    }
+    if (current.risk.rateLimited) {
+      return { kind: 'stopped', observation: current, errorCode: 'bilibili_rate_limited', terminalReason: 'rate_limited' };
+    }
+    if (current.risk.sourceUnavailable) {
+      return { kind: 'stopped', observation: current, errorCode: 'bilibili_source_unavailable', terminalReason: 'source_unavailable' };
+    }
+    if (current.commentHostPresent && !current.commentHostInViewport && !scrollAttempted) {
+      scrollAttempted = true;
+      try {
+        const scroll = await scrollBilibiliVideoDiscussionIntoView(workTab.tabId, documentId);
+        if (!scroll.found) {
+          await delay(OBSERVATION_INTERVAL_MS);
+          continue;
+        }
+        scrollSettledAt = Date.now();
+      } catch {
+        return { kind: 'partial', observation: current, errorCode: 'bilibili_video_discussion_scroll_failed', terminalReason: 'dom_projection_failed' };
+      }
+      continue;
+    }
+    if (scrollSettledAt !== null && Date.now() - scrollSettledAt < SCROLL_SETTLE_MS) {
+      await delay(OBSERVATION_INTERVAL_MS);
+      continue;
+    }
+    if (current.commentContentState === 'ready' && current.rootCommentTexts.length > 0 &&
+      current.commentHostPresent && current.commentHostVisible && current.commentHostInViewport) {
+      return { kind: 'ready', observation: current, terminalReason: 'discussion_ready', errorCode: null };
+    }
+    if (current.commentContentState === 'empty' && current.rootCommentTexts.length === 0 &&
+      current.commentHostPresent && current.commentHostVisible && current.commentHostInViewport) {
+      return { kind: 'empty', observation: current, terminalReason: 'discussion_empty', errorCode: null };
+    }
+    await delay(OBSERVATION_INTERVAL_MS);
   }
-  const [focusedWindow, activeTab] = await Promise.all([
-    chrome.windows.get(lease.windowId).catch(() => null),
-    chrome.tabs.get(lease.tabId).catch(() => null)
-  ]);
-  const ready = activeTab !== null && discussionTabNeedsForeground(activeTab, focusedWindow) === false;
-  return { ready, attempted: true, activated: ready };
+  return {
+    kind: 'partial',
+    observation: lastObservation,
+    errorCode: 'bilibili_video_discussion_dom_not_ready',
+    terminalReason: Date.now() >= Date.parse(expiresAt) ? 'run_deadline_exceeded' : 'discussion_partial'
+  };
 }
 
 function toObservation(
@@ -245,7 +241,9 @@ function result(
     state: BilibiliVideoDiscussionUserSelectedTabWorkResult['state'];
     errorCode: string | null;
     terminalReason: BilibiliVideoDiscussionUserSelectedTabWorkResult['terminalReason'];
-    disposition: BilibiliVideoDiscussionUserSelectedTabWorkResult['userSelectedTabDisposition'];
+    navigationAttempted: boolean;
+    acquisition: WorkTabAcquisition | 'not_acquired';
+    disposition: WorkTabDisposition;
     observation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null;
   }
 ): BilibiliVideoDiscussionUserSelectedTabWorkResult {
@@ -257,15 +255,34 @@ function result(
     browserBindingId: item.browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.discussion',
-    executionTarget: 'user_selected_tab',
+    executionTarget: 'collector_work_tab',
     state: input.state,
     errorCode: input.errorCode,
     terminalReason: input.terminalReason,
     completedAt: new Date().toISOString(),
-    navigation: { attempted: false, attemptCount: 0 },
-    userSelectedTabDisposition: input.disposition,
+    navigation: {
+      attempted: input.navigationAttempted,
+      attemptCount: input.navigationAttempted ? 1 : 0
+    },
+    workTabAcquisition: input.acquisition,
+    workTabDisposition: input.disposition,
     observation: input.observation
   };
+}
+
+function terminalReasonForError(
+  errorCode: string,
+  navigationAttempted: boolean
+): BilibiliVideoDiscussionUserSelectedTabWorkResult['terminalReason'] {
+  if (errorCode === 'work_tab_closed') return 'work_tab_closed';
+  if (errorCode === 'work_tab_user_taken_over') return 'work_tab_user_taken_over';
+  if (errorCode === 'work_tab_foreground_unavailable') return 'work_tab_foreground_unavailable';
+  return navigationAttempted ? 'navigation_outcome_unknown' : 'work_tab_closed';
+}
+
+function safeErrorCode(error: unknown): string {
+  const code = error instanceof Error ? error.message : '';
+  return /^[a-z0-9_]{1,100}$/.test(code) ? code : 'extension_work_execution_failed';
 }
 
 function delay(milliseconds: number): Promise<void> {

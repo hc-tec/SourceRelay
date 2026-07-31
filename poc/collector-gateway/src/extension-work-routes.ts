@@ -298,9 +298,9 @@ export async function enqueueBilibiliAccountInventoryUserSelectedTabWork(
 }
 
 /**
- * Queue a fixed zero-navigation comments projection only after the extension
- * popup has locally selected the matching already-visible discussion document.
- * The Gateway never receives, stores, or selects browser tab/document IDs.
+ * Queue a fixed managed-work-tab comments projection. The Gateway signs only
+ * the canonical video identity; the extension owns the tab lifecycle and the
+ * one bounded scroll. Browser tab/document IDs never cross this route.
  */
 export async function enqueueBilibiliDiscussionUserSelectedTabWork(
   context: ExtensionWorkRouteContext,

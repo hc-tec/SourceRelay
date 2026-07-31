@@ -38,7 +38,7 @@
 
 Collector 不创建、复制、读取、启动或关闭你的浏览器 Profile。浏览器自己的登录态仍只由浏览器维护；扩展不会导出 Cookie、密码、Token、Storage 或 Profile 文件。
 
-大多数 direct work 都会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**。已完成真实 canary 的详情只导航一次到严格规范的视频 URL；单页搜索只导航一次到 Gateway 从关键词推导出的“综合 / 相关性 / 第 1 页”搜索页，既不点击搜索按钮，也不翻页、滚动、改排序或读取 Network response body。固定两页搜索是独立能力：Gateway 只接收同一个 `query`，签名第 1、2 页并按顺序导航，最多两次导航、零页面语义动作；第 1 页为空、风险、用户接管、未知导航或过期时不会进入第 2 页。UP 主公开资料与 UP 主视频首屏也只接受规范空间主页：Gateway 分别推导空间主页和固定 `/upload/video` 首屏，前者投影公开账号头信息，后者投影首屏可见视频卡片；两项均已通过 user-owned-browser real canary，均不翻页、不滚动、不筛选。`bilibili.discussion` 是受限例外：用户先自己将评论区滚到可见区域，并在扩展 popup 明确选择当前视频页；随后 Gateway 只能对同一 tab/document 执行一次零导航、零页面动作、零 response body 的根评论 DOM 投影。为应对评论懒加载，work 发现精确租约 tab 不在前台时，最多只激活并聚焦这个已经由用户选择的 tab 一次；不会选择其他 tab，也不会代替用户滚动、排序、展开回复、翻页或刷新。扩展自有工作页成功后留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”；用户关闭、移动、激活接管或导航该工作页时，当前 run 停止，不会自动重开、刷新、换 tab 或重放平台动作。
+大多数 direct work 都会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**。已完成真实 canary 的详情只导航一次到严格规范的视频 URL；单页搜索只导航一次到 Gateway 从关键词推导出的“综合 / 相关性 / 第 1 页”搜索页，既不点击搜索按钮，也不翻页、滚动、改排序或读取 Network response body。固定两页搜索是独立能力：Gateway 只接收同一个 `query`，签名第 1、2 页并按顺序导航，最多两次导航、零页面语义动作；第 1 页为空、风险、用户接管、未知导航或过期时不会进入第 2 页。UP 主公开资料与 UP 主视频首屏也只接受规范空间主页：Gateway 分别推导空间主页和固定 `/upload/video` 首屏，前者投影公开账号头信息，后者投影首屏可见视频卡片；两项均已通过 user-owned-browser real canary，均不翻页、不滚动、不筛选。`bilibili.discussion` 现在与其他 direct work 一致：Gateway 只签名规范视频 URL，扩展自动复用或创建受管 work-tab、导航一次、前台激活并执行一次固定 DOM 滚动，使评论宿主进入视口后投影最多 20 条公开根评论。它不要求用户打开 popup 选择页面，也不接受 selector、脚本或任意 tab；不会排序、展开回复、翻页或刷新。成功 work-tab 留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”；用户关闭、移动、激活接管或导航该工作页时，当前 run 停止，不会自动重开、刷新、换 tab 或重放平台动作。
 
 ## 2. 一次性准备稳定的扩展目录
 
@@ -256,7 +256,7 @@ Python SDK 使用 `asyncio`，方法名采用 snake_case；协议字段仍保持
 - 断网：最多重试三次**本地 Gateway 结果提交**，不重试平台导航；
 - 验证码、风控、限流或导航结果未知：binding 进入锁定状态，后续平台工作被拒绝，必须在 Console 进行明确人工恢复；
 - 当前 MVP 不使用 `chrome.debugger`、CDP、任意 script、任意 selector、任意鼠标坐标或 Cookie 接口；
-- 当前 MVP 不读取字幕、播放器响应或任何 Network response body；这些仍是独立 capability。评论仅开放已完成 canary 的 `bilibili.discussion`：用户已选、当前已加载 document 的最多 20 条根评论被动 DOM 投影；它不是自动滚动、最新排序、回复树、分页或评论全量接口。
+- 当前 MVP 不读取字幕、播放器响应或任何 Network response body；这些仍是独立 capability。评论仅开放已完成 canary 的 `bilibili.discussion`：自动受管 work-tab 的一次规范导航、一次固定滚动和最多 20 条公开根评论 DOM 投影；它不是最新排序、回复树、分页或评论全量接口。
 
 停止 Gateway 时只在它所在的 PowerShell 中按 `Ctrl+C`。这只停止本地 loopback 服务；不会关闭、枚举、移动或刷新用户的任何浏览器窗口和标签页。浏览器下次仍按用户自己的方式启动并保留自己的登录状态。Gateway 再次启动且仍使用同一状态目录后，已配对扩展会继续通过原 binding 连接；可用下面命令确认：
 

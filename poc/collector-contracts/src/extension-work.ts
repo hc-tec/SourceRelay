@@ -676,7 +676,7 @@ export function isExtensionWorkItem(value: unknown): value is ExtensionWorkItem 
         : isBilibiliAccountInventoryUserSelectedTabWorkBudget(value.budget));
   }
   if (value.capability === 'bilibili.discussion') {
-    return value.executionTarget === 'user_selected_tab' &&
+    return value.executionTarget === 'collector_work_tab' &&
       isBilibiliVideoDiscussionUserSelectedTabWorkItem(value);
   }
   return value.executionTarget === 'collector_work_tab' && isBilibiliPassiveExtensionWorkItem(value);

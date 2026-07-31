@@ -70,10 +70,10 @@ export interface UserBrowserDanmakuCollectorServiceRequest extends UserBrowserCo
   input: { canonicalVideoUrl: string };
 }
 
-/** The user has already opened the video and made comments visible. */
+/** The extension opens or reuses its managed work tab and scrolls once to the public comments host. */
 export interface UserBrowserVideoDiscussionCollectorServiceRequest extends UserBrowserCollectorServiceRequestBase {
   capability: 'bilibili.discussion';
-  executionTarget: 'user_selected_tab';
+  executionTarget: 'collector_work_tab';
   input: { canonicalVideoUrl: string };
 }
 

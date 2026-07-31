@@ -286,27 +286,27 @@ describe('extension work queue state machine', () => {
     }
   });
 
-  test('signs a user-selected discussion observation with no browser identifier or navigation budget', async () => {
-    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-discussion-selected-tab-'));
+  test('signs an automatic discussion work-tab observation with one navigation and one bounded scroll', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-discussion-work-tab-'));
     try {
       const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
       const queued = await queue.enqueueBilibiliDiscussionUserSelectedTab({
         browserBindingId: bindingId,
         canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa'
       }, base);
-      expect(queued.executionTarget).toBe('user_selected_tab');
+      expect(queued.executionTarget).toBe('collector_work_tab');
       const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 1));
       expect(claimed).toMatchObject({
         operationId: queued.operationId,
         capability: 'bilibili.discussion',
-        executionTarget: 'user_selected_tab',
+        executionTarget: 'collector_work_tab',
         input: {
           canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa',
           bvid: 'BV1qZSLBYEpa'
         },
         budget: {
-          maximumPlatformNavigations: 0,
-          maximumSemanticActions: 0,
+          maximumPlatformNavigations: 1,
+          maximumSemanticActions: 1,
           maximumResponseObservations: 0
         }
       });
@@ -319,13 +319,14 @@ describe('extension work queue state machine', () => {
         browserBindingId: claimed.browserBindingId,
         platform: 'bilibili',
         capability: 'bilibili.discussion',
-        executionTarget: 'user_selected_tab',
+        executionTarget: 'collector_work_tab',
         state: 'stopped',
-        errorCode: 'user_selected_tab_required',
-        terminalReason: 'user_selected_tab_required',
+        errorCode: 'work_tab_user_taken_over',
+        terminalReason: 'work_tab_user_taken_over',
         completedAt: new Date(base.getTime() + 2).toISOString(),
-        navigation: { attempted: false, attemptCount: 0 },
-        userSelectedTabDisposition: 'selection_unavailable',
+        navigation: { attempted: true, attemptCount: 1 },
+        workTabAcquisition: 'created',
+        workTabDisposition: 'retained_not_reusable',
         observation: null
       }, null);
       const persisted = await readFile(join(stateDirectory, 'extension-work-operations.json'), 'utf8');
@@ -333,7 +334,7 @@ describe('extension work queue state machine', () => {
       expect(persisted).not.toContain('"windowId"');
       expect(persisted).not.toContain('"documentId"');
       expect(persisted).toContain('"bilibili.discussion"');
-      expect(persisted).toContain('"user_selected_tab"');
+      expect(persisted).toContain('"collector_work_tab"');
     } finally {
       await rm(stateDirectory, { recursive: true, force: true });
     }
