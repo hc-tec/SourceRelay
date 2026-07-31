@@ -51,12 +51,8 @@ describe('Bilibili discussion trusted scroll boundary', () => {
       .resolves.toEqual({ found: true, inViewport: false });
     expect(chrome.attach).toHaveBeenCalledTimes(1);
     expect(chrome.detach).toHaveBeenCalledTimes(1);
-    expect(chrome.commands.map(({ method }) => method)).toEqual([
-      'Input.dispatchMouseEvent',
-      'Input.dispatchMouseEvent'
-    ]);
-    expect(chrome.commands[0]?.params).toMatchObject({ type: 'mouseMoved', x: 640, y: 576 });
-    expect(chrome.commands[1]?.params).toMatchObject({ type: 'mouseWheel', x: 640, y: 576, deltaX: 0, deltaY: 810 });
+    expect(chrome.commands.map(({ method }) => method)).toEqual(['Input.dispatchMouseEvent']);
+    expect(chrome.commands[0]?.params).toMatchObject({ type: 'mouseWheel', x: 640, y: 576, deltaX: 0, deltaY: 810 });
   });
 
   test('does not attach when the host is absent or already visible', async () => {

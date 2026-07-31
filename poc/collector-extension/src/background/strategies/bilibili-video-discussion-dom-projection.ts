@@ -331,8 +331,8 @@ interface BilibiliVideoDiscussionScrollProbe {
  * One bounded, DOM-derived trusted scroll used by the managed discussion
  * work tab. The fixed projection first measures #commentapp and derives a
  * viewport-safe pointer and wheel delta. The actual scroll is delivered by
- * Chrome's Input domain so Bilibili sees the same kind of wheel input as a
- * foreground user page; no synthetic element method, selector, or caller
+ * one Chrome Input-domain wheel event so Bilibili sees the same kind of input
+ * as a foreground user page; no synthetic element method, selector, or caller
  * supplied coordinate is accepted.
  */
 export async function scrollBilibiliVideoDiscussionIntoView(
@@ -389,11 +389,6 @@ export async function scrollBilibiliVideoDiscussionIntoView(
     );
     attachPending = false;
     attached = true;
-    await sendTrustedMouseCommand(debuggee, {
-      type: 'mouseMoved',
-      x: probe.x,
-      y: probe.y
-    });
     await sendTrustedMouseCommand(debuggee, {
       type: 'mouseWheel',
       x: probe.x,
