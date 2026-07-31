@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { AccountSafetyRegistry } from './account-safety';
 import { BrowserBindingSafetyRegistry } from './browser-binding-safety';
@@ -48,9 +49,11 @@ import { XiaohongshuNotePublicDetailArtifactStore } from './xiaohongshu-note-pub
 import { XiaohongshuNotePublicCommentsArtifactStore } from './xiaohongshu-note-public-comments-artifacts';
 import { XiaohongshuReplyArtifactStore } from './xiaohongshu-note-public-comment-replies-artifacts';
 import { BrowserProfileRegistry } from './profiles';
+import { OperationalLog } from './operational-log';
 
 const config = loadGatewayConfig();
 const identity = await loadGatewayIdentity(config);
+const operationalLog = await OperationalLog.create(config.stateDirectory);
 const pairingBroker = await PairingBroker.create(identity, config.stateDirectory);
 const browserBindingSafety = await BrowserBindingSafetyRegistry.create(config.stateDirectory);
 const workQueue = await ExtensionWorkQueue.create(identity, config.stateDirectory);
@@ -174,15 +177,36 @@ const accountVideoDetailMaterializationRunner = new BilibiliAccountVideoDetailMa
 const expectedHost = `${config.host}:${config.port}`;
 
 const server = createServer(async (request, response) => {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+  let requestErrorCode: string | null = null;
+  const url = new URL(request.url ?? '/', identity.publicIdentity.loopbackOrigin);
+  response.setHeader('x-collector-request-id', requestId);
+  response.once('finish', () => {
+    void operationalLog.record({
+      level: response.statusCode >= 500 ? 'error' : response.statusCode >= 400 ? 'warn' : 'info',
+      eventType: 'http.request.completed',
+      requestId,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      outcome: response.statusCode >= 400 ? 'failed' : 'completed',
+      errorCode: requestErrorCode,
+      details: {
+        method: request.method ?? 'UNKNOWN',
+        pathname: url.pathname,
+        statusCode: response.statusCode
+      }
+    });
+  });
   try {
     if (request.socket.remoteAddress !== config.host || request.headers.host !== expectedHost) {
       sendJson(response, 403, { schemaVersion: 1, ok: false, error: 'loopback_request_rejected' });
       return;
     }
-    const url = new URL(request.url ?? '/', identity.publicIdentity.loopbackOrigin);
     const handled = await handleGatewayRoute(request, response, url, {
       identity,
       pairingBroker,
+      operationalLog,
+      requestId,
       browserBindingSafety,
       workQueue,
       collectorServiceClients,
@@ -230,6 +254,7 @@ const server = createServer(async (request, response) => {
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 1, ok: false, error: 'route_not_found' });
   } catch (error) {
+    requestErrorCode = safeErrorCode(error);
     process.stderr.write(`[gateway_request_error] ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     if (!response.headersSent) {
       const code = safeErrorCode(error);
@@ -255,6 +280,7 @@ server.maxRequestsPerSocket = 50;
 server.listen(config.port, config.host, () => {
   process.stdout.write(`Collector Gateway ready at ${identity.publicIdentity.loopbackOrigin}\n`);
   process.stdout.write(`Gateway identity ${identity.publicIdentity.identityFingerprint}\n`);
+  void operationalLog.record({ eventType: 'gateway.ready', outcome: 'completed', details: { port: config.port } });
 });
 
 let shuttingDown = false;
@@ -262,8 +288,11 @@ let shuttingDown = false;
 async function shutdown(): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
+  await operationalLog.record({ eventType: 'gateway.shutdown.started', outcome: 'started' });
   browserManager.disconnect();
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  await operationalLog.record({ eventType: 'gateway.shutdown.completed', outcome: 'completed' });
+  await operationalLog.seal();
 }
 
 process.on('SIGINT', () => void shutdown().catch(() => { process.exitCode = 1; }));

@@ -23,6 +23,10 @@ import {
   type XiaohongshuProfileScrollCount,
   type ExtensionWorkResult
 } from '@intelligence/collector-contracts';
+import {
+  isExtensionDiagnosticEvent,
+  type ExtensionDiagnosticEvent
+} from '@intelligence/collector-contracts';
 import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
 import type { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
@@ -51,11 +55,13 @@ import type { ExtensionWorkArtifactReference, ExtensionWorkQueue } from './exten
 import { readJsonBody, readJsonBodyWithRaw, requireSameOrigin, safeErrorCode, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
 import type { PairingBroker } from './pairing';
+import type { OperationalLog } from './operational-log';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const EXTENSION_ID = /^[a-p]{32}$/;
 const WORK_NEXT_PATH = '/v1/extension/work-items/next';
 const WORK_RESULT_PATH = '/v1/extension/work-items/result';
+const DIAGNOSTIC_PATH = '/v1/extension/diagnostics';
 const EXTENSION_CORS_HEADERS = [
   'content-type',
   'authorization',
@@ -69,6 +75,8 @@ const EXTENSION_CORS_HEADERS = [
 export interface ExtensionWorkRouteContext {
   identity: LoadedGatewayIdentity;
   pairingBroker: PairingBroker;
+  operationalLog: OperationalLog;
+  requestId?: string;
   workQueue: ExtensionWorkQueue;
   browserBindingSafety: BrowserBindingSafetyRegistry;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
@@ -118,6 +126,10 @@ export async function handleExtensionWorkRoute(
   }
   if (request.method === 'POST' && url.pathname === WORK_RESULT_PATH) {
     await handleExtensionWorkResult(request, response, context);
+    return true;
+  }
+  if (request.method === 'POST' && url.pathname === DIAGNOSTIC_PATH) {
+    await handleExtensionDiagnostic(request, response, context);
     return true;
   }
 
@@ -183,6 +195,51 @@ export async function handleExtensionWorkRoute(
     return true;
   }
   return false;
+}
+
+async function handleExtensionDiagnostic(
+  request: IncomingMessage,
+  response: ServerResponse,
+  context: ExtensionWorkRouteContext
+): Promise<void> {
+  const origin = extensionOrigin(request.headers.origin);
+  if (!origin) {
+    sendJson(response, 403, { schemaVersion: 1, ok: false, error: 'extension_origin_required' });
+    return;
+  }
+  setExtensionCors(response, origin);
+  try {
+    const body = await readJsonBodyWithRaw(request);
+    const authorised = await authoriseExtensionRequest(request, context, DIAGNOSTIC_PATH, body.raw);
+    if (!isExtensionDiagnosticEvent(body.value)) throw new Error('extension_diagnostic_invalid');
+    const event = body.value as ExtensionDiagnosticEvent;
+    if (event.browserBindingId !== authorised.browserBindingId) {
+      throw new Error('extension_diagnostic_binding_identity_mismatch');
+    }
+    await context.operationalLog.record({
+      level: event.outcome === 'failed' ? 'warn' : 'info',
+      eventType: `extension.diagnostic.${event.phase}`,
+      requestId: context.requestId ?? null,
+      operationId: event.operationId,
+      workId: event.workId,
+      capability: event.capability,
+      durationMs: event.durationMs,
+      outcome: event.outcome,
+      errorCode: event.errorCode,
+      details: event.details
+    });
+    sendJson(response, 200, { schemaVersion: 1, ok: true });
+  } catch (error) {
+    await context.operationalLog.record({
+      level: 'warn',
+      eventType: 'extension.diagnostic.rejected',
+      requestId: context.requestId ?? null,
+      outcome: 'failed',
+      errorCode: safeErrorCode(error),
+      details: { phase: 'diagnostic_validation' }
+    });
+    sendJson(response, extensionWorkStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
+  }
 }
 
 /** Shared by the Console and the scoped upper-application service route. */
@@ -441,8 +498,25 @@ async function handleExtensionWorkNext(
     if (item.executionTarget === 'collector_work_tab') {
       await context.browserBindingSafety.recordNavigationIntent(authorised.browserBindingId, item.platform, item.operationId);
     }
+    await context.operationalLog.record({
+      eventType: 'extension.work.claimed',
+      requestId: context.requestId ?? null,
+      operationId: item.operationId,
+      workId: item.workId,
+      capability: item.capability,
+      outcome: 'started',
+      details: { platform: item.platform, executionTarget: item.executionTarget }
+    });
     sendJson(response, 200, { schemaVersion: 1, workItem: item });
   } catch (error) {
+    await context.operationalLog.record({
+      level: 'warn',
+      eventType: 'extension.work.claim_failed',
+      requestId: context.requestId ?? null,
+      outcome: 'failed',
+      errorCode: safeErrorCode(error),
+      details: { phase: 'claim' }
+    });
     sendJson(response, extensionWorkStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
   }
 }
@@ -552,8 +626,31 @@ async function handleExtensionWorkResult(
       result.operationId,
       result
     );
+    await context.operationalLog.record({
+      level: result.state === 'failed' || result.state === 'stopped' ? 'warn' : 'info',
+      eventType: 'extension.work.result_accepted',
+      requestId: context.requestId ?? null,
+      operationId: result.operationId,
+      workId: result.workId,
+      capability: result.capability,
+      outcome: result.state === 'completed' ? 'completed' : result.state === 'partial' ? 'stopped' : 'failed',
+      errorCode: result.errorCode,
+      details: {
+        terminalReason: result.terminalReason,
+        navigationAttempted: result.navigation.attempted,
+        artifactId: artifact.artifactId
+      }
+    });
     sendJson(response, 200, { schemaVersion: 1, operation });
   } catch (error) {
+    await context.operationalLog.record({
+      level: 'warn',
+      eventType: 'extension.work.result_rejected',
+      requestId: context.requestId ?? null,
+      outcome: 'failed',
+      errorCode: safeErrorCode(error),
+      details: { phase: 'result_validation_or_persistence' }
+    });
     sendJson(response, extensionWorkStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
   }
 }
@@ -595,6 +692,16 @@ export async function reconcileExpiredExtensionWork(context: ExtensionWorkRouteC
   const expired = await context.workQueue.expire();
   for (const operation of expired) {
     await context.browserBindingSafety.expire(operation.browserBindingId, operation.platform, operation.operationId);
+    await context.operationalLog.record({
+      level: 'warn',
+      eventType: 'extension.work.expired',
+      requestId: context.requestId ?? null,
+      operationId: operation.operationId,
+      capability: operation.capability,
+      outcome: 'stopped',
+      errorCode: 'extension_work_expired',
+      details: { platform: operation.platform, state: operation.state }
+    });
   }
 }
 
@@ -646,7 +753,7 @@ function unlockInput(value: unknown): void {
 }
 
 function isExtensionWorkEndpoint(pathname: string): boolean {
-  return pathname === WORK_NEXT_PATH || pathname === WORK_RESULT_PATH;
+  return pathname === WORK_NEXT_PATH || pathname === WORK_RESULT_PATH || pathname === DIAGNOSTIC_PATH;
 }
 
 function extensionOrigin(value: string | string[] | undefined): string | null {

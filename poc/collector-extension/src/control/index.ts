@@ -172,6 +172,14 @@ function directCapabilityFallbackTitle(capability: UserBrowserDirectWorkCapabili
       return 'UP 主视频首屏';
     case 'bilibili.discussion':
       return '视频评论区（自动 work-tab）';
+    case 'bilibili.dynamic':
+      return 'UP 主公开动态';
+    case 'bilibili.collection_series.overview':
+      return 'UP 主合集概览';
+    case 'bilibili.collection_series.detail':
+      return '合集视频详情';
+    case 'bilibili.danmaku':
+      return '视频弹幕';
     case 'xiaohongshu.search.public_notes.v1':
       return '小红书公开笔记站内搜索';
     case 'xiaohongshu.account.public_notes.v1':

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
 import { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
@@ -22,11 +23,13 @@ import { safeErrorCode, sendJson } from './gateway-http';
 import { loadGatewayIdentity } from './identity';
 import { PairingBroker } from './pairing';
 import { handleUserBrowserGatewayRoute } from './user-browser-gateway-routes';
+import { OperationalLog } from './operational-log';
 
 const config = loadUserBrowserGatewayConfig();
 await assertUserBrowserStateIsolation(config.stateDirectory);
 
 const identity = await loadGatewayIdentity(config);
+const operationalLog = await OperationalLog.create(config.stateDirectory);
 const pairingBroker = await PairingBroker.create(identity, config.stateDirectory);
 const browserBindingSafety = await BrowserBindingSafetyRegistry.create(config.stateDirectory);
 const workQueue = await ExtensionWorkQueue.create(identity, config.stateDirectory);
@@ -49,15 +52,36 @@ const xiaohongshuReplyArtifacts=await XiaohongshuReplyArtifactStore.create(confi
 const expectedHost = config.host + ':' + config.port;
 
 const server = createServer(async (request, response) => {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+  let requestErrorCode: string | null = null;
+  const url = new URL(request.url ?? '/', identity.publicIdentity.loopbackOrigin);
+  response.setHeader('x-collector-request-id', requestId);
+  response.once('finish', () => {
+    void operationalLog.record({
+      level: response.statusCode >= 500 ? 'error' : response.statusCode >= 400 ? 'warn' : 'info',
+      eventType: 'http.request.completed',
+      requestId,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      outcome: response.statusCode >= 400 ? 'failed' : 'completed',
+      errorCode: requestErrorCode,
+      details: {
+        method: request.method ?? 'UNKNOWN',
+        pathname: url.pathname,
+        statusCode: response.statusCode
+      }
+    });
+  });
   try {
     if (request.socket.remoteAddress !== config.host || request.headers.host !== expectedHost) {
       sendJson(response, 403, { schemaVersion: 2, ok: false, error: 'loopback_request_rejected' });
       return;
     }
-    const url = new URL(request.url ?? '/', identity.publicIdentity.loopbackOrigin);
     const handled = await handleUserBrowserGatewayRoute(request, response, url, {
       identity,
       pairingBroker,
+      operationalLog,
+      requestId,
       browserBindingSafety,
       workQueue,
       collectorServiceClients,
@@ -76,6 +100,7 @@ const server = createServer(async (request, response) => {
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 2, ok: false, error: 'route_not_found' });
   } catch (error) {
+    requestErrorCode = safeErrorCode(error);
     process.stderr.write('[user_browser_gateway_request_error] ' +
       (error instanceof Error ? error.stack ?? error.message : String(error)) + '\n');
     if (!response.headersSent) {
@@ -111,6 +136,11 @@ server.listen(config.port, config.host, () => {
   process.stdout.write('User-owned Browser Collector ready at ' + identity.publicIdentity.loopbackOrigin + '\n');
   process.stdout.write('Gateway identity ' + identity.publicIdentity.identityFingerprint + '\n');
   process.stdout.write('Browser process control is intentionally unavailable.\n');
+  void operationalLog.record({
+    eventType: 'gateway.ready',
+    outcome: 'completed',
+    details: { port: config.port, deploymentMode: 'user_owned_browser_extension' }
+  });
 });
 
 let shuttingDown = false;
@@ -118,7 +148,10 @@ let shuttingDown = false;
 async function shutdown(): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
+  await operationalLog.record({ eventType: 'gateway.shutdown.started', outcome: 'started' });
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  await operationalLog.record({ eventType: 'gateway.shutdown.completed', outcome: 'completed' });
+  await operationalLog.seal();
 }
 
 process.on('SIGINT', () => void shutdown().catch(() => { process.exitCode = 1; }));

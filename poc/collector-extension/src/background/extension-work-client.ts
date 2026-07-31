@@ -1,9 +1,11 @@
 import type {
+  ExtensionDiagnosticEvent,
   ExtensionWorkItem,
   ExtensionWorkResult,
   GatewayPairingRecord
 } from '@intelligence/collector-contracts';
 import {
+  isExtensionDiagnosticEvent,
   extensionWorkSigningPayload,
   isExtensionWorkItem,
   isExtensionWorkResult
@@ -52,6 +54,26 @@ export async function submitExtensionWorkResult(
     (payload as { schemaVersion?: unknown }).schemaVersion !== 1 ||
     !('operation' in payload)) {
     throw new Error('extension_work_result_response_invalid');
+  }
+}
+
+/** Best-effort phase telemetry; it never issues browser/platform actions. */
+export async function submitExtensionDiagnostic(
+  record: GatewayPairingRecord,
+  event: ExtensionDiagnosticEvent
+): Promise<void> {
+  if (!isExtensionDiagnosticEvent(event) || event.browserBindingId !== record.browserBindingId) {
+    throw new Error('extension_diagnostic_invalid');
+  }
+  const payload = await authenticatedGatewayJson(record, {
+    method: 'POST',
+    pathname: '/v1/extension/diagnostics',
+    body: JSON.stringify(event)
+  });
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+    (payload as { schemaVersion?: unknown }).schemaVersion !== 1 ||
+    (payload as { ok?: unknown }).ok !== true) {
+    throw new Error('extension_diagnostic_response_invalid');
   }
 }
 

@@ -92,6 +92,18 @@ export const userBrowserConsoleHtml = `<!doctype html>
       <div id="service-audit" class="card-grid" aria-live="polite"></div>
       <p id="service-audit-empty" class="empty" hidden>还没有调用记录。</p>
     </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">OPERATIONAL LOG</p>
+          <h2>运行链路与失败诊断</h2>
+        </div>
+      </div>
+      <p class="panel-copy">这里只显示脱敏后的阶段、耗时、错误码和关联 ID；不会显示 Cookie、Token、查询词、页面正文或 Profile 路径。</p>
+      <div id="operational-logs" class="card-grid" aria-live="polite"></div>
+      <p id="operational-logs-empty" class="empty" hidden>还没有运行日志。</p>
+    </section>
   </main>
   <div id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="/app.js"></script>

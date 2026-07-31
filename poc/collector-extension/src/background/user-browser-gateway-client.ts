@@ -76,7 +76,7 @@ export async function readGatewayDirectCapabilityCatalog(
 }
 
 /**
- * Internal-only authenticated transport for the three fixed extension routes.
+ * Internal-only authenticated transport for the fixed extension routes.
  * The caller cannot choose a Gateway host, arbitrary path, headers, or body
  * digest; those remain bound to the verified pairing record.
  */
@@ -87,7 +87,8 @@ export async function authenticatedGatewayJson(
     pathname:
       | '/v1/extension/browser-binding'
       | '/v1/extension/work-items/next'
-      | '/v1/extension/work-items/result';
+      | '/v1/extension/work-items/result'
+      | '/v1/extension/diagnostics';
     body: string;
   }
 ): Promise<unknown> {

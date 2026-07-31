@@ -7,6 +7,8 @@ const clientsElement = $('#service-clients');
 const clientsEmptyElement = $('#service-clients-empty');
 const auditElement = $('#service-audit');
 const auditEmptyElement = $('#service-audit-empty');
+const operationalLogsElement = $('#operational-logs');
+const operationalLogsEmptyElement = $('#operational-logs-empty');
 const issuedTokenElement = $('#issued-service-token');
 const issuedTokenValueElement = $('#issued-service-token-value');
 const toastElement = $('#toast');
@@ -68,17 +70,32 @@ function auditCard(event) {
     '</p></div><time>' + escapeHtml(event.occurredAt) + '</time></article>';
 }
 
+function operationalLogCard(event) {
+  const tone = event.level === 'error' ? 'bad' : event.level === 'warn' ? 'warn' : 'neutral';
+  const details = event.details && typeof event.details === 'object'
+    ? Object.entries(event.details).slice(0, 6).map(([key, value]) => escapeHtml(key) + '=' + escapeHtml(value)).join(' · ')
+    : '';
+  return '<article class="card"><div><h3><span class="badge ' + tone + '">' + escapeHtml(event.level) + '</span> ' +
+    escapeHtml(event.eventType) + '</h3><p>组件 ' + escapeHtml(event.component ?? '—') +
+    ' · 结果 ' + escapeHtml(event.outcome ?? '—') + ' · 耗时 ' + escapeHtml(event.durationMs ?? '—') + ' ms</p>' +
+    '<p>请求 ' + escapeHtml(event.requestId ?? '—') + ' · 操作 ' + escapeHtml(event.operationId ?? '—') +
+    ' · work ' + escapeHtml(event.workId ?? '—') + ' · 错误 ' + escapeHtml(event.errorCode ?? '—') + '</p>' +
+    (details ? '<p>' + details + '</p>' : '') + '</div><time>' + escapeHtml(event.occurredAt) + '</time></article>';
+}
+
 async function refresh() {
   const results = await Promise.all([
     api('/v1/status'),
     api('/v1/browser-bindings'),
     api('/v2/collector-service/clients'),
-    api('/v2/collector-service/audit')
+    api('/v2/collector-service/audit'),
+    api('/v2/observability/logs?limit=100')
   ]);
   const status = results[0];
   const bindingPayload = results[1];
   const clientPayload = results[2];
   const auditPayload = results[3];
+  const operationalLogPayload = results[4];
   $('#gateway-mode').textContent = status.deploymentMode === 'user_owned_browser_extension' ? '日常浏览器模式就绪' : '模式异常';
   $('#gateway-mode').className = 'badge ' + (status.deploymentMode === 'user_owned_browser_extension' ? 'good' : 'bad');
   $('#gateway-origin').textContent = status.identity?.loopbackOrigin ?? location.origin;
@@ -100,6 +117,9 @@ async function refresh() {
   const events = auditPayload.events ?? [];
   auditElement.innerHTML = events.map(auditCard).join('');
   auditEmptyElement.hidden = events.length !== 0;
+  const operationalEvents = operationalLogPayload.events ?? [];
+  operationalLogsElement.innerHTML = operationalEvents.map(operationalLogCard).join('');
+  operationalLogsEmptyElement.hidden = operationalEvents.length !== 0;
 }
 
 $('#refresh').addEventListener('click', () => refresh().catch((error) => toast(error.message)));

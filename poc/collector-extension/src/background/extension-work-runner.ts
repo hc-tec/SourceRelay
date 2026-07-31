@@ -1,4 +1,10 @@
-import type { ExtensionWorkItem, ExtensionWorkResult } from '@intelligence/collector-contracts';
+import type {
+  ExtensionDiagnosticOutcome,
+  ExtensionDiagnosticPhase,
+  ExtensionWorkItem,
+  ExtensionWorkResult,
+  GatewayPairingRecord
+} from '@intelligence/collector-contracts';
 import { executeBilibiliAccountInventoryExtensionWork } from './extension-work-bilibili-account-inventory';
 import { executeBilibiliAccountInventoryUserSelectedTabExtensionWork } from './extension-work-bilibili-account-inventory-user-selected-tab';
 import { executeBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
@@ -22,7 +28,7 @@ import { xiaohongshuNoteDetailClickAttempted } from './xiaohongshu-note-detail-c
 import { xiaohongshuNoteCommentsScrollCounts } from './xiaohongshu-note-comments-scroll-ledger';
 import { xiaohongshuCommentRepliesClickCounts } from './xiaohongshu-comment-replies-click-ledger';
 import { cleanupXiaohongshuSearchObserver } from './xiaohongshu-current-page-network';
-import { claimNextExtensionWork, submitExtensionWorkResult } from './extension-work-client';
+import { claimNextExtensionWork, submitExtensionDiagnostic, submitExtensionWorkResult } from './extension-work-client';
 import {
   clearActiveExtensionWork,
   clearPendingExtensionWorkResult,
@@ -94,7 +100,18 @@ export async function pollForExtensionWork(): Promise<void> {
       navigationIntentCount: 0,
       workTabAcquisition: 'not_acquired'
     });
-    const result = await execute(item);
+    void emitExtensionDiagnostic(pairing, item, 'work_claimed', 'started', null, {
+      executionTarget: item.executionTarget
+    });
+    const result = await execute(item, pairing);
+    void emitExtensionDiagnostic(
+      pairing,
+      item,
+      'execution_finished',
+      result.state === 'completed' ? 'completed' : result.state === 'partial' ? 'stopped' : 'failed',
+      result.errorCode,
+      { terminalReason: result.terminalReason, navigationAttempted: result.navigation.attempted }
+    );
     await savePendingExtensionWorkResult({
       schemaVersion: 1,
       result,
@@ -112,10 +129,11 @@ export async function pollForExtensionWork(): Promise<void> {
   }
 }
 
-async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
+async function execute(item: ExtensionWorkItem, pairing: GatewayPairingRecord): Promise<ExtensionWorkResult> {
   const lifecycle = {
     onWorkTabAcquired: async (acquisition: WorkTabAcquisition) => {
       await updateActivePhase(item, 'work_tab_acquired', acquisition);
+      void emitExtensionDiagnostic(pairing, item, 'work_tab_acquired', 'started', null, { acquisition });
     },
     onNavigationIntent: async () => {
       const active = await loadActiveExtensionWork();
@@ -123,6 +141,7 @@ async function execute(item: ExtensionWorkItem): Promise<ExtensionWorkResult> {
         ? active.workTabAcquisition
         : 'not_acquired';
       await updateActivePhase(item, 'navigation_intent_recorded', acquisition);
+      void emitExtensionDiagnostic(pairing, item, 'navigation_intent_recorded', 'started', null, { acquisition });
     }
   };
   if (item.capability === 'xiaohongshu.search.public_notes.v1') {
@@ -196,6 +215,20 @@ async function deliverPendingResult(pending: PendingExtensionWorkResult): Promis
     await clearPendingExtensionWorkResult();
   } catch (error) {
     const errorCode = safeErrorCode(error);
+    void emitExtensionDiagnostic(
+      pairing,
+      {
+        browserBindingId: pending.result.browserBindingId,
+        workId: pending.result.workId,
+        operationId: pending.result.operationId,
+        platform: pending.result.platform,
+        capability: pending.result.capability
+      },
+      'result_delivery_failed',
+      'failed',
+      errorCode,
+      { deliveryAttempts: pending.deliveryAttempts + 1 }
+    );
     const deliveryAttempts = terminalDeliveryError(errorCode)
       ? MAX_RESULT_DELIVERY_ATTEMPTS
       : Math.min(MAX_RESULT_DELIVERY_ATTEMPTS, pending.deliveryAttempts + 1) as PendingExtensionWorkResult['deliveryAttempts'];
@@ -204,6 +237,38 @@ async function deliverPendingResult(pending: PendingExtensionWorkResult): Promis
       deliveryAttempts,
       lastErrorCode: errorCode
     });
+  }
+}
+
+async function emitExtensionDiagnostic(
+  pairing: GatewayPairingRecord,
+  item: Pick<ExtensionWorkItem, 'browserBindingId' | 'workId' | 'operationId' | 'platform' | 'capability'>,
+  phase: ExtensionDiagnosticPhase,
+  outcome: ExtensionDiagnosticOutcome,
+  errorCode: string | null,
+  details: unknown
+): Promise<void> {
+  try {
+    await submitExtensionDiagnostic(pairing, {
+      schemaVersion: 1,
+      eventId: crypto.randomUUID(),
+      occurredAt: new Date().toISOString(),
+      browserBindingId: item.browserBindingId,
+      workId: item.workId,
+      operationId: item.operationId,
+      platform: item.platform,
+      capability: item.capability,
+      phase,
+      outcome,
+      durationMs: null,
+      errorCode,
+      details: details && typeof details === 'object' && !Array.isArray(details)
+        ? details as Record<string, never>
+        : {}
+    });
+  } catch {
+    // Diagnostics are best-effort and must never affect collection or trigger
+    // another platform action.
   }
 }
 

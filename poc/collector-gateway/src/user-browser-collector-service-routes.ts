@@ -76,10 +76,20 @@ export async function handleUserBrowserCollectorServiceRoute(
       return true;
     }
     let operationId: string | null = null;
+    const startedAt = Date.now();
     try {
       const collection = userBrowserCollectorServiceRequestInput(await readJsonBody(request));
       const operation = await dispatchUserBrowserCapability(context, collection);
       operationId = operation.operationId;
+      await context.operationalLog.record({
+        eventType: 'collector.operation.queued',
+        requestId: context.requestId ?? null,
+        operationId,
+        capability: collection.capability,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        outcome: 'started',
+        details: { executionTarget: operation.executionTarget }
+      });
       await audit(context, access.principal, 'collect', collection.capability, operationId, 'queued', null);
       sendJson(response, 201, {
         schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
@@ -87,6 +97,16 @@ export async function handleUserBrowserCollectorServiceRoute(
       });
     } catch (error) {
       const code = safeErrorCode(error);
+      await context.operationalLog.record({
+        level: 'warn',
+        eventType: 'collector.operation.queue_rejected',
+        requestId: context.requestId ?? null,
+        operationId,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        outcome: 'failed',
+        errorCode: code,
+        details: { phase: 'dispatch' }
+      });
       await audit(context, access.principal, 'collect', null, operationId, 'failed', code);
       sendJson(response, operationStatus(code), { schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION, ok: false, error: code });
     }

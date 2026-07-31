@@ -3,7 +3,9 @@ import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
   BrowserHostError,
+  OPERATIONAL_LOG_SCHEMA_VERSION,
   PAGE_POOL_SCHEMA_VERSION,
+  sanitiseOperationalDetails,
   validationExtensionControlRequest,
   isXiaohongshuNoteOverlayReconRequest,
   isXiaohongshuNoteCommentsReconRequest,
@@ -12,6 +14,7 @@ import {
   type BrowserHostCommandBody,
   type BrowserHostCommandResult,
   type LaunchProfileRequest,
+  type OperationalLogEvent,
   type PagePoolSnapshot
 } from '@intelligence/collector-contracts';
 import { hostError } from './host-errors.js';
@@ -35,6 +38,10 @@ export interface BrowserHostRuntimeConfig {
   nativeBridgeCommands: Pick<NativeBridgeServer, 'command'>;
   validationAutomationProfileId?: string | null;
 }
+
+export type BrowserHostOperationalEventInput = Partial<Omit<OperationalLogEvent,
+  'schemaVersion' | 'eventId' | 'occurredAt' | 'component' | 'details'>> &
+  Pick<OperationalLogEvent, 'eventType'> & { details?: unknown };
 
 export class BrowserHostRuntime {
   readonly hostInstanceId: string;
@@ -72,6 +79,36 @@ export class BrowserHostRuntime {
     await mkdir(this.#profileRoot, { recursive: true });
     await mkdir(this.#visualEvidenceDirectory, { recursive: true, mode: 0o700 });
     await this.#journal.initialise();
+  }
+
+  async recordOperationalEvent(input: BrowserHostOperationalEventInput): Promise<void> {
+    await this.#journal.append({
+      schemaVersion: OPERATIONAL_LOG_SCHEMA_VERSION,
+      eventId: randomUUID(),
+      occurredAt: new Date().toISOString(),
+      component: 'browser_host',
+      level: input.level ?? 'info',
+      eventType: input.eventType,
+      requestId: input.requestId ?? null,
+      commandId: input.commandId ?? null,
+      operationId: input.operationId ?? null,
+      workId: input.workId ?? null,
+      capability: input.capability ?? null,
+      durationMs: input.durationMs ?? null,
+      outcome: input.outcome ?? 'unknown',
+      errorCode: input.errorCode ?? null,
+      details: sanitiseOperationalDetails(input.details),
+      hostInstanceId: this.hostInstanceId,
+      browserSessionId: null,
+      controllerGeneration: this.#controllerGeneration,
+      profileId: null,
+      pageAlias: null,
+      targetIdentityDigest: null,
+      recordVersion: null,
+      state: null,
+      reason: null,
+      actionId: null
+    });
   }
 
   adoptController(controllerGeneration: string): void {
@@ -293,22 +330,10 @@ export class BrowserHostRuntime {
     });
     this.#profiles.set(profileId, runtime);
     this.#snapshotRevision += 1;
-    await this.#journal.append({
-      schemaVersion: 1,
-      eventId: randomUUID(),
-      eventType: 'profile_launched',
-      occurredAt: new Date().toISOString(),
-      hostInstanceId: this.hostInstanceId,
-      browserSessionId,
-      controllerGeneration: this.#controllerGeneration,
-      profileId,
-      pageAlias: null,
-      targetIdentityDigest: null,
-      recordVersion: null,
-      state: 'running',
-      reason: null,
-      commandId: null,
-      actionId: null
+    await this.recordOperationalEvent({
+      eventType: 'profile.launched',
+      outcome: 'completed',
+      details: { profileId, browserSessionId, maximumManagedPages }
     });
   }
 
@@ -340,22 +365,20 @@ export class BrowserHostRuntime {
 
   #recordLedgerEvent(browserSessionId: string, event: PageLedgerEvent): void {
     this.#snapshotRevision += 1;
-    void this.#journal.append({
-      schemaVersion: 1,
-      eventId: randomUUID(),
+    void this.recordOperationalEvent({
       eventType: event.eventType,
-      occurredAt: new Date().toISOString(),
-      hostInstanceId: this.hostInstanceId,
-      browserSessionId,
-      controllerGeneration: this.#controllerGeneration,
-      profileId: event.profileId,
-      pageAlias: event.record.pageAlias,
-      targetIdentityDigest: event.record.targetIdentityDigest,
-      recordVersion: event.record.recordVersion,
-      state: event.record.state,
-      reason: event.reason,
-      commandId: null,
-      actionId: event.actionId
+      level: event.reason ? 'warn' : 'info',
+      outcome: event.reason ? 'stopped' : 'completed',
+      details: {
+        browserSessionId,
+        profileId: event.profileId,
+        pageAlias: event.record.pageAlias,
+        targetIdentityDigest: event.record.targetIdentityDigest,
+        recordVersion: event.record.recordVersion,
+        state: event.record.state,
+        reason: event.reason,
+        actionId: event.actionId
+      }
     });
   }
 }

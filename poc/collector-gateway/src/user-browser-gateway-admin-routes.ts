@@ -23,12 +23,15 @@ import {
   recordUserBrowserServiceAudit,
   sendUserBrowserServiceAccessDenied
 } from './user-browser-collector-service-access';
+import type { OperationalLog } from './operational-log';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const DIRECT_ARTIFACT = new RegExp(`^/v1/collect/artifacts/([^/]+)/(${UUID})$`, 'i');
 
 export interface UserBrowserGatewayAdminRouteContext {
   identity: LoadedGatewayIdentity;
+  operationalLog: OperationalLog;
+  requestId?: string;
   collectorServiceClients: CollectorServiceClientRegistry;
   collectorServiceAudit: CollectorServiceAuditLog;
   videoDetailArtifacts: BilibiliVideoDetailArtifactStore;
@@ -55,6 +58,22 @@ export async function handleUserBrowserGatewayAdminRoute(
   url: URL,
   context: UserBrowserGatewayAdminRouteContext
 ): Promise<boolean> {
+  if (request.method === 'GET' && url.pathname === '/v2/observability/logs') {
+    if (!sameOrigin(request, response, context)) return true;
+    const limitValue = Number(url.searchParams.get('limit') ?? '100');
+    const limit = Number.isSafeInteger(limitValue) && limitValue > 0 ? Math.min(limitValue, 500) : 100;
+    const level = url.searchParams.get('level');
+    const eventType = url.searchParams.get('eventType') ?? undefined;
+    const operationId = url.searchParams.get('operationId') ?? undefined;
+    const events = context.operationalLog.list({
+      limit,
+      level: level === 'debug' || level === 'info' || level === 'warn' || level === 'error' ? level : undefined,
+      eventType,
+      operationId
+    });
+    sendJson(response, 200, { schemaVersion: 1, events });
+    return true;
+  }
   if (request.method === 'GET' && url.pathname === '/v2/collector-service/clients') {
     if (!sameOrigin(request, response, context)) return true;
     sendJson(response, 200, { schemaVersion: 2, clients: context.collectorServiceClients.list() });

@@ -1,14 +1,11 @@
 import { appendFile, mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import type { OperationalLogEvent } from '@intelligence/collector-contracts';
 
 const DEFAULT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_MAXIMUM_BYTES = 32 * 1024 * 1024;
 
-export interface RuntimeJournalEntry {
-  schemaVersion: 1;
-  eventId: string;
-  eventType: string;
-  occurredAt: string;
+export interface RuntimeJournalEntry extends OperationalLogEvent {
   hostInstanceId: string;
   browserSessionId: string | null;
   controllerGeneration: string | null;
@@ -18,7 +15,6 @@ export interface RuntimeJournalEntry {
   recordVersion: number | null;
   state: string | null;
   reason: string | null;
-  commandId: string | null;
   actionId: string | null;
 }
 

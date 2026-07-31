@@ -120,6 +120,12 @@ export class BrowserHostServer {
     socket.on('close', () => {
       if (this.#activeSocket !== socket || !state.controllerGeneration) return;
       this.#runtime.disconnectController(state.controllerGeneration);
+      void this.#runtime.recordOperationalEvent({
+        level: 'warn',
+        eventType: 'controller.disconnected',
+        outcome: 'stopped',
+        details: { reason: 'socket_closed', connectionMode: state.connectionMode ?? 'controller' }
+      });
       this.#activeSocket = null;
       this.#activeControllerGeneration = null;
     });
@@ -166,6 +172,11 @@ export class BrowserHostServer {
       this.#activeControllerGeneration = controllerGeneration;
       this.#runtime.adoptController(controllerGeneration);
     }
+    void this.#runtime.recordOperationalEvent({
+      eventType: 'controller.connected',
+      outcome: 'completed',
+      details: { connectionMode }
+    });
     const response: BrowserHostHandshakeResponse = {
       ok: true,
       type: 'handshake_accepted',
@@ -180,12 +191,29 @@ export class BrowserHostServer {
   async #executeCommand(socket: Socket, state: ConnectionState, envelope: BrowserHostCommandEnvelope): Promise<void> {
     const validationError = this.#commandValidationError(state, envelope);
     if (validationError) {
+      const validationErrorCode = validationError instanceof BrowserHostError
+        ? validationError.record.code
+        : 'browser_host_command_validation_failed';
+      void this.#runtime.recordOperationalEvent({
+        level: 'warn',
+        eventType: 'browser.command.rejected',
+        commandId: envelope.commandId ?? null,
+        outcome: 'denied',
+        errorCode: validationErrorCode,
+        details: { phase: 'validation', bodyType: envelope.body?.type ?? null }
+      });
       this.#write(socket, this.#errorResponse(envelope.commandId ?? null, validationError));
       return;
     }
     const payloadDigest = commandIntentDigest(envelope);
     const cached = this.#commandCache.get(envelope.commandId);
     if (cached) {
+      void this.#runtime.recordOperationalEvent({
+        eventType: 'browser.command.replayed',
+        commandId: envelope.commandId,
+        outcome: 'completed',
+        details: { bodyType: envelope.body.type }
+      });
       if (cached.payloadDigest !== payloadDigest) {
         this.#write(socket, this.#errorResponse(envelope.commandId, hostError({
           code: 'command_id_payload_conflict',
@@ -207,6 +235,7 @@ export class BrowserHostServer {
     }
     this.#rememberNonce(envelope.nonce);
     let response: BrowserHostCommandResponse | BrowserHostErrorResponse;
+    const startedAt = Date.now();
     try {
       if (state.connectionMode === 'observer' && envelope.body.type !== 'get_snapshot') {
         throw hostError({ code: 'observer_command_rejected', category: 'protocol', scope: 'host' });
@@ -224,6 +253,18 @@ export class BrowserHostServer {
       if (first) this.#commandCache.delete(first);
     }
     this.#write(socket, response);
+    void this.#runtime.recordOperationalEvent({
+      level: response.ok ? 'info' : 'warn',
+      eventType: response.ok ? 'browser.command.completed' : 'browser.command.failed',
+      commandId: envelope.commandId,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      outcome: response.ok ? 'completed' : 'failed',
+      errorCode: response.ok ? null : response.error.code,
+      details: {
+        bodyType: envelope.body.type,
+        connectionMode: state.connectionMode ?? 'controller'
+      }
+    });
     if (envelope.body.type === 'shutdown_host' && response.ok) {
       setTimeout(this.#onShutdownRequested, 25);
     }
