@@ -72,5 +72,39 @@ operation ID 或 work ID 关联事件。
 3. 若涉及隔离验证浏览器，再用 Browser Host 的 `commandId` 和 `browser.command.*` 事件；
 4. 最后检查 artifact summary 和对应的真实运行证据，不把“日志有请求”误判为“采集成功”。
 
+## 真实闭环验证基线（2026-08-01）
+
+在已配对的 user-owned-browser 扩展和本地 Gateway 上，使用 Python SDK 对
+`bilibili.video_detail` 执行了一次真实、单次提交的 canary：
+
+```text
+operationId: 611a2829-f721-44ad-b7a7-a31df402d988
+workId: e71503c9-1e1c-4157-bf0a-e4fbb0144413
+artifactId: cddc9ef0-26ec-41dc-8ea7-7c88cd879a5c
+state: completed
+terminalReason: detail_ready
+errorCode: null
+```
+
+按 `operationId` 查询到的事件集合完整包含：
+
+```text
+collector.operation.queued
+extension.work.claimed
+extension.diagnostic.work_claimed
+extension.diagnostic.work_tab_acquired
+extension.diagnostic.navigation_intent_recorded
+extension.diagnostic.execution_finished
+extension.work.result_accepted
+```
+
+本次 operation 的 `warn`/`error` 事件数均为 0，绑定安全状态在终态回到
+`ready`，没有发生页面接管、关闭、验证码、未知导航或自动平台重试。对应的
+`http.request.completed` 事件通过相同 `requestId` 与业务事件关联；其去参数
+pathname 只保留本地 API 路径，不保存请求正文、响应正文或认证材料。
+
+这条记录是日志系统的最小成功基线，不代表所有平台能力都已通过；后续能力验证仍
+必须使用各自的 `operationId`、`workId` 和明确的风险终态进行独立核对。
+
 未知终态、标签页被接管、验证码或风险停止必须保留为明确失败/停止事件，不能通过自动
 重试把日志改写成成功。
