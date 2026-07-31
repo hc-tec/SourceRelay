@@ -81,8 +81,9 @@ test('a real installed MV3 extension pairs with the direct Gateway without creat
     await controlPage.locator('#pair-gateway button[type="submit"]').click();
     await approval;
     await expect(controlPage.locator('#gateway-state')).toContainText('已连接');
-    await expect(controlPage.locator('#select-current-bilibili-account-inventory')).toBeEnabled();
-    await expect(controlPage.locator('#user-selected-inventory-tab-state')).toContainText('尚未选择页面');
+    await expect(controlPage.locator('h2').filter({ hasText: '研究型页面预置' })).toBeVisible();
+    await expect(controlPage.locator('#select-current-bilibili-account-inventory')).toHaveCount(0);
+    await expect(controlPage.locator('#user-selected-inventory-tab-state')).toHaveCount(0);
 
     const permissions = await launched.worker.evaluate(async () => await chrome.permissions.getAll());
     expect(permissions.origins).toContain('http://127.0.0.1/*');

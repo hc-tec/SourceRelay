@@ -10,10 +10,6 @@ import {
   type UserBrowserGatewayConnection
 } from '../background/user-browser-gateway';
 import {
-  getSelectedBilibiliAccountInventoryTabSummary,
-  selectCurrentBilibiliAccountInventoryTab
-} from '../background/user-selected-tab';
-import {
   armNextXiaohongshuCurrentPageNetworkDocument,
   getXiaohongshuCurrentPageNetworkSelectionSummary
 } from '../background/xiaohongshu-current-page-network';
@@ -36,8 +32,6 @@ const pairingForm = element<HTMLFormElement>('pair-gateway');
 const forgetGateway = element<HTMLButtonElement>('forget-gateway');
 const directCapabilityState = element<HTMLDivElement>('direct-capability-state');
 const directCapabilityList = element<HTMLDivElement>('direct-capability-list');
-const userSelectedInventoryTabState = element<HTMLDivElement>('user-selected-inventory-tab-state');
-const selectCurrentInventoryTab = element<HTMLButtonElement>('select-current-bilibili-account-inventory');
 const xiaohongshuCurrentPageNetworkState = element<HTMLDivElement>('xiaohongshu-current-page-network-state');
 const armNextXiaohongshuCurrentPageNetwork = element<HTMLButtonElement>(
   'arm-next-xiaohongshu-current-page-network'
@@ -54,7 +48,6 @@ async function render(): Promise<void> {
   runtimeStatus.className = `status ${connection.state === 'online' ? 'ready' : ''}`;
   renderGatewayConnection(connection);
   await Promise.all([
-    renderUserSelectedInventoryTab(connection),
     renderXiaohongshuCurrentPageNetwork()
   ]);
   await renderDirectCapabilities(connection);
@@ -84,20 +77,6 @@ async function renderXiaohongshuCurrentPageNetwork(): Promise<void> {
     '预置已因 document 变化、页面风险、网络不可用或 tab 关闭而停止；不会自动刷新、重试或改用其他页面。';
 }
 
-async function renderUserSelectedInventoryTab(connection: UserBrowserGatewayConnection): Promise<void> {
-  const selection = await getSelectedBilibiliAccountInventoryTabSummary();
-  selectCurrentInventoryTab.disabled = connection.state !== 'online';
-  if (connection.state !== 'online') {
-    userSelectedInventoryTabState.textContent = '需先完成本机 Gateway 配对并保持在线；选择不会缓存到 Gateway，也不会在离线后自行执行。';
-    return;
-  }
-  if (selection.state === 'available' && selection.expiresAt) {
-    userSelectedInventoryTabState.textContent = `当前投稿页已显式选择，短时有效至 ${new Date(selection.expiresAt).toLocaleTimeString('zh-CN')}。` +
-      ' 后续 user_selected_tab work 只能被动观察这个精确页面一次。';
-    return;
-  }
-  userSelectedInventoryTabState.textContent = '尚未选择页面。请先切到一个已加载完成的 B 站 UP 主投稿视频首页，再打开此扩展 popup 点击选择。';
-}
 
 
 function renderGatewayConnection(connection: UserBrowserGatewayConnection): void {
@@ -255,20 +234,6 @@ forgetGateway.addEventListener('click', () => {
   }).catch((error) => {
     controlError.textContent = error instanceof Error ? error.message : 'gateway_pairing_clear_failed';
     controlError.hidden = false;
-  });
-});
-
-selectCurrentInventoryTab.addEventListener('click', () => {
-  selectCurrentInventoryTab.disabled = true;
-  controlError.hidden = true;
-  void selectCurrentBilibiliAccountInventoryTab().then(async () => {
-    await render();
-  }).catch((error) => {
-    controlError.textContent = error instanceof Error ? error.message : 'user_selected_tab_selection_failed';
-    controlError.hidden = false;
-  }).finally(async () => {
-    const connection = await getUserBrowserGatewayConnection();
-    selectCurrentInventoryTab.disabled = connection.state !== 'online';
   });
 });
 
