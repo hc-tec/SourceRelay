@@ -21,7 +21,7 @@ function installChromeMock(input: {
   const sendCommand = vi.fn(async (_debuggee: unknown, method: string, params: Record<string, unknown>) => {
     commands.push({ method, params });
     if (input.fail === 'input') throw new Error('input failed');
-    if (input.fail === 'input_hang' && params.type === 'mouseWheel') await new Promise<never>(() => undefined);
+    if (input.fail === 'input_hang' && params.gestureSourceType === 'mouse') await new Promise<never>(() => undefined);
     return {};
   });
   const executeScript = vi.fn(async () => [{ result: {
@@ -51,8 +51,14 @@ describe('Bilibili discussion trusted scroll boundary', () => {
       .resolves.toEqual({ found: true, inViewport: false });
     expect(chrome.attach).toHaveBeenCalledTimes(1);
     expect(chrome.detach).toHaveBeenCalledTimes(1);
-    expect(chrome.commands.map(({ method }) => method)).toEqual(['Input.dispatchMouseEvent']);
-    expect(chrome.commands[0]?.params).toMatchObject({ type: 'mouseWheel', x: 640, y: 576, deltaX: 0, deltaY: 810 });
+    expect(chrome.commands.map(({ method }) => method)).toEqual(['Input.synthesizeScrollGesture']);
+    expect(chrome.commands[0]?.params).toMatchObject({
+      x: 640,
+      y: 576,
+      xDistance: 0,
+      yDistance: -810,
+      gestureSourceType: 'mouse'
+    });
   });
 
   test('does not attach when the host is absent or already visible', async () => {

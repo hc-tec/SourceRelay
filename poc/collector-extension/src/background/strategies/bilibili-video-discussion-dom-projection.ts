@@ -331,9 +331,9 @@ interface BilibiliVideoDiscussionScrollProbe {
  * One bounded, DOM-derived trusted scroll used by the managed discussion
  * work tab. The fixed projection first measures #commentapp and derives a
  * viewport-safe pointer and wheel delta. The actual scroll is delivered by
- * one Chrome Input-domain wheel event so Bilibili sees the same kind of input
- * as a foreground user page; no synthetic element method, selector, or caller
- * supplied coordinate is accepted.
+ * one Chrome Input-domain mouse scroll gesture so Bilibili sees the same kind
+ * of compositor-level input as a foreground user page; no synthetic element
+ * method, selector, or caller supplied coordinate is accepted.
  */
 export async function scrollBilibiliVideoDiscussionIntoView(
   tabId: number,
@@ -389,12 +389,13 @@ export async function scrollBilibiliVideoDiscussionIntoView(
     );
     attachPending = false;
     attached = true;
-    await sendTrustedMouseCommand(debuggee, {
-      type: 'mouseWheel',
+    await sendTrustedScrollGesture(debuggee, {
       x: probe.x,
       y: probe.y,
-      deltaX: 0,
-      deltaY: probe.deltaY
+      xDistance: 0,
+      yDistance: -probe.deltaY,
+      speed: Math.min(1_200, Math.max(600, Math.abs(probe.deltaY) * 2)),
+      gestureSourceType: 'mouse'
     });
   } catch (error) {
     const code = error instanceof Error ? error.message : '';
@@ -420,13 +421,13 @@ export async function scrollBilibiliVideoDiscussionIntoView(
   return { found: true, inViewport: false };
 }
 
-async function sendTrustedMouseCommand(
+async function sendTrustedScrollGesture(
   debuggee: chrome.debugger.Debuggee,
   command: Record<string, unknown>
 ): Promise<void> {
   try {
     await withTimeout(
-      chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', command),
+      chrome.debugger.sendCommand(debuggee, 'Input.synthesizeScrollGesture', command),
       BILIBILI_DISCUSSION_DEBUGGER_INPUT_TIMEOUT_MS,
       'bilibili_video_discussion_scroll_debugger_input_timeout'
     );
