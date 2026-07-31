@@ -15,7 +15,8 @@ export async function readCoreCapabilityMatrix(pocRoot = resolve(here, '..')) {
     artifacts: resolve(pocRoot, 'collector-gateway/src/user-browser-artifact-reader-registry.ts'),
     openapi: resolve(pocRoot, 'collector-gateway/src/user-browser-collector-service-openapi.ts'),
     javascript: resolve(pocRoot, 'collector-client/src/constants.mjs'),
-    python: resolve(pocRoot, 'collector-python-client/src/intelligence_collector/constants.py')
+    python: resolve(pocRoot, 'collector-python-client/src/intelligence_collector/constants.py'),
+    extension: resolve(pocRoot, 'collector-extension/src/background/user-browser-gateway-types.ts')
   };
   const source = {};
   for (const [name, path] of Object.entries(files)) source[name] = await readFile(path, 'utf8');
@@ -27,8 +28,9 @@ export async function readCoreCapabilityMatrix(pocRoot = resolve(here, '..')) {
   const openapiArtifacts = extractOpenApiEnum(source.openapi, 'ArtifactResponse');
   const javascript = extractQuotedBlock(source.javascript, 'DIRECT_CAPABILITY_NAMES');
   const python = extractQuotedBlock(source.python, 'DIRECT_CAPABILITY_NAMES');
+  const extension = extractQuotedBlock(source.extension, 'USER_BROWSER_DIRECT_WORK_CAPABILITIES');
 
-  return { registry, artifacts, openapiRequests, openapiOperations, openapiArtifacts, javascript, python };
+  return { registry, artifacts, openapiRequests, openapiOperations, openapiArtifacts, javascript, python, extension };
 }
 
 export function compareCoreCapabilityMatrix(matrix) {
