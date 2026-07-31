@@ -39,6 +39,12 @@ import {
 import type { LoadedGatewayIdentity } from './identity';
 
 const WORK_ITEM_TTL_MS = 60_000;
+// The extension checks the Gateway on a 30-second alarm and a claimed
+// Bilibili run may then spend its own bounded observation window.  A 60-second
+// item can therefore expire in the queue before the next poll or while the
+// one-shot runner is still valid.  Keep Bilibili's one-shot lease finite, but
+// long enough for one poll window plus the existing bounded run deadline.
+const BILIBILI_WORK_ITEM_TTL_MS = 120_000;
 // MV3 work polling is intentionally low-frequency (30s). Multi-thread
 // replies have a larger bounded projection budget, so give the standalone
 // item one additional poll window without making it long-lived.
@@ -342,7 +348,7 @@ export class ExtensionWorkQueue {
       capability: 'bilibili.video_detail',
       executionTarget: 'collector_work_tab',
       issuedAt,
-      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      expiresAt: new Date(now.getTime() + BILIBILI_WORK_ITEM_TTL_MS).toISOString(),
       input: { canonicalVideoUrl, bvid },
       budget: {
         maximumPlatformNavigations: 1,
@@ -404,7 +410,7 @@ export class ExtensionWorkQueue {
       capability: 'bilibili.native_search',
       executionTarget: 'collector_work_tab',
       issuedAt,
-      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      expiresAt: new Date(now.getTime() + BILIBILI_WORK_ITEM_TTL_MS).toISOString(),
       input: {
         query: route.query,
         canonicalSearchUrl: bilibiliNativeSearchUrl(route),
@@ -469,7 +475,7 @@ export class ExtensionWorkQueue {
       capability: 'bilibili.native_search_batch',
       executionTarget: 'collector_work_tab',
       issuedAt,
-      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      expiresAt: new Date(now.getTime() + BILIBILI_WORK_ITEM_TTL_MS).toISOString(),
       input: {
         query: pageOne.query,
         resultType: 'comprehensive',
@@ -512,7 +518,7 @@ export class ExtensionWorkQueue {
       capability: 'bilibili.account_profile',
       executionTarget: 'collector_work_tab',
       issuedAt,
-      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      expiresAt: new Date(now.getTime() + BILIBILI_WORK_ITEM_TTL_MS).toISOString(),
       input: { canonicalProfileUrl, stableAccountId },
       budget: fixedDirectWorkBudget()
     };
@@ -542,7 +548,7 @@ export class ExtensionWorkQueue {
       capability: 'bilibili.account_inventory',
       executionTarget: 'collector_work_tab',
       issuedAt,
-      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      expiresAt: new Date(now.getTime() + BILIBILI_WORK_ITEM_TTL_MS).toISOString(),
       input: {
         canonicalProfileUrl,
         canonicalInventoryUrl: `${canonicalProfileUrl}/upload/video`,
@@ -581,7 +587,7 @@ export class ExtensionWorkQueue {
       capability: 'bilibili.account_inventory',
       executionTarget: 'user_selected_tab',
       issuedAt,
-      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      expiresAt: new Date(now.getTime() + BILIBILI_WORK_ITEM_TTL_MS).toISOString(),
       input: {
         canonicalProfileUrl,
         canonicalInventoryUrl: `${canonicalProfileUrl}/upload/video`,
@@ -619,7 +625,7 @@ export class ExtensionWorkQueue {
       capability: 'bilibili.discussion',
       executionTarget: 'collector_work_tab',
       issuedAt,
-      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      expiresAt: new Date(now.getTime() + BILIBILI_WORK_ITEM_TTL_MS).toISOString(),
       input: { canonicalVideoUrl, bvid },
       budget: discussionWorkTabBudget()
     };
@@ -732,7 +738,7 @@ export class ExtensionWorkQueue {
       capability: 'bilibili.danmaku',
       executionTarget: 'collector_work_tab',
       issuedAt,
-      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
+      expiresAt: new Date(now.getTime() + BILIBILI_WORK_ITEM_TTL_MS).toISOString(),
       input: { canonicalVideoUrl, bvid },
       budget: fixedDirectWorkBudget()
     };
@@ -1036,7 +1042,7 @@ export class ExtensionWorkQueue {
       canonicalProfileUrl,
       stableAccountId,
       issuedAt,
-      expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString()
+      expiresAt: new Date(now.getTime() + BILIBILI_WORK_ITEM_TTL_MS).toISOString()
     };
   }
 

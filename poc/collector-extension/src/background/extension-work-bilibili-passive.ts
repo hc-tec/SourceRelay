@@ -39,6 +39,14 @@ import {
 
 const BILIBILI_VIDEO_PAGE_SETTLE_MS = 4_000;
 const BILIBILI_VIDEO_DOM_OBSERVATION_MAX_MS = 30_000;
+// A Chrome tabs/scripting promise must never keep the MV3 worker alive past
+// the signed work lease. These are local command bounds, not platform retries:
+// an unknown command outcome is returned once and the managed tab is abandoned
+// for review by the existing catch path.
+const PASSIVE_TAB_ACQUIRE_TIMEOUT_MS = 5_000;
+const PASSIVE_NAVIGATION_TIMEOUT_MS = 20_000;
+const PASSIVE_TAB_READ_TIMEOUT_MS = 3_000;
+const PASSIVE_DOM_CAPTURE_TIMEOUT_MS = 5_000;
 
 type PassiveItem = Extract<ExtensionWorkItem, { capability: BilibiliPassiveExtensionWorkItem['capability'] }>;
 type PassiveResult = Extract<ExtensionWorkResult, { capability: BilibiliPassiveExtensionWorkItem['capability'] }>;
@@ -75,17 +83,37 @@ export async function executeBilibiliPassiveExtensionWork(
     });
   }
   try {
-    workTab = await acquireExtensionWorkTab();
+    workTab = await withTimeout(
+      acquireExtensionWorkTab(),
+      PASSIVE_TAB_ACQUIRE_TIMEOUT_MS,
+      'work_tab_acquire_timeout'
+    );
     acquisition = workTab.acquisition;
-    await lifecycle.onWorkTabAcquired?.(acquisition);
+    if (lifecycle.onWorkTabAcquired) {
+      await withTimeout(
+        lifecycle.onWorkTabAcquired(acquisition),
+        PASSIVE_TAB_READ_TIMEOUT_MS,
+        'extension_work_lifecycle_timeout'
+      );
+    }
     if (item.capability === 'bilibili.collection_series.overview') {
       await armBilibiliCollectionOverviewNetworkObservation({ tabId: workTab.tabId, item });
       collectionOverviewNetworkTabId = workTab.tabId;
     }
-    await navigateExtensionWorkTabOnce(workTab, item, async () => {
-      navigationAttempted = true;
-      await lifecycle.onNavigationIntent?.();
-    });
+    await withTimeout(
+      navigateExtensionWorkTabOnce(workTab, item, async () => {
+        navigationAttempted = true;
+        if (lifecycle.onNavigationIntent) {
+          await withTimeout(
+            lifecycle.onNavigationIntent(),
+            PASSIVE_TAB_READ_TIMEOUT_MS,
+            'extension_work_lifecycle_timeout'
+          );
+        }
+      }),
+      PASSIVE_NAVIGATION_TIMEOUT_MS,
+      'navigation_outcome_unknown'
+    );
     const observed = await observePassiveWork(workTab, item, collectionOverviewNetworkTabId !== null);
     observation = observed.observation;
     const disposition = observed.kind === 'ready' || observed.kind === 'empty'
@@ -136,7 +164,11 @@ async function observePassiveWork(
   let pageReadyAt: number | null = null;
   let lastObservation: PassiveObservation | null = null;
   while (Date.now() < deadline) {
-    const tab = await readExtensionWorkTab(workTab);
+    const tab = await withTimeout(
+      readExtensionWorkTab(workTab),
+      PASSIVE_TAB_READ_TIMEOUT_MS,
+      'work_tab_read_timeout'
+    );
     if (tab.status !== 'complete') {
       await delay(BILIBILI_SPACE_DOM_OBSERVATION_INTERVAL_MS);
       continue;
@@ -159,7 +191,11 @@ async function observePassiveWork(
           item,
           deadlineMs: Math.max(1, deadline - Date.now())
         })
-        : await captureObservation(item, workTab.tabId);
+        : await withTimeout(
+          captureObservation(item, workTab.tabId),
+          PASSIVE_DOM_CAPTURE_TIMEOUT_MS,
+          'bilibili_passive_dom_projection_timeout'
+        );
     } catch (error) {
       const code = safeErrorCode(error);
       return {
@@ -389,4 +425,25 @@ function safeErrorCode(error: unknown): string {
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function withTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  errorCode: string
+): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || !/^[a-z0-9_]{1,100}$/.test(errorCode)) {
+    throw new Error('extension_work_timeout_invalid');
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(errorCode)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }

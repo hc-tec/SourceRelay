@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { USER_BROWSER_DIRECT_WORK_CAPABILITIES } from '../src/background/user-browser-gateway-types.js';
 import { userBrowserGatewayDirectCapabilityCatalog } from '../src/background/user-browser-gateway-validation.js';
 
 function descriptor(input: {
@@ -20,6 +21,15 @@ function descriptor(input: {
 }
 
 describe('user-browser Gateway direct capability catalog', () => {
+  test('keeps every Gateway direct-ready Bilibili passive work kind executable', () => {
+    expect(USER_BROWSER_DIRECT_WORK_CAPABILITIES).toEqual(expect.arrayContaining([
+      'bilibili.dynamic',
+      'bilibili.collection_series.overview',
+      'bilibili.collection_series.detail',
+      'bilibili.danmaku'
+    ]));
+  });
+
   test('shows only work types this installed extension can execute and ignores research-only registry entries', () => {
     expect(userBrowserGatewayDirectCapabilityCatalog({
       schemaVersion: 2,
@@ -57,7 +67,7 @@ describe('user-browser Gateway direct capability catalog', () => {
           captureMode: 'network_archive_first_dom_hierarchy_fallback_trusted_click',
           browserHostFallback: 'forbidden'
         },
-        descriptor({ capability: 'bilibili.dynamic', dispatchState: 'direct_migration_required' })
+        descriptor({ capability: 'bilibili.transcript', dispatchState: 'trusted_interaction_migration_required' })
       ]
     })).toEqual([
       expect.objectContaining({ capability: 'bilibili.video_detail', dispatchState: 'direct_ready' }),

@@ -43,7 +43,8 @@ test('direct extension work items read real Bilibili capabilities', async ({}, t
         context.on('request', (request) => {
           if (!request.isNavigationRequest()) return;
           const url = new URL(request.url());
-          if (url.hostname === 'www.bilibili.com' || url.hostname === 'search.bilibili.com') {
+          if (url.hostname === 'www.bilibili.com' || url.hostname === 'search.bilibili.com' ||
+            url.hostname === 'space.bilibili.com') {
             platformNavigations.push(`${url.origin}${url.pathname}${url.search}`);
           }
         });
@@ -152,6 +153,20 @@ test('direct extension work items read real Bilibili capabilities', async ({}, t
         gatewayOrigin,
         clientToken: clientToken!,
         bindingId: bindingId!,
+        platformNavigations,
+        testInfo
+      });
+      await controlPage.close();
+      await consolePage.close();
+      return;
+    }
+
+    if (process.env.COLLECTOR_LIVE_CANARY_SCOPE === 'dynamic') {
+      await runDynamicCanary({
+        gatewayOrigin,
+        clientToken: clientToken!,
+        bindingId: bindingId!,
+        launched,
         platformNavigations,
         testInfo
       });
@@ -535,6 +550,121 @@ async function runNativeSearchBatchCanary(input: {
   await expect(retainedSearchTab.evaluate(() => document.visibilityState)).resolves.toBe('visible');
   expect((await retainedSearchTab.screenshot({
     path: input.testInfo.outputPath('bilibili-native-search-batch-page-two-visible.png')
+  })).byteLength).toBeGreaterThan(0);
+}
+
+async function runDynamicCanary(input: {
+  gatewayOrigin: string;
+  clientToken: string;
+  bindingId: string;
+  launched: Awaited<ReturnType<typeof launchProductionExtension>>;
+  platformNavigations: string[];
+  testInfo: { outputPath(path: string): string };
+}): Promise<void> {
+  const dispatchResponse = await fetch(`${input.gatewayOrigin}/v2/collect`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${input.clientToken}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      schemaVersion: 2,
+      browserBindingId: input.bindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.dynamic',
+      executionTarget: 'collector_work_tab',
+      input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+    })
+  });
+  const dispatch = await dispatchResponse.json() as { result?: { operationId?: string } };
+  expect(dispatchResponse.status).toBe(201);
+  const operationId = dispatch.result?.operationId;
+  expect(operationId).toMatch(/^[0-9a-f-]{36}$/i);
+
+  await expect.poll(async () => {
+    const response = await fetch(`${input.gatewayOrigin}/v2/collect/operations/${operationId}`, {
+      headers: { authorization: `Bearer ${input.clientToken}` }
+    });
+    const payload = await response.json() as {
+      result?: { state?: string; errorCode?: string | null; terminalReason?: string | null };
+    };
+    return payload.result?.state && ['completed', 'partial', 'stopped', 'failed'].includes(payload.result.state)
+      ? `${payload.result.state}:${payload.result.errorCode ?? 'none'}:${payload.result.terminalReason ?? 'none'}`
+      : 'pending';
+  }, { timeout: 120_000, intervals: [1_000, 2_000, 5_000] }).not.toBe('pending');
+
+  const finalResponse = await fetch(`${input.gatewayOrigin}/v2/collect/operations/${operationId}`, {
+    headers: { authorization: `Bearer ${input.clientToken}` }
+  });
+  const finalOperation = await finalResponse.json() as {
+    result?: {
+      state?: string;
+      errorCode?: string | null;
+      terminalReason?: string | null;
+      artifact?: { artifactId?: string; retrievalPath?: string };
+    };
+  };
+  expect(finalResponse.status).toBe(200);
+  expect(finalOperation.result?.state).toBeDefined();
+  expect(['completed', 'partial']).toContain(finalOperation.result?.state);
+  expect(['dynamic_ready', 'dynamic_empty', 'dynamic_partial', 'budget_exhausted', 'feed_terminal_reached'])
+    .toContain(finalOperation.result?.terminalReason);
+  expect(finalOperation.result?.artifact?.artifactId).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(finalOperation.result?.artifact?.retrievalPath)
+    .toMatch(/^\/v1\/collect\/artifacts\/bilibili\.dynamic\//);
+
+  const artifactResponse = await fetch(`${input.gatewayOrigin}${finalOperation.result?.artifact?.retrievalPath}`, {
+    headers: { authorization: `Bearer ${input.clientToken}` }
+  });
+  expect(artifactResponse.status).toBe(200);
+  const payload = await artifactResponse.json() as {
+    artifact?: {
+      capability?: string;
+      state?: string;
+      provenance?: {
+        environment?: string;
+        executionTarget?: string;
+        captureMode?: string;
+        responseBodies?: string;
+        platformNavigations?: number;
+      };
+      result?: {
+        observation?: { stableAccountId?: string | null; feedVisible?: boolean; cards?: unknown[] } | null;
+      };
+    };
+  };
+  expect(payload.artifact?.capability).toBe('bilibili.dynamic');
+  expect(payload.artifact?.provenance).toMatchObject({
+    environment: 'user_owned_browser_extension',
+    executionTarget: 'collector_work_tab',
+    captureMode: 'passive_dom_projection',
+    responseBodies: 'not_read',
+    platformNavigations: 1
+  });
+  expect(payload.artifact?.result?.observation).toMatchObject({
+    stableAccountId: '7481602',
+    feedVisible: true
+  });
+
+  const dynamicNavigationTargets = [...new Set(input.platformNavigations
+    .filter((value) => new URL(value).hostname === 'space.bilibili.com')
+    .map((value) => {
+      const target = new URL(value);
+      return `${target.origin}${target.pathname.replace(/\/$/, '')}`;
+    }))];
+  expect(dynamicNavigationTargets).toEqual(['https://space.bilibili.com/7481602/dynamic']);
+  expect(input.platformNavigations.filter((value) => new URL(value).hostname === 'space.bilibili.com').length)
+    .toBeGreaterThanOrEqual(1);
+
+  const retainedWorkTab = input.launched.context.pages().find((page) =>
+    page.url().startsWith('https://space.bilibili.com/7481602/dynamic')
+  );
+  expect(retainedWorkTab).toBeTruthy();
+  expect(retainedWorkTab?.isClosed()).toBe(false);
+  if (!retainedWorkTab) throw new Error('live_canary_retained_dynamic_work_tab_missing');
+  await expect(retainedWorkTab.evaluate(() => document.visibilityState)).resolves.toBe('visible');
+  expect((await retainedWorkTab.screenshot({
+    path: input.testInfo.outputPath('bilibili-dynamic-visible.png')
   })).byteLength).toBeGreaterThan(0);
 }
 

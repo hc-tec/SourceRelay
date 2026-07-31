@@ -24,6 +24,23 @@ function identity(): LoadedGatewayIdentity {
 }
 
 describe('extension work queue state machine', () => {
+  test('gives Bilibili direct work one poll window before its bounded runner deadline', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-bilibili-ttl-'));
+    try {
+      const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const dynamic = await queue.enqueueBilibiliDynamic({
+        browserBindingId: bindingId,
+        canonicalProfileUrl: 'https://space.bilibili.com/7481602'
+      }, base);
+      const claimed = await queue.claimNext(bindingId, new Date(base.getTime() + 60_001));
+      expect(claimed?.operationId).toBe(dynamic.operationId);
+      expect(claimed).not.toBeNull();
+      expect(Date.parse(claimed!.expiresAt) - Date.parse(claimed!.issuedAt)).toBe(120_000);
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
   test('gives bounded multi-thread reply work one extra poll window', async () => {
     const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-reply-ttl-'));
     try {
