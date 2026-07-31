@@ -310,38 +310,97 @@ export async function captureBilibiliVideoDiscussionDom(
   return result;
 }
 
+interface BilibiliVideoDiscussionScrollProbe {
+  found: boolean;
+  inViewport: boolean;
+  x: number;
+  y: number;
+  deltaY: number;
+}
+
 /**
- * One bounded, DOM-derived scroll used by the managed discussion work tab.
- * The host is selected by the fixed projection strategy; callers cannot pass
- * a selector or arbitrary script. It returns only whether the public comment
- * host was found and whether it is now in the viewport.
+ * One bounded, DOM-derived trusted scroll used by the managed discussion
+ * work tab. The fixed projection first measures #commentapp and derives a
+ * viewport-safe pointer and wheel delta. The actual scroll is delivered by
+ * Chrome's Input domain so Bilibili sees the same kind of wheel input as a
+ * foreground user page; no synthetic element method, selector, or caller
+ * supplied coordinate is accepted.
  */
 export async function scrollBilibiliVideoDiscussionIntoView(
   tabId: number,
   documentId: string
 ): Promise<{ found: boolean; inViewport: boolean }> {
-  let results: chrome.scripting.InjectionResult<{ found: boolean; inViewport: boolean }>[];
+  let results: chrome.scripting.InjectionResult<BilibiliVideoDiscussionScrollProbe>[];
   try {
     results = await chrome.scripting.executeScript({
       target: { tabId, documentIds: [documentId] },
       world: 'ISOLATED',
       func: () => {
         const host = document.querySelector<HTMLElement>('#commentapp');
-        if (!host) return { found: false, inViewport: false };
-        const before = host.getBoundingClientRect();
-        const inViewport = before.bottom > 0 && before.top < window.innerHeight;
-        if (!inViewport) host.scrollIntoView({ behavior: 'auto', block: 'center' });
-        const after = host.getBoundingClientRect();
-        return {
-          found: true,
-          inViewport: after.bottom > 0 && after.top < window.innerHeight
-        };
+        if (!host) return { found: false, inViewport: false, x: 0, y: 0, deltaY: 0 };
+        const rect = host.getBoundingClientRect();
+        const viewportWidth = Math.max(1, window.innerWidth);
+        const viewportHeight = Math.max(1, window.innerHeight);
+        const inViewport = rect.bottom > 0 && rect.top < viewportHeight;
+        // Keep the pointer in the lower portion of the foreground viewport,
+        // where a person would naturally place it before moving toward the
+        // comments. A positive wheel is the expected direction because the
+        // public discussion host follows the video; retain a bounded upward
+        // fallback if the page is already above the viewport in an unusual
+        // retained-tab state.
+        const direction = rect.bottom <= 0 ? -1 : 1;
+        const x = Math.min(viewportWidth - 1, Math.max(0, Math.round(viewportWidth / 2)));
+        const y = Math.min(viewportHeight - 1, Math.max(1, Math.round(viewportHeight * 0.8)));
+        const deltaY = direction * Math.min(1_050, Math.max(480, Math.round(viewportHeight * 0.9)));
+        return { found: true, inViewport, x, y, deltaY };
       }
     });
   } catch {
-    throw new Error('video_discussion_scroll_document_context_changed');
+    throw new Error('bilibili_video_discussion_scroll_document_context_changed');
   }
-  const result = results[0]?.result;
-  if (!result) throw new Error('video_discussion_scroll_document_context_changed');
-  return result;
+  const probe = results[0]?.result;
+  if (!probe) throw new Error('bilibili_video_discussion_scroll_document_context_changed');
+  if (!probe.found || probe.inViewport) return { found: probe.found, inViewport: probe.inViewport };
+
+  const debuggee: chrome.debugger.Debuggee = { tabId };
+  let attached = false;
+  let primaryError: Error | null = null;
+  let detachError: Error | null = null;
+  try {
+    await chrome.debugger.attach(debuggee, '1.3').catch(() => {
+      throw new Error('bilibili_video_discussion_scroll_debugger_attach_failed');
+    });
+    attached = true;
+    await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: probe.x,
+      y: probe.y
+    }).catch(() => {
+      throw new Error('bilibili_video_discussion_scroll_debugger_input_failed');
+    });
+    await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+      type: 'mouseWheel',
+      x: probe.x,
+      y: probe.y,
+      deltaX: 0,
+      deltaY: probe.deltaY
+    }).catch(() => {
+      throw new Error('bilibili_video_discussion_scroll_debugger_input_failed');
+    });
+  } catch (error) {
+    primaryError = error instanceof Error
+      ? error
+      : new Error('bilibili_video_discussion_scroll_debugger_input_failed');
+  } finally {
+    if (attached) {
+      try {
+        await chrome.debugger.detach(debuggee);
+      } catch {
+        detachError = new Error('bilibili_video_discussion_scroll_debugger_detach_failed');
+      }
+    }
+  }
+  if (detachError) throw detachError;
+  if (primaryError) throw primaryError;
+  return { found: true, inViewport: false };
 }

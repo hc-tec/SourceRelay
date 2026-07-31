@@ -107,6 +107,20 @@ test('direct extension work items read one real Bilibili detail and fixed native
     const bindingId = bindingPayload.bindings?.find((candidate) => candidate.state === 'online')?.browserBindingId ?? null;
     expect(bindingId).toMatch(/^[0-9a-f-]{36}$/i);
 
+    if (process.env.COLLECTOR_LIVE_CANARY_SCOPE === 'discussion') {
+      await runDiscussionCanary({
+        gatewayOrigin,
+        clientToken: clientToken!,
+        bindingId: bindingId!,
+        launched,
+        platformNavigations,
+        testInfo
+      });
+      await controlPage.close();
+      await consolePage.close();
+      return;
+    }
+
     if (process.env.COLLECTOR_LIVE_CANARY_SCOPE === 'native_search_batch') {
       await runNativeSearchBatchCanary({
         gatewayOrigin,
@@ -522,6 +536,147 @@ async function runNativeSearchBatchCanary(input: {
   expect((await retainedSearchTab.screenshot({
     path: input.testInfo.outputPath('bilibili-native-search-batch-page-two-visible.png')
   })).byteLength).toBeGreaterThan(0);
+}
+
+async function runDiscussionCanary(input: {
+  gatewayOrigin: string;
+  clientToken: string;
+  bindingId: string;
+  launched: Awaited<ReturnType<typeof launchProductionExtension>>;
+  platformNavigations: string[];
+  testInfo: { outputPath(path: string): string };
+}): Promise<void> {
+  const dispatchResponse = await fetch(`${input.gatewayOrigin}/v2/collect`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${input.clientToken}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      schemaVersion: 2,
+      browserBindingId: input.bindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.discussion',
+      executionTarget: 'collector_work_tab',
+      input: { canonicalVideoUrl }
+    })
+  });
+  const dispatch = await dispatchResponse.json() as { result?: { operationId?: string } };
+  expect(dispatchResponse.status).toBe(201);
+  const operationId = dispatch.result?.operationId;
+  expect(operationId).toMatch(/^[0-9a-f-]{36}$/i);
+
+  await expect.poll(async () => {
+    const response = await fetch(`${input.gatewayOrigin}/v2/collect/operations/${operationId}`, {
+      headers: { authorization: `Bearer ${input.clientToken}` }
+    });
+    const payload = await response.json() as {
+      result?: { state?: string; errorCode?: string | null; terminalReason?: string | null };
+    };
+    return payload.result?.state && ['completed', 'partial', 'stopped', 'failed'].includes(payload.result.state)
+      ? `${payload.result.state}:${payload.result.errorCode ?? 'none'}:${payload.result.terminalReason ?? 'none'}`
+      : 'pending';
+  }, { timeout: 120_000, intervals: [1_000, 2_000, 5_000] }).not.toBe('pending');
+
+  const finalResponse = await fetch(`${input.gatewayOrigin}/v2/collect/operations/${operationId}`, {
+    headers: { authorization: `Bearer ${input.clientToken}` }
+  });
+  const finalOperation = await finalResponse.json() as {
+    result?: {
+      state?: string;
+      errorCode?: string | null;
+      terminalReason?: string | null;
+      artifact?: { artifactId?: string; retrievalPath?: string };
+    };
+  };
+  expect(finalResponse.status).toBe(200);
+  expect(finalOperation.result?.state).toBeDefined();
+  expect(['completed', 'stopped']).toContain(finalOperation.result?.state);
+  expect(['discussion_ready', 'discussion_empty', 'login_required']).toContain(finalOperation.result?.terminalReason);
+  expect(finalOperation.result?.artifact?.artifactId).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(finalOperation.result?.artifact?.retrievalPath).toMatch(/^\/v1\/collect\/artifacts\/bilibili\.discussion\//);
+
+  const artifactResponse = await fetch(`${input.gatewayOrigin}${finalOperation.result?.artifact?.retrievalPath}`, {
+    headers: { authorization: `Bearer ${input.clientToken}` }
+  });
+  expect(artifactResponse.status).toBe(200);
+  const payload = await artifactResponse.json() as {
+    artifact?: {
+      capability?: string;
+      state?: string;
+      provenance?: {
+        environment?: string;
+        executionTarget?: string;
+        captureMode?: string;
+        responseBodies?: string;
+        semanticActions?: number;
+        platformNavigations?: number;
+        workTabDisposition?: string;
+      };
+      result?: {
+        state?: string;
+        errorCode?: string | null;
+        terminalReason?: string | null;
+        observation?: {
+          bvid?: string | null;
+          commentHostPresent?: boolean;
+          commentHostVisible?: boolean;
+          commentHostInViewport?: boolean;
+          commentContentState?: string;
+          rootCommentTexts?: string[];
+          loginGateVisible?: boolean;
+          risk?: {
+            verificationRequired?: boolean;
+            rateLimited?: boolean;
+            sourceUnavailable?: boolean;
+          };
+        } | null;
+      };
+    };
+  };
+  const artifact = payload.artifact;
+  const observation = artifact?.result?.observation;
+  expect(artifact?.capability).toBe('bilibili.discussion');
+  expect(artifact?.provenance).toMatchObject({
+    environment: 'user_owned_browser_extension',
+    executionTarget: 'collector_work_tab',
+    captureMode: 'passive_dom_projection',
+    responseBodies: 'not_read',
+    semanticActions: 1,
+    platformNavigations: 1
+  });
+  expect(artifact?.result?.state).toBe(finalOperation.result?.state);
+  expect(observation).toMatchObject({
+    bvid: 'BV1qZSLBYEpa',
+    commentHostPresent: true,
+    commentHostVisible: true,
+    commentHostInViewport: true,
+    risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+  });
+  if (finalOperation.result?.terminalReason === 'login_required') {
+    expect(observation?.loginGateVisible).toBe(true);
+  } else if (finalOperation.result?.terminalReason === 'discussion_ready') {
+    expect(observation?.commentContentState).toBe('ready');
+    expect(observation?.rootCommentTexts?.length).toBeGreaterThan(0);
+  } else {
+    expect(observation?.commentContentState).toBe('empty');
+    expect(observation?.rootCommentTexts).toEqual([]);
+  }
+
+  const retainedWorkTab = input.launched.context.pages().find((page) => page.url().startsWith(canonicalVideoUrl));
+  expect(retainedWorkTab).toBeTruthy();
+  expect(retainedWorkTab?.isClosed()).toBe(false);
+  if (!retainedWorkTab) throw new Error('live_canary_retained_discussion_work_tab_missing');
+  await expect(retainedWorkTab.evaluate(() => document.visibilityState)).resolves.toBe('visible');
+  expect((await retainedWorkTab.screenshot({
+    path: input.testInfo.outputPath('bilibili-discussion-visible.png')
+  })).byteLength).toBeGreaterThan(0);
+
+  const discussionNavigations = input.platformNavigations.filter((value) => {
+    const url = new URL(value);
+    return url.hostname === 'www.bilibili.com' && url.pathname.startsWith('/video/');
+  });
+  expect(discussionNavigations.length).toBeGreaterThanOrEqual(1);
 }
 
 async function runPythonSdkCanary(input: {

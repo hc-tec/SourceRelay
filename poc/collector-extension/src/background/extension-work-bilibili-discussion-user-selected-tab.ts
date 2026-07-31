@@ -192,8 +192,16 @@ async function observeDiscussion(
           continue;
         }
         scrollSettledAt = Date.now();
-      } catch {
-        return { kind: 'partial', observation: current, errorCode: 'bilibili_video_discussion_scroll_failed', terminalReason: 'dom_projection_failed' };
+      } catch (error) {
+        const errorCode = safeErrorCode(error);
+        return {
+          kind: 'partial',
+          observation: current,
+          errorCode: errorCode.startsWith('bilibili_video_discussion_scroll_debugger_')
+            ? errorCode
+            : 'bilibili_video_discussion_scroll_failed',
+          terminalReason: 'dom_projection_failed'
+        };
       }
       continue;
     }
