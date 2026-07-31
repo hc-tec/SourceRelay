@@ -4,17 +4,24 @@ import type {
   BilibiliVideoDiscussionUserSelectedTabWorkResult
 } from '@intelligence/collector-contracts';
 import { captureBilibiliVideoDiscussionDom } from './strategies/bilibili-video-discussion-dom-projection';
-import { takeSelectedBilibiliVideoDiscussionTab } from './user-selected-bilibili-video-discussion-tab';
+import {
+  takeSelectedBilibiliVideoDiscussionTab,
+  type TakenUserSelectedBilibiliVideoDiscussionTab
+} from './user-selected-bilibili-video-discussion-tab';
 
 const OBSERVATION_INTERVAL_MS = 350;
 const MAX_OBSERVATION_WINDOW_MS = 15_000;
 const PAGE_SETTLE_MS = 2_000;
+const FOREGROUND_SETTLE_MS = 750;
 
 /**
  * A zero-input public comments observation. The extension consumes only the
  * tab/document that the user explicitly chose after personally scrolling
- * comments into view. It performs no navigation, focus, scroll, sort, reply
+ * comments into view. It performs no navigation, scroll, sort, reply
  * expansion, refresh, response-body read or Browser Host/CDP control action.
+ * If the exact leased tab is no longer foreground, it may focus that one
+ * leased tab once so Bilibili's lazy comment renderer can settle; it never
+ * chooses another tab or exposes tab identifiers to the Gateway.
  */
 export async function executeBilibiliDiscussionUserSelectedTabExtensionWork(
   item: BilibiliVideoDiscussionUserSelectedTabWorkItem
@@ -42,6 +49,8 @@ export async function executeBilibiliDiscussionUserSelectedTabExtensionWork(
 
   const deadline = Math.min(Date.parse(item.expiresAt), Date.now() + MAX_OBSERVATION_WINDOW_MS);
   let firstCompleteAt: number | null = null;
+  let foregroundActivationAttempted = false;
+  let foregroundActivatedAt: number | null = null;
   let lastObservation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null = null;
   while (Date.now() < deadline) {
     let tab: chrome.tabs.Tab;
@@ -55,6 +64,24 @@ export async function executeBilibiliDiscussionUserSelectedTabExtensionWork(
         disposition: 'closed_or_missing',
         observation: lastObservation
       });
+    }
+    const foreground = await ensureDiscussionTabForeground(selected.lease, tab, foregroundActivationAttempted);
+    foregroundActivationAttempted = foreground.attempted;
+    if (!foreground.ready) {
+      return result(item, {
+        state: 'stopped',
+        errorCode: 'user_selected_tab_foreground_unavailable',
+        terminalReason: 'user_selected_tab_foreground_unavailable',
+        disposition: 'foreground_unavailable',
+        observation: lastObservation
+      });
+    }
+    if (foreground.activated) {
+      foregroundActivatedAt ??= Date.now();
+    }
+    if (foregroundActivatedAt !== null && Date.now() - foregroundActivatedAt < FOREGROUND_SETTLE_MS) {
+      await delay(OBSERVATION_INTERVAL_MS);
+      continue;
     }
     if (tab.windowId !== selected.lease.windowId || tab.status !== 'complete') {
       await delay(OBSERVATION_INTERVAL_MS);
@@ -157,6 +184,43 @@ export async function executeBilibiliDiscussionUserSelectedTabExtensionWork(
     disposition: 'observed',
     observation: lastObservation
   });
+}
+
+export function discussionTabNeedsForeground(
+  tab: Pick<chrome.tabs.Tab, 'active'>,
+  window: Pick<chrome.windows.Window, 'focused'> | null
+): boolean {
+  return tab.active !== true || window?.focused !== true;
+}
+
+async function ensureDiscussionTabForeground(
+  lease: Extract<TakenUserSelectedBilibiliVideoDiscussionTab, { kind: 'ready' }>['lease'],
+  tab: chrome.tabs.Tab,
+  activationAttempted: boolean
+): Promise<{ ready: boolean; attempted: boolean; activated: boolean }> {
+  const window = await chrome.windows.get(lease.windowId).catch(() => null);
+  if (!discussionTabNeedsForeground(tab, window)) {
+    return { ready: true, attempted: activationAttempted, activated: false };
+  }
+  if (activationAttempted) {
+    return { ready: false, attempted: true, activated: false };
+  }
+  try {
+    if (window?.focused !== true) {
+      await chrome.windows.update(lease.windowId, { focused: true });
+    }
+    if (tab.active !== true) {
+      await chrome.tabs.update(lease.tabId, { active: true });
+    }
+  } catch {
+    return { ready: false, attempted: true, activated: false };
+  }
+  const [focusedWindow, activeTab] = await Promise.all([
+    chrome.windows.get(lease.windowId).catch(() => null),
+    chrome.tabs.get(lease.tabId).catch(() => null)
+  ]);
+  const ready = activeTab !== null && discussionTabNeedsForeground(activeTab, focusedWindow) === false;
+  return { ready, attempted: true, activated: ready };
 }
 
 function toObservation(

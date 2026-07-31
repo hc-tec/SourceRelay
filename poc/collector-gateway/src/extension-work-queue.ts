@@ -1275,7 +1275,8 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'navigation_outcome_unknown' || value === 'gateway_restarted_before_completion' ||
     value === 'user_selected_tab_required' || value === 'user_selected_tab_closed' ||
     value === 'user_selected_tab_document_changed' || value === 'user_selected_tab_target_mismatch' ||
-    value === 'user_selected_tab_page_not_supported' || value === 'user_selected_tab_worker_interrupted' ||
+    value === 'user_selected_tab_foreground_unavailable' || value === 'user_selected_tab_page_not_supported' ||
+    value === 'user_selected_tab_worker_interrupted' ||
     value === 'login_required' || value === 'search_ready' || value === 'search_depth_ready' ||
     value === 'search_depth_stopped' || value === 'existing_public_explore_tab_required' ||
     value === 'existing_public_explore_tab_ambiguous' || value === 'search_target_unavailable' ||

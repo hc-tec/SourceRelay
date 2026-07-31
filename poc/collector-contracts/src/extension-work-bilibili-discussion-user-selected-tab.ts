@@ -45,7 +45,8 @@ export type BilibiliVideoDiscussionUserSelectedTabDisposition =
   | 'selection_unavailable'
   | 'closed_or_missing'
   | 'document_changed'
-  | 'target_mismatch';
+  | 'target_mismatch'
+  | 'foreground_unavailable';
 
 export type BilibiliVideoDiscussionUserSelectedTabTerminalReason =
   | 'discussion_ready'
@@ -55,6 +56,7 @@ export type BilibiliVideoDiscussionUserSelectedTabTerminalReason =
   | 'user_selected_tab_closed'
   | 'user_selected_tab_document_changed'
   | 'user_selected_tab_target_mismatch'
+  | 'user_selected_tab_foreground_unavailable'
   | 'user_selected_tab_worker_interrupted'
   | 'login_required'
   | 'verification_required'
@@ -211,13 +213,14 @@ function isState(value: unknown): value is BilibiliVideoDiscussionUserSelectedTa
 
 function isDisposition(value: unknown): value is BilibiliVideoDiscussionUserSelectedTabDisposition {
   return value === 'observed' || value === 'selection_unavailable' || value === 'closed_or_missing' ||
-    value === 'document_changed' || value === 'target_mismatch';
+    value === 'document_changed' || value === 'target_mismatch' || value === 'foreground_unavailable';
 }
 
 function isTerminalReason(value: unknown): value is BilibiliVideoDiscussionUserSelectedTabTerminalReason {
   return value === 'discussion_ready' || value === 'discussion_empty' || value === 'discussion_partial' ||
     value === 'user_selected_tab_required' || value === 'user_selected_tab_closed' ||
     value === 'user_selected_tab_document_changed' || value === 'user_selected_tab_target_mismatch' ||
+    value === 'user_selected_tab_foreground_unavailable' ||
     value === 'user_selected_tab_worker_interrupted' || value === 'login_required' || value === 'verification_required' ||
     value === 'rate_limited' || value === 'source_unavailable' || value === 'dom_projection_failed' ||
     value === 'run_deadline_exceeded';

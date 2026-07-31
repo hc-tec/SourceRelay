@@ -111,6 +111,14 @@ describe('user-selected Bilibili inventory tab lease', () => {
 });
 
 describe('user-selected Bilibili video discussion tab lease', () => {
+  test('detects a background leased tab without naming or selecting another tab', async () => {
+    const executor = await import('../src/background/extension-work-bilibili-discussion-user-selected-tab.js');
+    expect(executor.discussionTabNeedsForeground({ active: true }, { focused: true })).toBe(false);
+    expect(executor.discussionTabNeedsForeground({ active: false }, { focused: true })).toBe(true);
+    expect(executor.discussionTabNeedsForeground({ active: true }, { focused: false })).toBe(true);
+    expect(executor.discussionTabNeedsForeground({ active: true }, null)).toBe(true);
+  });
+
   test('records a user-visible video document and consumes it once without browser control APIs', async () => {
     const chrome = installChromeMock({ tabUrl: discussionUrl });
     const selection = await import('../src/background/user-selected-bilibili-video-discussion-tab.js');

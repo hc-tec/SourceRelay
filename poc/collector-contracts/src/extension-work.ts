@@ -1077,7 +1077,8 @@ function isBilibiliAccountInventoryUserSelectedTabTerminalReason(
   return value === 'inventory_ready' || value === 'inventory_partial' ||
     value === 'user_selected_tab_required' || value === 'user_selected_tab_closed' ||
     value === 'user_selected_tab_document_changed' || value === 'user_selected_tab_target_mismatch' ||
-    value === 'user_selected_tab_page_not_supported' || value === 'user_selected_tab_worker_interrupted' ||
+    value === 'user_selected_tab_foreground_unavailable' || value === 'user_selected_tab_page_not_supported' ||
+    value === 'user_selected_tab_worker_interrupted' ||
     value === 'verification_required' || value === 'rate_limited' || value === 'source_unavailable' ||
     value === 'dom_projection_failed' || value === 'run_deadline_exceeded';
 }
