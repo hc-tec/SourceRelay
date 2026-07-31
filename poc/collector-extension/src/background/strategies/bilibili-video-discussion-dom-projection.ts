@@ -36,6 +36,11 @@ export interface BilibiliVideoDiscussionDomSnapshot {
   };
 }
 
+const BILIBILI_DISCUSSION_SCRIPT_TIMEOUT_MS = 5_000;
+const BILIBILI_DISCUSSION_DEBUGGER_ATTACH_TIMEOUT_MS = 2_500;
+const BILIBILI_DISCUSSION_DEBUGGER_INPUT_TIMEOUT_MS = 2_500;
+const BILIBILI_DISCUSSION_DEBUGGER_DETACH_TIMEOUT_MS = 1_500;
+
 /**
  * Fixed Bilibili discussion DOM projection. Bilibili's current desktop
  * comments component is an open Shadow DOM tree; this function explicitly
@@ -48,10 +53,11 @@ export async function captureBilibiliVideoDiscussionDom(
 ): Promise<BilibiliVideoDiscussionDomSnapshot> {
   let results: chrome.scripting.InjectionResult<BilibiliVideoDiscussionDomSnapshot>[];
   try {
-    results = await chrome.scripting.executeScript({
-      target: { tabId, documentIds: [documentId] },
-      world: 'ISOLATED',
-      func: () => {
+    results = await withTimeout(
+      chrome.scripting.executeScript({
+        target: { tabId, documentIds: [documentId] },
+        world: 'ISOLATED',
+        func: () => {
         const clean = (value: string | null | undefined, maximum: number): string =>
           (value ?? '').replace(/\s+/g, ' ').trim().slice(0, maximum);
         const rendered = (element: Element | null): element is HTMLElement => {
@@ -271,37 +277,40 @@ export async function captureBilibiliVideoDiscussionDom(
         const bvid = location.protocol === 'https:' && location.hostname === 'www.bilibili.com'
           ? location.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/)?.[1] ?? null
           : null;
-        return {
-          bvid,
-          commentHostPresent: Boolean(host && commentRoot),
-          commentHostVisible: Boolean(commentRoot && rendered(commentRoot)),
-          commentHostInViewport,
-          commentHostBounds: rect && rect.width > 0 && rect.height > 0
-            ? { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
-            : null,
-          sortControls: {
-            hotVisible: hot !== null,
-            latestVisible: latest !== null,
-            latestState: resolvedLatestState
-          },
-          commentContentState,
-          rootCommentTexts: roots,
-          firstThreadExpandVisible,
-          firstThreadReplies,
-          replyPaginationVisible,
-          replyPage,
-          replyPageCount,
-          replyHasMore,
-          replyCoverage,
-          loginGateVisible: /登录后查看|登录参与社区互动/.test(commentText),
-          risk: {
-            verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(commentText),
-            rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(commentText),
-            sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(commentText)
-          }
-        };
-      }
-    });
+          return {
+            bvid,
+            commentHostPresent: Boolean(host && commentRoot),
+            commentHostVisible: Boolean(commentRoot && rendered(commentRoot)),
+            commentHostInViewport,
+            commentHostBounds: rect && rect.width > 0 && rect.height > 0
+              ? { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
+              : null,
+            sortControls: {
+              hotVisible: hot !== null,
+              latestVisible: latest !== null,
+              latestState: resolvedLatestState
+            },
+            commentContentState,
+            rootCommentTexts: roots,
+            firstThreadExpandVisible,
+            firstThreadReplies,
+            replyPaginationVisible,
+            replyPage,
+            replyPageCount,
+            replyHasMore,
+            replyCoverage,
+            loginGateVisible: /登录后查看|登录参与社区互动/.test(commentText),
+            risk: {
+              verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(commentText),
+              rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(commentText),
+              sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(commentText)
+            }
+          };
+        }
+      }),
+      BILIBILI_DISCUSSION_SCRIPT_TIMEOUT_MS,
+      'video_discussion_strategy_document_context_changed'
+    );
   } catch {
     throw new Error('video_discussion_strategy_document_context_changed');
   }
@@ -332,10 +341,11 @@ export async function scrollBilibiliVideoDiscussionIntoView(
 ): Promise<{ found: boolean; inViewport: boolean }> {
   let results: chrome.scripting.InjectionResult<BilibiliVideoDiscussionScrollProbe>[];
   try {
-    results = await chrome.scripting.executeScript({
-      target: { tabId, documentIds: [documentId] },
-      world: 'ISOLATED',
-      func: () => {
+    results = await withTimeout(
+      chrome.scripting.executeScript({
+        target: { tabId, documentIds: [documentId] },
+        world: 'ISOLATED',
+        func: () => {
         const host = document.querySelector<HTMLElement>('#commentapp');
         if (!host) return { found: false, inViewport: false, x: 0, y: 0, deltaY: 0 };
         const rect = host.getBoundingClientRect();
@@ -352,9 +362,12 @@ export async function scrollBilibiliVideoDiscussionIntoView(
         const x = Math.min(viewportWidth - 1, Math.max(0, Math.round(viewportWidth / 2)));
         const y = Math.min(viewportHeight - 1, Math.max(1, Math.round(viewportHeight * 0.8)));
         const deltaY = direction * Math.min(1_050, Math.max(480, Math.round(viewportHeight * 0.9)));
-        return { found: true, inViewport, x, y, deltaY };
-      }
-    });
+          return { found: true, inViewport, x, y, deltaY };
+        }
+      }),
+      BILIBILI_DISCUSSION_SCRIPT_TIMEOUT_MS,
+      'bilibili_video_discussion_scroll_document_context_changed'
+    );
   } catch {
     throw new Error('bilibili_video_discussion_scroll_document_context_changed');
   }
@@ -364,37 +377,44 @@ export async function scrollBilibiliVideoDiscussionIntoView(
 
   const debuggee: chrome.debugger.Debuggee = { tabId };
   let attached = false;
+  let attachPending = false;
   let primaryError: Error | null = null;
   let detachError: Error | null = null;
   try {
-    await chrome.debugger.attach(debuggee, '1.3').catch(() => {
-      throw new Error('bilibili_video_discussion_scroll_debugger_attach_failed');
-    });
+    attachPending = true;
+    await withTimeout(
+      chrome.debugger.attach(debuggee, '1.3'),
+      BILIBILI_DISCUSSION_DEBUGGER_ATTACH_TIMEOUT_MS,
+      'bilibili_video_discussion_scroll_debugger_attach_timeout'
+    );
+    attachPending = false;
     attached = true;
-    await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+    await sendTrustedMouseCommand(debuggee, {
       type: 'mouseMoved',
       x: probe.x,
       y: probe.y
-    }).catch(() => {
-      throw new Error('bilibili_video_discussion_scroll_debugger_input_failed');
     });
-    await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+    await sendTrustedMouseCommand(debuggee, {
       type: 'mouseWheel',
       x: probe.x,
       y: probe.y,
       deltaX: 0,
       deltaY: probe.deltaY
-    }).catch(() => {
-      throw new Error('bilibili_video_discussion_scroll_debugger_input_failed');
     });
   } catch (error) {
-    primaryError = error instanceof Error
-      ? error
-      : new Error('bilibili_video_discussion_scroll_debugger_input_failed');
+    const code = error instanceof Error ? error.message : '';
+    primaryError = new Error(code.startsWith('bilibili_video_discussion_scroll_debugger_')
+      ? code
+      : 'bilibili_video_discussion_scroll_debugger_attach_failed');
+    if (code !== 'bilibili_video_discussion_scroll_debugger_attach_timeout') attachPending = false;
   } finally {
-    if (attached) {
+    if (attached || attachPending) {
       try {
-        await chrome.debugger.detach(debuggee);
+        await withTimeout(
+          chrome.debugger.detach(debuggee),
+          BILIBILI_DISCUSSION_DEBUGGER_DETACH_TIMEOUT_MS,
+          'bilibili_video_discussion_scroll_debugger_detach_timeout'
+        );
       } catch {
         detachError = new Error('bilibili_video_discussion_scroll_debugger_detach_failed');
       }
@@ -403,4 +423,36 @@ export async function scrollBilibiliVideoDiscussionIntoView(
   if (detachError) throw detachError;
   if (primaryError) throw primaryError;
   return { found: true, inViewport: false };
+}
+
+async function sendTrustedMouseCommand(
+  debuggee: chrome.debugger.Debuggee,
+  command: Record<string, unknown>
+): Promise<void> {
+  try {
+    await withTimeout(
+      chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', command),
+      BILIBILI_DISCUSSION_DEBUGGER_INPUT_TIMEOUT_MS,
+      'bilibili_video_discussion_scroll_debugger_input_timeout'
+    );
+  } catch (error) {
+    const code = error instanceof Error ? error.message : '';
+    throw new Error(code === 'bilibili_video_discussion_scroll_debugger_input_timeout'
+      ? code
+      : 'bilibili_video_discussion_scroll_debugger_input_failed');
+  }
+}
+
+async function withTimeout<T>(operation: Promise<T>, timeoutMs: number, errorCode: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(errorCode)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
 }

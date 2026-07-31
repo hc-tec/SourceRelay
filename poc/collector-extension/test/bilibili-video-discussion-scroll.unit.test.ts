@@ -9,7 +9,7 @@ afterEach(() => {
 
 function installChromeMock(input: {
   probe?: Partial<{ found: boolean; inViewport: boolean; x: number; y: number; deltaY: number }>;
-  fail?: 'attach' | 'input' | 'detach';
+  fail?: 'attach' | 'input' | 'input_hang' | 'detach';
 } = {}) {
   const commands: Array<{ method: string; params: Record<string, unknown> }> = [];
   const attach = vi.fn(async () => {
@@ -21,6 +21,7 @@ function installChromeMock(input: {
   const sendCommand = vi.fn(async (_debuggee: unknown, method: string, params: Record<string, unknown>) => {
     commands.push({ method, params });
     if (input.fail === 'input') throw new Error('input failed');
+    if (input.fail === 'input_hang' && params.type === 'mouseWheel') await new Promise<never>(() => undefined);
     return {};
   });
   const executeScript = vi.fn(async () => [{ result: {
@@ -86,6 +87,17 @@ describe('Bilibili discussion trusted scroll boundary', () => {
     const strategy = await import('../src/background/strategies/bilibili-video-discussion-dom-projection.js');
     await expect(strategy.scrollBilibiliVideoDiscussionIntoView(11, 'document-1'))
       .rejects.toThrow('bilibili_video_discussion_scroll_debugger_detach_failed');
+    expect(chrome.detach).toHaveBeenCalledTimes(1);
+  });
+
+  test('bounds a hanging debugger input and still releases the debugger lease', async () => {
+    vi.useFakeTimers();
+    const chrome = installChromeMock({ fail: 'input_hang' });
+    const strategy = await import('../src/background/strategies/bilibili-video-discussion-dom-projection.js');
+    const pending = strategy.scrollBilibiliVideoDiscussionIntoView(11, 'document-1');
+    const rejection = expect(pending).rejects.toThrow('bilibili_video_discussion_scroll_debugger_input_timeout');
+    await vi.advanceTimersByTimeAsync(2_500);
+    await rejection;
     expect(chrome.detach).toHaveBeenCalledTimes(1);
   });
 });
