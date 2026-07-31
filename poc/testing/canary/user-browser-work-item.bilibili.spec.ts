@@ -23,7 +23,7 @@ const canonicalNativeSearchUrl = `https://search.bilibili.com/all?keyword=${nati
  * and native-search runs. It never uses a managed Browser Host or the user's
  * daily browser.
  */
-test('direct extension work items read one real Bilibili detail and fixed native-search page', async ({}, testInfo) => {
+test('direct extension work items read real Bilibili capabilities', async ({}, testInfo) => {
   test.skip(process.env.COLLECTOR_LIVE_CANARY !== '1', 'requires explicit live-platform canary opt-in');
   test.skip(process.platform !== 'win32', 'native extension-permission verification currently uses Windows UI Automation');
   test.setTimeout(180_000);
