@@ -32,7 +32,12 @@ try {
 }
 
 async function readStatus() {
-  const response = await fetch(origin + '/v1/status', { signal: AbortSignal.timeout(5_000) });
+  let response;
+  try {
+    response = await fetch(origin + '/v1/status', { signal: AbortSignal.timeout(5_000) });
+  } catch (error) {
+    throw new Error(classifyGatewayFetchError(error));
+  }
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload || typeof payload !== 'object') {
     throw new Error(typeof payload?.error === 'string' ? payload.error : 'user_browser_gateway_unreachable');
@@ -42,6 +47,21 @@ async function readStatus() {
     throw new Error('user_browser_gateway_mode_mismatch');
   }
   return payload;
+}
+
+function classifyGatewayFetchError(error) {
+  const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : '';
+  if (name === 'AbortError' || name === 'TimeoutError') {
+    return 'user_browser_gateway_timeout';
+  }
+
+  const cause = error && typeof error === 'object' && 'cause' in error ? error.cause : null;
+  const causeCode = cause && typeof cause === 'object' && 'code' in cause ? String(cause.code) : '';
+  if (causeCode === 'ECONNREFUSED' || causeCode === 'ECONNRESET' || causeCode === 'EHOSTUNREACH') {
+    return 'user_browser_gateway_unreachable';
+  }
+
+  return 'user_browser_gateway_unreachable';
 }
 
 function onlineCount(payload) {

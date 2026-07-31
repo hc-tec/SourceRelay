@@ -65,6 +65,8 @@ npm run update:user-browser-deployment
 | `already_prepared` | 目标目录 fingerprint 与当前构建一致 | 保持扩展目录，检查浏览器扩展是否在线 |
 | `update_required` | 目标目录是另一 Core 构建 | 明确执行 update 命令后刷新扩展 |
 | `user_browser_gateway_mode_mismatch` | 启动到了旧的隔离 Browser Host/legacy Gateway | 停止旧进程，只启动 user-browser bundle |
+| `user_browser_gateway_unreachable` | `127.0.0.1:43127` 没有可访问的 user-browser Gateway | 先在另一个终端运行 `npm run start:user-browser`，再重新执行 check |
+| `user_browser_gateway_timeout` | Gateway 端口可连接但未在 5 秒内返回状态 | 检查 Gateway 控制台输出、端口占用和本机安全软件拦截 |
 | `user_browser_extension_not_online` | Gateway 未看到扩展 binding | 打开宿主浏览器扩展控制页，检查配对和 loopback 权限 |
 | `collector_gateway_port_in_use` | loopback 端口已被占用 | 检查占用进程，或显式选择其他 loopback 端口后重新配对 |
 
