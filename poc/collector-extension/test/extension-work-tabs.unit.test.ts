@@ -200,6 +200,23 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     });
   });
 
+  test('keeps the lease when Chromium repeats the internally initiated same-tab activation', async () => {
+    const browser = installChromeTabsMock();
+    const { acquireExtensionWorkTab, navigateExtensionWorkTabOnce, readExtensionWorkTab } = await import(
+      '../src/background/extension-work-tabs.js'
+    );
+    const lease = await acquireExtensionWorkTab();
+    await navigateExtensionWorkTabOnce(lease, videoDetailWork());
+
+    browser.activate(lease.tabId);
+
+    await expect(readExtensionWorkTab(lease)).resolves.toMatchObject({
+      id: lease.tabId,
+      active: true,
+      url: 'https://www.bilibili.com/video/BV1qZSLBYEpa'
+    });
+  });
+
   test('does not record or send a platform navigation when foregrounding is unavailable', async () => {
     const browser = installChromeTabsMock({ foregroundAvailable: false });
     const { acquireExtensionWorkTab, navigateExtensionWorkTabOnce } = await import('../src/background/extension-work-tabs.js');

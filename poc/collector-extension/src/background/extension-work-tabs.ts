@@ -60,11 +60,18 @@ export function initialiseExtensionWorkTabs(): void {
   chrome.tabs.onMoved.addListener((tabId) => forgetTab(tabId, 'user_taken_over'));
   chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
     const activated = managedTabs.get(tabId);
+    const foregroundActivationExpected = activated?.expectedForegroundActivationUntil !== null &&
+      activated?.expectedForegroundActivationUntil !== undefined &&
+      Date.now() <= activated.expectedForegroundActivationUntil;
+    const navigationActivationExpected = activated?.expectedNavigationUntil !== null &&
+      activated?.expectedNavigationUntil !== undefined &&
+      Date.now() <= activated.expectedNavigationUntil;
     if (activated && activated.state === 'leased' && activated.windowId === windowId &&
-      activated.expectedForegroundActivationUntil !== null &&
-      Date.now() <= activated.expectedForegroundActivationUntil
-    ) {
-      activated.expectedForegroundActivationUntil = null;
+      (foregroundActivationExpected || navigationActivationExpected)) {
+      // Chromium may emit the same-tab activation more than once while the
+      // extension foregrounds and navigates its lease. Keep the acknowledgement
+      // window alive for that bounded internal phase. Activating any other tab
+      // still loses the lease immediately below.
       return;
     }
 
