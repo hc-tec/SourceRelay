@@ -3,6 +3,7 @@ import {
   DEFAULT_POLL_MAX_DELAY_MS,
   DEFAULT_WAIT_TIMEOUT_MS,
   CORE_RELEASE_VERSION,
+  CORE_SERVICE_SCHEMA_VERSION,
   TERMINAL_STATES
 } from './constants.mjs';
 import { CollectorClientError } from './errors.mjs';
@@ -13,9 +14,13 @@ import {
   assertUuid,
   boundedInteger,
   isOperation,
+  isArtifactContentWindow,
+  isArtifactMetadata,
   isRecord,
   validateCollectRequest
 } from './validation.mjs';
+
+const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
 export class CollectorClient {
   #transport;
@@ -30,11 +35,17 @@ export class CollectorClient {
   }
 
   async listCapabilities(options = {}) {
+    return structuredClone((await this.readCapabilityCatalog(options)).capabilities);
+  }
+
+  async readCapabilityCatalog(options = {}) {
     const payload = await this.#transport.requestJson('/v2/capabilities', { signal: options.signal });
-    if (!isRecord(payload) || !Array.isArray(payload.capabilities)) {
+    if (!isRecord(payload) || payload.schemaVersion !== CORE_SERVICE_SCHEMA_VERSION ||
+      typeof payload.catalogDigest !== 'string' || !DIGEST_PATTERN.test(payload.catalogDigest) ||
+      !Array.isArray(payload.capabilities) || !Array.isArray(payload.directContracts)) {
       throw new CollectorClientError('collector_client_capabilities_invalid', 502);
     }
-    return structuredClone(payload.capabilities);
+    return structuredClone(payload);
   }
 
   async readStatus(options = {}) {
@@ -47,7 +58,16 @@ export class CollectorClient {
 
   async readRelease(options = {}) {
     const payload = await this.#transport.requestJson('/v2/release', { signal: options.signal });
-    if (!isRecord(payload) || payload.product !== 'collector-core' || payload.releaseVersion !== CORE_RELEASE_VERSION) {
+    if (!isRecord(payload) || payload.product !== 'collector-core' || payload.releaseVersion !== CORE_RELEASE_VERSION ||
+      payload.service?.schemaVersion !== CORE_SERVICE_SCHEMA_VERSION || !isRecord(payload.compatibility) ||
+      payload.compatibility.schemaVersion !== 1 ||
+      payload.compatibility.digestAlgorithm !== 'sha256-canonical-json-v1' ||
+      typeof payload.compatibility.openApiSchemaDigest !== 'string' ||
+      !DIGEST_PATTERN.test(payload.compatibility.openApiSchemaDigest) ||
+      typeof payload.compatibility.capabilityCatalogDigest !== 'string' ||
+      !DIGEST_PATTERN.test(payload.compatibility.capabilityCatalogDigest) ||
+      !Array.isArray(payload.compatibility.features) ||
+      !payload.compatibility.features.every((feature) => typeof feature === 'string')) {
       throw new CollectorClientError('collector_client_release_manifest_invalid', 502);
     }
     return structuredClone(payload);
@@ -145,6 +165,44 @@ export class CollectorClient {
   async readArtifact(operationId, options = {}) {
     const operation = await this.getOperation(operationId, { signal: options.signal });
     return await this.readArtifactFromOperation(operation, options);
+  }
+
+  async readArtifactMetadata(artifactId, options = {}) {
+    assertUuid(artifactId, 'collector_client_artifact_id_invalid');
+    const payload = await this.#transport.requestJson(`/v2/collect/artifacts/${artifactId}`, {
+      requiresToken: true,
+      signal: options.signal
+    });
+    if (!isRecord(payload) || !isArtifactMetadata(payload.metadata)) {
+      throw new CollectorClientError('collector_client_artifact_metadata_invalid', 502);
+    }
+    return structuredClone(payload.metadata);
+  }
+
+  async readArtifactContentWindow(artifactId, options = {}) {
+    assertUuid(artifactId, 'collector_client_artifact_id_invalid');
+    const offset = boundedInteger(
+      options.offset ?? 0,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      'collector_client_artifact_offset_invalid'
+    );
+    const maxBytes = boundedInteger(
+      options.maxBytes ?? 16_384,
+      1,
+      65_536,
+      'collector_client_artifact_window_invalid'
+    );
+    const payload = await this.#transport.requestJson(
+      `/v2/collect/artifacts/${artifactId}/content?offset=${offset}&maxBytes=${maxBytes}`,
+      { requiresToken: true, signal: options.signal }
+    );
+    if (!isRecord(payload) || !isArtifactContentWindow(payload.window) ||
+      payload.window.artifactId !== artifactId || payload.window.offset !== offset ||
+      payload.window.maximumBytes !== maxBytes) {
+      throw new CollectorClientError('collector_client_artifact_window_invalid', 502);
+    }
+    return structuredClone(payload.window);
   }
 
   async readArtifactModel(operationId, options = {}) {

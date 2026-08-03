@@ -3,6 +3,7 @@ import {
   CollectorClientError,
   CollectionResult,
   bilibiliNativeSearch,
+  createClientRequestId,
   listDirectCapabilities
 } from '../src/index.mjs';
 
@@ -30,6 +31,8 @@ async function run() {
     '/v2/collector-service/browser-bindings',
     '/v2/collect',
     '/v2/collect/operations/{operationId}',
+    '/v2/collect/artifacts/{artifactId}',
+    '/v2/collect/artifacts/{artifactId}/content',
     '/v1/collect/artifacts/{capability}/{artifactId}'
   ];
   if (!expectedPaths.every((path) => Object.hasOwn(openapi.paths ?? {}, path))) {
@@ -41,7 +44,8 @@ async function run() {
   let catalogOnlyRejected = false;
   try {
     await client.collect({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId: createClientRequestId(),
       browserBindingId: bindingIdPlaceholder,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.current_page.network_metadata',
@@ -55,6 +59,7 @@ async function run() {
   if (!catalogOnlyRejected) throw new Error('catalog_only_capability_was_accepted');
 
   const request = bilibiliNativeSearch({
+    clientRequestId: createClientRequestId(),
     browserBindingId: binding.browserBindingId,
     query: 'DeepSeek'
   });

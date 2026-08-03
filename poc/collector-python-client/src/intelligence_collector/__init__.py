@@ -1,5 +1,5 @@
 from .client import CollectorClient
-from .constants import CORE_RELEASE_VERSION, DIRECT_CAPABILITY_NAMES
+from .constants import CORE_RELEASE_VERSION, CORE_SERVICE_SCHEMA_VERSION, DIRECT_CAPABILITY_NAMES
 from .errors import CollectorClientError
 from .models import Artifact, ArtifactReference, CollectionResult, Operation
 from .requests import (
@@ -13,6 +13,7 @@ from .requests import (
     bilibili_native_search,
     bilibili_native_search_batch,
     bilibili_video_detail,
+    create_client_request_id,
     xiaohongshu_account_public_notes,
     xiaohongshu_note_public_comment_replies,
     xiaohongshu_note_public_comments,
@@ -31,6 +32,7 @@ def list_direct_capabilities() -> list[str]:
 __all__ = [
     "CollectorClient",
     "CORE_RELEASE_VERSION",
+    "CORE_SERVICE_SCHEMA_VERSION",
     "CollectorClientError",
     "Operation",
     "ArtifactReference",
@@ -38,6 +40,7 @@ __all__ = [
     "CollectionResult",
     "artifact_path_from_operation",
     "list_direct_capabilities",
+    "create_client_request_id",
     "bilibili_video_detail",
     "bilibili_native_search",
     "bilibili_native_search_batch",

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION } from '@intelligence/collector-contracts';
 import { handleBrowserBindingRoute, type BrowserBindingRouteContext } from './browser-binding-routes';
 import { handleExtensionWorkRoute, type ExtensionWorkRouteContext } from './extension-work-routes';
 import { send, sendJson } from './gateway-http';
@@ -69,7 +70,7 @@ export async function handleUserBrowserGatewayRoute(
 
   if (isLegacyIsolatedRoute(url.pathname)) {
     sendJson(response, 410, {
-      schemaVersion: 2,
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
       ok: false,
       error: 'user_browser_legacy_route_not_available'
     });

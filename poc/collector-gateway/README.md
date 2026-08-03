@@ -13,6 +13,8 @@
   → GET  /v2/collector-service/browser-bindings
   → POST /v2/collect
   → GET  /v2/collect/operations/{operationId}
+  → GET  /v2/collect/artifacts/{artifactId}
+  → GET  /v2/collect/artifacts/{artifactId}/content?offset=…&maxBytes=…
   → GET  /v1/collect/artifacts/{capability}/{artifactId}
 ```
 
@@ -20,7 +22,8 @@
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "clientRequestId": "11111111-1111-4111-8111-111111111111",
   "browserBindingId": "…",
   "platform": "bilibili",
   "capability": "bilibili.video_detail",
@@ -35,7 +38,8 @@
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "clientRequestId": "22222222-2222-4222-8222-222222222222",
   "browserBindingId": "…",
   "platform": "bilibili",
   "capability": "bilibili.native_search",
@@ -52,7 +56,8 @@
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "clientRequestId": "33333333-3333-4333-8333-333333333333",
   "browserBindingId": "…",
   "platform": "bilibili",
   "capability": "bilibili.native_search_batch",
@@ -69,7 +74,8 @@
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "clientRequestId": "44444444-4444-4444-8444-444444444444",
   "browserBindingId": "…",
   "platform": "bilibili",
   "capability": "bilibili.account_profile",
@@ -88,6 +94,15 @@
 - `operations:read`：读取 `queued / claimed / completed / partial / stopped / failed` 状态；
 - `artifacts:read`：读取终态返回的受控 artifact path；
 - `profiles:read` 不属于 direct mode。
+
+`clientRequestId` 是一次逻辑提交的必填 UUID。Core 会在投递扩展工作项之前持久化请求摘要和
+预分配 Operation ID；相同 ID 与相同规范请求返回同一 Operation，相同 ID 与不同请求返回
+冲突。若崩溃发生在预留后、无法证明投递是否成功，Core 明确返回 outcome-unknown，绝不会
+自动重放平台动作。幂等账本不保存 query、URL 或 Artifact 正文。
+
+新 `/v2/collect/artifacts/{artifactId}` 只返回元数据；`/content` 按 UTF-8 字节边界读取
+最多 64 KiB 的规范 JSON 窗口，不暴露磁盘路径。旧 capability-bound 完整 JSON 路由暂时
+保留给已有 SDK 的结构化结果读取。
 
 工作 tab 只由扩展建立并在成功后保留为可复用；风险、未知导航、用户接管或关闭时不会自动重开或重放。当前 direct runner 对一次结果提交最多进行三次本地 loopback 重试，但绝不重试平台导航。具体命令、安装与恢复流程见 runbook。
 
@@ -174,7 +189,7 @@ Console 的“其他本地应用的服务访问”面板可创建、查看和撤
 | `collect:execute` | `POST /v1/collect` |
 | `collect:execute` | `POST /v2/collect` |
 | `operations:read` | `GET /v2/collect/operations/<operationId>` |
-| `artifacts:read` | `GET /v1/collect/artifacts/<capability>/<artifactId>` |
+| `artifacts:read` | `GET /v1/collect/artifacts/<capability>/<artifactId>`；`GET /v2/collect/artifacts/<artifactId>`；`GET /v2/collect/artifacts/<artifactId>/content` |
 
 scope 不足固定返回 `403 collector_service_client_scope_denied`，缺失、格式错误或已撤销 token 固定返回 `401 collector_service_client_authorization_rejected`。旧的 schema-v1 client 会在本地启动时一次性迁移成三个 scope，保留原先全量服务访问语义；新建 client 的 scope 始终按上表的稳定顺序保存。
 
@@ -212,8 +227,8 @@ npm run collector-client -- artifact /v1/collect/artifacts/bilibili.video_detail
 
 需要在应用代码中调用 direct API 时，优先使用 workspace package
 `@intelligence/collector-client`，而不是复制 testbench 的请求流程。它提供
-`listDirectCapabilities()`、`listCapabilities()`、`readOpenApi()`、`listBrowserBindings()`、`collect()`、`waitOperation()`、
-`readArtifact()` 和 `collectAndWait()`，只在本地轮询 operation，不会在网络异常后重放
+`listDirectCapabilities()`、`readCapabilityCatalog()`、`readOpenApi()`、`listBrowserBindings()`、`collect()`、`waitOperation()`、
+`readArtifact()`、`readArtifactMetadata()`、`readArtifactContentWindow()` 和 `collectAndWait()`，只在本地轮询 operation，不会在网络异常后重放
 平台任务。artifact path 仍由已读取 operation 的 capability 绑定结果推导，调用方不能传
 任意 Gateway path。使用说明见 [`poc/collector-client/README.md`](../collector-client/README.md)。
 Python 上层应用使用同协议的独立 `intelligence-collector-client` 包，见

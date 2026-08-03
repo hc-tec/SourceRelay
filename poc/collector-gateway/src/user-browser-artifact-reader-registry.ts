@@ -31,6 +31,11 @@ export interface UserBrowserArtifactReaderContext {
 }
 
 type ArtifactView = unknown;
+export interface FoundUserBrowserArtifact {
+  capability: UserBrowserArtifactCapability;
+  artifactId: string;
+  view: Exclude<ArtifactView, null | undefined>;
+}
 type ArtifactReader = (
   context: UserBrowserArtifactReaderContext,
   artifactId: string
@@ -73,5 +78,19 @@ export async function readUserBrowserArtifact(
   return await reader(context, artifactId);
 }
 
-export type { PassiveDirectCapability };
+/** Resolve one globally random Artifact ID without exposing a filesystem path. */
+export async function findUserBrowserArtifact(
+  context: UserBrowserArtifactReaderContext,
+  artifactId: string
+): Promise<FoundUserBrowserArtifact | null> {
+  let found: FoundUserBrowserArtifact | null = null;
+  for (const capability of listUserBrowserArtifactCapabilities()) {
+    const view = await ARTIFACT_READERS[capability](context, artifactId);
+    if (view === null || view === undefined) continue;
+    if (found) throw new Error('collector_service_artifact_identity_collision');
+    found = { capability, artifactId, view };
+  }
+  return found;
+}
 
+export type { PassiveDirectCapability };

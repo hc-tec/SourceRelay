@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
+import { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION } from '@intelligence/collector-contracts';
 import { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
 import { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
 import { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
@@ -7,6 +8,7 @@ import { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifa
 import { BrowserBindingSafetyRegistry } from './browser-binding-safety';
 import { CollectorServiceAuditLog } from './collector-service-audit';
 import { CollectorServiceClientRegistry } from './collector-service-clients';
+import { CollectorServiceIdempotencyLedger } from './collector-service-idempotency';
 import {
   assertUserBrowserStateIsolation,
   loadUserBrowserGatewayConfig
@@ -35,6 +37,7 @@ const browserBindingSafety = await BrowserBindingSafetyRegistry.create(config.st
 const workQueue = await ExtensionWorkQueue.create(identity, config.stateDirectory);
 const collectorServiceClients = await CollectorServiceClientRegistry.create(config.stateDirectory);
 const collectorServiceAudit = await CollectorServiceAuditLog.create(config.stateDirectory);
+const collectorServiceIdempotency = await CollectorServiceIdempotencyLedger.create(config.stateDirectory);
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
 const nativeSearchBatchDirectArtifacts = await ExtensionWorkNativeSearchBatchArtifactStore.create(config.stateDirectory);
@@ -74,7 +77,11 @@ const server = createServer(async (request, response) => {
   });
   try {
     if (request.socket.remoteAddress !== config.host || request.headers.host !== expectedHost) {
-      sendJson(response, 403, { schemaVersion: 2, ok: false, error: 'loopback_request_rejected' });
+      sendJson(response, 403, {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        ok: false,
+        error: 'loopback_request_rejected'
+      });
       return;
     }
     const handled = await handleUserBrowserGatewayRoute(request, response, url, {
@@ -86,6 +93,7 @@ const server = createServer(async (request, response) => {
       workQueue,
       collectorServiceClients,
       collectorServiceAudit,
+      collectorServiceIdempotency,
       videoDetailArtifacts,
       nativeSearchArtifacts,
       nativeSearchBatchDirectArtifacts,
@@ -98,13 +106,21 @@ const server = createServer(async (request, response) => {
       xiaohongshuNotePublicCommentsArtifacts,
       xiaohongshuReplyArtifacts
     });
-    if (!handled) sendJson(response, 404, { schemaVersion: 2, ok: false, error: 'route_not_found' });
+    if (!handled) sendJson(response, 404, {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      ok: false,
+      error: 'route_not_found'
+    });
   } catch (error) {
     requestErrorCode = safeErrorCode(error);
     process.stderr.write('[user_browser_gateway_request_error] ' +
       (error instanceof Error ? error.stack ?? error.message : String(error)) + '\n');
     if (!response.headersSent) {
-      sendJson(response, 400, { schemaVersion: 2, ok: false, error: safeErrorCode(error) });
+      sendJson(response, 400, {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        ok: false,
+        error: safeErrorCode(error)
+      });
     } else {
       response.destroy();
     }

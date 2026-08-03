@@ -11,6 +11,7 @@ import type {
 } from './collector-service-clients';
 import { safeErrorCode, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
+import { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION } from '@intelligence/collector-contracts';
 
 export interface UserBrowserServiceAccessContext {
   identity: LoadedGatewayIdentity;
@@ -58,7 +59,7 @@ export async function authoriseUserBrowserServiceRequest(
 export function sendUserBrowserServiceAccessDenied(
   response: ServerResponse,
   access: Extract<UserBrowserServiceAccess, { granted: false }>,
-  schemaVersion = 2
+  schemaVersion = USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION
 ): void {
   sendJson(response, access.status, { schemaVersion, ok: false, error: access.errorCode });
 }

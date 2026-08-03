@@ -50,6 +50,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             content: { 'application/json': { schema: { $ref: '#/components/schemas/UserBrowserCollectRequest' } } }
           },
           responses: {
+            '200': jsonResponse({ $ref: '#/components/schemas/QueuedOperationResponse' }),
             '201': jsonResponse({ $ref: '#/components/schemas/QueuedOperationResponse' }),
             '400': errorResponse(),
             '401': errorResponse(),
@@ -67,7 +68,55 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             name: 'operationId', in: 'path', required: true,
             schema: { type: 'string', format: 'uuid' }
           }],
-          responses: { '200': jsonResponse({ $ref: '#/components/schemas/QueuedOperationResponse' }), '404': errorResponse() }
+          responses: { '200': jsonResponse({ $ref: '#/components/schemas/OperationResponse' }), '404': errorResponse() }
+        }
+      },
+      '/v2/collect/artifacts/{artifactId}': {
+        get: {
+          operationId: 'getUserBrowserArtifactMetadata',
+          summary: 'Read metadata for one Core-owned Artifact without reading its body.',
+          security: [{ CollectorServiceToken: [] }],
+          'x-collector-required-scope': 'artifacts:read',
+          parameters: [{
+            name: 'artifactId', in: 'path', required: true,
+            schema: { type: 'string', format: 'uuid' }
+          }],
+          responses: {
+            '200': jsonResponse({ $ref: '#/components/schemas/ArtifactMetadataResponse' }),
+            '401': errorResponse(),
+            '403': errorResponse(),
+            '404': errorResponse()
+          }
+        }
+      },
+      '/v2/collect/artifacts/{artifactId}/content': {
+        get: {
+          operationId: 'readUserBrowserArtifactContentWindow',
+          summary: 'Read one bounded byte-aligned window of the canonical UTF-8 JSON representation.',
+          security: [{ CollectorServiceToken: [] }],
+          'x-collector-required-scope': 'artifacts:read',
+          parameters: [
+            {
+              name: 'artifactId', in: 'path', required: true,
+              schema: { type: 'string', format: 'uuid' }
+            },
+            {
+              name: 'offset', in: 'query', required: false,
+              schema: { type: 'integer', minimum: 0, default: 0 }
+            },
+            {
+              name: 'maxBytes', in: 'query', required: false,
+              schema: { type: 'integer', minimum: 1, maximum: 65536, default: 16384 }
+            }
+          ],
+          responses: {
+            '200': jsonResponse({ $ref: '#/components/schemas/ArtifactContentWindowResponse' }),
+            '400': errorResponse(),
+            '401': errorResponse(),
+            '403': errorResponse(),
+            '404': errorResponse(),
+            '416': errorResponse()
+          }
         }
       },
       '/v1/collect/artifacts/{capability}/{artifactId}': {
@@ -116,7 +165,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
       schemas: {
         CoreReleaseManifest: {
           type: 'object', additionalProperties: false,
-          required: ['schemaVersion', 'releaseVersion', 'product', 'channel', 'service', 'protocols', 'boundaries'],
+          required: [
+            'schemaVersion', 'releaseVersion', 'product', 'channel', 'service', 'protocols',
+            'boundaries', 'compatibility'
+          ],
           properties: {
             schemaVersion: { type: 'integer', const: 1 },
             releaseVersion: { type: 'string', pattern: '^\\d+\\.\\d+\\.\\d+$' },
@@ -151,6 +203,34 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 arbitraryBrowserControl: { type: 'string', const: 'not_exposed' },
                 upperApplications: { type: 'string', const: 'external_projects_only' }
               }
+            },
+            compatibility: { $ref: '#/components/schemas/CoreCompatibility' }
+          }
+        },
+        CoreCompatibility: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'schemaVersion', 'digestAlgorithm', 'openApiSchemaDigest', 'capabilityCatalogDigest', 'features'
+          ],
+          properties: {
+            schemaVersion: { type: 'integer', const: 1 },
+            digestAlgorithm: { type: 'string', const: 'sha256-canonical-json-v1' },
+            openApiSchemaDigest: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+            capabilityCatalogDigest: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+            features: {
+              type: 'array',
+              uniqueItems: true,
+              items: {
+                type: 'string',
+                enum: [
+                  'artifacts.canonical_json_utf8_window.v1',
+                  'artifacts.metadata.v1',
+                  'capabilities.direct_contracts.v1',
+                  'collect.client_request_id.v1',
+                  'operations.exact_core_state.v1'
+                ]
+              }
             }
           }
         },
@@ -160,7 +240,9 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
             ok: { type: 'boolean', const: false },
-            error: { type: 'string' }
+            error: { type: 'string' },
+            clientRequestId: { type: 'string', format: 'uuid' },
+            operationId: { type: 'string', format: 'uuid' }
           }
         },
         BrowserBindingCatalog: {
@@ -173,10 +255,35 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserCapabilityCatalog: {
           type: 'object', additionalProperties: false,
-          required: ['schemaVersion', 'capabilities'],
+          required: ['schemaVersion', 'catalogDigest', 'capabilities', 'directContracts'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
-            capabilities: { type: 'array', items: { $ref: '#/components/schemas/UserBrowserCapability' } }
+            catalogDigest: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+            capabilities: { type: 'array', items: { $ref: '#/components/schemas/UserBrowserCapability' } },
+            directContracts: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/UserBrowserDirectCapabilityContract' }
+            }
+          }
+        },
+        UserBrowserDirectCapabilityContract: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'capability', 'requestSchemaRef', 'requestSchemaDigest', 'executionTargets',
+            'defaultExecutionTarget', 'executionTargetMode', 'budgetPolicy'
+          ],
+          properties: {
+            capability: { type: 'string' },
+            requestSchemaRef: { type: 'string', pattern: '^#/components/schemas/[A-Za-z0-9]+$' },
+            requestSchemaDigest: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+            executionTargets: { type: 'array', minItems: 1, uniqueItems: true, items: { type: 'string' } },
+            defaultExecutionTarget: { type: 'string' },
+            executionTargetMode: { type: 'string', enum: ['fixed', 'enum'] },
+            budgetPolicy: {
+              type: 'string',
+              enum: ['fixed_queue_budget', 'input_bounded_queue_budget', 'fixed_observation_budget']
+            }
           }
         },
         UserBrowserCapability: {
@@ -543,9 +650,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserVideoDetailCollectRequest: {
           type: 'object', additionalProperties: false,
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.video_detail' },
@@ -559,9 +667,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserNativeSearchCollectRequest: {
           type: 'object', additionalProperties: false,
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.native_search' },
@@ -575,9 +684,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserNativeSearchBatchCollectRequest: {
           type: 'object', additionalProperties: false,
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.native_search_batch' },
@@ -591,9 +701,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserAccountProfileCollectRequest: {
           type: 'object', additionalProperties: false,
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.account_profile' },
@@ -607,9 +718,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserAccountInventoryCollectRequest: {
           type: 'object', additionalProperties: false,
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.account_inventory' },
@@ -627,10 +739,11 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserVideoDiscussionCollectRequest: {
           type: 'object', additionalProperties: false,
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           description: 'The extension owns a managed work tab, performs one canonical video navigation and one bounded scroll to the public comment host. Callers cannot name a tab, document, selector, script, or page action.',
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.discussion' },
@@ -646,13 +759,14 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         UserBrowserCollectionSeriesOverviewCollectRequest: profileCollectRequest('bilibili.collection_series.overview'),
         UserBrowserCollectionSeriesDetailCollectRequest: {
           type: 'object', additionalProperties: false,
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.collection_series.detail' },
-            executionTarget: { type: 'string', enum: ['collector_work_tab', 'user_selected_tab'] },
+            executionTarget: { type: 'string', const: 'collector_work_tab' },
             input: {
               type: 'object', additionalProperties: false,
               required: ['canonicalProfileUrl', 'stableSeriesId', 'listType'],
@@ -666,9 +780,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserDanmakuCollectRequest: {
           type: 'object', additionalProperties: false,
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'bilibili' },
             capability: { type: 'string', const: 'bilibili.danmaku' },
@@ -683,9 +798,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         UserBrowserXiaohongshuPublicNotesSearchCollectRequest: {
           type: 'object', additionalProperties: false,
           description: 'Runs one fixed trusted in-page search in the unique existing public Explore tab. An optional maximumDetails (0–20) performs sequential same-document detail captures with a slow fixed delay and closes each overlay before the next rank. An optional comments.maximumScrolls (1–3) collects public comments while each requested detail overlay is open; comments.replies.maximumThreads (1–3) additionally expands up to the requested number of visible reply threads per detail, and is disabled unless comments is enabled. No URL, tab ID, selector, coordinate, script, debugger command, refresh, new tab, or Browser Host fallback can be supplied.',
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'xiaohongshu' },
             capability: { type: 'string', const: 'xiaohongshu.search.public_notes.v1' },
@@ -715,9 +831,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         UserBrowserXiaohongshuAccountPublicNotesCollectRequest: {
           type: 'object', additionalProperties: false,
           description: 'Collects public note cards from an existing profile, a one-time supplied short-lived profile link, or a natural author-avatar click that discovers a short-lived profile link. Tokens are never persisted.',
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'xiaohongshu' },
             capability: { type: 'string', const: 'xiaohongshu.account.public_notes.v1' },
@@ -776,9 +893,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         UserBrowserXiaohongshuNotePublicDetailCollectRequest: {
           type: 'object', additionalProperties: false,
           description: 'Opens one ranked visible note card from the unique existing public search or profile tab in the proved same-document detail overlay. No URL, note ID, tab ID, selector, coordinate, script, refresh, or new tab can be supplied.',
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' },
             platform: { type: 'string', const: 'xiaohongshu' },
             capability: { type: 'string', const: 'xiaohongshu.note.public_detail.v1' },
@@ -793,17 +911,51 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         UserBrowserXiaohongshuNotePublicCommentsCollectRequest: {
           type: 'object', additionalProperties: false,
           description: 'Collects public comments from the already-open same-document note overlay with bounded trusted scrolling. No URL, note ID, cursor, tab ID, selector, coordinate, script, refresh, or new tab can be supplied.',
-          required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+          required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: { schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
             browserBindingId: { type: 'string', format: 'uuid' }, platform: { type: 'string', const: 'xiaohongshu' },
             capability: { type: 'string', const: 'xiaohongshu.note.public_comments.v1' },
             executionTarget: { type: 'string', const: 'existing_public_note_overlay' },
             input: { type: 'object', additionalProperties: false, required: ['maximumScrolls'],
               properties: { maximumScrolls: { type: 'integer', enum: [1, 2, 3] } } } }
         },
-        UserBrowserXiaohongshuReplyCollectRequest:{type:'object',additionalProperties:false,description:'Projects up to three public reply threads from the short-lived Network archive first; only when a requested thread is incomplete may it expand one visible public reply thread once in the unique existing note overlay. No URL, note or comment identity, selector, coordinate, script, route or cursor can be supplied.',required:['schemaVersion','browserBindingId','platform','capability','executionTarget','input'],properties:{schemaVersion:{type:'integer',const:USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION},browserBindingId:{type:'string',format:'uuid'},platform:{type:'string',const:'xiaohongshu'},capability:{type:'string',const:'xiaohongshu.note.public_comment_replies.v1'},executionTarget:{type:'string',const:'existing_public_note_overlay'},input:{type:'object',additionalProperties:false,required:['maximumThreads'],properties:{maximumThreads:{type:'integer',enum:[1,2,3]}}}}},
+        UserBrowserXiaohongshuReplyCollectRequest: {
+          type: 'object',
+          additionalProperties: false,
+          description: 'Projects up to three public reply threads from the short-lived Network archive first; only when a requested thread is incomplete may it expand one visible public reply thread once in the unique existing note overlay. No URL, note or comment identity, selector, coordinate, script, route or cursor can be supplied.',
+          required: [
+            'schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability',
+            'executionTarget', 'input'
+          ],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
+            browserBindingId: { type: 'string', format: 'uuid' },
+            platform: { type: 'string', const: 'xiaohongshu' },
+            capability: { type: 'string', const: 'xiaohongshu.note.public_comment_replies.v1' },
+            executionTarget: { type: 'string', const: 'existing_public_note_overlay' },
+            input: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['maximumThreads'],
+              properties: { maximumThreads: { type: 'integer', enum: [1, 2, 3] } }
+            }
+          }
+        },
         QueuedOperationResponse: {
           type: 'object', additionalProperties: false,
+          required: ['schemaVersion', 'clientRequestId', 'idempotentReplay', 'result'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            clientRequestId: { type: 'string', format: 'uuid' },
+            idempotentReplay: { type: 'boolean' },
+            result: { $ref: '#/components/schemas/Operation' }
+          }
+        },
+        OperationResponse: {
+          type: 'object',
+          additionalProperties: false,
           required: ['schemaVersion', 'result'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
@@ -867,6 +1019,74 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             },
             artifact: { type: 'object' }
           }
+        },
+        ArtifactMetadataResponse: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['schemaVersion', 'metadata'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            metadata: { $ref: '#/components/schemas/ArtifactMetadata' }
+          }
+        },
+        ArtifactMetadata: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'schemaVersion', 'artifactId', 'operationId', 'capability', 'mediaType', 'representation',
+            'byteLength', 'sha256', 'capturedAt', 'terminalStatus', 'retentionClass', 'retainedUntil',
+            'deletionState', 'available'
+          ],
+          properties: {
+            schemaVersion: { type: 'integer', const: 1 },
+            artifactId: { type: 'string', format: 'uuid' },
+            operationId: { type: ['string', 'null'], format: 'uuid' },
+            capability: { type: 'string' },
+            mediaType: { type: 'string', const: 'application/json' },
+            representation: { type: 'string', const: 'canonical_json_utf8' },
+            byteLength: { type: 'integer', minimum: 0 },
+            sha256: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+            capturedAt: { type: ['string', 'null'], format: 'date-time' },
+            terminalStatus: { type: ['string', 'null'] },
+            retentionClass: { type: 'string', const: 'core_managed_local' },
+            retainedUntil: { type: 'null' },
+            deletionState: { type: 'string', const: 'retained' },
+            available: { type: 'boolean', const: true }
+          }
+        },
+        ArtifactContentWindowResponse: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['schemaVersion', 'window'],
+          properties: {
+            schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+            window: { $ref: '#/components/schemas/ArtifactContentWindow' }
+          }
+        },
+        ArtifactContentWindow: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'schemaVersion', 'artifactId', 'capability', 'representation', 'encoding', 'offset',
+            'endExclusive', 'byteLength', 'maximumBytes', 'nextOffset', 'truncated', 'sha256',
+            'chunkSha256', 'text'
+          ],
+          properties: {
+            schemaVersion: { type: 'integer', const: 1 },
+            artifactId: { type: 'string', format: 'uuid' },
+            capability: { type: 'string' },
+            representation: { type: 'string', const: 'canonical_json_utf8' },
+            encoding: { type: 'string', const: 'utf-8' },
+            offset: { type: 'integer', minimum: 0 },
+            endExclusive: { type: 'integer', minimum: 0 },
+            byteLength: { type: 'integer', minimum: 0 },
+            maximumBytes: { type: 'integer', minimum: 1, maximum: 65536 },
+            nextOffset: { type: ['integer', 'null'], minimum: 0 },
+            truncated: { type: 'boolean' },
+            sha256: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+            chunkSha256: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+            text: { type: 'string' }
+          }
         }
       }
     },
@@ -888,9 +1108,10 @@ function errorResponse(): Record<string, unknown> {
 function profileCollectRequest(capability: 'bilibili.dynamic' | 'bilibili.collection_series.overview'): Record<string, unknown> {
   return {
     type: 'object', additionalProperties: false,
-    required: ['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
+    required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
     properties: {
       schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
+      clientRequestId: { type: 'string', format: 'uuid' },
       browserBindingId: { type: 'string', format: 'uuid' },
       platform: { type: 'string', const: 'bilibili' },
       capability: { type: 'string', const: capability },

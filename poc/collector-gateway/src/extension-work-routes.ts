@@ -246,7 +246,8 @@ async function handleExtensionDiagnostic(
 export async function enqueueBilibiliVideoDetailWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  canonicalVideoUrl: string
+  canonicalVideoUrl: string,
+  operationId?: string
 ) {
   await reconcileExpiredExtensionWork(context);
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
@@ -255,6 +256,7 @@ export async function enqueueBilibiliVideoDetailWork(
   if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliVideoDetail({
+    operationId,
     browserBindingId: binding.browserBindingId,
     canonicalVideoUrl
   });
@@ -264,7 +266,8 @@ export async function enqueueBilibiliVideoDetailWork(
 export async function enqueueBilibiliNativeSearchWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  query: string
+  query: string,
+  operationId?: string
 ) {
   await reconcileExpiredExtensionWork(context);
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
@@ -273,6 +276,7 @@ export async function enqueueBilibiliNativeSearchWork(
   if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliNativeSearch({
+    operationId,
     browserBindingId: binding.browserBindingId,
     query
   });
@@ -282,7 +286,8 @@ export async function enqueueBilibiliNativeSearchWork(
 export async function enqueueBilibiliNativeSearchBatchWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  query: string
+  query: string,
+  operationId?: string
 ) {
   await reconcileExpiredExtensionWork(context);
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
@@ -291,6 +296,7 @@ export async function enqueueBilibiliNativeSearchBatchWork(
   if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliNativeSearchBatch({
+    operationId,
     browserBindingId: binding.browserBindingId,
     query
   });
@@ -300,7 +306,8 @@ export async function enqueueBilibiliNativeSearchBatchWork(
 export async function enqueueBilibiliAccountProfileWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  canonicalProfileUrl: string
+  canonicalProfileUrl: string,
+  operationId?: string
 ) {
   await reconcileExpiredExtensionWork(context);
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
@@ -309,6 +316,7 @@ export async function enqueueBilibiliAccountProfileWork(
   if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliAccountProfile({
+    operationId,
     browserBindingId: binding.browserBindingId,
     canonicalProfileUrl
   });
@@ -318,7 +326,8 @@ export async function enqueueBilibiliAccountProfileWork(
 export async function enqueueBilibiliAccountInventoryWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  canonicalProfileUrl: string
+  canonicalProfileUrl: string,
+  operationId?: string
 ) {
   await reconcileExpiredExtensionWork(context);
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
@@ -327,6 +336,7 @@ export async function enqueueBilibiliAccountInventoryWork(
   if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliAccountInventory({
+    operationId,
     browserBindingId: binding.browserBindingId,
     canonicalProfileUrl
   });
@@ -340,7 +350,8 @@ export async function enqueueBilibiliAccountInventoryWork(
 export async function enqueueBilibiliAccountInventoryUserSelectedTabWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  canonicalProfileUrl: string
+  canonicalProfileUrl: string,
+  operationId?: string
 ) {
   await reconcileExpiredExtensionWork(context);
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
@@ -349,6 +360,7 @@ export async function enqueueBilibiliAccountInventoryUserSelectedTabWork(
   if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliAccountInventoryUserSelectedTab({
+    operationId,
     browserBindingId: binding.browserBindingId,
     canonicalProfileUrl
   });
@@ -362,7 +374,8 @@ export async function enqueueBilibiliAccountInventoryUserSelectedTabWork(
 export async function enqueueBilibiliDiscussionUserSelectedTabWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  canonicalVideoUrl: string
+  canonicalVideoUrl: string,
+  operationId?: string
 ) {
   await reconcileExpiredExtensionWork(context);
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
@@ -371,6 +384,7 @@ export async function enqueueBilibiliDiscussionUserSelectedTabWork(
   if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliDiscussionUserSelectedTab({
+    operationId,
     browserBindingId: binding.browserBindingId,
     canonicalVideoUrl
   });
@@ -380,20 +394,22 @@ export async function enqueueBilibiliDiscussionUserSelectedTabWork(
 export async function enqueueBilibiliDynamicWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  canonicalProfileUrl: string
+  canonicalProfileUrl: string,
+  operationId?: string
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId);
-  return await context.workQueue.enqueueBilibiliDynamic({ browserBindingId, canonicalProfileUrl });
+  return await context.workQueue.enqueueBilibiliDynamic({ operationId, browserBindingId, canonicalProfileUrl });
 }
 
 /** Shared by the Console and the scoped upper-application service route. */
 export async function enqueueBilibiliCollectionSeriesOverviewWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  canonicalProfileUrl: string
+  canonicalProfileUrl: string,
+  operationId?: string
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId);
-  return await context.workQueue.enqueueBilibiliCollectionSeriesOverview({ browserBindingId, canonicalProfileUrl });
+  return await context.workQueue.enqueueBilibiliCollectionSeriesOverview({ operationId, browserBindingId, canonicalProfileUrl });
 }
 
 /** Shared by the Console and the scoped upper-application service route. */
@@ -402,11 +418,12 @@ export async function enqueueBilibiliCollectionSeriesDetailWork(
   browserBindingId: string,
   canonicalProfileUrl: string,
   stableSeriesId: string,
-  listType: 'series' | 'season'
+  listType: 'series' | 'season',
+  operationId?: string
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId);
   return await context.workQueue.enqueueBilibiliCollectionSeriesDetail({
-    browserBindingId, canonicalProfileUrl, stableSeriesId, listType
+    operationId, browserBindingId, canonicalProfileUrl, stableSeriesId, listType
   });
 }
 
@@ -414,10 +431,11 @@ export async function enqueueBilibiliCollectionSeriesDetailWork(
 export async function enqueueBilibiliDanmakuWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
-  canonicalVideoUrl: string
+  canonicalVideoUrl: string,
+  operationId?: string
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId);
-  return await context.workQueue.enqueueBilibiliDanmaku({ browserBindingId, canonicalVideoUrl });
+  return await context.workQueue.enqueueBilibiliDanmaku({ operationId, browserBindingId, canonicalVideoUrl });
 }
 
 export async function enqueueXiaohongshuPublicNotesSearchWork(
@@ -425,11 +443,12 @@ export async function enqueueXiaohongshuPublicNotesSearchWork(
   browserBindingId: string,
   query: string,
   maximumDetails?: number,
-  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } }
+  comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } },
+  operationId?: string
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
   return await context.workQueue.enqueueXiaohongshuPublicNotesSearch({
-    browserBindingId, query, maximumDetails, comments
+    operationId, browserBindingId, query, maximumDetails, comments
   });
 }
 
@@ -438,11 +457,12 @@ export async function enqueueXiaohongshuAccountPublicNotesWork(
   browserBindingId: string,
   maximumScrolls: XiaohongshuProfileScrollCount,
   profileUrl?: string,
-  discoverFromNote = false
+  discoverFromNote = false,
+  operationId?: string
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
   return await context.workQueue.enqueueXiaohongshuAccountPublicNotes({
-    browserBindingId, maximumScrolls, profileUrl, discoverFromNote
+    operationId, browserBindingId, maximumScrolls, profileUrl, discoverFromNote
   });
 }
 
@@ -450,19 +470,31 @@ export async function enqueueXiaohongshuNotePublicDetailWork(
   context: ExtensionWorkRouteContext,
   browserBindingId: string,
   resultRank: number,
-  executionTarget: 'existing_public_search_tab' | 'existing_public_profile_tab' = 'existing_public_search_tab'
+  executionTarget: 'existing_public_search_tab' | 'existing_public_profile_tab' = 'existing_public_search_tab',
+  operationId?: string
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
-  return await context.workQueue.enqueueXiaohongshuNotePublicDetail({ browserBindingId, resultRank, executionTarget });
+  return await context.workQueue.enqueueXiaohongshuNotePublicDetail({ operationId, browserBindingId, resultRank, executionTarget });
 }
 export async function enqueueXiaohongshuNotePublicCommentsWork(
-  context: ExtensionWorkRouteContext, browserBindingId: string, maximumScrolls: 1 | 2 | 3
+  context: ExtensionWorkRouteContext, browserBindingId: string, maximumScrolls: 1 | 2 | 3, operationId?: string
 ) {
   await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
-  return await context.workQueue.enqueueXiaohongshuNotePublicComments({ browserBindingId, maximumScrolls });
+  return await context.workQueue.enqueueXiaohongshuNotePublicComments({ operationId, browserBindingId, maximumScrolls });
 }
-export async function enqueueXiaohongshuReplyWork(context:ExtensionWorkRouteContext,browserBindingId:string,maximumThreads:1|2|3){
-  await assertBindingCanAcceptWork(context,browserBindingId,'xiaohongshu');return await context.workQueue.enqueueXiaohongshuNotePublicCommentReplies({browserBindingId,maximumThreads});}
+export async function enqueueXiaohongshuReplyWork(
+  context: ExtensionWorkRouteContext,
+  browserBindingId: string,
+  maximumThreads: 1 | 2 | 3,
+  operationId?: string
+) {
+  await assertBindingCanAcceptWork(context, browserBindingId, 'xiaohongshu');
+  return await context.workQueue.enqueueXiaohongshuNotePublicCommentReplies({
+    operationId,
+    browserBindingId,
+    maximumThreads
+  });
+}
 
 async function handleExtensionWorkNext(
   request: IncomingMessage,

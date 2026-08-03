@@ -30,8 +30,9 @@ export function isTerminalOperationState(state) {
 
 export function validateCollectRequest(value) {
   if (!isRecord(value) || !exactKeys(value, [
-    'schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'
-  ]) || value.schemaVersion !== 2 || !UUID_PATTERN.test(value.browserBindingId) ||
+    'schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'
+  ]) || value.schemaVersion !== 3 || !UUID_PATTERN.test(value.clientRequestId) ||
+    !UUID_PATTERN.test(value.browserBindingId) ||
     (value.platform !== 'bilibili' && value.platform !== 'xiaohongshu') ||
     typeof value.capability !== 'string' || !DIRECT_CAPABILITIES.has(value.capability) ||
     (value.platform === 'bilibili' && !value.capability.startsWith('bilibili.')) ||
@@ -46,6 +47,35 @@ export function isOperation(value) {
   return isRecord(value) && UUID_PATTERN.test(value.operationId) &&
     typeof value.capability === 'string' && DIRECT_CAPABILITIES.has(value.capability) &&
     (value.state === 'queued' || value.state === 'claimed' || TERMINAL_STATES.has(value.state));
+}
+
+export function isArtifactMetadata(value) {
+  return isRecord(value) && value.schemaVersion === 1 && UUID_PATTERN.test(value.artifactId) &&
+    (value.operationId === null || UUID_PATTERN.test(value.operationId)) &&
+    typeof value.capability === 'string' && DIRECT_CAPABILITIES.has(value.capability) &&
+    value.mediaType === 'application/json' && value.representation === 'canonical_json_utf8' &&
+    Number.isSafeInteger(value.byteLength) && value.byteLength >= 0 &&
+    typeof value.sha256 === 'string' && /^sha256:[a-f0-9]{64}$/.test(value.sha256) &&
+    (value.capturedAt === null || typeof value.capturedAt === 'string') &&
+    (value.terminalStatus === null ||
+      (typeof value.terminalStatus === 'string' && SAFE_ERROR_PATTERN.test(value.terminalStatus))) &&
+    value.retentionClass === 'core_managed_local' && value.retainedUntil === null &&
+    value.deletionState === 'retained' && value.available === true;
+}
+
+export function isArtifactContentWindow(value) {
+  return isRecord(value) && value.schemaVersion === 1 && UUID_PATTERN.test(value.artifactId) &&
+    typeof value.capability === 'string' && DIRECT_CAPABILITIES.has(value.capability) &&
+    value.representation === 'canonical_json_utf8' && value.encoding === 'utf-8' &&
+    Number.isSafeInteger(value.offset) && value.offset >= 0 &&
+    Number.isSafeInteger(value.endExclusive) && value.endExclusive >= value.offset &&
+    Number.isSafeInteger(value.byteLength) && value.byteLength >= value.endExclusive &&
+    Number.isSafeInteger(value.maximumBytes) && value.maximumBytes >= 1 && value.maximumBytes <= 65_536 &&
+    (value.nextOffset === null || (Number.isSafeInteger(value.nextOffset) && value.nextOffset === value.endExclusive)) &&
+    typeof value.truncated === 'boolean' && value.truncated === (value.nextOffset !== null) &&
+    typeof value.sha256 === 'string' && /^sha256:[a-f0-9]{64}$/.test(value.sha256) &&
+    typeof value.chunkSha256 === 'string' && /^sha256:[a-f0-9]{64}$/.test(value.chunkSha256) &&
+    typeof value.text === 'string' && Buffer.byteLength(value.text, 'utf8') <= value.maximumBytes;
 }
 
 export function validateLoopbackOrigin(value) {

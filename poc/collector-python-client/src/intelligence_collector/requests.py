@@ -17,14 +17,12 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 from urllib.parse import SplitResult, urlsplit
+from uuid import uuid4
 
+from .constants import CORE_SERVICE_SCHEMA_VERSION
 from .errors import CollectorClientError
 from .validation import assert_uuid
 
-
-# Keep this local rather than importing the TypeScript contract.  The value is
-# part of the public /v2 wire protocol and is intentionally fixed here too.
-SCHEMA_VERSION = 2
 BILIBILI_SEARCH_QUERY_MAX_LENGTH = 160
 XIAOHONGSHU_SEARCH_QUERY_MAX_LENGTH = 80
 XIAOHONGSHU_MAX_DETAILS = 20
@@ -62,6 +60,20 @@ def _binding_id(value: str) -> str:
     return value
 
 
+def _client_request_id(value: str) -> str:
+    try:
+        assert_uuid(value, "collector_client_request_builder_invalid")
+    except CollectorClientError:
+        raise
+    return value
+
+
+def create_client_request_id() -> str:
+    """Create an identity that callers persist and reuse only for the same submission."""
+
+    return str(uuid4())
+
+
 def _text(value: str, field: str, *, maximum: int, trim: bool = False) -> str:
     if not isinstance(value, str) or not value or _CONTROL_PATTERN.search(value):
         raise _invalid(field)
@@ -73,6 +85,7 @@ def _text(value: str, field: str, *, maximum: int, trim: bool = False) -> str:
 
 
 def _base(
+    client_request_id: str,
     browser_binding_id: str,
     platform: Literal["bilibili", "xiaohongshu"],
     capability: str,
@@ -81,7 +94,8 @@ def _base(
 ) -> Request:
     _binding_id(browser_binding_id)
     return {
-        "schemaVersion": SCHEMA_VERSION,
+        "schemaVersion": CORE_SERVICE_SCHEMA_VERSION,
+        "clientRequestId": _client_request_id(client_request_id),
         "browserBindingId": browser_binding_id,
         "platform": platform,
         "capability": capability,
@@ -188,8 +202,9 @@ def _maximum_details(value: int | None) -> int | None:
     return value
 
 
-def bilibili_video_detail(*, browser_binding_id: str, canonical_video_url: str) -> Request:
+def bilibili_video_detail(*, client_request_id: str, browser_binding_id: str, canonical_video_url: str) -> Request:
     return _base(
+        client_request_id,
         browser_binding_id,
         "bilibili",
         "bilibili.video_detail",
@@ -198,8 +213,9 @@ def bilibili_video_detail(*, browser_binding_id: str, canonical_video_url: str) 
     )
 
 
-def bilibili_native_search(*, browser_binding_id: str, query: str) -> Request:
+def bilibili_native_search(*, client_request_id: str, browser_binding_id: str, query: str) -> Request:
     return _base(
+        client_request_id,
         browser_binding_id,
         "bilibili",
         "bilibili.native_search",
@@ -208,8 +224,9 @@ def bilibili_native_search(*, browser_binding_id: str, query: str) -> Request:
     )
 
 
-def bilibili_native_search_batch(*, browser_binding_id: str, query: str) -> Request:
+def bilibili_native_search_batch(*, client_request_id: str, browser_binding_id: str, query: str) -> Request:
     return _base(
+        client_request_id,
         browser_binding_id,
         "bilibili",
         "bilibili.native_search_batch",
@@ -218,8 +235,11 @@ def bilibili_native_search_batch(*, browser_binding_id: str, query: str) -> Requ
     )
 
 
-def bilibili_account_profile(*, browser_binding_id: str, canonical_profile_url: str) -> Request:
+def bilibili_account_profile(
+    *, client_request_id: str, browser_binding_id: str, canonical_profile_url: str
+) -> Request:
     return _base(
+        client_request_id,
         browser_binding_id,
         "bilibili",
         "bilibili.account_profile",
@@ -230,6 +250,7 @@ def bilibili_account_profile(*, browser_binding_id: str, canonical_profile_url: 
 
 def bilibili_account_inventory(
     *,
+    client_request_id: str,
     browser_binding_id: str,
     canonical_profile_url: str,
     execution_target: Literal["collector_work_tab", "user_selected_tab"] = "collector_work_tab",
@@ -237,6 +258,7 @@ def bilibili_account_inventory(
     if execution_target not in {"collector_work_tab", "user_selected_tab"}:
         raise _invalid("execution_target")
     return _base(
+        client_request_id,
         browser_binding_id,
         "bilibili",
         "bilibili.account_inventory",
@@ -245,8 +267,9 @@ def bilibili_account_inventory(
     )
 
 
-def bilibili_dynamic(*, browser_binding_id: str, canonical_profile_url: str) -> Request:
+def bilibili_dynamic(*, client_request_id: str, browser_binding_id: str, canonical_profile_url: str) -> Request:
     return _base(
+        client_request_id,
         browser_binding_id,
         "bilibili",
         "bilibili.dynamic",
@@ -255,8 +278,11 @@ def bilibili_dynamic(*, browser_binding_id: str, canonical_profile_url: str) -> 
     )
 
 
-def bilibili_collection_series_overview(*, browser_binding_id: str, canonical_profile_url: str) -> Request:
+def bilibili_collection_series_overview(
+    *, client_request_id: str, browser_binding_id: str, canonical_profile_url: str
+) -> Request:
     return _base(
+        client_request_id,
         browser_binding_id,
         "bilibili",
         "bilibili.collection_series.overview",
@@ -267,6 +293,7 @@ def bilibili_collection_series_overview(*, browser_binding_id: str, canonical_pr
 
 def bilibili_collection_series_detail(
     *,
+    client_request_id: str,
     browser_binding_id: str,
     canonical_profile_url: str,
     stable_series_id: str,
@@ -280,6 +307,7 @@ def bilibili_collection_series_detail(
     ):
         raise _invalid("stable_series_id" if list_type in {"series", "season"} else "list_type")
     return _base(
+        client_request_id,
         browser_binding_id,
         "bilibili",
         "bilibili.collection_series.detail",
@@ -292,8 +320,9 @@ def bilibili_collection_series_detail(
     )
 
 
-def bilibili_danmaku(*, browser_binding_id: str, canonical_video_url: str) -> Request:
+def bilibili_danmaku(*, client_request_id: str, browser_binding_id: str, canonical_video_url: str) -> Request:
     return _base(
+        client_request_id,
         browser_binding_id,
         "bilibili",
         "bilibili.danmaku",
@@ -302,8 +331,9 @@ def bilibili_danmaku(*, browser_binding_id: str, canonical_video_url: str) -> Re
     )
 
 
-def bilibili_discussion(*, browser_binding_id: str, canonical_video_url: str) -> Request:
+def bilibili_discussion(*, client_request_id: str, browser_binding_id: str, canonical_video_url: str) -> Request:
     return _base(
+        client_request_id,
         browser_binding_id,
         "bilibili",
         "bilibili.discussion",
@@ -314,6 +344,7 @@ def bilibili_discussion(*, browser_binding_id: str, canonical_video_url: str) ->
 
 def xiaohongshu_public_notes_search(
     *,
+    client_request_id: str,
     browser_binding_id: str,
     query: str,
     maximum_details: int | None = None,
@@ -346,6 +377,7 @@ def xiaohongshu_public_notes_search(
     if comments is not None:
         input_value["comments"] = comments
     return _base(
+        client_request_id,
         browser_binding_id,
         "xiaohongshu",
         "xiaohongshu.search.public_notes.v1",
@@ -356,6 +388,7 @@ def xiaohongshu_public_notes_search(
 
 def xiaohongshu_account_public_notes(
     *,
+    client_request_id: str,
     browser_binding_id: str,
     maximum_scrolls: int,
     execution_target: Literal[
@@ -388,6 +421,7 @@ def xiaohongshu_account_public_notes(
     if profile_value is not None:
         input_value["profileUrl"] = profile_value
     return _base(
+        client_request_id,
         browser_binding_id,
         "xiaohongshu",
         "xiaohongshu.account.public_notes.v1",
@@ -398,6 +432,7 @@ def xiaohongshu_account_public_notes(
 
 def xiaohongshu_note_public_detail(
     *,
+    client_request_id: str,
     browser_binding_id: str,
     result_rank: int,
     execution_target: Literal["existing_public_search_tab", "existing_public_profile_tab"] = "existing_public_search_tab",
@@ -407,6 +442,7 @@ def xiaohongshu_note_public_detail(
     if execution_target not in {"existing_public_search_tab", "existing_public_profile_tab"}:
         raise _invalid("execution_target")
     return _base(
+        client_request_id,
         browser_binding_id,
         "xiaohongshu",
         "xiaohongshu.note.public_detail.v1",
@@ -415,8 +451,11 @@ def xiaohongshu_note_public_detail(
     )
 
 
-def xiaohongshu_note_public_comments(*, browser_binding_id: str, maximum_scrolls: Literal[1, 2, 3]) -> Request:
+def xiaohongshu_note_public_comments(
+    *, client_request_id: str, browser_binding_id: str, maximum_scrolls: Literal[1, 2, 3]
+) -> Request:
     return _base(
+        client_request_id,
         browser_binding_id,
         "xiaohongshu",
         "xiaohongshu.note.public_comments.v1",
@@ -425,8 +464,11 @@ def xiaohongshu_note_public_comments(*, browser_binding_id: str, maximum_scrolls
     )
 
 
-def xiaohongshu_note_public_comment_replies(*, browser_binding_id: str, maximum_threads: Literal[1, 2, 3]) -> Request:
+def xiaohongshu_note_public_comment_replies(
+    *, client_request_id: str, browser_binding_id: str, maximum_threads: Literal[1, 2, 3]
+) -> Request:
     return _base(
+        client_request_id,
         browser_binding_id,
         "xiaohongshu",
         "xiaohongshu.note.public_comment_replies.v1",
@@ -437,6 +479,7 @@ def xiaohongshu_note_public_comment_replies(*, browser_binding_id: str, maximum_
 
 __all__ = [
     "Request",
+    "create_client_request_id",
     "bilibili_video_detail",
     "bilibili_native_search",
     "bilibili_native_search_batch",

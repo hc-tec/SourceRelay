@@ -6,6 +6,7 @@ export { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION };
 
 interface UserBrowserCollectorServiceRequestBase {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  clientRequestId: string;
   browserBindingId: string;
   platform: 'bilibili';
   executionTarget: 'collector_work_tab' | 'user_selected_tab' | 'ephemeral_public_profile_url' | 'discover_public_profile_from_note';
@@ -79,6 +80,7 @@ export interface UserBrowserVideoDiscussionCollectorServiceRequest extends UserB
 
 export interface UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  clientRequestId: string;
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.search.public_notes.v1';
@@ -88,6 +90,7 @@ export interface UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest 
 
 export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  clientRequestId: string;
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.account.public_notes.v1';
@@ -97,6 +100,7 @@ export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest
 
 export interface UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  clientRequestId: string;
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.note.public_detail.v1';
@@ -106,6 +110,7 @@ export interface UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest {
 
 export interface UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  clientRequestId: string;
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.note.public_comments.v1';
@@ -115,6 +120,7 @@ export interface UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest
 
 export interface UserBrowserXiaohongshuReplyCollectorServiceRequest {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  clientRequestId: string;
   browserBindingId: string;
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.note.public_comment_replies.v1';

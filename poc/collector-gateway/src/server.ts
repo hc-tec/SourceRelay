@@ -35,6 +35,7 @@ import { BilibiliTranscriptHostRunner } from './bilibili-transcript-host-runner'
 import { CollectionBrowserManager } from './browser-manager';
 import { CollectorServiceAuditLog } from './collector-service-audit';
 import { CollectorServiceClientRegistry } from './collector-service-clients';
+import { CollectorServiceIdempotencyLedger } from './collector-service-idempotency';
 import { loadGatewayConfig } from './config';
 import { handleGatewayRoute } from './gateway-routes';
 import { safeErrorCode, sendJson } from './gateway-http';
@@ -59,6 +60,7 @@ const browserBindingSafety = await BrowserBindingSafetyRegistry.create(config.st
 const workQueue = await ExtensionWorkQueue.create(identity, config.stateDirectory);
 const collectorServiceClients = await CollectorServiceClientRegistry.create(config.stateDirectory);
 const collectorServiceAudit = await CollectorServiceAuditLog.create(config.stateDirectory);
+const collectorServiceIdempotency = await CollectorServiceIdempotencyLedger.create(config.stateDirectory);
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
 const accountSafety = await AccountSafetyRegistry.create(config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
@@ -211,6 +213,7 @@ const server = createServer(async (request, response) => {
       workQueue,
       collectorServiceClients,
       collectorServiceAudit,
+      collectorServiceIdempotency,
       browserManager,
       profileRegistry,
       accountSafety,

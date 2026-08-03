@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -19,7 +20,9 @@ ORIGIN = "http://127.0.0.1:43127"
 BINDING_ID = "11111111-1111-4111-8111-111111111111"
 OPERATION_ID = "22222222-2222-4222-8222-222222222222"
 ARTIFACT_ID = "33333333-3333-4333-8333-333333333333"
+CLIENT_REQUEST_ID = "44444444-4444-4444-8444-444444444444"
 TOKEN = "cst_" + "A" * 43
+DIGEST = "sha256:" + "a" * 64
 
 
 def operation(state: str, artifact: bool = True) -> dict[str, Any]:
@@ -62,12 +65,17 @@ async def test_collect_and_wait_submits_once_polls_and_reads_artifact() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
         if request.url.path == "/v2/collect":
-            return httpx.Response(201, json={"schemaVersion": 2, "result": operation("queued")})
+            return httpx.Response(201, json={
+                "schemaVersion": 3,
+                "clientRequestId": CLIENT_REQUEST_ID,
+                "idempotentReplay": False,
+                "result": operation("queued"),
+            })
         if request.url.path == f"/v2/collect/operations/{OPERATION_ID}":
-            return httpx.Response(200, json={"schemaVersion": 2, "result": operation(next(states))})
+            return httpx.Response(200, json={"schemaVersion": 3, "result": operation(next(states))})
         if request.url.path == f"/v1/collect/artifacts/xiaohongshu.search.public_notes.v1/{ARTIFACT_ID}":
             return httpx.Response(200, json={
-                "schemaVersion": 2,
+                "schemaVersion": 3,
                 "capability": "xiaohongshu.search.public_notes.v1",
                 "artifact": {"result": {"items": [{"title": "公开卡片"}]}},
             })
@@ -76,7 +84,8 @@ async def test_collect_and_wait_submits_once_polls_and_reads_artifact() -> None:
     client, http_client = await with_client(handler)
     try:
         result = await client.collect_and_wait({
-            "schemaVersion": 2,
+            "schemaVersion": 3,
+            "clientRequestId": CLIENT_REQUEST_ID,
             "browserBindingId": BINDING_ID,
             "platform": "xiaohongshu",
             "capability": "xiaohongshu.search.public_notes.v1",
@@ -90,6 +99,8 @@ async def test_collect_and_wait_submits_once_polls_and_reads_artifact() -> None:
     assert result["artifact"]["artifact"]["result"]["items"][0]["title"] == "公开卡片"
     assert sum(request.url.path == "/v2/collect" for request in calls) == 1
     assert sum(request.url.path.startswith("/v2/collect/operations/") for request in calls) == 2
+    submission = next(request for request in calls if request.url.path == "/v2/collect")
+    assert json.loads(submission.content)["clientRequestId"] == CLIENT_REQUEST_ID
 
 
 def test_direct_allowlist_is_detached_and_complete() -> None:
@@ -114,9 +125,16 @@ async def test_read_release_returns_core_compatibility_manifest() -> None:
             "releaseVersion": "0.7.17",
             "product": "collector-core",
             "channel": "source-compatible",
-            "service": {"schemaVersion": 2, "openApiVersion": "2.0.0-experimental"},
+            "service": {"schemaVersion": 3, "openApiVersion": "3.0.0-experimental"},
             "protocols": {},
             "boundaries": {},
+            "compatibility": {
+                "schemaVersion": 1,
+                "digestAlgorithm": "sha256-canonical-json-v1",
+                "openApiSchemaDigest": DIGEST,
+                "capabilityCatalogDigest": DIGEST,
+                "features": ["collect.client_request_id.v1"],
+            },
         })
 
     client, http_client = await with_client(handler)
@@ -126,7 +144,7 @@ async def test_read_release_returns_core_compatibility_manifest() -> None:
         await http_client.aclose()
 
     assert manifest["product"] == "collector-core"
-    assert manifest["service"]["schemaVersion"] == 2
+    assert manifest["service"]["schemaVersion"] == 3
 
 
 @pytest.mark.asyncio
@@ -156,7 +174,8 @@ async def test_collect_rejects_extra_control_fields_before_http() -> None:
     try:
         with pytest.raises(CollectorClientError) as failure:
             await client.collect({
-                "schemaVersion": 2,
+                "schemaVersion": 3,
+                "clientRequestId": CLIENT_REQUEST_ID,
                 "browserBindingId": BINDING_ID,
                 "platform": "xiaohongshu",
                 "capability": "xiaohongshu.search.public_notes.v1",
@@ -182,7 +201,7 @@ async def test_wait_timeout_does_not_submit_another_operation() -> None:
             collect_posts += 1
         if request.url.path == f"/v2/collect/operations/{OPERATION_ID}":
             operation_reads += 1
-            return httpx.Response(200, json={"schemaVersion": 2, "result": operation("claimed", False)})
+            return httpx.Response(200, json={"schemaVersion": 3, "result": operation("claimed", False)})
         raise AssertionError(f"unexpected_url:{request.url}")
 
     client, http_client = await with_client(handler)
@@ -200,3 +219,71 @@ async def test_wait_timeout_does_not_submit_another_operation() -> None:
     assert failure.value.code == "collector_client_wait_timeout"
     assert operation_reads == 1
     assert collect_posts == 0
+
+
+@pytest.mark.asyncio
+async def test_capability_catalog_and_bounded_artifact_resources_use_v3_routes() -> None:
+    seen: list[httpx.Request] = []
+    metadata = {
+        "schemaVersion": 1,
+        "artifactId": ARTIFACT_ID,
+        "operationId": OPERATION_ID,
+        "capability": "xiaohongshu.search.public_notes.v1",
+        "mediaType": "application/json",
+        "representation": "canonical_json_utf8",
+        "byteLength": 2,
+        "sha256": DIGEST,
+        "capturedAt": "2026-08-03T00:00:00.000Z",
+        "terminalStatus": "completed",
+        "retentionClass": "core_managed_local",
+        "retainedUntil": None,
+        "deletionState": "retained",
+        "available": True,
+    }
+    window = {
+        "schemaVersion": 1,
+        "artifactId": ARTIFACT_ID,
+        "capability": "xiaohongshu.search.public_notes.v1",
+        "representation": "canonical_json_utf8",
+        "encoding": "utf-8",
+        "offset": 0,
+        "endExclusive": 2,
+        "byteLength": 2,
+        "maximumBytes": 16_384,
+        "nextOffset": None,
+        "truncated": False,
+        "sha256": DIGEST,
+        "chunkSha256": DIGEST,
+        "text": "{}",
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/v2/capabilities":
+            return httpx.Response(200, json={
+                "schemaVersion": 3,
+                "catalogDigest": DIGEST,
+                "capabilities": [],
+                "directContracts": [],
+            })
+        if request.url.path == f"/v2/collect/artifacts/{ARTIFACT_ID}":
+            return httpx.Response(200, json={"schemaVersion": 3, "metadata": metadata})
+        if request.url.path == f"/v2/collect/artifacts/{ARTIFACT_ID}/content":
+            assert dict(request.url.params) == {"offset": "0", "maxBytes": "16384"}
+            return httpx.Response(200, json={"schemaVersion": 3, "window": window})
+        raise AssertionError(f"unexpected_url:{request.url}")
+
+    client, http_client = await with_client(handler)
+    try:
+        catalog = await client.read_capability_catalog()
+        capabilities = await client.list_capabilities()
+        actual_metadata = await client.read_artifact_metadata(ARTIFACT_ID)
+        actual_window = await client.read_artifact_content_window(ARTIFACT_ID)
+    finally:
+        await http_client.aclose()
+
+    assert catalog["catalogDigest"] == DIGEST
+    assert capabilities == []
+    assert actual_metadata == metadata
+    assert actual_window == window
+    assert sum(request.url.path == "/v2/capabilities" for request in seen) == 2

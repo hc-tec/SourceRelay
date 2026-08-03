@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { CollectorClient, CollectorClientError } from '../collector-client/src/index.mjs';
+import { CollectorClient, CollectorClientError, createClientRequestId } from '../collector-client/src/index.mjs';
 
 const pocRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const port = await availablePort();
@@ -31,7 +31,10 @@ try {
 
   const release = await readJson('/v2/release');
   const capabilities = await readJson('/v2/capabilities');
-  if (release.releaseVersion !== '0.7.17' || capabilities.capabilities?.length !== 18) {
+  if (release.releaseVersion !== '0.7.17' || release.service?.schemaVersion !== 3 ||
+      release.compatibility?.digestAlgorithm !== 'sha256-canonical-json-v1' ||
+      capabilities.schemaVersion !== 3 || capabilities.capabilities?.length !== 18 ||
+      capabilities.directContracts?.length !== 15) {
     throw new Error('user_browser_api_catalog_probe_failed');
   }
 
@@ -53,7 +56,8 @@ try {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     body: JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId: createClientRequestId(),
       browserBindingId: '11111111-1111-4111-8111-111111111111',
       platform: 'bilibili',
       capability: 'bilibili.transcript',
@@ -64,7 +68,8 @@ try {
   if (rejected.error !== 'user_browser_collector_service_request_invalid') throw new Error('user_browser_api_catalog_only_not_rejected');
 
   const validRequest = {
-    schemaVersion: 2,
+    schemaVersion: 3,
+    clientRequestId: createClientRequestId(),
     browserBindingId: '11111111-1111-4111-8111-111111111111',
     platform: 'bilibili',
     capability: 'bilibili.video_detail',
@@ -78,6 +83,12 @@ try {
     headers: { authorization: `Bearer ${token}` }
   }, 404);
   if (missingArtifact.error !== 'collector_service_artifact_not_found') throw new Error('user_browser_api_artifact_boundary_failed');
+  const missingArtifactMetadata = await fetchJson('/v2/collect/artifacts/22222222-2222-4222-8222-222222222222', {
+    headers: { authorization: `Bearer ${token}` }
+  }, 404);
+  if (missingArtifactMetadata.error !== 'collector_service_artifact_not_found') {
+    throw new Error('user_browser_api_artifact_metadata_boundary_failed');
+  }
 
   const limitedIssued = await fetchJson('/v2/collector-service/clients', {
     method: 'POST',

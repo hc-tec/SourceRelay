@@ -9,6 +9,7 @@ URL、tab、selector、脚本、CDP 或 Network 接口。
 ```js
 import {
   CollectorClient,
+  createClientRequestId,
   xiaohongshuPublicNotesSearch
 } from '@intelligence/collector-client';
 
@@ -22,6 +23,7 @@ const binding = bindings.find((value) => value.state === 'online');
 if (!binding) throw new Error('no_online_browser_binding');
 
 const request = xiaohongshuPublicNotesSearch({
+  clientRequestId: createClientRequestId(),
   browserBindingId: binding.browserBindingId,
   query: '人工智能',
   maximumDetails: 3
@@ -38,6 +40,7 @@ console.log(artifact?.artifact);
 
 - `listDirectCapabilities()`：读取客户端当前允许提交的 direct capability 名称；它不能替代 Gateway 的 `dispatchState`、预算和绑定状态检查；
 - `listCapabilities()`：读取能力目录；上层应只提交 `dispatchState: direct_ready` 的能力；
+- `readCapabilityCatalog()`：读取带 SHA-256 身份和 15 项 direct contract 的完整能力目录；
 - `readRelease()`：读取 Core release manifest，确认本地扩展、Gateway、Browser Host 和服务 schema 的兼容性；
 - `readOpenApi()`：读取当前 `/v2` OpenAPI 3.1 机器契约，构造请求前应优先使用它核对输入边界；
 - `listBrowserBindings()`：读取已配对浏览器绑定的安全摘要；
@@ -45,6 +48,8 @@ console.log(artifact?.artifact);
 - `getOperation(operationId)`：读取一次 operation；
 - `waitOperation(operationId)`：只轮询本地 operation，不重新提交任务；
 - `readArtifact(operationId)`：重新读取 operation，并从 capability 匹配的受控 path 读取 artifact；
+- `readArtifactMetadata(artifactId)`：读取 Artifact 大小、摘要、状态和保留信息，不加载正文；
+- `readArtifactContentWindow(artifactId, { offset, maxBytes })`：按 UTF-8 边界读取最多 64 KiB 的规范 JSON 窗口；
 - `collectAndWait(request)`：组合提交、等待和 artifact 读取。
 - `collectModel(request)`、`getOperationModel(operationId)`、`waitOperationModel(operationId)`、
   `readArtifactModel(operationId)`、`collectAndWaitModel(request)`：返回稳定字段投影并
@@ -60,15 +65,18 @@ ID、搜索词，小红书短时 profile URL、详情序号以及评论/回复/�
 ```js
 import {
   bilibiliNativeSearch,
+  createClientRequestId,
   xiaohongshuAccountPublicNotes
 } from '@intelligence/collector-client';
 
 const searchRequest = bilibiliNativeSearch({
+  clientRequestId: createClientRequestId(),
   browserBindingId: bindingId,
   query: 'DeepSeek'
 });
 
 const profileRequest = xiaohongshuAccountPublicNotes({
+  clientRequestId: createClientRequestId(),
   browserBindingId: bindingId,
   maximumScrolls: 20,
   executionTarget: 'ephemeral_public_profile_url',
@@ -89,9 +97,10 @@ builder 都拒绝 selector、脚本、tab ID、CDP 和任意 Network 控制字�
 客户端会拒绝非 loopback origin、非法 token、未知 direct capability、额外顶层字段和
 不符合 operation capability 的 artifact path。Gateway 仍是最终的请求校验和权限边界。
 
-`collect()` 的 POST 没有自动重试。如果调用方在网络超时后无法确认是否已经排队，应该先
-使用原 operation 追踪机制或人工检查，而不是盲目再次提交；幂等键会在后续协议版本中单独
-设计。
+每个 builder 都要求调用方提供 `clientRequestId`。一次逻辑提交必须保存同一份完整请求；
+如果 POST 结果因断网而未知，只能用相同 ID 和相同规范请求重试。Core 会返回原 Operation、
+明确的 outcome-unknown，或冲突，绝不会自动执行第二次平台动作。换了输入就必须生成新 ID。
+SDK 本身仍不自动重试 POST。
 
 ## 源码分层
 

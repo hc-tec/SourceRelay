@@ -12,11 +12,17 @@ export {
   bilibiliNativeSearch,
   bilibiliNativeSearchBatch,
   bilibiliVideoDetail,
+  createClientRequestId,
   xiaohongshuAccountPublicNotes,
   xiaohongshuNotePublicCommentReplies,
   xiaohongshuNotePublicComments,
   xiaohongshuNotePublicDetail,
   xiaohongshuPublicNotesSearch
 } from './requests.mjs';
-export { CORE_RELEASE_VERSION, DIRECT_CAPABILITY_NAMES, listDirectCapabilities } from './public.mjs';
+export {
+  CORE_RELEASE_VERSION,
+  CORE_SERVICE_SCHEMA_VERSION,
+  DIRECT_CAPABILITY_NAMES,
+  listDirectCapabilities
+} from './public.mjs';
 export { artifactPathFromOperation, isTerminalOperationState } from './validation.mjs';

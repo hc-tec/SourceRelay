@@ -3,18 +3,21 @@ import { userBrowserCollectorServiceRequestInput } from '../src/user-browser-col
 import { userBrowserCollectorServiceOpenApiDocument } from '../src/user-browser-collector-service-openapi.js';
 
 const browserBindingId = '11111111-1111-4111-8111-111111111111';
+const clientRequestId = '22222222-2222-4222-8222-222222222222';
 
 describe('user-owned browser collector service', () => {
   test('admits only the fixed first-page native-search input and normalises its phrase', () => {
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search',
       executionTarget: 'collector_work_tab',
       input: { query: '  DeepSeek   搜索  ' }
     })).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search',
@@ -22,7 +25,8 @@ describe('user-owned browser collector service', () => {
       input: { query: 'DeepSeek 搜索' }
     });
     expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search',
@@ -33,14 +37,16 @@ describe('user-owned browser collector service', () => {
 
   test('admits only a phrase for the fixed two-page search batch', () => {
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search_batch',
       executionTarget: 'collector_work_tab',
       input: { query: '  DeepSeek   两页  ' }
     })).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search_batch',
@@ -48,7 +54,8 @@ describe('user-owned browser collector service', () => {
       input: { query: 'DeepSeek 两页' }
     });
     expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search_batch',
@@ -59,14 +66,16 @@ describe('user-owned browser collector service', () => {
 
   test('admits Xiaohongshu query-only or bounded sequential depth input in an existing Explore tab', () => {
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
       executionTarget: 'existing_public_explore_tab',
       input: { query: '咖啡豆' }
     })).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
@@ -74,7 +83,8 @@ describe('user-owned browser collector service', () => {
       input: { query: '咖啡豆' }
     });
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
@@ -82,7 +92,8 @@ describe('user-owned browser collector service', () => {
       input: { query: '咖啡豆', maximumDetails: 3 }
     })).toMatchObject({ input: { query: '咖啡豆', maximumDetails: 3 } });
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
@@ -90,7 +101,8 @@ describe('user-owned browser collector service', () => {
       input: { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2 } }
     })).toMatchObject({ input: { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 2 } } });
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
@@ -106,7 +118,8 @@ describe('user-owned browser collector service', () => {
       { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, replies: { maximumThreads: 4 } } },
       { query: '咖啡豆', maximumDetails: 1, comments: { maximumScrolls: 1, replies: { maximumThreads: 1, extra: true } } }
     ]) expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
@@ -114,7 +127,8 @@ describe('user-owned browser collector service', () => {
       input
     })).toThrow('user_browser_collector_service_request_invalid');
     for (const invalidDepth of [-1, 21, 1.5]) expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
@@ -129,7 +143,8 @@ describe('user-owned browser collector service', () => {
       { script: 'document.body.innerHTML' },
       { debuggerCommand: 'Runtime.evaluate' }
     ]) expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
@@ -140,14 +155,16 @@ describe('user-owned browser collector service', () => {
 
   test('admits Xiaohongshu public-profile notes with only a bounded scroll budget', () => {
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1',
       executionTarget: 'existing_public_profile_tab',
       input: { maximumScrolls: 2 }
     })).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1',
@@ -159,7 +176,8 @@ describe('user-owned browser collector service', () => {
       { maximumScrolls: 1, url: 'https://www.xiaohongshu.com/user/profile/x' },
       { maximumScrolls: 1, tabId: 1 }, { maximumScrolls: 1, selector: 'section.note-item' }
     ]) expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1',
@@ -170,14 +188,16 @@ describe('user-owned browser collector service', () => {
 
   test('admits note-avatar profile discovery without accepting a caller URL or browser identity', () => {
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1',
       executionTarget: 'discover_public_profile_from_note',
       input: { maximumScrolls: 20 }
     })).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1',
@@ -189,7 +209,8 @@ describe('user-owned browser collector service', () => {
       { maximumScrolls: 20, tabId: 1 },
       { maximumScrolls: 20, selector: 'a[href*="/user/profile/"]' }
     ]) expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1',
@@ -245,7 +266,8 @@ describe('user-owned browser collector service', () => {
       input: { required: ['resultRank'], additionalProperties: false }
     });
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.note.public_detail.v1',
@@ -265,7 +287,7 @@ describe('user-owned browser collector service', () => {
       executionTarget:{const:'existing_public_note_overlay'},input:{required:['maximumThreads'],additionalProperties:false}
     });
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2, browserBindingId,
+      schemaVersion: 3, clientRequestId, browserBindingId,
       platform: 'xiaohongshu', capability: 'xiaohongshu.note.public_comment_replies.v1',
       executionTarget: 'existing_public_note_overlay', input: { maximumThreads: 3 }
     })).toMatchObject({ input: { maximumThreads: 3 } });
@@ -286,7 +308,8 @@ describe('user-owned browser collector service', () => {
   test('admits one canonical public MID for profile and first-screen inventory, never a page URL or pagination control', () => {
     for (const capability of ['bilibili.account_profile', 'bilibili.account_inventory'] as const) {
       expect(userBrowserCollectorServiceRequestInput({
-        schemaVersion: 2,
+        schemaVersion: 3,
+        clientRequestId,
         browserBindingId,
         platform: 'bilibili',
         capability,
@@ -298,7 +321,8 @@ describe('user-owned browser collector service', () => {
       });
     }
     expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.account_inventory',
@@ -309,14 +333,16 @@ describe('user-owned browser collector service', () => {
 
   test('admits user_selected_tab only for the fixed inventory identity and never lets the caller name browser controls', () => {
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.account_inventory',
       executionTarget: 'user_selected_tab',
       input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
     })).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.account_inventory',
@@ -324,7 +350,8 @@ describe('user-owned browser collector service', () => {
       input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
     });
     expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.account_profile',
@@ -332,7 +359,8 @@ describe('user-owned browser collector service', () => {
       input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
     })).toThrow('user_browser_collector_service_request_invalid');
     expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.account_inventory',
@@ -363,14 +391,16 @@ describe('user-owned browser collector service', () => {
 
   test('admits comments as a canonical video managed by the extension work-tab lane', () => {
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
       executionTarget: 'collector_work_tab',
       input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
     })).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
@@ -378,7 +408,8 @@ describe('user-owned browser collector service', () => {
       input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
     });
     expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
@@ -386,7 +417,8 @@ describe('user-owned browser collector service', () => {
       input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
     })).toThrow('user_browser_collector_service_request_invalid');
     expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
@@ -407,7 +439,8 @@ describe('user-owned browser collector service', () => {
 
   test('admits only fixed public identities for passive dynamic, collection and danmaku canaries', () => {
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.dynamic',
@@ -415,7 +448,8 @@ describe('user-owned browser collector service', () => {
       input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
     })).toMatchObject({ capability: 'bilibili.dynamic' });
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.collection_series.detail',
@@ -430,7 +464,8 @@ describe('user-owned browser collector service', () => {
       input: { stableSeriesId: '123', listType: 'series' }
     });
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.danmaku',
@@ -438,7 +473,8 @@ describe('user-owned browser collector service', () => {
       input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
     })).toMatchObject({ capability: 'bilibili.danmaku' });
     expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.collection_series.detail',

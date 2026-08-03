@@ -4,6 +4,8 @@ import { userBrowserCollectorServiceRequestInput } from '../src/user-browser-col
 import { userBrowserCollectorServiceOpenApiDocument } from '../src/user-browser-collector-service-openapi.js';
 import { listUserBrowserXiaohongshuCapabilities } from '../src/user-browser-xiaohongshu-capabilities.js';
 
+const clientRequestId = '22222222-2222-4222-8222-222222222222';
+
 describe('user-owned browser Xiaohongshu capability catalog', () => {
   test('publishes the strict network-first policy without making it dispatchable', () => {
     const capabilities = listUserBrowserXiaohongshuCapabilities();
@@ -99,7 +101,8 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
 
   test('keeps the catalog-only policy outside the executable collect request union', () => {
     expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId: '11111111-1111-4111-8111-111111111111',
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.current_page.network_metadata',
@@ -148,13 +151,15 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
     });
 
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2, browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',
+      schemaVersion: 3, clientRequestId,
+      browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',
       capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
       input: { maximumScrolls: 1 }
     })).toMatchObject({ input: { maximumScrolls: 1 } });
 
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2, browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',
+      schemaVersion: 3, clientRequestId,
+      browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1', executionTarget: 'ephemeral_public_profile_url',
       input: { maximumScrolls: 20, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short' }
     })).toMatchObject({
@@ -162,13 +167,15 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       input: { maximumScrolls: 20, profileUrl: 'https://www.xiaohongshu.com/user/profile/abc123?expires=short' }
     });
     expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2, browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',
+      schemaVersion: 3, clientRequestId,
+      browserBindingId: '11111111-1111-4111-8111-111111111111', platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1', executionTarget: 'ephemeral_public_profile_url',
       input: { maximumScrolls: 1, profileUrl: 'https://www.xiaohongshu.com/explore' }
     })).toThrow('user_browser_collector_service_request_invalid');
 
     expect(userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId: '11111111-1111-4111-8111-111111111111',
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.note.public_detail.v1',
@@ -179,7 +186,8 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       { resultRank: 0 }, { resultRank: 21 }, { resultRank: 1, url: 'https://www.xiaohongshu.com/explore/x' },
       { resultRank: 1, selector: 'section.note-item' }
     ]) expect(() => userBrowserCollectorServiceRequestInput({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId,
       browserBindingId: '11111111-1111-4111-8111-111111111111',
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.note.public_detail.v1',

@@ -54,6 +54,7 @@ type ExecutionTarget = UserBrowserCollectorServiceRequest['executionTarget'];
 
 interface ValidRequestEnvelope {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  clientRequestId: string;
   browserBindingId: string;
   platform: Platform;
   capability: string;
@@ -68,6 +69,8 @@ export type UserBrowserCapabilityBudgetPolicy =
 
 export interface UserBrowserCapabilityRegistryEntry<C extends UserBrowserExecutableCapability> {
   capability: C;
+  /** OpenAPI component containing the exact direct request envelope. */
+  requestSchemaName: string;
   /** Validates the common envelope and normalises the capability input. */
   validate: (envelope: ValidRequestEnvelope) => RequestFor<C>;
   /** Declares the only execution targets admitted by this capability. */
@@ -76,7 +79,8 @@ export interface UserBrowserCapabilityRegistryEntry<C extends UserBrowserExecuta
   budgetPolicy: UserBrowserCapabilityBudgetPolicy;
   dispatch: (
     context: ExtensionWorkRouteContext,
-    request: RequestFor<C>
+    request: RequestFor<C>,
+    operationId: string
   ) => Promise<ExtensionWorkOperationSummary>;
 }
 
@@ -99,9 +103,12 @@ function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boo
 function envelope(value: unknown): ValidRequestEnvelope {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();
   const candidate = value as Record<string, unknown>;
-  const allowed = new Set(['schemaVersion', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input']);
+  const allowed = new Set([
+    'schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'
+  ]);
   if (Object.keys(candidate).some((key) => !allowed.has(key)) ||
     candidate.schemaVersion !== USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION ||
+    typeof candidate.clientRequestId !== 'string' || !UUID_PATTERN.test(candidate.clientRequestId) ||
     typeof candidate.browserBindingId !== 'string' || !UUID_PATTERN.test(candidate.browserBindingId) ||
     (candidate.platform !== 'bilibili' && candidate.platform !== 'xiaohongshu') ||
     typeof candidate.capability !== 'string' ||
@@ -109,6 +116,7 @@ function envelope(value: unknown): ValidRequestEnvelope {
     !candidate.input || typeof candidate.input !== 'object' || Array.isArray(candidate.input)) return invalid();
   return {
     schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+    clientRequestId: candidate.clientRequestId,
     browserBindingId: candidate.browserBindingId,
     platform: candidate.platform,
     capability: candidate.capability,
@@ -274,28 +282,220 @@ function validXiaohongshuSearchInput(
 
 function base<P extends Platform>(value: ValidRequestEnvelope, platform: P): {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  clientRequestId: string;
   browserBindingId: string;
   platform: P;
 } {
-  return { schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION, browserBindingId: value.browserBindingId, platform };
+  return {
+    schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+    clientRequestId: value.clientRequestId,
+    browserBindingId: value.browserBindingId,
+    platform
+  };
 }
 
 export const USER_BROWSER_CAPABILITY_REGISTRY: UserBrowserCapabilityRegistry = {
-  'bilibili.video_detail': { capability: 'bilibili.video_detail', validate: parseBilibiliVideoDetail, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliVideoDetailWork(context, request.browserBindingId, request.input.canonicalVideoUrl) },
-  'bilibili.native_search': { capability: 'bilibili.native_search', validate: parseBilibiliNativeSearch, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliNativeSearchWork(context, request.browserBindingId, request.input.query) },
-  'bilibili.native_search_batch': { capability: 'bilibili.native_search_batch', validate: parseBilibiliNativeSearchBatch, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliNativeSearchBatchWork(context, request.browserBindingId, request.input.query) },
-  'bilibili.account_profile': { capability: 'bilibili.account_profile', validate: parseBilibiliAccountProfile, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliAccountProfileWork(context, request.browserBindingId, request.input.canonicalProfileUrl) },
-  'bilibili.account_inventory': { capability: 'bilibili.account_inventory', validate: parseBilibiliAccountInventory, executionTargets: ['collector_work_tab', 'user_selected_tab'], budgetPolicy: 'fixed_observation_budget', dispatch: (context, request) => request.executionTarget === 'user_selected_tab' ? enqueueBilibiliAccountInventoryUserSelectedTabWork(context, request.browserBindingId, request.input.canonicalProfileUrl) : enqueueBilibiliAccountInventoryWork(context, request.browserBindingId, request.input.canonicalProfileUrl) },
-  'bilibili.dynamic': { capability: 'bilibili.dynamic', validate: (value) => parseBilibiliProfileCapability(value, 'bilibili.dynamic') as UserBrowserDynamicCollectorServiceRequest, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliDynamicWork(context, request.browserBindingId, request.input.canonicalProfileUrl) },
-  'bilibili.collection_series.overview': { capability: 'bilibili.collection_series.overview', validate: (value) => parseBilibiliProfileCapability(value, 'bilibili.collection_series.overview') as UserBrowserCollectionSeriesOverviewCollectorServiceRequest, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliCollectionSeriesOverviewWork(context, request.browserBindingId, request.input.canonicalProfileUrl) },
-  'bilibili.collection_series.detail': { capability: 'bilibili.collection_series.detail', validate: parseBilibiliSeriesDetail, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliCollectionSeriesDetailWork(context, request.browserBindingId, request.input.canonicalProfileUrl, request.input.stableSeriesId, request.input.listType) },
-  'bilibili.danmaku': { capability: 'bilibili.danmaku', validate: (value) => parseBilibiliVideoPassive(value, 'bilibili.danmaku') as UserBrowserDanmakuCollectorServiceRequest, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliDanmakuWork(context, request.browserBindingId, request.input.canonicalVideoUrl) },
-  'bilibili.discussion': { capability: 'bilibili.discussion', validate: (value) => parseBilibiliVideoPassive(value, 'bilibili.discussion') as UserBrowserVideoDiscussionCollectorServiceRequest, executionTargets: ['collector_work_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueBilibiliDiscussionUserSelectedTabWork(context, request.browserBindingId, request.input.canonicalVideoUrl) },
-  'xiaohongshu.search.public_notes.v1': { capability: 'xiaohongshu.search.public_notes.v1', validate: parseXiaohongshuSearch, executionTargets: ['existing_public_explore_tab'], budgetPolicy: 'input_bounded_queue_budget', dispatch: (context, request) => enqueueXiaohongshuPublicNotesSearchWork(context, request.browserBindingId, request.input.query, request.input.maximumDetails, request.input.comments) },
-  'xiaohongshu.account.public_notes.v1': { capability: 'xiaohongshu.account.public_notes.v1', validate: parseXiaohongshuAccount, executionTargets: ['existing_public_profile_tab', 'ephemeral_public_profile_url', 'discover_public_profile_from_note'], budgetPolicy: 'input_bounded_queue_budget', dispatch: (context, request) => enqueueXiaohongshuAccountPublicNotesWork(context, request.browserBindingId, request.input.maximumScrolls, request.executionTarget === 'ephemeral_public_profile_url' ? request.input.profileUrl : undefined, request.executionTarget === 'discover_public_profile_from_note') },
-  'xiaohongshu.note.public_detail.v1': { capability: 'xiaohongshu.note.public_detail.v1', validate: parseXiaohongshuDetail, executionTargets: ['existing_public_search_tab', 'existing_public_profile_tab'], budgetPolicy: 'fixed_queue_budget', dispatch: (context, request) => enqueueXiaohongshuNotePublicDetailWork(context, request.browserBindingId, request.input.resultRank, request.executionTarget) },
-  'xiaohongshu.note.public_comments.v1': { capability: 'xiaohongshu.note.public_comments.v1', validate: parseXiaohongshuComments, executionTargets: ['existing_public_note_overlay'], budgetPolicy: 'input_bounded_queue_budget', dispatch: (context, request) => enqueueXiaohongshuNotePublicCommentsWork(context, request.browserBindingId, request.input.maximumScrolls) },
-  'xiaohongshu.note.public_comment_replies.v1': { capability: 'xiaohongshu.note.public_comment_replies.v1', validate: parseXiaohongshuReplies, executionTargets: ['existing_public_note_overlay'], budgetPolicy: 'input_bounded_queue_budget', dispatch: (context, request) => enqueueXiaohongshuReplyWork(context, request.browserBindingId, request.input.maximumThreads) }
+  'bilibili.video_detail': {
+    capability: 'bilibili.video_detail',
+    requestSchemaName: 'UserBrowserVideoDetailCollectRequest',
+    validate: parseBilibiliVideoDetail,
+    executionTargets: ['collector_work_tab'],
+    budgetPolicy: 'fixed_queue_budget',
+    dispatch: (context, request, operationId) =>
+      enqueueBilibiliVideoDetailWork(context, request.browserBindingId, request.input.canonicalVideoUrl, operationId)
+  },
+  'bilibili.native_search': {
+    capability: 'bilibili.native_search',
+    requestSchemaName: 'UserBrowserNativeSearchCollectRequest',
+    validate: parseBilibiliNativeSearch,
+    executionTargets: ['collector_work_tab'],
+    budgetPolicy: 'fixed_queue_budget',
+    dispatch: (context, request, operationId) =>
+      enqueueBilibiliNativeSearchWork(context, request.browserBindingId, request.input.query, operationId)
+  },
+  'bilibili.native_search_batch': {
+    capability: 'bilibili.native_search_batch',
+    requestSchemaName: 'UserBrowserNativeSearchBatchCollectRequest',
+    validate: parseBilibiliNativeSearchBatch,
+    executionTargets: ['collector_work_tab'],
+    budgetPolicy: 'fixed_queue_budget',
+    dispatch: (context, request, operationId) =>
+      enqueueBilibiliNativeSearchBatchWork(context, request.browserBindingId, request.input.query, operationId)
+  },
+  'bilibili.account_profile': {
+    capability: 'bilibili.account_profile',
+    requestSchemaName: 'UserBrowserAccountProfileCollectRequest',
+    validate: parseBilibiliAccountProfile,
+    executionTargets: ['collector_work_tab'],
+    budgetPolicy: 'fixed_queue_budget',
+    dispatch: (context, request, operationId) =>
+      enqueueBilibiliAccountProfileWork(context, request.browserBindingId, request.input.canonicalProfileUrl, operationId)
+  },
+  'bilibili.account_inventory': {
+    capability: 'bilibili.account_inventory',
+    requestSchemaName: 'UserBrowserAccountInventoryCollectRequest',
+    validate: parseBilibiliAccountInventory,
+    executionTargets: ['collector_work_tab', 'user_selected_tab'],
+    budgetPolicy: 'fixed_observation_budget',
+    dispatch: (context, request, operationId) => request.executionTarget === 'user_selected_tab'
+      ? enqueueBilibiliAccountInventoryUserSelectedTabWork(
+        context,
+        request.browserBindingId,
+        request.input.canonicalProfileUrl,
+        operationId
+      )
+      : enqueueBilibiliAccountInventoryWork(
+        context,
+        request.browserBindingId,
+        request.input.canonicalProfileUrl,
+        operationId
+      )
+  },
+  'bilibili.dynamic': {
+    capability: 'bilibili.dynamic',
+    requestSchemaName: 'UserBrowserDynamicCollectRequest',
+    validate: (value) => parseBilibiliProfileCapability(
+      value,
+      'bilibili.dynamic'
+    ) as UserBrowserDynamicCollectorServiceRequest,
+    executionTargets: ['collector_work_tab'],
+    budgetPolicy: 'fixed_queue_budget',
+    dispatch: (context, request, operationId) =>
+      enqueueBilibiliDynamicWork(context, request.browserBindingId, request.input.canonicalProfileUrl, operationId)
+  },
+  'bilibili.collection_series.overview': {
+    capability: 'bilibili.collection_series.overview',
+    requestSchemaName: 'UserBrowserCollectionSeriesOverviewCollectRequest',
+    validate: (value) => parseBilibiliProfileCapability(
+      value,
+      'bilibili.collection_series.overview'
+    ) as UserBrowserCollectionSeriesOverviewCollectorServiceRequest,
+    executionTargets: ['collector_work_tab'],
+    budgetPolicy: 'fixed_queue_budget',
+    dispatch: (context, request, operationId) => enqueueBilibiliCollectionSeriesOverviewWork(
+      context,
+      request.browserBindingId,
+      request.input.canonicalProfileUrl,
+      operationId
+    )
+  },
+  'bilibili.collection_series.detail': {
+    capability: 'bilibili.collection_series.detail',
+    requestSchemaName: 'UserBrowserCollectionSeriesDetailCollectRequest',
+    validate: parseBilibiliSeriesDetail,
+    executionTargets: ['collector_work_tab'],
+    budgetPolicy: 'fixed_queue_budget',
+    dispatch: (context, request, operationId) => enqueueBilibiliCollectionSeriesDetailWork(
+      context,
+      request.browserBindingId,
+      request.input.canonicalProfileUrl,
+      request.input.stableSeriesId,
+      request.input.listType,
+      operationId
+    )
+  },
+  'bilibili.danmaku': {
+    capability: 'bilibili.danmaku',
+    requestSchemaName: 'UserBrowserDanmakuCollectRequest',
+    validate: (value) => parseBilibiliVideoPassive(
+      value,
+      'bilibili.danmaku'
+    ) as UserBrowserDanmakuCollectorServiceRequest,
+    executionTargets: ['collector_work_tab'],
+    budgetPolicy: 'fixed_queue_budget',
+    dispatch: (context, request, operationId) =>
+      enqueueBilibiliDanmakuWork(context, request.browserBindingId, request.input.canonicalVideoUrl, operationId)
+  },
+  'bilibili.discussion': {
+    capability: 'bilibili.discussion',
+    requestSchemaName: 'UserBrowserVideoDiscussionCollectRequest',
+    validate: (value) => parseBilibiliVideoPassive(
+      value,
+      'bilibili.discussion'
+    ) as UserBrowserVideoDiscussionCollectorServiceRequest,
+    executionTargets: ['collector_work_tab'],
+    budgetPolicy: 'fixed_queue_budget',
+    dispatch: (context, request, operationId) => enqueueBilibiliDiscussionUserSelectedTabWork(
+      context,
+      request.browserBindingId,
+      request.input.canonicalVideoUrl,
+      operationId
+    )
+  },
+  'xiaohongshu.search.public_notes.v1': {
+    capability: 'xiaohongshu.search.public_notes.v1',
+    requestSchemaName: 'UserBrowserXiaohongshuPublicNotesSearchCollectRequest',
+    validate: parseXiaohongshuSearch,
+    executionTargets: ['existing_public_explore_tab'],
+    budgetPolicy: 'input_bounded_queue_budget',
+    dispatch: (context, request, operationId) => enqueueXiaohongshuPublicNotesSearchWork(
+      context,
+      request.browserBindingId,
+      request.input.query,
+      request.input.maximumDetails,
+      request.input.comments,
+      operationId
+    )
+  },
+  'xiaohongshu.account.public_notes.v1': {
+    capability: 'xiaohongshu.account.public_notes.v1',
+    requestSchemaName: 'UserBrowserXiaohongshuAccountPublicNotesCollectRequest',
+    validate: parseXiaohongshuAccount,
+    executionTargets: [
+      'existing_public_profile_tab',
+      'ephemeral_public_profile_url',
+      'discover_public_profile_from_note'
+    ],
+    budgetPolicy: 'input_bounded_queue_budget',
+    dispatch: (context, request, operationId) => enqueueXiaohongshuAccountPublicNotesWork(
+      context,
+      request.browserBindingId,
+      request.input.maximumScrolls,
+      request.executionTarget === 'ephemeral_public_profile_url' ? request.input.profileUrl : undefined,
+      request.executionTarget === 'discover_public_profile_from_note',
+      operationId
+    )
+  },
+  'xiaohongshu.note.public_detail.v1': {
+    capability: 'xiaohongshu.note.public_detail.v1',
+    requestSchemaName: 'UserBrowserXiaohongshuNotePublicDetailCollectRequest',
+    validate: parseXiaohongshuDetail,
+    executionTargets: ['existing_public_search_tab', 'existing_public_profile_tab'],
+    budgetPolicy: 'fixed_queue_budget',
+    dispatch: (context, request, operationId) => enqueueXiaohongshuNotePublicDetailWork(
+      context,
+      request.browserBindingId,
+      request.input.resultRank,
+      request.executionTarget,
+      operationId
+    )
+  },
+  'xiaohongshu.note.public_comments.v1': {
+    capability: 'xiaohongshu.note.public_comments.v1',
+    requestSchemaName: 'UserBrowserXiaohongshuNotePublicCommentsCollectRequest',
+    validate: parseXiaohongshuComments,
+    executionTargets: ['existing_public_note_overlay'],
+    budgetPolicy: 'input_bounded_queue_budget',
+    dispatch: (context, request, operationId) => enqueueXiaohongshuNotePublicCommentsWork(
+      context,
+      request.browserBindingId,
+      request.input.maximumScrolls,
+      operationId
+    )
+  },
+  'xiaohongshu.note.public_comment_replies.v1': {
+    capability: 'xiaohongshu.note.public_comment_replies.v1',
+    requestSchemaName: 'UserBrowserXiaohongshuReplyCollectRequest',
+    validate: parseXiaohongshuReplies,
+    executionTargets: ['existing_public_note_overlay'],
+    budgetPolicy: 'input_bounded_queue_budget',
+    dispatch: (context, request, operationId) => enqueueXiaohongshuReplyWork(
+      context,
+      request.browserBindingId,
+      request.input.maximumThreads,
+      operationId
+    )
+  }
 };
 
 export function listUserBrowserExecutableCapabilities(): UserBrowserExecutableCapability[] {
@@ -315,9 +515,10 @@ export function parseUserBrowserCollectorServiceRequest(value: unknown): UserBro
 
 export async function dispatchUserBrowserCapability(
   context: ExtensionWorkRouteContext,
-  request: UserBrowserCollectorServiceRequest
+  request: UserBrowserCollectorServiceRequest,
+  operationId: string
 ): Promise<ExtensionWorkOperationSummary> {
   const entry = USER_BROWSER_CAPABILITY_REGISTRY[request.capability] as UserBrowserCapabilityRegistryEntry<UserBrowserExecutableCapability> | undefined;
   if (!entry) throw new Error('user_browser_capability_dispatch_unavailable');
-  return await entry.dispatch(context, request as never);
+  return await entry.dispatch(context, request as never, operationId);
 }

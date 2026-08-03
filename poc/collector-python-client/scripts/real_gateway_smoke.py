@@ -11,6 +11,7 @@ from intelligence_collector import (
     CollectorClientError,
     CollectionResult,
     bilibili_native_search,
+    create_client_request_id,
     list_direct_capabilities,
 )
 
@@ -43,6 +44,8 @@ async def run() -> dict[str, Any]:
             "/v2/collector-service/browser-bindings",
             "/v2/collect",
             "/v2/collect/operations/{operationId}",
+            "/v2/collect/artifacts/{artifactId}",
+            "/v2/collect/artifacts/{artifactId}/content",
             "/v1/collect/artifacts/{capability}/{artifactId}",
         }
         openapi_paths = openapi.get("paths", {})
@@ -60,7 +63,8 @@ async def run() -> dict[str, Any]:
         # layer against the same safety boundary as the JS SDK.
         try:
             await client.collect({
-                "schemaVersion": 2,
+                "schemaVersion": 3,
+                "clientRequestId": create_client_request_id(),
                 "browserBindingId": BINDING_ID_PLACEHOLDER,
                 "platform": "xiaohongshu",
                 "capability": "xiaohongshu.current_page.network_metadata",
@@ -74,6 +78,7 @@ async def run() -> dict[str, Any]:
             raise AssertionError("catalog_only_capability_was_accepted")
 
         request = bilibili_native_search(
+            client_request_id=create_client_request_id(),
             browser_binding_id=binding["browserBindingId"],
             query="DeepSeek",
         )

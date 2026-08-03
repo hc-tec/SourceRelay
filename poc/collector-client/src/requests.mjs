@@ -8,9 +8,9 @@
  */
 
 import { CollectorClientError } from './errors.mjs';
-import { UUID_PATTERN } from './constants.mjs';
+import { CORE_SERVICE_SCHEMA_VERSION, UUID_PATTERN } from './constants.mjs';
+import { randomUUID } from 'node:crypto';
 
-const SCHEMA_VERSION = 2;
 const BILIBILI_SEARCH_QUERY_MAX_LENGTH = 160;
 const XIAOHONGSHU_SEARCH_QUERY_MAX_LENGTH = 80;
 const XIAOHONGSHU_MAX_DETAILS = 20;
@@ -29,9 +29,20 @@ function bindingId(value) {
   return value;
 }
 
-function base({ browserBindingId, platform, capability, executionTarget, input }) {
+function clientRequestIdValue(value) {
+  if (typeof value !== 'string' || !UUID_PATTERN.test(value)) invalid('clientRequestId');
+  return value;
+}
+
+/** Create a fresh request identity. Persist and reuse it only for the same canonical submission. */
+export function createClientRequestId() {
+  return randomUUID();
+}
+
+function base({ clientRequestId, browserBindingId, platform, capability, executionTarget, input }) {
   return {
-    schemaVersion: SCHEMA_VERSION,
+    schemaVersion: CORE_SERVICE_SCHEMA_VERSION,
+    clientRequestId: clientRequestIdValue(clientRequestId),
     browserBindingId: bindingId(browserBindingId),
     platform,
     capability,
@@ -97,8 +108,9 @@ function maximumDetails(value) {
   return value;
 }
 
-export function bilibiliVideoDetail({ browserBindingId, canonicalVideoUrl }) {
+export function bilibiliVideoDetail({ clientRequestId, browserBindingId, canonicalVideoUrl }) {
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.video_detail',
@@ -107,8 +119,9 @@ export function bilibiliVideoDetail({ browserBindingId, canonicalVideoUrl }) {
   });
 }
 
-export function bilibiliNativeSearch({ browserBindingId, query }) {
+export function bilibiliNativeSearch({ clientRequestId, browserBindingId, query }) {
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.native_search',
@@ -117,8 +130,9 @@ export function bilibiliNativeSearch({ browserBindingId, query }) {
   });
 }
 
-export function bilibiliNativeSearchBatch({ browserBindingId, query }) {
+export function bilibiliNativeSearchBatch({ clientRequestId, browserBindingId, query }) {
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.native_search_batch',
@@ -127,8 +141,9 @@ export function bilibiliNativeSearchBatch({ browserBindingId, query }) {
   });
 }
 
-export function bilibiliAccountProfile({ browserBindingId, canonicalProfileUrl }) {
+export function bilibiliAccountProfile({ clientRequestId, browserBindingId, canonicalProfileUrl }) {
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.account_profile',
@@ -138,12 +153,14 @@ export function bilibiliAccountProfile({ browserBindingId, canonicalProfileUrl }
 }
 
 export function bilibiliAccountInventory({
+  clientRequestId,
   browserBindingId,
   canonicalProfileUrl,
   executionTarget = 'collector_work_tab'
 }) {
   if (executionTarget !== 'collector_work_tab' && executionTarget !== 'user_selected_tab') invalid('executionTarget');
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.account_inventory',
@@ -152,8 +169,9 @@ export function bilibiliAccountInventory({
   });
 }
 
-export function bilibiliDynamic({ browserBindingId, canonicalProfileUrl }) {
+export function bilibiliDynamic({ clientRequestId, browserBindingId, canonicalProfileUrl }) {
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.dynamic',
@@ -162,8 +180,9 @@ export function bilibiliDynamic({ browserBindingId, canonicalProfileUrl }) {
   });
 }
 
-export function bilibiliCollectionSeriesOverview({ browserBindingId, canonicalProfileUrl }) {
+export function bilibiliCollectionSeriesOverview({ clientRequestId, browserBindingId, canonicalProfileUrl }) {
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.collection_series.overview',
@@ -173,6 +192,7 @@ export function bilibiliCollectionSeriesOverview({ browserBindingId, canonicalPr
 }
 
 export function bilibiliCollectionSeriesDetail({
+  clientRequestId,
   browserBindingId,
   canonicalProfileUrl,
   stableSeriesId,
@@ -181,6 +201,7 @@ export function bilibiliCollectionSeriesDetail({
   if (typeof stableSeriesId !== 'string' || !/^\d{1,20}$/.test(stableSeriesId) || stableSeriesId === '0') invalid('stableSeriesId');
   if (listType !== 'series' && listType !== 'season') invalid('listType');
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.collection_series.detail',
@@ -193,8 +214,9 @@ export function bilibiliCollectionSeriesDetail({
   });
 }
 
-export function bilibiliDanmaku({ browserBindingId, canonicalVideoUrl }) {
+export function bilibiliDanmaku({ clientRequestId, browserBindingId, canonicalVideoUrl }) {
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.danmaku',
@@ -203,8 +225,9 @@ export function bilibiliDanmaku({ browserBindingId, canonicalVideoUrl }) {
   });
 }
 
-export function bilibiliDiscussion({ browserBindingId, canonicalVideoUrl }) {
+export function bilibiliDiscussion({ clientRequestId, browserBindingId, canonicalVideoUrl }) {
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'bilibili',
     capability: 'bilibili.discussion',
@@ -214,6 +237,7 @@ export function bilibiliDiscussion({ browserBindingId, canonicalVideoUrl }) {
 }
 
 export function xiaohongshuPublicNotesSearch({
+  clientRequestId,
   browserBindingId,
   query,
   maximumDetails: requestedMaximumDetails,
@@ -236,6 +260,7 @@ export function xiaohongshuPublicNotesSearch({
   if (details !== undefined) input.maximumDetails = details;
   if (comments !== undefined) input.comments = comments;
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'xiaohongshu',
     capability: 'xiaohongshu.search.public_notes.v1',
@@ -245,6 +270,7 @@ export function xiaohongshuPublicNotesSearch({
 }
 
 export function xiaohongshuAccountPublicNotes({
+  clientRequestId,
   browserBindingId,
   maximumScrolls,
   executionTarget = 'existing_public_profile_tab',
@@ -265,6 +291,7 @@ export function xiaohongshuAccountPublicNotes({
   const input = { maximumScrolls };
   if (canonicalProfileUrl !== undefined) input.profileUrl = canonicalProfileUrl;
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'xiaohongshu',
     capability: 'xiaohongshu.account.public_notes.v1',
@@ -274,6 +301,7 @@ export function xiaohongshuAccountPublicNotes({
 }
 
 export function xiaohongshuNotePublicDetail({
+  clientRequestId,
   browserBindingId,
   resultRank,
   executionTarget = 'existing_public_search_tab'
@@ -281,6 +309,7 @@ export function xiaohongshuNotePublicDetail({
   if (!Number.isSafeInteger(resultRank) || resultRank < 1 || resultRank > 20) invalid('resultRank');
   if (executionTarget !== 'existing_public_search_tab' && executionTarget !== 'existing_public_profile_tab') invalid('executionTarget');
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'xiaohongshu',
     capability: 'xiaohongshu.note.public_detail.v1',
@@ -289,8 +318,9 @@ export function xiaohongshuNotePublicDetail({
   });
 }
 
-export function xiaohongshuNotePublicComments({ browserBindingId, maximumScrolls }) {
+export function xiaohongshuNotePublicComments({ clientRequestId, browserBindingId, maximumScrolls }) {
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'xiaohongshu',
     capability: 'xiaohongshu.note.public_comments.v1',
@@ -299,8 +329,9 @@ export function xiaohongshuNotePublicComments({ browserBindingId, maximumScrolls
   });
 }
 
-export function xiaohongshuNotePublicCommentReplies({ browserBindingId, maximumThreads }) {
+export function xiaohongshuNotePublicCommentReplies({ clientRequestId, browserBindingId, maximumThreads }) {
   return base({
+    clientRequestId,
     browserBindingId,
     platform: 'xiaohongshu',
     capability: 'xiaohongshu.note.public_comment_replies.v1',

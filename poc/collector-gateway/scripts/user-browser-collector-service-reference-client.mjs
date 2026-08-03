@@ -54,7 +54,8 @@ async function validatedQueueRequest(path) {
   const candidate = value;
   const keys = Object.keys(candidate);
   if (
-    keys.length !== 6 || candidate.schemaVersion !== 2 ||
+    keys.length !== 7 || candidate.schemaVersion !== 3 ||
+    typeof candidate.clientRequestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(candidate.clientRequestId) ||
     typeof candidate.browserBindingId !== 'string' || !/^[0-9a-f-]{36}$/i.test(candidate.browserBindingId) ||
     candidate.platform !== 'bilibili' ||
     !['bilibili.video_detail', 'bilibili.native_search'].includes(candidate.capability) ||

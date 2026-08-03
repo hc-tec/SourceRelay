@@ -94,51 +94,61 @@ interface StoredOperation {
 }
 
 export interface EnqueueBilibiliVideoDetailWorkInput {
+  operationId?: string;
   browserBindingId: string;
   canonicalVideoUrl: string;
 }
 
 export interface EnqueueBilibiliNativeSearchWorkInput {
+  operationId?: string;
   browserBindingId: string;
   query: string;
 }
 
 export interface EnqueueBilibiliNativeSearchBatchWorkInput {
+  operationId?: string;
   browserBindingId: string;
   query: string;
 }
 
 export interface EnqueueBilibiliAccountProfileWorkInput {
+  operationId?: string;
   browserBindingId: string;
   canonicalProfileUrl: string;
 }
 
 export interface EnqueueBilibiliAccountInventoryWorkInput {
+  operationId?: string;
   browserBindingId: string;
   canonicalProfileUrl: string;
 }
 
 export interface EnqueueBilibiliAccountInventoryUserSelectedTabWorkInput {
+  operationId?: string;
   browserBindingId: string;
   canonicalProfileUrl: string;
 }
 
 export interface EnqueueBilibiliDiscussionUserSelectedTabWorkInput {
+  operationId?: string;
   browserBindingId: string;
   canonicalVideoUrl: string;
 }
 
 export interface EnqueueBilibiliDynamicWorkInput {
+  operationId?: string;
   browserBindingId: string;
   canonicalProfileUrl: string;
 }
 
 export interface EnqueueBilibiliCollectionSeriesOverviewWorkInput {
+  operationId?: string;
   browserBindingId: string;
   canonicalProfileUrl: string;
 }
 
 export interface EnqueueBilibiliCollectionSeriesDetailWorkInput {
+  operationId?: string;
   browserBindingId: string;
   canonicalProfileUrl: string;
   stableSeriesId: string;
@@ -146,11 +156,13 @@ export interface EnqueueBilibiliCollectionSeriesDetailWorkInput {
 }
 
 export interface EnqueueBilibiliDanmakuWorkInput {
+  operationId?: string;
   browserBindingId: string;
   canonicalVideoUrl: string;
 }
 
 export interface EnqueueXiaohongshuPublicNotesSearchWorkInput {
+  operationId?: string;
   browserBindingId: string;
   query: string;
   maximumDetails?: number;
@@ -158,6 +170,7 @@ export interface EnqueueXiaohongshuPublicNotesSearchWorkInput {
 }
 
 export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
+  operationId?: string;
   browserBindingId: string;
   maximumScrolls: XiaohongshuProfileScrollCount;
   profileUrl?: string;
@@ -165,15 +178,21 @@ export interface EnqueueXiaohongshuAccountPublicNotesWorkInput {
 }
 
 export interface EnqueueXiaohongshuNotePublicDetailWorkInput {
+  operationId?: string;
   browserBindingId: string;
   resultRank: number;
   executionTarget?: 'existing_public_search_tab' | 'existing_public_profile_tab';
 }
 export interface EnqueueXiaohongshuNotePublicCommentsWorkInput {
+  operationId?: string;
   browserBindingId: string;
   maximumScrolls: 1 | 2 | 3;
 }
-export interface EnqueueXiaohongshuNotePublicCommentRepliesWorkInput { browserBindingId: string; maximumThreads: 1 | 2 | 3; }
+export interface EnqueueXiaohongshuNotePublicCommentRepliesWorkInput {
+  operationId?: string;
+  browserBindingId: string;
+  maximumThreads: 1 | 2 | 3;
+}
 
 /**
  * Queued and claimed operations retain their signed envelope because it is
@@ -342,7 +361,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.video_detail',
@@ -404,7 +423,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search',
@@ -469,7 +488,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search_batch',
@@ -512,7 +531,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.account_profile',
@@ -542,7 +561,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.account_inventory',
@@ -581,7 +600,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.account_inventory',
@@ -619,7 +638,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
@@ -641,7 +660,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.dynamic',
@@ -667,7 +686,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.collection_series.overview',
@@ -696,7 +715,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.collection_series.detail',
@@ -732,7 +751,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.danmaku',
@@ -772,7 +791,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
@@ -826,7 +845,7 @@ export class ExtensionWorkQueue {
         schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
         protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
         workId: randomUUID(),
-        operationId: randomUUID(),
+        operationId: this.#operationId(input.operationId),
         browserBindingId: input.browserBindingId,
         platform: 'xiaohongshu',
         capability: 'xiaohongshu.account.public_notes.v1',
@@ -843,7 +862,7 @@ export class ExtensionWorkQueue {
         schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
         protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
         workId: randomUUID(),
-        operationId: randomUUID(),
+        operationId: this.#operationId(input.operationId),
         browserBindingId: input.browserBindingId,
         platform: 'xiaohongshu',
         capability: 'xiaohongshu.account.public_notes.v1',
@@ -859,7 +878,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.account.public_notes.v1',
@@ -888,7 +907,7 @@ export class ExtensionWorkQueue {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION,
       protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
       workId: randomUUID(),
-      operationId: randomUUID(),
+      operationId: this.#operationId(input.operationId),
       browserBindingId: input.browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.note.public_detail.v1',
@@ -914,7 +933,7 @@ export class ExtensionWorkQueue {
     const issuedAt = now.toISOString();
     const unsigned: UnsignedExtensionWorkItem = {
       schemaVersion: EXTENSION_WORK_SCHEMA_VERSION, protocolVersion: EXTENSION_WORK_PROTOCOL_VERSION,
-      workId: randomUUID(), operationId: randomUUID(), browserBindingId: input.browserBindingId,
+      workId: randomUUID(), operationId: this.#operationId(input.operationId), browserBindingId: input.browserBindingId,
       platform: 'xiaohongshu', capability: 'xiaohongshu.note.public_comments.v1',
       executionTarget: 'existing_public_note_overlay', issuedAt,
       expiresAt: new Date(now.getTime() + WORK_ITEM_TTL_MS).toISOString(),
@@ -1022,6 +1041,15 @@ export class ExtensionWorkQueue {
       operation.item.browserBindingId === browserBindingId &&
       (operation.state === 'queued' || operation.state === 'claimed')
     )) throw new Error('extension_work_binding_busy');
+  }
+
+  #operationId(value: string | undefined): string {
+    const operationId = value ?? randomUUID();
+    if (!isUuid(operationId)) throw new Error('extension_work_operation_invalid');
+    if (this.#operations.some((operation) => operation.item.operationId === operationId)) {
+      throw new Error('extension_work_operation_conflict');
+    }
+    return operationId;
   }
 
   async #normaliseAccountWork(

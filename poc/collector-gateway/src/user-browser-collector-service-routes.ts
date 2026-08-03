@@ -5,6 +5,11 @@ import type {
   CollectorServiceAuditOutcome
 } from './collector-service-audit';
 import type { CollectorServiceClientRegistry } from './collector-service-clients';
+import type {
+  CollectorServiceIdempotencyLedger,
+  CollectorServiceIdempotencyRecord
+} from './collector-service-idempotency';
+import { canonicalJson, sha256Hex } from './canonical-json';
 import { reconcileExpiredExtensionWork, type ExtensionWorkRouteContext } from './extension-work-routes';
 import { readJsonBody, safeErrorCode, sendJson } from './gateway-http';
 import {
@@ -19,7 +24,10 @@ import {
   type UserBrowserServicePrincipal
 } from './user-browser-collector-service-access';
 import { dispatchUserBrowserCapability } from './user-browser-capability-registry';
-import { listUserBrowserCapabilities } from './user-browser-capabilities';
+import {
+  userBrowserCapabilityCatalogContract,
+  userBrowserServiceCompatibility
+} from './user-browser-service-compatibility';
 import { collectorCoreReleaseManifest } from '@intelligence/collector-contracts';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
@@ -27,6 +35,7 @@ const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 export interface UserBrowserCollectorServiceRouteContext extends ExtensionWorkRouteContext {
   collectorServiceClients: CollectorServiceClientRegistry;
   collectorServiceAudit: CollectorServiceAuditLog;
+  collectorServiceIdempotency: CollectorServiceIdempotencyLedger;
 }
 
 /**
@@ -45,14 +54,19 @@ export async function handleUserBrowserCollectorServiceRoute(
     return true;
   }
   if (request.method === 'GET' && url.pathname === '/v2/release') {
-    sendJson(response, 200, collectorCoreReleaseManifest());
+    const origin = context.identity.publicIdentity.loopbackOrigin;
+    sendJson(response, 200, {
+      ...collectorCoreReleaseManifest(),
+      compatibility: userBrowserServiceCompatibility(origin)
+    });
     return true;
   }
   if (request.method === 'GET' && url.pathname === '/v2/capabilities') {
-    sendJson(response, 200, {
-      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
-      capabilities: listUserBrowserCapabilities()
-    });
+    sendJson(
+      response,
+      200,
+      userBrowserCapabilityCatalogContract(context.identity.publicIdentity.loopbackOrigin)
+    );
     return true;
   }
   if (request.method === 'GET' && url.pathname === '/v2/collector-service/browser-bindings') {
@@ -75,28 +89,54 @@ export async function handleUserBrowserCollectorServiceRoute(
       sendUserBrowserServiceAccessDenied(response, access);
       return true;
     }
-    let operationId: string | null = null;
     const startedAt = Date.now();
+    let collection: ReturnType<typeof userBrowserCollectorServiceRequestInput>;
+    let reservation: { created: boolean; record: CollectorServiceIdempotencyRecord };
     try {
-      const collection = userBrowserCollectorServiceRequestInput(await readJsonBody(request));
-      const operation = await dispatchUserBrowserCapability(context, collection);
-      operationId = operation.operationId;
-      await context.operationalLog.record({
-        eventType: 'collector.operation.queued',
-        requestId: context.requestId ?? null,
-        operationId,
-        capability: collection.capability,
-        durationMs: Math.max(0, Date.now() - startedAt),
-        outcome: 'started',
-        details: { executionTarget: operation.executionTarget }
-      });
-      await audit(context, access.principal, 'collect', collection.capability, operationId, 'queued', null);
-      sendJson(response, 201, {
-        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
-        result: operation
-      });
+      collection = userBrowserCollectorServiceRequestInput(await readJsonBody(request));
+      reservation = await context.collectorServiceIdempotency.reserve(
+        collection.clientRequestId,
+        collectionRequestSha256(collection)
+      );
     } catch (error) {
       const code = safeErrorCode(error);
+      await context.operationalLog.record({
+        level: 'warn',
+        eventType: 'collector.operation.queue_rejected',
+        requestId: context.requestId ?? null,
+        operationId: null,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        outcome: 'failed',
+        errorCode: code,
+        details: { phase: 'request_or_idempotency_validation' }
+      });
+      await audit(context, access.principal, 'collect', null, null, 'failed', code);
+      sendJson(response, operationStatus(code), {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        ok: false,
+        error: code
+      });
+      return true;
+    }
+
+    if (!reservation.created) {
+      await sendIdempotentReplay(response, context, access.principal, collection, reservation.record, startedAt);
+      return true;
+    }
+
+    const operationId = reservation.record.operationId;
+    let operation: Awaited<ReturnType<typeof dispatchUserBrowserCapability>>;
+    try {
+      operation = await dispatchUserBrowserCapability(context, collection, operationId);
+    } catch (error) {
+      const code = safeErrorCode(error);
+      const status = operationStatus(code);
+      try {
+        await context.collectorServiceIdempotency.reject(collection.clientRequestId, operationId, code, status);
+      } catch {
+        // A failed ledger transition must never permit replay. The persisted
+        // reservation remains outcome-unknown and the original error is kept.
+      }
       await context.operationalLog.record({
         level: 'warn',
         eventType: 'collector.operation.queue_rejected',
@@ -108,8 +148,47 @@ export async function handleUserBrowserCollectorServiceRoute(
         details: { phase: 'dispatch' }
       });
       await audit(context, access.principal, 'collect', null, operationId, 'failed', code);
-      sendJson(response, operationStatus(code), { schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION, ok: false, error: code });
+      sendJson(response, status, {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        ok: false,
+        error: code,
+        clientRequestId: collection.clientRequestId,
+        operationId
+      });
+      return true;
     }
+
+    try {
+      await context.collectorServiceIdempotency.accept(collection.clientRequestId, operationId);
+    } catch (error) {
+      await context.operationalLog.record({
+        level: 'warn',
+        eventType: 'collector.operation.idempotency_accept_deferred',
+        requestId: context.requestId ?? null,
+        operationId,
+        capability: collection.capability,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        outcome: 'failed',
+        errorCode: safeErrorCode(error),
+        details: { phase: 'idempotency_accept' }
+      });
+    }
+    await context.operationalLog.record({
+      eventType: 'collector.operation.queued',
+      requestId: context.requestId ?? null,
+      operationId,
+      capability: collection.capability,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      outcome: 'started',
+      details: { executionTarget: operation.executionTarget, idempotentReplay: false }
+    });
+    await audit(context, access.principal, 'collect', collection.capability, operationId, 'queued', null);
+    sendJson(response, 201, {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      clientRequestId: collection.clientRequestId,
+      idempotentReplay: false,
+      result: operation
+    });
     return true;
   }
 
@@ -179,10 +258,77 @@ async function audit(
 }
 
 function operationStatus(errorCode: string): 400 | 409 {
-  return errorCode === 'browser_binding_offline' || errorCode.startsWith('browser_binding_safety_') ||
+  return errorCode === 'collector_service_idempotency_conflict' ||
+    errorCode === 'collector_service_idempotency_outcome_unknown' ||
+    errorCode === 'collector_service_idempotency_operation_unavailable' ||
+    errorCode === 'browser_binding_offline' || errorCode.startsWith('browser_binding_safety_') ||
     errorCode.startsWith('extension_work_binding_')
     ? 409
     : 400;
+}
+
+function collectionRequestSha256(
+  collection: ReturnType<typeof userBrowserCollectorServiceRequestInput>
+): string {
+  const { clientRequestId: _clientRequestId, ...canonicalRequest } = collection;
+  return sha256Hex(canonicalJson(canonicalRequest));
+}
+
+async function sendIdempotentReplay(
+  response: ServerResponse,
+  context: UserBrowserCollectorServiceRouteContext,
+  principal: UserBrowserServicePrincipal,
+  collection: ReturnType<typeof userBrowserCollectorServiceRequestInput>,
+  record: CollectorServiceIdempotencyRecord,
+  startedAt: number
+): Promise<void> {
+  if (record.state === 'rejected') {
+    await audit(context, principal, 'collect', collection.capability, record.operationId, 'failed', record.errorCode);
+    sendJson(response, record.errorStatus ?? 409, {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      ok: false,
+      error: record.errorCode ?? 'collector_service_idempotency_outcome_unknown',
+      clientRequestId: collection.clientRequestId,
+      operationId: record.operationId
+    });
+    return;
+  }
+
+  const operation = await context.workQueue.get(record.operationId);
+  if (!operation) {
+    const code = record.state === 'accepted'
+      ? 'collector_service_idempotency_operation_unavailable'
+      : 'collector_service_idempotency_outcome_unknown';
+    await audit(context, principal, 'collect', collection.capability, record.operationId, 'failed', code);
+    sendJson(response, 409, {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      ok: false,
+      error: code,
+      clientRequestId: collection.clientRequestId,
+      operationId: record.operationId
+    });
+    return;
+  }
+
+  if (record.state === 'reserved') {
+    await context.collectorServiceIdempotency.accept(collection.clientRequestId, record.operationId);
+  }
+  await context.operationalLog.record({
+    eventType: 'collector.operation.idempotent_replay',
+    requestId: context.requestId ?? null,
+    operationId: operation.operationId,
+    capability: operation.capability,
+    durationMs: Math.max(0, Date.now() - startedAt),
+    outcome: 'completed',
+    details: { executionTarget: operation.executionTarget, idempotentReplay: true }
+  });
+  await audit(context, principal, 'collect', operation.capability, operation.operationId, outcomeForState(operation.state), operation.errorCode);
+  sendJson(response, 200, {
+    schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+    clientRequestId: collection.clientRequestId,
+    idempotentReplay: true,
+    result: operation
+  });
 }
 
 function outcomeForState(state: 'queued' | 'claimed' | 'completed' | 'partial' | 'stopped' | 'failed'): CollectorServiceAuditOutcome {

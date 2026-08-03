@@ -15,18 +15,27 @@ import type { CollectorServiceAuditLog } from './collector-service-audit';
 import { readJsonBody, requireSameOrigin, sendJson } from './gateway-http';
 import type { LoadedGatewayIdentity } from './identity';
 import {
+  findUserBrowserArtifact,
   isUserBrowserArtifactCapability,
   readUserBrowserArtifact
 } from './user-browser-artifact-reader-registry';
+import {
+  USER_BROWSER_ARTIFACT_DEFAULT_WINDOW_BYTES,
+  userBrowserArtifactContentWindow,
+  userBrowserArtifactMetadata
+} from './user-browser-artifact-resource';
 import {
   authoriseUserBrowserServiceRequest,
   recordUserBrowserServiceAudit,
   sendUserBrowserServiceAccessDenied
 } from './user-browser-collector-service-access';
 import type { OperationalLog } from './operational-log';
+import { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION } from '@intelligence/collector-contracts';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const DIRECT_ARTIFACT = new RegExp(`^/v1/collect/artifacts/([^/]+)/(${UUID})$`, 'i');
+const ARTIFACT_METADATA = new RegExp(`^/v2/collect/artifacts/(${UUID})$`, 'i');
+const ARTIFACT_CONTENT = new RegExp(`^/v2/collect/artifacts/(${UUID})/content$`, 'i');
 
 export interface UserBrowserGatewayAdminRouteContext {
   identity: LoadedGatewayIdentity;
@@ -100,6 +109,131 @@ export async function handleUserBrowserGatewayAdminRoute(
     return true;
   }
 
+  const artifactContent = url.pathname.match(ARTIFACT_CONTENT);
+  if (request.method === 'GET' && artifactContent) {
+    const artifactId = artifactContent[1]!;
+    const access = await authoriseUserBrowserServiceRequest(request, context, 'artifacts:read');
+    if (!access.granted) {
+      await recordUserBrowserServiceAudit(context, null, 'artifact_read', {
+        capability: null,
+        artifactId,
+        operationId: null,
+        operationKind: null,
+        outcome: 'denied',
+        errorCode: access.errorCode
+      });
+      sendUserBrowserServiceAccessDenied(response, access, USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION);
+      return true;
+    }
+    const found = await findUserBrowserArtifact(context, artifactId);
+    if (!found) {
+      await recordUserBrowserServiceAudit(context, access.principal, 'artifact_read', {
+        capability: null,
+        artifactId,
+        operationId: null,
+        operationKind: null,
+        outcome: 'not_found',
+        errorCode: 'collector_service_artifact_not_found'
+      });
+      sendJson(response, 404, {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        ok: false,
+        error: 'collector_service_artifact_not_found'
+      });
+      return true;
+    }
+    try {
+      const { offset, maximumBytes } = artifactWindowInput(url);
+      const metadata = userBrowserArtifactMetadata(found);
+      const window = userBrowserArtifactContentWindow(found, offset, maximumBytes);
+      await recordUserBrowserServiceAudit(context, access.principal, 'artifact_read', {
+        capability: found.capability,
+        artifactId,
+        operationId: metadata.operationId,
+        operationKind: metadata.operationId ? 'run' : null,
+        outcome: 'completed',
+        errorCode: null
+      });
+      sendJson(response, 200, {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        window
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      await recordUserBrowserServiceAudit(context, access.principal, 'artifact_read', {
+        capability: found.capability,
+        artifactId,
+        operationId: null,
+        operationKind: null,
+        outcome: 'failed',
+        errorCode: code
+      });
+      sendJson(response, artifactReadStatus(code), {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        ok: false,
+        error: code
+      });
+    }
+    return true;
+  }
+
+  const artifactMetadata = url.pathname.match(ARTIFACT_METADATA);
+  if (request.method === 'GET' && artifactMetadata) {
+    const artifactId = artifactMetadata[1]!;
+    const access = await authoriseUserBrowserServiceRequest(request, context, 'artifacts:read');
+    if (!access.granted) {
+      await recordUserBrowserServiceAudit(context, null, 'artifact_read', {
+        capability: null,
+        artifactId,
+        operationId: null,
+        operationKind: null,
+        outcome: 'denied',
+        errorCode: access.errorCode
+      });
+      sendUserBrowserServiceAccessDenied(response, access, USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION);
+      return true;
+    }
+    if ([...url.searchParams.keys()].length > 0) {
+      sendJson(response, 400, {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        ok: false,
+        error: 'collector_service_artifact_metadata_query_invalid'
+      });
+      return true;
+    }
+    const found = await findUserBrowserArtifact(context, artifactId);
+    if (!found) {
+      await recordUserBrowserServiceAudit(context, access.principal, 'artifact_read', {
+        capability: null,
+        artifactId,
+        operationId: null,
+        operationKind: null,
+        outcome: 'not_found',
+        errorCode: 'collector_service_artifact_not_found'
+      });
+      sendJson(response, 404, {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        ok: false,
+        error: 'collector_service_artifact_not_found'
+      });
+      return true;
+    }
+    const metadata = userBrowserArtifactMetadata(found);
+    await recordUserBrowserServiceAudit(context, access.principal, 'artifact_read', {
+      capability: found.capability,
+      artifactId,
+      operationId: metadata.operationId,
+      operationKind: metadata.operationId ? 'run' : null,
+      outcome: 'completed',
+      errorCode: null
+    });
+    sendJson(response, 200, {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      metadata
+    });
+    return true;
+  }
+
   const artifact = url.pathname.match(DIRECT_ARTIFACT);
   if (request.method === 'GET' && artifact && isUserBrowserArtifactCapability(artifact[1]!)) {
     const access = await authoriseUserBrowserServiceRequest(request, context, 'artifacts:read');
@@ -127,7 +261,11 @@ export async function handleUserBrowserGatewayAdminRoute(
         outcome: 'not_found',
         errorCode: 'collector_service_artifact_not_found'
       });
-      sendJson(response, 404, { schemaVersion: 2, ok: false, error: 'collector_service_artifact_not_found' });
+      sendJson(response, 404, {
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        ok: false,
+        error: 'collector_service_artifact_not_found'
+      });
       return true;
     }
     await recordUserBrowserServiceAudit(context, access.principal, 'artifact_read', {
@@ -138,10 +276,48 @@ export async function handleUserBrowserGatewayAdminRoute(
       outcome: 'completed',
       errorCode: null
     });
-    sendJson(response, 200, { schemaVersion: 2, capability, artifact: view });
+    sendJson(response, 200, {
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      capability,
+      artifact: view
+    });
     return true;
   }
   return false;
+}
+
+function artifactWindowInput(url: URL): { offset: number; maximumBytes: number } {
+  const allowed = new Set(['offset', 'maxBytes']);
+  if ([...url.searchParams.keys()].some((key) => !allowed.has(key)) ||
+    url.searchParams.getAll('offset').length > 1 || url.searchParams.getAll('maxBytes').length > 1) {
+    throw new Error('collector_service_artifact_window_invalid');
+  }
+  return {
+    offset: unsignedInteger(url.searchParams.get('offset') ?? '0', 'collector_service_artifact_offset_invalid'),
+    maximumBytes: unsignedInteger(
+      url.searchParams.get('maxBytes') ?? String(USER_BROWSER_ARTIFACT_DEFAULT_WINDOW_BYTES),
+      'collector_service_artifact_window_invalid'
+    )
+  };
+}
+
+function unsignedInteger(value: string, code: string): number {
+  if (!/^(0|[1-9]\d*)$/.test(value)) throw new Error(code);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) throw new Error(code);
+  return parsed;
+}
+
+function artifactReadStatus(code: string): 400 | 416 {
+  return code === 'collector_service_artifact_read_out_of_bounds' ||
+    code === 'collector_service_artifact_offset_not_utf8_boundary'
+    ? 416
+    : 400;
+}
+
+function errorCode(error: unknown): string {
+  const code = error instanceof Error ? error.message : 'collector_service_artifact_read_failed';
+  return /^[a-z0-9_.-]{1,120}$/i.test(code) ? code : 'collector_service_artifact_read_failed';
 }
 
 function userBrowserClientCreateInput(value: unknown) {

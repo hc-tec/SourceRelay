@@ -23,7 +23,7 @@ SDK 是异步的，适合 FastAPI、DeepAgents、LangGraph、AgentScope 和其�
 import asyncio
 import os
 
-from intelligence_collector import CollectorClient
+from intelligence_collector import CollectorClient, create_client_request_id
 
 
 async def main() -> None:
@@ -38,6 +38,7 @@ async def main() -> None:
         from intelligence_collector import bilibili_native_search
 
         request = bilibili_native_search(
+            client_request_id=create_client_request_id(),
             browser_binding_id=binding["browserBindingId"],
             query="DeepSeek",
         )
@@ -81,6 +82,7 @@ GET /v2/openapi.json
 ```text
 list_direct_capabilities()
 list_capabilities()
+read_capability_catalog()
 read_release()
 read_openapi()
 list_browser_bindings()
@@ -88,6 +90,8 @@ collect(request)
 get_operation(operation_id)
 wait_operation(operation_id)
 read_artifact(operation_id)
+read_artifact_metadata(artifact_id)
+read_artifact_content_window(artifact_id, offset=0, max_bytes=16384)
 read_artifact_from_operation(operation)
 collect_and_wait(request)
 collect_model(request)
@@ -106,15 +110,18 @@ URL、搜索词、结果序号和评论/滚动预算；Gateway 仍会再次校�
 ```python
 from intelligence_collector import (
     bilibili_video_detail,
+    create_client_request_id,
     xiaohongshu_public_notes_search,
 )
 
 bilibili_request = bilibili_video_detail(
+    client_request_id=create_client_request_id(),
     browser_binding_id=binding_id,
     canonical_video_url="https://www.bilibili.com/video/BV1qZSLBYEpa",
 )
 
 xiaohongshu_request = xiaohongshu_public_notes_search(
+    client_request_id=create_client_request_id(),
     browser_binding_id=binding_id,
     query="人工智能",
     maximum_details=3,
@@ -131,6 +138,10 @@ xiaohongshu_request = xiaohongshu_public_notes_search(
 小红书账号 builder 只有在 `execution_target="ephemeral_public_profile_url"` 时才
 接受短时 `profile_url`，并保留签名链接原文；搜索和详情 builder 不接受调用方 URL。
 所有 builder 都拒绝 selector、脚本、tab ID、CDP 和任意 Network 控制字段。
+
+`client_request_id` 属于一次逻辑提交。调用方应保存完整请求；POST 结果未知时只能用同一
+ID 和同一请求重试，修改输入则必须生成新 ID。Core 会返回原 Operation、明确的
+outcome-unknown 或冲突，不会把一次网络抖动变成第二次平台动作；SDK 自身不自动重试 POST。
 
 ## 结构化结果
 

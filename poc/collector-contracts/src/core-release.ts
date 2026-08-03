@@ -7,8 +7,8 @@ import { EXTENSION_WORK_PROTOCOL_VERSION, EXTENSION_WORK_SCHEMA_VERSION } from '
 import { NATIVE_BRIDGE_PROTOCOL_VERSION } from './native-bridge.js';
 
 /** Public wire version for the user-owned-browser Local Collector Service. */
-export const USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION = 2 as const;
-export const USER_BROWSER_COLLECTOR_SERVICE_OPENAPI_VERSION = '2.0.0-experimental' as const;
+export const USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION = 3 as const;
+export const USER_BROWSER_COLLECTOR_SERVICE_OPENAPI_VERSION = '3.0.0-experimental' as const;
 
 /**
  * Compatibility identity for one Core release. The extension compatibility

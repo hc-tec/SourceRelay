@@ -25,10 +25,10 @@ try {
   }, null, 2), 'utf8');
   await runNpm(['install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefix', jsConsumer,
     `file:${join(releaseDirectory, 'npm', manifest.packages.javascriptSdk)}`], verificationRoot);
-  const jsProbe = await runNodeProbe(jsConsumer, `import { CORE_RELEASE_VERSION, listDirectCapabilities, bilibiliVideoDetail } from '@intelligence/collector-client';
-if (CORE_RELEASE_VERSION !== '0.7.17' || listDirectCapabilities().length !== 15) throw new Error('js_sdk_release_probe_failed');
-const request = bilibiliVideoDetail({ browserBindingId: '11111111-1111-4111-8111-111111111111', canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' });
-if (request.schemaVersion !== 2 || request.capability !== 'bilibili.video_detail') throw new Error('js_sdk_builder_probe_failed');
+  const jsProbe = await runNodeProbe(jsConsumer, `import { CORE_RELEASE_VERSION, CORE_SERVICE_SCHEMA_VERSION, createClientRequestId, listDirectCapabilities, bilibiliVideoDetail } from '@intelligence/collector-client';
+if (CORE_RELEASE_VERSION !== '0.7.17' || CORE_SERVICE_SCHEMA_VERSION !== 3 || listDirectCapabilities().length !== 15) throw new Error('js_sdk_release_probe_failed');
+const request = bilibiliVideoDetail({ clientRequestId: createClientRequestId(), browserBindingId: '11111111-1111-4111-8111-111111111111', canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' });
+if (request.schemaVersion !== 3 || request.capability !== 'bilibili.video_detail' || typeof request.clientRequestId !== 'string') throw new Error('js_sdk_builder_probe_failed');
 console.log(JSON.stringify({ ok: true, release: CORE_RELEASE_VERSION, directCapabilities: listDirectCapabilities().length }));`);
   if (!jsProbe.includes('"ok":true')) throw new Error('js_sdk_release_probe_invalid');
 
@@ -36,7 +36,7 @@ console.log(JSON.stringify({ ok: true, release: CORE_RELEASE_VERSION, directCapa
   const pythonExecutable = process.platform === 'win32' ? join(pythonEnvironment, 'Scripts', 'python.exe') : join(pythonEnvironment, 'bin', 'python');
   await runPythonExecutable(pythonExecutable, ['-m', 'pip', 'install', '--disable-pip-version-check', 'httpx>=0.28,<1'], verificationRoot);
   await runPythonExecutable(pythonExecutable, ['-m', 'pip', 'install', '--no-index', '--find-links', join(releaseDirectory, 'python'), `intelligence-collector-client==${manifest.releaseVersion}`], verificationRoot);
-  const pythonProbe = await runPythonExecutable(pythonExecutable, ['-c', "from intelligence_collector import CORE_RELEASE_VERSION, list_direct_capabilities, bilibili_video_detail; assert CORE_RELEASE_VERSION == '0.7.17'; assert len(list_direct_capabilities()) == 15; request = bilibili_video_detail(browser_binding_id='11111111-1111-4111-8111-111111111111', canonical_video_url='https://www.bilibili.com/video/BV1qZSLBYEpa'); assert request['capability'] == 'bilibili.video_detail'; print('{\\\"ok\\\":true,\\\"release\\\":\\\"' + CORE_RELEASE_VERSION + '\\\",\\\"directCapabilities\\\":' + str(len(list_direct_capabilities())) + '}')"], verificationRoot);
+  const pythonProbe = await runPythonExecutable(pythonExecutable, ['-c', "from intelligence_collector import CORE_RELEASE_VERSION, CORE_SERVICE_SCHEMA_VERSION, create_client_request_id, list_direct_capabilities, bilibili_video_detail; assert CORE_RELEASE_VERSION == '0.7.17'; assert CORE_SERVICE_SCHEMA_VERSION == 3; assert len(list_direct_capabilities()) == 15; request = bilibili_video_detail(client_request_id=create_client_request_id(), browser_binding_id='11111111-1111-4111-8111-111111111111', canonical_video_url='https://www.bilibili.com/video/BV1qZSLBYEpa'); assert request['schemaVersion'] == 3 and request['capability'] == 'bilibili.video_detail' and isinstance(request['clientRequestId'], str); print('{\\\"ok\\\":true,\\\"release\\\":\\\"' + CORE_RELEASE_VERSION + '\\\",\\\"directCapabilities\\\":' + str(len(list_direct_capabilities())) + '}')"], verificationRoot);
   if (!pythonProbe.includes('"ok":true')) throw new Error('python_sdk_release_probe_invalid');
 
   console.log(JSON.stringify({
