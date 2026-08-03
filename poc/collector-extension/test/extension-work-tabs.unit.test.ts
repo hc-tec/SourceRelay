@@ -175,7 +175,12 @@ describe('extension-owned work-tab navigation identity', () => {
 describe('extension-owned work-tab foreground lifecycle', () => {
   test('foregrounds only its current lease before recording and sending the canonical navigation', async () => {
     const browser = installChromeTabsMock();
-    const { acquireExtensionWorkTab, navigateExtensionWorkTabOnce, readExtensionWorkTab } = await import(
+    const {
+      acquireExtensionWorkTab,
+      currentExtensionWorkTabLossCause,
+      navigateExtensionWorkTabOnce,
+      readExtensionWorkTab
+    } = await import(
       '../src/background/extension-work-tabs.js'
     );
     const lease = await acquireExtensionWorkTab();
@@ -198,11 +203,17 @@ describe('extension-owned work-tab foreground lifecycle', () => {
       active: true,
       url: 'https://www.bilibili.com/video/BV1qZSLBYEpa'
     });
+    expect(currentExtensionWorkTabLossCause()).toBeNull();
   });
 
   test('keeps the lease when Chromium repeats the internally initiated same-tab activation', async () => {
     const browser = installChromeTabsMock();
-    const { acquireExtensionWorkTab, navigateExtensionWorkTabOnce, readExtensionWorkTab } = await import(
+    const {
+      acquireExtensionWorkTab,
+      currentExtensionWorkTabLossCause,
+      navigateExtensionWorkTabOnce,
+      readExtensionWorkTab
+    } = await import(
       '../src/background/extension-work-tabs.js'
     );
     const lease = await acquireExtensionWorkTab();
@@ -215,6 +226,7 @@ describe('extension-owned work-tab foreground lifecycle', () => {
       active: true,
       url: 'https://www.bilibili.com/video/BV1qZSLBYEpa'
     });
+    expect(currentExtensionWorkTabLossCause()).toBeNull();
   });
 
   test('does not record or send a platform navigation when foregrounding is unavailable', async () => {
@@ -235,7 +247,12 @@ describe('extension-owned work-tab foreground lifecycle', () => {
 
   test('stops the lease without reclaiming focus when the person switches away', async () => {
     const browser = installChromeTabsMock();
-    const { acquireExtensionWorkTab, navigateExtensionWorkTabOnce, readExtensionWorkTab } = await import(
+    const {
+      acquireExtensionWorkTab,
+      currentExtensionWorkTabLossCause,
+      navigateExtensionWorkTabOnce,
+      readExtensionWorkTab
+    } = await import(
       '../src/background/extension-work-tabs.js'
     );
     const lease = await acquireExtensionWorkTab();
@@ -244,6 +261,7 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     browser.activate(1);
 
     await expect(readExtensionWorkTab(lease)).rejects.toThrow('work_tab_user_taken_over');
+    expect(currentExtensionWorkTabLossCause()).toBe('another_tab_activated');
     expect(browser.update.mock.calls.map(([, properties]) => properties)).toEqual([
       { active: true },
       { url: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
@@ -252,7 +270,12 @@ describe('extension-owned work-tab foreground lifecycle', () => {
 
   test('does not keep polling a tab that became backgrounded without an activation event', async () => {
     const browser = installChromeTabsMock();
-    const { acquireExtensionWorkTab, navigateExtensionWorkTabOnce, readExtensionWorkTab } = await import(
+    const {
+      acquireExtensionWorkTab,
+      currentExtensionWorkTabLossCause,
+      navigateExtensionWorkTabOnce,
+      readExtensionWorkTab
+    } = await import(
       '../src/background/extension-work-tabs.js'
     );
     const lease = await acquireExtensionWorkTab();
@@ -262,5 +285,6 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     tab.active = false;
 
     await expect(readExtensionWorkTab(lease)).rejects.toThrow('work_tab_user_taken_over');
+    expect(currentExtensionWorkTabLossCause()).toBe('tab_became_inactive');
   });
 });

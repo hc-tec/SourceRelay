@@ -18,6 +18,16 @@ import {
 
 export type WorkTabAcquisition = 'created' | 'reused';
 export type WorkTabDisposition = 'idle_reusable' | 'retained_not_reusable' | 'user_taken_over' | 'closed_or_missing';
+export type WorkTabLossCause =
+  | 'another_tab_activated'
+  | 'leased_tab_activated_outside_internal_window'
+  | 'managed_tab_moved'
+  | 'managed_tab_removed'
+  | 'unexpected_url_update'
+  | 'idle_tab_active_before_reuse'
+  | 'idle_tab_missing_before_reuse'
+  | 'tab_became_inactive'
+  | 'tab_read_failed';
 
 export interface ExtensionWorkTabLease {
   leaseId: string;
@@ -45,6 +55,7 @@ interface ManagedWorkTab {
 const managedTabs = new Map<number, ManagedWorkTab>();
 const leaseLosses = new Map<string, Exclude<WorkTabDisposition, 'idle_reusable'>>();
 let listenersInitialised = false;
+let latestLossCause: WorkTabLossCause | null = null;
 const FOREGROUND_ACTIVATION_GRACE_MS = 2_000;
 const FOREGROUND_SETTLE_MS = 350;
 
@@ -56,8 +67,8 @@ const FOREGROUND_SETTLE_MS = 350;
 export function initialiseExtensionWorkTabs(): void {
   if (listenersInitialised) return;
   listenersInitialised = true;
-  chrome.tabs.onRemoved.addListener((tabId) => forgetTab(tabId, 'closed_or_missing'));
-  chrome.tabs.onMoved.addListener((tabId) => forgetTab(tabId, 'user_taken_over'));
+  chrome.tabs.onRemoved.addListener((tabId) => forgetTab(tabId, 'closed_or_missing', 'managed_tab_removed'));
+  chrome.tabs.onMoved.addListener((tabId) => forgetTab(tabId, 'user_taken_over', 'managed_tab_moved'));
   chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
     const activated = managedTabs.get(tabId);
     const foregroundActivationExpected = activated?.expectedForegroundActivationUntil !== null &&
@@ -81,7 +92,13 @@ export function initialiseExtensionWorkTabs(): void {
     // a throttled/background platform page indefinitely.
     for (const record of [...managedTabs.values()]) {
       if (record.state === 'leased' && record.windowId === windowId) {
-        forgetTab(record.tabId, 'user_taken_over');
+        forgetTab(
+          record.tabId,
+          'user_taken_over',
+          record.tabId === tabId
+            ? 'leased_tab_activated_outside_internal_window'
+            : 'another_tab_activated'
+        );
       }
     }
   });
@@ -98,7 +115,7 @@ export function initialiseExtensionWorkTabs(): void {
       Date.now() <= record.expectedNavigationUntil) return;
     if (record.expectedNavigationUntil === null && changeInfo.url === 'about:blank' &&
       Date.now() <= record.initialBlankNavigationUntil) return;
-    forgetTab(tabId, 'user_taken_over');
+    forgetTab(tabId, 'user_taken_over', 'unexpected_url_update');
   });
 }
 
@@ -109,12 +126,12 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
     try {
       const tab = await chrome.tabs.get(record.tabId);
       if (tab.windowId !== record.windowId || tab.active) {
-        forgetTab(record.tabId, 'user_taken_over');
+        forgetTab(record.tabId, 'user_taken_over', 'idle_tab_active_before_reuse');
         continue;
       }
       return lease(record, 'reused');
     } catch {
-      forgetTab(record.tabId, 'closed_or_missing');
+      forgetTab(record.tabId, 'closed_or_missing', 'idle_tab_missing_before_reuse');
     }
   }
 
@@ -191,7 +208,7 @@ export async function readExtensionWorkTab(workTab: ExtensionWorkTabLease): Prom
   try {
     const tab = await chrome.tabs.get(workTab.tabId);
     if (tab.windowId !== record.windowId || !tab.active) {
-      forgetTab(workTab.tabId, 'user_taken_over');
+      forgetTab(workTab.tabId, 'user_taken_over', 'tab_became_inactive');
       throw new Error('work_tab_user_taken_over');
     }
     return tab;
@@ -200,7 +217,7 @@ export async function readExtensionWorkTab(workTab: ExtensionWorkTabLease): Prom
     if (disposition === 'user_taken_over' || disposition === 'retained_not_reusable') {
       throw new Error('work_tab_user_taken_over');
     }
-    forgetTab(workTab.tabId, 'closed_or_missing');
+    forgetTab(workTab.tabId, 'closed_or_missing', 'tab_read_failed');
     throw new Error('work_tab_closed');
   }
 }
@@ -298,10 +315,23 @@ function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function forgetTab(tabId: number, disposition: Exclude<WorkTabDisposition, 'idle_reusable'>): void {
+export function resetExtensionWorkTabLossCause(): void {
+  latestLossCause = null;
+}
+
+export function currentExtensionWorkTabLossCause(): WorkTabLossCause | null {
+  return latestLossCause;
+}
+
+function forgetTab(
+  tabId: number,
+  disposition: Exclude<WorkTabDisposition, 'idle_reusable'>,
+  cause: WorkTabLossCause
+): void {
   const record = managedTabs.get(tabId);
   if (!record) return;
   managedTabs.delete(tabId);
+  latestLossCause = cause;
   if (record.leaseId) {
     leaseLosses.set(record.leaseId, disposition);
     while (leaseLosses.size > 100) {

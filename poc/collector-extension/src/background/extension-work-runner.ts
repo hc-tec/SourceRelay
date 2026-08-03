@@ -39,7 +39,12 @@ import {
   type ActiveExtensionWork,
   type PendingExtensionWorkResult
 } from './extension-work-storage';
-import { initialiseExtensionWorkTabs, type WorkTabAcquisition } from './extension-work-tabs';
+import {
+  currentExtensionWorkTabLossCause,
+  initialiseExtensionWorkTabs,
+  resetExtensionWorkTabLossCause,
+  type WorkTabAcquisition
+} from './extension-work-tabs';
 import { loadGatewayPairingRecord } from './user-browser-gateway-storage';
 
 const WORK_POLL_ALARM = 'collector.user-browser-work-poll.v1';
@@ -103,14 +108,20 @@ export async function pollForExtensionWork(): Promise<void> {
     void emitExtensionDiagnostic(pairing, item, 'work_claimed', 'started', null, {
       executionTarget: item.executionTarget
     });
+    resetExtensionWorkTabLossCause();
     const result = await execute(item, pairing);
+    const workTabLossCause = currentExtensionWorkTabLossCause();
     void emitExtensionDiagnostic(
       pairing,
       item,
       'execution_finished',
       result.state === 'completed' ? 'completed' : result.state === 'partial' ? 'stopped' : 'failed',
       result.errorCode,
-      { terminalReason: result.terminalReason, navigationAttempted: result.navigation.attempted }
+      {
+        terminalReason: result.terminalReason,
+        navigationAttempted: result.navigation.attempted,
+        ...(workTabLossCause === null ? {} : { workTabLossCause })
+      }
     );
     await savePendingExtensionWorkResult({
       schemaVersion: 1,
