@@ -26,3 +26,14 @@ npm run verify:release-candidate
 
 该门禁验证 Core 的可发布边界，不替代 `npm run test:real-local` 的真实 Chromium/MV3/
 Native Messaging 集成测试，也不替代需要单独人工身份输入的真实平台 canary。
+
+## GitHub Actions 门禁
+
+`.github/workflows/core-release-candidate.yml` 只在手动触发或推送 `core-v*` 标签时运行，避免
+每个普通提交重复构建发布包。它会生成并上传 14 天保留期的 Core release directory，同时
+运行 clean checkout、SDK 脱离源码安装、SBOM 和 SHA-256 完整性校验。
+
+AgentKit 的 `.github/workflows/released-core-l2.yml` 会 checkout Core `main`，从 Core 的
+`package-core-release` 生成发布目录，再让 packaged MCP 连接该目录中的 Gateway entrypoint。
+它不会连接 Core 源码 `dist`，也不会访问真实平台；Core 与 AgentKit 的发布锚点不一致时，
+AgentKit preflight 会 fail closed。
