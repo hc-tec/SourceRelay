@@ -105,9 +105,9 @@ async def test_collect_and_wait_submits_once_polls_and_reads_artifact() -> None:
 
 def test_direct_allowlist_is_detached_and_complete() -> None:
     names = list_direct_capabilities()
-    assert len(names) == 15
+    assert len(names) == 18
     names.pop()
-    assert len(list_direct_capabilities()) == 15
+    assert len(list_direct_capabilities()) == 18
 
 
 def test_artifact_path_must_match_operation_capability() -> None:

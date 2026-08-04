@@ -2,6 +2,7 @@ import {
   USER_BROWSER_COLLECTOR_SERVICE_OPENAPI_VERSION,
   USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION
 } from '@intelligence/collector-contracts';
+import { ZHIHU_OFFICIAL_OPENAPI_SCHEMAS } from './zhihu-official-openapi';
 
 /** Machine-readable production contract; it deliberately omits the legacy Profile lane. */
 export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: string): Record<string, unknown> {
@@ -9,9 +10,9 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Local Collector Service — User-Owned Browser Mode',
+      title: 'Local Collector Service — Registered Source Providers',
       version: USER_BROWSER_COLLECTOR_SERVICE_OPENAPI_VERSION,
-      description: 'Loopback-only registered-capability API for a paired user-owned browser extension. It is not a generic browser-control API.'
+      description: 'Loopback-only registered-capability API backed by either a paired user-owned browser extension or a fixed-contract official API provider. It is not a generic browser-control or arbitrary HTTP proxy API.'
     },
     servers: [{ url: origin }],
     paths: {
@@ -26,7 +27,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
       '/v2/capabilities': {
         get: {
           operationId: 'listUserBrowserCapabilities',
-          summary: 'List registered user-owned-browser capabilities and their dispatch or route-admission state.',
+          summary: 'List registered source capabilities and their dispatch or route-admission state.',
           responses: { '200': jsonResponse({ $ref: '#/components/schemas/UserBrowserCapabilityCatalog' }) }
         }
       },
@@ -40,8 +41,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
       },
       '/v2/collect': {
         post: {
-          operationId: 'queueUserBrowserCollection',
-          summary: 'Queue one registered capability for a paired user-owned browser binding.',
+          operationId: 'startRegisteredCollection',
+          summary: 'Start one registered capability through its fixed browser-extension or official-API provider.',
           security: [{ CollectorServiceToken: [] }],
           'x-collector-required-scope': 'collect:execute',
           'x-collector-browser-control': 'not_exposed',
@@ -55,7 +56,11 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             '400': errorResponse(),
             '401': errorResponse(),
             '403': errorResponse(),
-            '409': errorResponse()
+            '409': errorResponse(),
+            '429': errorResponse(),
+            '502': errorResponse(),
+            '503': errorResponse(),
+            '504': errorResponse()
           }
         }
       },
@@ -270,11 +275,12 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           type: 'object',
           additionalProperties: false,
           required: [
-            'capability', 'requestSchemaRef', 'requestSchemaDigest', 'executionTargets',
+            'capability', 'executionProvider', 'requestSchemaRef', 'requestSchemaDigest', 'executionTargets',
             'defaultExecutionTarget', 'executionTargetMode', 'budgetPolicy'
           ],
           properties: {
             capability: { type: 'string' },
+            executionProvider: { type: 'string', enum: ['browser_extension', 'official_api'] },
             requestSchemaRef: { type: 'string', pattern: '^#/components/schemas/[A-Za-z0-9]+$' },
             requestSchemaDigest: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
             executionTargets: { type: 'array', minItems: 1, uniqueItems: true, items: { type: 'string' } },
@@ -282,7 +288,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             executionTargetMode: { type: 'string', enum: ['fixed', 'enum'] },
             budgetPolicy: {
               type: 'string',
-              enum: ['fixed_queue_budget', 'input_bounded_queue_budget', 'fixed_observation_budget']
+              enum: [
+                'fixed_queue_budget', 'input_bounded_queue_budget', 'fixed_observation_budget',
+                'official_api_fixed_count'
+              ]
             }
           }
         },
@@ -294,9 +303,11 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             { $ref: '#/components/schemas/XiaohongshuAccountPublicNotesCapability' },
             { $ref: '#/components/schemas/XiaohongshuNotePublicDetailCapability' },
             { $ref: '#/components/schemas/XiaohongshuNotePublicCommentsCapability' },
-            { $ref: '#/components/schemas/XiaohongshuReplyCapability' }
+            { $ref: '#/components/schemas/XiaohongshuReplyCapability' },
+            { $ref: '#/components/schemas/OfficialSourceCapability' }
           ]
         },
+        ...ZHIHU_OFFICIAL_OPENAPI_SCHEMAS,
         BilibiliUserBrowserCapability: {
           type: 'object', additionalProperties: false,
           required: [
@@ -645,7 +656,10 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
             { $ref: '#/components/schemas/UserBrowserXiaohongshuAccountPublicNotesCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicDetailCollectRequest' },
             { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicCommentsCollectRequest' },
-            { $ref: '#/components/schemas/UserBrowserXiaohongshuReplyCollectRequest' }
+            { $ref: '#/components/schemas/UserBrowserXiaohongshuReplyCollectRequest' },
+            { $ref: '#/components/schemas/ZhihuOfficialSearchCollectRequest' },
+            { $ref: '#/components/schemas/ZhihuOfficialHotListCollectRequest' },
+            { $ref: '#/components/schemas/ZhihuOfficialGlobalSearchCollectRequest' }
           ]
         },
         UserBrowserVideoDetailCollectRequest: {
@@ -971,8 +985,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
           properties: {
             schemaVersion: { type: 'integer', const: 1 },
             operationId: { type: 'string', format: 'uuid' },
-            browserBindingId: { type: 'string', format: 'uuid' },
-            platform: { type: 'string', enum: ['bilibili', 'xiaohongshu'] },
+            browserBindingId: { type: ['string', 'null'], format: 'uuid' },
+            platform: { type: 'string', enum: ['bilibili', 'xiaohongshu', 'zhihu', 'web'] },
             capability: {
               type: 'string',
               enum: [
@@ -982,14 +996,16 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion',
                 'xiaohongshu.search.public_notes.v1', 'xiaohongshu.account.public_notes.v1',
                 'xiaohongshu.note.public_detail.v1', 'xiaohongshu.note.public_comments.v1',
-                'xiaohongshu.note.public_comment_replies.v1'
+                'xiaohongshu.note.public_comment_replies.v1',
+                'zhihu.search.public_content.v1', 'zhihu.hot_list.public_content.v1',
+                'web.search.global.zhihu_provider.v1'
               ]
             },
             executionTarget: {
               type: 'string',
               enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab',
                 'existing_public_profile_tab', 'ephemeral_public_profile_url', 'discover_public_profile_from_note', 'existing_public_search_tab',
-                'existing_public_note_overlay']
+                'existing_public_note_overlay', 'official_api']
             },
             state: { type: 'string', enum: ['queued', 'claimed', 'completed', 'partial', 'stopped', 'failed'] },
             queuedAt: { type: 'string', format: 'date-time' },
@@ -1014,7 +1030,9 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'bilibili.collection_series.detail', 'bilibili.danmaku', 'bilibili.discussion',
                 'xiaohongshu.search.public_notes.v1', 'xiaohongshu.account.public_notes.v1',
                 'xiaohongshu.note.public_detail.v1', 'xiaohongshu.note.public_comments.v1',
-                'xiaohongshu.note.public_comment_replies.v1'
+                'xiaohongshu.note.public_comment_replies.v1',
+                'zhihu.search.public_content.v1', 'zhihu.hot_list.public_content.v1',
+                'web.search.global.zhihu_provider.v1'
               ]
             },
             artifact: { type: 'object' }
@@ -1091,9 +1109,16 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
       }
     },
     'x-collector-excluded-surfaces': [
-      'profile_id', 'profile_path', 'cookie', 'token', 'arbitrary_url', 'arbitrary_selector',
-      'arbitrary_script', 'arbitrary_pointer_input', 'cdp', 'network_response_body'
-    ]
+      'profile_id', 'profile_path', 'cookie', 'caller_supplied_platform_credential',
+      'credential_forwarding_to_extension_or_sdk', 'arbitrary_url', 'arbitrary_selector',
+      'arbitrary_script', 'arbitrary_pointer_input', 'cdp', 'arbitrary_network_response_body'
+    ],
+    'x-collector-credential-boundary': {
+      platformCredentialsAcceptedFromCaller: false,
+      platformCredentialsStoredByGatewayOnly: true,
+      platformCredentialsExposedToBrowserExtension: false,
+      platformCredentialsExposedToSdk: false
+    }
   };
 }
 

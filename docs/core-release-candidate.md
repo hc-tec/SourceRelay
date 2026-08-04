@@ -17,7 +17,7 @@ npm run verify:release-candidate
 - 构建 Contracts、MV3 Extension 和 user-browser Gateway；
 - 将扩展准备到临时 `COLLECTOR_USER_BROWSER_HOME`；
 - 启动临时 Gateway，读取 `/v2/release`、`/v2/capabilities` 和 `/v2/openapi.json`；
-- 确认 release manifest、OpenAPI release anchor 与 15 项 direct-ready capability 一致；
+- 确认 release manifest、OpenAPI release anchor 与 18 项 direct-ready capability 一致；
 - 确认没有创建 `profiles`、`browser-profiles.json` 或 `browser-host` 等历史 Profile 状态；
 - 只访问 loopback，`livePlatformRequests` 始终为 0；
 - 退出 Gateway 并删除临时 checkout。

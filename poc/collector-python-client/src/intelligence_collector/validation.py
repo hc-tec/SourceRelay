@@ -23,7 +23,7 @@ TOKEN_PATTERN = re.compile(r"^cst_[A-Za-z0-9_-]{43}$")
 SAFE_ERROR_PATTERN = re.compile(r"^[a-z0-9_.-]{1,120}$", re.IGNORECASE)
 DIGEST_PATTERN = re.compile(r"^sha256:[a-f0-9]{64}$")
 ARTIFACT_PATH_PATTERN = re.compile(
-    r"^/v1/collect/artifacts/((?:bilibili\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\.(?:overview|detail)|danmaku|discussion)|xiaohongshu\.(?:(?:search|account)\.public_notes|note\.public_(?:detail|comments|comment_replies))\.v1))/"
+    r"^/v1/collect/artifacts/((?:bilibili\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\.(?:overview|detail)|danmaku|discussion)|xiaohongshu\.(?:(?:search|account)\.public_notes|note\.public_(?:detail|comments|comment_replies))\.v1|zhihu\.(?:search|hot_list)\.public_content\.v1|web\.search\.global\.zhihu_provider\.v1))/"
     r"([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
     re.IGNORECASE,
 )
@@ -64,29 +64,35 @@ def assert_uuid(value: str, code: str) -> None:
 def validate_collect_request(value: Any) -> None:
     if not isinstance(value, Mapping):
         raise CollectorClientError("collector_client_collect_request_invalid", 400)
+    official = value.get("executionTarget") == "official_api"
     expected_keys = {
-        "schemaVersion",
-        "clientRequestId",
-        "browserBindingId",
-        "platform",
-        "capability",
-        "executionTarget",
-        "input",
+        "schemaVersion", "clientRequestId", "platform", "capability", "executionTarget", "input"
     }
+    if not official:
+        expected_keys.add("browserBindingId")
     if set(value) != expected_keys:
         raise CollectorClientError("collector_client_collect_request_invalid", 400)
     if value["schemaVersion"] != CORE_SERVICE_SCHEMA_VERSION:
         raise CollectorClientError("collector_client_collect_request_invalid", 400)
     assert_uuid(value["clientRequestId"], "collector_client_collect_request_invalid")
-    assert_uuid(value["browserBindingId"], "collector_client_collect_request_invalid")
-    if value["platform"] not in {"bilibili", "xiaohongshu"}:
-        raise CollectorClientError("collector_client_collect_request_invalid", 400)
     capability = value["capability"]
     if capability not in DIRECT_CAPABILITIES:
         raise CollectorClientError("collector_client_collect_request_invalid", 400)
-    if value["platform"] == "bilibili" and not capability.startswith("bilibili."):
-        raise CollectorClientError("collector_client_collect_request_invalid", 400)
-    if value["platform"] == "xiaohongshu" and not capability.startswith("xiaohongshu."):
+    if official:
+        valid_identity = (
+            value["platform"] == "zhihu"
+            and capability in {"zhihu.search.public_content.v1", "zhihu.hot_list.public_content.v1"}
+        ) or (
+            value["platform"] == "web" and capability == "web.search.global.zhihu_provider.v1"
+        )
+    else:
+        assert_uuid(value["browserBindingId"], "collector_client_collect_request_invalid")
+        valid_identity = (
+            value["platform"] == "bilibili" and capability.startswith("bilibili.")
+        ) or (
+            value["platform"] == "xiaohongshu" and capability.startswith("xiaohongshu.")
+        )
+    if not valid_identity:
         raise CollectorClientError("collector_client_collect_request_invalid", 400)
     if value["executionTarget"] not in DIRECT_EXECUTION_TARGETS:
         raise CollectorClientError("collector_client_collect_request_invalid", 400)

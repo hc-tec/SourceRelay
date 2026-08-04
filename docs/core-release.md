@@ -39,7 +39,7 @@ npm run verify:sdk-release-installation
 
 - 从 npm tarball 安装 JS SDK；
 - 从 Python wheel 安装 Python SDK；
-- 检查 `CORE_RELEASE_VERSION`、15 项 direct capability 和 request builder；
+- 检查 `CORE_RELEASE_VERSION`、18 项 direct capability 和 request builder；
 - 确认没有从 `D:\AIProject\inteligence\poc` 导入源码；
 - 使用真实 Python venv 和 npm 安装流程；
 - 不启动浏览器、不访问平台、不伪造平台采集结果。

@@ -22,7 +22,7 @@ describe('user-owned-browser capability registries', () => {
     const registered = new Set(listUserBrowserExecutableCapabilities());
 
     expect(registered).toEqual(direct);
-    expect(Object.keys(USER_BROWSER_CAPABILITY_REGISTRY)).toHaveLength(15);
+    expect(Object.keys(USER_BROWSER_CAPABILITY_REGISTRY)).toHaveLength(18);
     for (const capability of direct) {
       expect(isUserBrowserExecutableCapability(capability)).toBe(true);
       expect(USER_BROWSER_CAPABILITY_REGISTRY[capability as keyof typeof USER_BROWSER_CAPABILITY_REGISTRY].capability)
@@ -39,4 +39,3 @@ describe('user-owned-browser capability registries', () => {
     expect(isUserBrowserArtifactCapability('bilibili.transcript')).toBe(false);
   });
 });
-

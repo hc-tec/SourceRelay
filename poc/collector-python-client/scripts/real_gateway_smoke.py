@@ -35,7 +35,7 @@ async def run() -> dict[str, Any]:
             for item in capabilities
             if item.get("dispatchState") == "direct_ready"
         }
-        if len(capabilities) != 18 or len(direct_ready) != 15:
+        if len(capabilities) != 21 or len(direct_ready) != 18:
             raise AssertionError("unexpected_capability_catalog_shape")
         if set(list_direct_capabilities()) != direct_ready:
             raise AssertionError("python_allowlist_catalog_mismatch")

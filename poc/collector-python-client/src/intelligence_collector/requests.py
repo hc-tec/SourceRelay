@@ -15,6 +15,7 @@ byte because its signature can be invalidated by URL re-serialisation.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from typing import Any, Literal
 from urllib.parse import SplitResult, urlsplit
 from uuid import uuid4
@@ -102,6 +103,67 @@ def _base(
         "executionTarget": execution_target,
         "input": input_value,
     }
+
+
+def _official_base(
+    client_request_id: str,
+    platform: Literal["zhihu", "web"],
+    capability: str,
+    input_value: dict[str, Any],
+) -> Request:
+    return {
+        "schemaVersion": CORE_SERVICE_SCHEMA_VERSION,
+        "clientRequestId": _client_request_id(client_request_id),
+        "platform": platform,
+        "capability": capability,
+        "executionTarget": "official_api",
+        "input": input_value,
+    }
+
+
+def _official_query(value: str) -> str:
+    if not isinstance(value, str):
+        raise _invalid("query")
+    query = re.sub(r"\s+", " ", value).strip()
+    if not query or len(query) > 100 or _CONTROL_PATTERN.search(query):
+        raise _invalid("query")
+    return query
+
+
+def _official_integer(value: int, maximum: int, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
+        raise _invalid(field)
+    return value
+
+
+def _official_site(value: str) -> str:
+    if (
+        not isinstance(value, str)
+        or value != value.strip()
+        or not value
+        or len(value) > 253
+        or not re.fullmatch(r"[A-Za-z0-9.-]+", value)
+    ):
+        raise _invalid("site")
+    site = value.lower()
+    if site.startswith(".") or site.endswith(".") or ".." in site:
+        raise _invalid("site")
+    parsed = _parsed_url(f"https://{site}", "site")
+    if parsed.hostname != site or parsed.port or site == "zhihu.com" or site.endswith(".zhihu.com"):
+        raise _invalid("site")
+    return site
+
+
+def _official_timestamp(value: str) -> str:
+    if not isinstance(value, str):
+        raise _invalid("published_after")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise _invalid("published_after")
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _parsed_url(value: str, field: str) -> SplitResult:
@@ -477,6 +539,60 @@ def xiaohongshu_note_public_comment_replies(
     )
 
 
+def zhihu_official_search(
+    *, client_request_id: str, query: str, count: int = 10
+) -> Request:
+    """Search public Zhihu content through the Gateway-owned official provider."""
+
+    return _official_base(
+        client_request_id,
+        "zhihu",
+        "zhihu.search.public_content.v1",
+        {"query": _official_query(query), "count": _official_integer(count, 10, "count")},
+    )
+
+
+def zhihu_official_hot_list(*, client_request_id: str, limit: int = 30) -> Request:
+    """Read the bounded official Zhihu hot list without a browser binding."""
+
+    return _official_base(
+        client_request_id,
+        "zhihu",
+        "zhihu.hot_list.public_content.v1",
+        {"limit": _official_integer(limit, 30, "limit")},
+    )
+
+
+def zhihu_official_global_search(
+    *,
+    client_request_id: str,
+    query: str,
+    count: int = 10,
+    search_database: Literal["all", "realtime", "static"] = "all",
+    site: str | None = None,
+    published_after: str | None = None,
+) -> Request:
+    """Search the web through Zhihu's official provider with bounded filters."""
+
+    if search_database not in {"all", "realtime", "static"}:
+        raise _invalid("search_database")
+    input_value: dict[str, Any] = {
+        "query": _official_query(query),
+        "count": _official_integer(count, 20, "count"),
+        "searchDatabase": search_database,
+    }
+    if site is not None:
+        input_value["site"] = _official_site(site)
+    if published_after is not None:
+        input_value["publishedAfter"] = _official_timestamp(published_after)
+    return _official_base(
+        client_request_id,
+        "web",
+        "web.search.global.zhihu_provider.v1",
+        input_value,
+    )
+
+
 __all__ = [
     "Request",
     "create_client_request_id",
@@ -495,4 +611,7 @@ __all__ = [
     "xiaohongshu_note_public_detail",
     "xiaohongshu_note_public_comments",
     "xiaohongshu_note_public_comment_replies",
+    "zhihu_official_search",
+    "zhihu_official_hot_list",
+    "zhihu_official_global_search",
 ]

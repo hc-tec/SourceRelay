@@ -1,6 +1,12 @@
 import type { XiaohongshuProfileScrollCount } from '@intelligence/collector-contracts';
 import { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION } from '@intelligence/collector-contracts';
 import { parseUserBrowserCollectorServiceRequest } from './user-browser-capability-registry.js';
+import type {
+  ZhihuOfficialCollectorServiceRequest,
+  ZhihuOfficialGlobalSearchCollectorServiceRequest,
+  ZhihuOfficialHotListCollectorServiceRequest,
+  ZhihuOfficialSearchCollectorServiceRequest
+} from './zhihu-official-contract.js';
 
 export { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION };
 
@@ -143,7 +149,15 @@ export type UserBrowserCollectorServiceRequest =
   | UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest
   | UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest
   | UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest
-  | UserBrowserXiaohongshuReplyCollectorServiceRequest;
+  | UserBrowserXiaohongshuReplyCollectorServiceRequest
+  | ZhihuOfficialCollectorServiceRequest;
+
+export type {
+  ZhihuOfficialCollectorServiceRequest,
+  ZhihuOfficialGlobalSearchCollectorServiceRequest,
+  ZhihuOfficialHotListCollectorServiceRequest,
+  ZhihuOfficialSearchCollectorServiceRequest
+};
 
 /**
  * Parse and normalise a production `/v2/collect` request through the typed

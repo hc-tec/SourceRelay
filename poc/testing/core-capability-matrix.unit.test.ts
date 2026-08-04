@@ -2,9 +2,12 @@ import { describe, expect, test } from 'vitest';
 import { compareCoreCapabilityMatrix, readCoreCapabilityMatrix } from '../scripts/core-capability-matrix.mjs';
 
 describe('Collector Core cross-language capability matrix', () => {
-  test('all executable declarations are the same set', async () => {
+  test('all executable declarations match while the extension keeps only browser capabilities', async () => {
     const matrix = await readCoreCapabilityMatrix();
-    expect(matrix.registry).toHaveLength(15);
+    expect(matrix.registry).toHaveLength(18);
+    expect(matrix.officialRegistry).toHaveLength(3);
+    expect(matrix.officialContract).toEqual(expect.arrayContaining(matrix.officialRegistry));
+    expect(matrix.extension).toHaveLength(15);
     expect(compareCoreCapabilityMatrix(matrix)).toEqual([]);
   });
 

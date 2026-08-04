@@ -89,10 +89,11 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
 
   test('keeps the Bilibili catalog and the Xiaohongshu policy visible together', () => {
     const catalog = listUserBrowserCapabilities();
-    expect(catalog).toHaveLength(18);
+    expect(catalog).toHaveLength(21);
     expect(catalog.map((entry) => entry.capability)).toContain('bilibili.discussion');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.current_page.network_metadata');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.search.public_notes.v1');
+    expect(catalog.map((entry) => entry.capability)).toContain('zhihu.search.public_content.v1');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.account.public_notes.v1');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.note.public_detail.v1');
     expect(catalog.map((entry) => entry.capability)).toContain('xiaohongshu.note.public_comments.v1');

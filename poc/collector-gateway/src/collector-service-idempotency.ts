@@ -8,6 +8,7 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const SAFE_ERROR_CODE = /^[a-z0-9_.-]{1,120}$/i;
 
 export type CollectorServiceIdempotencyState = 'reserved' | 'accepted' | 'rejected';
+export type CollectorServiceIdempotencyErrorStatus = 400 | 409 | 429 | 502 | 503 | 504;
 
 export interface CollectorServiceIdempotencyRecord {
   schemaVersion: typeof SCHEMA_VERSION;
@@ -16,7 +17,7 @@ export interface CollectorServiceIdempotencyRecord {
   operationId: string;
   state: CollectorServiceIdempotencyState;
   errorCode: string | null;
-  errorStatus: 400 | 409 | null;
+  errorStatus: CollectorServiceIdempotencyErrorStatus | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -102,7 +103,7 @@ export class CollectorServiceIdempotencyLedger {
     clientRequestId: string,
     operationId: string,
     errorCode: string,
-    errorStatus: 400 | 409,
+    errorStatus: CollectorServiceIdempotencyErrorStatus,
     now = new Date()
   ): Promise<void> {
     await this.#serialise(async () => {
@@ -162,7 +163,9 @@ function isRecord(value: unknown): value is CollectorServiceIdempotencyRecord {
     typeof candidate.operationId === 'string' && UUID_PATTERN.test(candidate.operationId) &&
     (candidate.state === 'reserved' || candidate.state === 'accepted' || candidate.state === 'rejected') &&
     (candidate.errorCode === null || (typeof candidate.errorCode === 'string' && SAFE_ERROR_CODE.test(candidate.errorCode))) &&
-    (candidate.errorStatus === null || candidate.errorStatus === 400 || candidate.errorStatus === 409) &&
+    (candidate.errorStatus === null || candidate.errorStatus === 400 || candidate.errorStatus === 409 ||
+      candidate.errorStatus === 429 || candidate.errorStatus === 502 || candidate.errorStatus === 503 ||
+      candidate.errorStatus === 504) &&
     isTimestamp(candidate.createdAt) && isTimestamp(candidate.updatedAt) &&
     Date.parse(candidate.updatedAt) >= Date.parse(candidate.createdAt) &&
     (candidate.state === 'rejected'

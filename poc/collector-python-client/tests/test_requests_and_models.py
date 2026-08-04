@@ -23,6 +23,9 @@ from intelligence_collector import (
     xiaohongshu_note_public_comments,
     xiaohongshu_note_public_detail,
     xiaohongshu_public_notes_search,
+    zhihu_official_global_search,
+    zhihu_official_hot_list,
+    zhihu_official_search,
 )
 
 
@@ -103,6 +106,34 @@ def test_xiaohongshu_builders_preserve_profile_signature_and_budget_shape() -> N
     assert replies["input"] == {"maximumThreads": 2}
 
 
+def test_zhihu_official_builders_omit_browser_identity_and_bound_inputs() -> None:
+    search = zhihu_official_search(client_request_id=CLIENT_REQUEST_ID, query="  RAG\n系统  ", count=1)
+    hot_list = zhihu_official_hot_list(client_request_id=CLIENT_REQUEST_ID, limit=2)
+    global_search = zhihu_official_global_search(
+        client_request_id=CLIENT_REQUEST_ID,
+        query="人工智能",
+        count=3,
+        search_database="realtime",
+        site="News.Example.com",
+        published_after="2026-08-01T00:00:00+08:00",
+    )
+    for request in (search, hot_list, global_search):
+        assert set(request) == {
+            "schemaVersion", "clientRequestId", "platform", "capability", "executionTarget", "input"
+        }
+        assert request["executionTarget"] == "official_api"
+        assert "browserBindingId" not in request
+    assert search["input"] == {"query": "RAG 系统", "count": 1}
+    assert hot_list["input"] == {"limit": 2}
+    assert global_search["input"] == {
+        "query": "人工智能",
+        "count": 3,
+        "searchDatabase": "realtime",
+        "site": "news.example.com",
+        "publishedAfter": "2026-07-31T16:00:00.000Z",
+    }
+
+
 @pytest.mark.parametrize(
     "factory",
     [
@@ -113,6 +144,11 @@ def test_xiaohongshu_builders_preserve_profile_signature_and_budget_shape() -> N
         lambda: xiaohongshu_account_public_notes(**REQUEST_IDENTITY, maximum_scrolls=4),
         lambda: xiaohongshu_account_public_notes(**REQUEST_IDENTITY, maximum_scrolls=1, execution_target="ephemeral_public_profile_url"),
         lambda: xiaohongshu_note_public_detail(**REQUEST_IDENTITY, result_rank=21),
+        lambda: zhihu_official_search(client_request_id=CLIENT_REQUEST_ID, query="RAG", count=11),
+        lambda: zhihu_official_global_search(client_request_id=CLIENT_REQUEST_ID, query="RAG", site="zhihu.com"),
+        lambda: zhihu_official_global_search(
+            client_request_id=CLIENT_REQUEST_ID, query="RAG", search_database="unknown"
+        ),
     ],
 )
 def test_builders_reject_unsafe_or_incomplete_inputs(factory) -> None:

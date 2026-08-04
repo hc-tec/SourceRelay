@@ -27,7 +27,7 @@ import {
   enqueueXiaohongshuReplyWork,
   type ExtensionWorkRouteContext
 } from './extension-work-routes.js';
-import type { ExtensionWorkOperationSummary } from './extension-work-queue.js';
+import type { CollectorOperationSummary } from './collector-operation-reader.js';
 import type {
   UserBrowserAccountInventoryCollectorServiceRequest,
   UserBrowserAccountProfileCollectorServiceRequest,
@@ -44,18 +44,27 @@ import type {
   UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest,
   UserBrowserXiaohongshuNotePublicDetailCollectorServiceRequest,
   UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest,
-  UserBrowserXiaohongshuReplyCollectorServiceRequest
+  UserBrowserXiaohongshuReplyCollectorServiceRequest,
+  ZhihuOfficialGlobalSearchCollectorServiceRequest,
+  ZhihuOfficialHotListCollectorServiceRequest,
+  ZhihuOfficialSearchCollectorServiceRequest
 } from './user-browser-collector-service-contract.js';
+import {
+  ZHIHU_OFFICIAL_GLOBAL_SEARCH_CAPABILITY,
+  ZHIHU_OFFICIAL_HOT_LIST_CAPABILITY,
+  ZHIHU_OFFICIAL_SEARCH_CAPABILITY
+} from './zhihu-official-contract.js';
+import type { ZhihuOfficialApiProvider } from './zhihu-official-api-provider.js';
 
 export type UserBrowserExecutableCapability = UserBrowserCollectorServiceRequest['capability'];
 type RequestFor<C extends UserBrowserExecutableCapability> = Extract<UserBrowserCollectorServiceRequest, { capability: C }>;
-type Platform = 'bilibili' | 'xiaohongshu';
+type Platform = UserBrowserCollectorServiceRequest['platform'];
 type ExecutionTarget = UserBrowserCollectorServiceRequest['executionTarget'];
 
 interface ValidRequestEnvelope {
   schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
   clientRequestId: string;
-  browserBindingId: string;
+  browserBindingId?: string;
   platform: Platform;
   capability: string;
   executionTarget: ExecutionTarget;
@@ -65,12 +74,21 @@ interface ValidRequestEnvelope {
 export type UserBrowserCapabilityBudgetPolicy =
   | 'fixed_queue_budget'
   | 'input_bounded_queue_budget'
-  | 'fixed_observation_budget';
+  | 'fixed_observation_budget'
+  | 'official_api_fixed_count';
+
+export type CollectorExecutionProvider = 'browser_extension' | 'official_api';
+
+export interface UserBrowserCapabilityDispatchContext extends ExtensionWorkRouteContext {
+  zhihuOfficialApiProvider: ZhihuOfficialApiProvider;
+}
 
 export interface UserBrowserCapabilityRegistryEntry<C extends UserBrowserExecutableCapability> {
   capability: C;
   /** OpenAPI component containing the exact direct request envelope. */
   requestSchemaName: string;
+  /** Existing entries default to browser_extension; official providers must declare themselves. */
+  executionProvider?: CollectorExecutionProvider;
   /** Validates the common envelope and normalises the capability input. */
   validate: (envelope: ValidRequestEnvelope) => RequestFor<C>;
   /** Declares the only execution targets admitted by this capability. */
@@ -78,10 +96,10 @@ export interface UserBrowserCapabilityRegistryEntry<C extends UserBrowserExecuta
   /** Queue-side budget policy; no caller supplied budget is accepted. */
   budgetPolicy: UserBrowserCapabilityBudgetPolicy;
   dispatch: (
-    context: ExtensionWorkRouteContext,
+    context: UserBrowserCapabilityDispatchContext,
     request: RequestFor<C>,
     operationId: string
-  ) => Promise<ExtensionWorkOperationSummary>;
+  ) => Promise<CollectorOperationSummary>;
 }
 
 type UserBrowserCapabilityRegistry = {
@@ -109,15 +127,17 @@ function envelope(value: unknown): ValidRequestEnvelope {
   if (Object.keys(candidate).some((key) => !allowed.has(key)) ||
     candidate.schemaVersion !== USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION ||
     typeof candidate.clientRequestId !== 'string' || !UUID_PATTERN.test(candidate.clientRequestId) ||
-    typeof candidate.browserBindingId !== 'string' || !UUID_PATTERN.test(candidate.browserBindingId) ||
-    (candidate.platform !== 'bilibili' && candidate.platform !== 'xiaohongshu') ||
+    (candidate.browserBindingId !== undefined &&
+      (typeof candidate.browserBindingId !== 'string' || !UUID_PATTERN.test(candidate.browserBindingId))) ||
+    (candidate.platform !== 'bilibili' && candidate.platform !== 'xiaohongshu' &&
+      candidate.platform !== 'zhihu' && candidate.platform !== 'web') ||
     typeof candidate.capability !== 'string' ||
     !isExecutionTarget(candidate.executionTarget) ||
     !candidate.input || typeof candidate.input !== 'object' || Array.isArray(candidate.input)) return invalid();
   return {
     schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
     clientRequestId: candidate.clientRequestId,
-    browserBindingId: candidate.browserBindingId,
+    ...(candidate.browserBindingId === undefined ? {} : { browserBindingId: candidate.browserBindingId }),
     platform: candidate.platform,
     capability: candidate.capability,
     executionTarget: candidate.executionTarget,
@@ -129,7 +149,8 @@ function isExecutionTarget(value: unknown): value is ExecutionTarget {
   return value === 'collector_work_tab' || value === 'user_selected_tab' ||
     value === 'existing_public_explore_tab' || value === 'existing_public_profile_tab' ||
     value === 'ephemeral_public_profile_url' || value === 'discover_public_profile_from_note' ||
-    value === 'existing_public_search_tab' || value === 'existing_public_note_overlay';
+    value === 'existing_public_search_tab' || value === 'existing_public_note_overlay' ||
+    value === 'official_api';
 }
 
 function requirePlatform(value: ValidRequestEnvelope, platform: Platform): void {
@@ -259,6 +280,112 @@ function parseXiaohongshuReplies(value: ValidRequestEnvelope): UserBrowserXiaoho
   return { ...base(value, 'xiaohongshu'), capability: 'xiaohongshu.note.public_comment_replies.v1', executionTarget: 'existing_public_note_overlay', input: { maximumThreads: value.input.maximumThreads } };
 }
 
+function parseZhihuOfficialSearch(value: ValidRequestEnvelope): ZhihuOfficialSearchCollectorServiceRequest {
+  requireOfficialEnvelope(value, 'zhihu', ZHIHU_OFFICIAL_SEARCH_CAPABILITY);
+  if (!optionalExactKeys(value.input, ['query'], ['count']) || typeof value.input.query !== 'string') invalid();
+  const query = officialQuery(value.input.query);
+  const count = boundedInteger(value.input.count, 10, 1, 10);
+  return {
+    ...officialBase(value, 'zhihu'),
+    capability: ZHIHU_OFFICIAL_SEARCH_CAPABILITY,
+    executionTarget: 'official_api',
+    input: { query, count }
+  };
+}
+
+function parseZhihuOfficialHotList(value: ValidRequestEnvelope): ZhihuOfficialHotListCollectorServiceRequest {
+  requireOfficialEnvelope(value, 'zhihu', ZHIHU_OFFICIAL_HOT_LIST_CAPABILITY);
+  if (!optionalExactKeys(value.input, [], ['limit'])) invalid();
+  const limit = boundedInteger(value.input.limit, 30, 1, 30);
+  return {
+    ...officialBase(value, 'zhihu'),
+    capability: ZHIHU_OFFICIAL_HOT_LIST_CAPABILITY,
+    executionTarget: 'official_api',
+    input: { limit }
+  };
+}
+
+function parseZhihuOfficialGlobalSearch(
+  value: ValidRequestEnvelope
+): ZhihuOfficialGlobalSearchCollectorServiceRequest {
+  requireOfficialEnvelope(value, 'web', ZHIHU_OFFICIAL_GLOBAL_SEARCH_CAPABILITY);
+  if (!optionalExactKeys(value.input, ['query'], [
+    'count', 'searchDatabase', 'site', 'publishedAfter'
+  ]) || typeof value.input.query !== 'string') invalid();
+  const query = officialQuery(value.input.query);
+  const count = boundedInteger(value.input.count, 10, 1, 20);
+  const searchDatabase = value.input.searchDatabase ?? 'all';
+  if (searchDatabase !== 'all' && searchDatabase !== 'realtime' && searchDatabase !== 'static') invalid();
+  const site = value.input.site === undefined ? undefined : officialSite(value.input.site);
+  const publishedAfter = value.input.publishedAfter === undefined
+    ? undefined
+    : officialTimestamp(value.input.publishedAfter);
+  return {
+    ...officialBase(value, 'web'),
+    capability: ZHIHU_OFFICIAL_GLOBAL_SEARCH_CAPABILITY,
+    executionTarget: 'official_api',
+    input: {
+      query,
+      count,
+      searchDatabase,
+      ...(site ? { site } : {}),
+      ...(publishedAfter ? { publishedAfter } : {})
+    }
+  };
+}
+
+function requireOfficialEnvelope(
+  value: ValidRequestEnvelope,
+  platform: 'zhihu' | 'web',
+  capability: string
+): void {
+  requirePlatform(value, platform);
+  requireTarget(value, 'official_api');
+  if (value.browserBindingId !== undefined || value.capability !== capability) invalid();
+}
+
+function officialQuery(value: string): string {
+  const query = value.replace(/\s+/g, ' ').trim();
+  if (query.length < 1 || query.length > 100 || /[\u0000-\u001f\u007f]/.test(query)) invalid();
+  return query;
+}
+
+function officialSite(value: unknown): string {
+  if (typeof value !== 'string' || value !== value.trim() || value.length > 253 ||
+    !/^[a-z0-9.-]+$/i.test(value)) invalid();
+  const site = value.toLowerCase();
+  if (site.startsWith('.') || site.endsWith('.') || site.includes('..')) invalid();
+  let url: URL;
+  try {
+    url = new URL(`https://${site}`);
+  } catch {
+    return invalid();
+  }
+  if (url.hostname !== site || url.port || site === 'zhihu.com' || site.endsWith('.zhihu.com')) invalid();
+  return site;
+}
+
+function officialTimestamp(value: unknown): string {
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) invalid();
+  return new Date(value).toISOString();
+}
+
+function boundedInteger(value: unknown, defaultValue: number, minimum: number, maximum: number): number {
+  if (value === undefined) return defaultValue;
+  if (!Number.isSafeInteger(value) || Number(value) < minimum || Number(value) > maximum) invalid();
+  return Number(value);
+}
+
+function optionalExactKeys(
+  input: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[]
+): boolean {
+  const allowed = new Set([...required, ...optional]);
+  return required.every((key) => Object.hasOwn(input, key)) &&
+    Object.keys(input).every((key) => allowed.has(key));
+}
+
 function oneToThree(value: unknown): value is 1 | 2 | 3 {
   return value === 1 || value === 2 || value === 3;
 }
@@ -286,10 +413,23 @@ function base<P extends Platform>(value: ValidRequestEnvelope, platform: P): {
   browserBindingId: string;
   platform: P;
 } {
+  if (!value.browserBindingId) invalid();
   return {
     schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
     clientRequestId: value.clientRequestId,
     browserBindingId: value.browserBindingId,
+    platform
+  };
+}
+
+function officialBase<P extends 'zhihu' | 'web'>(value: ValidRequestEnvelope, platform: P): {
+  schemaVersion: typeof USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION;
+  clientRequestId: string;
+  platform: P;
+} {
+  return {
+    schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+    clientRequestId: value.clientRequestId,
     platform
   };
 }
@@ -495,6 +635,36 @@ export const USER_BROWSER_CAPABILITY_REGISTRY: UserBrowserCapabilityRegistry = {
       request.input.maximumThreads,
       operationId
     )
+  },
+  'zhihu.search.public_content.v1': {
+    capability: ZHIHU_OFFICIAL_SEARCH_CAPABILITY,
+    requestSchemaName: 'ZhihuOfficialSearchCollectRequest',
+    executionProvider: 'official_api',
+    validate: parseZhihuOfficialSearch,
+    executionTargets: ['official_api'],
+    budgetPolicy: 'official_api_fixed_count',
+    dispatch: (context, request, operationId) =>
+      context.zhihuOfficialApiProvider.collect(request, operationId)
+  },
+  'zhihu.hot_list.public_content.v1': {
+    capability: ZHIHU_OFFICIAL_HOT_LIST_CAPABILITY,
+    requestSchemaName: 'ZhihuOfficialHotListCollectRequest',
+    executionProvider: 'official_api',
+    validate: parseZhihuOfficialHotList,
+    executionTargets: ['official_api'],
+    budgetPolicy: 'official_api_fixed_count',
+    dispatch: (context, request, operationId) =>
+      context.zhihuOfficialApiProvider.collect(request, operationId)
+  },
+  'web.search.global.zhihu_provider.v1': {
+    capability: ZHIHU_OFFICIAL_GLOBAL_SEARCH_CAPABILITY,
+    requestSchemaName: 'ZhihuOfficialGlobalSearchCollectRequest',
+    executionProvider: 'official_api',
+    validate: parseZhihuOfficialGlobalSearch,
+    executionTargets: ['official_api'],
+    budgetPolicy: 'official_api_fixed_count',
+    dispatch: (context, request, operationId) =>
+      context.zhihuOfficialApiProvider.collect(request, operationId)
   }
 };
 
@@ -514,10 +684,10 @@ export function parseUserBrowserCollectorServiceRequest(value: unknown): UserBro
 }
 
 export async function dispatchUserBrowserCapability(
-  context: ExtensionWorkRouteContext,
+  context: UserBrowserCapabilityDispatchContext,
   request: UserBrowserCollectorServiceRequest,
   operationId: string
-): Promise<ExtensionWorkOperationSummary> {
+): Promise<CollectorOperationSummary> {
   const entry = USER_BROWSER_CAPABILITY_REGISTRY[request.capability] as UserBrowserCapabilityRegistryEntry<UserBrowserExecutableCapability> | undefined;
   if (!entry) throw new Error('user_browser_capability_dispatch_unavailable');
   return await entry.dispatch(context, request as never, operationId);

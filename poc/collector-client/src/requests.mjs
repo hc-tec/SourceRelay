@@ -1,5 +1,5 @@
 /**
- * Capability-specific request builders for the direct user-owned-browser API.
+ * Capability-specific request builders for the registered direct-provider API.
  *
  * These functions are deliberately narrower than the generic `collect`
  * method. They construct only registered /v2 request shapes and validate the
@@ -49,6 +49,53 @@ function base({ clientRequestId, browserBindingId, platform, capability, executi
     executionTarget,
     input
   };
+}
+
+function officialBase({ clientRequestId, platform, capability, input }) {
+  return {
+    schemaVersion: CORE_SERVICE_SCHEMA_VERSION,
+    clientRequestId: clientRequestIdValue(clientRequestId),
+    platform,
+    capability,
+    executionTarget: 'official_api',
+    input
+  };
+}
+
+function exactOptions(value, required, optional = []) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
+  const allowed = new Set([...required, ...optional]);
+  if (!required.every((key) => Object.hasOwn(value, key)) ||
+      Object.keys(value).some((key) => !allowed.has(key))) invalid();
+  return value;
+}
+
+function officialQuery(value) {
+  if (typeof value !== 'string') invalid('query');
+  const query = value.replace(/\s+/g, ' ').trim();
+  if (!query || query.length > 100 || CONTROL_PATTERN.test(query)) invalid('query');
+  return query;
+}
+
+function officialInteger(value, defaultValue, maximum, field) {
+  if (value === undefined) return defaultValue;
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) invalid(field);
+  return value;
+}
+
+function officialSite(value) {
+  if (typeof value !== 'string' || value !== value.trim() || !value || value.length > 253 ||
+      !/^[A-Za-z0-9.-]+$/.test(value)) invalid('site');
+  const site = value.toLowerCase();
+  if (site.startsWith('.') || site.endsWith('.') || site.includes('..')) invalid('site');
+  const url = parsedUrl(`https://${site}`, 'site');
+  if (url.hostname !== site || url.port || site === 'zhihu.com' || site.endsWith('.zhihu.com')) invalid('site');
+  return site;
+}
+
+function officialTimestamp(value) {
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) invalid('publishedAfter');
+  return new Date(value).toISOString();
 }
 
 function parsedUrl(value, field) {
@@ -337,5 +384,54 @@ export function xiaohongshuNotePublicCommentReplies({ clientRequestId, browserBi
     capability: 'xiaohongshu.note.public_comment_replies.v1',
     executionTarget: 'existing_public_note_overlay',
     input: { maximumThreads: smallBudget(maximumThreads, 'maximumThreads') }
+  });
+}
+
+/** Search public Zhihu content through the Gateway-owned official provider. */
+export function zhihuOfficialSearch(options) {
+  const value = exactOptions(options, ['clientRequestId', 'query'], ['count']);
+  return officialBase({
+    clientRequestId: value.clientRequestId,
+    platform: 'zhihu',
+    capability: 'zhihu.search.public_content.v1',
+    input: {
+      query: officialQuery(value.query),
+      count: officialInteger(value.count, 10, 10, 'count')
+    }
+  });
+}
+
+/** Read the bounded official Zhihu hot list without a browser binding. */
+export function zhihuOfficialHotList(options) {
+  const value = exactOptions(options, ['clientRequestId'], ['limit']);
+  return officialBase({
+    clientRequestId: value.clientRequestId,
+    platform: 'zhihu',
+    capability: 'zhihu.hot_list.public_content.v1',
+    input: { limit: officialInteger(value.limit, 30, 30, 'limit') }
+  });
+}
+
+/** Search the web through Zhihu's official provider with fixed, bounded filters. */
+export function zhihuOfficialGlobalSearch(options) {
+  const value = exactOptions(
+    options,
+    ['clientRequestId', 'query'],
+    ['count', 'searchDatabase', 'site', 'publishedAfter']
+  );
+  const searchDatabase = value.searchDatabase ?? 'all';
+  if (!['all', 'realtime', 'static'].includes(searchDatabase)) invalid('searchDatabase');
+  const input = {
+    query: officialQuery(value.query),
+    count: officialInteger(value.count, 10, 20, 'count'),
+    searchDatabase
+  };
+  if (value.site !== undefined) input.site = officialSite(value.site);
+  if (value.publishedAfter !== undefined) input.publishedAfter = officialTimestamp(value.publishedAfter);
+  return officialBase({
+    clientRequestId: value.clientRequestId,
+    platform: 'web',
+    capability: 'web.search.global.zhihu_provider.v1',
+    input
   });
 }

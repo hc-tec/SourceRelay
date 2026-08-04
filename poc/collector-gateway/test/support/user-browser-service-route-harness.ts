@@ -24,6 +24,7 @@ import { ExtensionWorkPassiveArtifactStore } from '../../src/extension-work-pass
 import { ExtensionWorkQueue } from '../../src/extension-work-queue.js';
 import type { LoadedGatewayIdentity } from '../../src/identity.js';
 import { OperationalLog } from '../../src/operational-log.js';
+import { OfficialSourceOperationStore } from '../../src/official-source-operation-store.js';
 import { PairingBroker } from '../../src/pairing.js';
 import {
   handleUserBrowserCollectorServiceRoute,
@@ -38,6 +39,8 @@ import { XiaohongshuNotePublicCommentsArtifactStore } from '../../src/xiaohongsh
 import { XiaohongshuReplyArtifactStore } from '../../src/xiaohongshu-note-public-comment-replies-artifacts.js';
 import { XiaohongshuNotePublicDetailArtifactStore } from '../../src/xiaohongshu-note-public-detail-artifacts.js';
 import { XiaohongshuPublicNotesArtifactStore } from '../../src/xiaohongshu-public-notes-artifacts.js';
+import { ZhihuOfficialApiProvider } from '../../src/zhihu-official-api-provider.js';
+import { ZhihuOfficialArtifactStore } from '../../src/zhihu-official-artifacts.js';
 
 type RouteContext = UserBrowserCollectorServiceRouteContext & UserBrowserGatewayAdminRouteContext;
 
@@ -51,7 +54,14 @@ export interface UserBrowserServiceRouteHarness {
   close(): Promise<void>;
 }
 
-export async function createUserBrowserServiceRouteHarness(): Promise<UserBrowserServiceRouteHarness> {
+export interface UserBrowserServiceRouteHarnessOptions {
+  zhihuAccessSecret?: string | null;
+  zhihuFetchImpl?: typeof globalThis.fetch;
+}
+
+export async function createUserBrowserServiceRouteHarness(
+  options: UserBrowserServiceRouteHarnessOptions = {}
+): Promise<UserBrowserServiceRouteHarness> {
   const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-service-route-'));
   const identity = testIdentity();
   const operationalLog = await OperationalLog.create(stateDirectory);
@@ -61,6 +71,8 @@ export async function createUserBrowserServiceRouteHarness(): Promise<UserBrowse
   const collectorServiceClients = await CollectorServiceClientRegistry.create(stateDirectory);
   const collectorServiceAudit = await CollectorServiceAuditLog.create(stateDirectory);
   const collectorServiceIdempotency = await CollectorServiceIdempotencyLedger.create(stateDirectory);
+  const officialSourceOperations = await OfficialSourceOperationStore.create(stateDirectory);
+  const zhihuOfficialArtifacts = await ZhihuOfficialArtifactStore.create(stateDirectory);
   const context: RouteContext = {
     identity,
     operationalLog,
@@ -70,6 +82,13 @@ export async function createUserBrowserServiceRouteHarness(): Promise<UserBrowse
     collectorServiceClients,
     collectorServiceAudit,
     collectorServiceIdempotency,
+    officialSourceOperations,
+    zhihuOfficialApiProvider: new ZhihuOfficialApiProvider({
+      accessSecret: options.zhihuAccessSecret ?? null,
+      artifacts: zhihuOfficialArtifacts,
+      operations: officialSourceOperations,
+      ...(options.zhihuFetchImpl ? { fetchImpl: options.zhihuFetchImpl } : {})
+    }),
     videoDetailArtifacts: await BilibiliVideoDetailArtifactStore.create(stateDirectory),
     nativeSearchArtifacts: await BilibiliNativeSearchArtifactStore.create(stateDirectory),
     nativeSearchBatchDirectArtifacts: await ExtensionWorkNativeSearchBatchArtifactStore.create(stateDirectory),
@@ -83,7 +102,8 @@ export async function createUserBrowserServiceRouteHarness(): Promise<UserBrowse
       await XiaohongshuNotePublicDetailArtifactStore.create(stateDirectory),
     xiaohongshuNotePublicCommentsArtifacts:
       await XiaohongshuNotePublicCommentsArtifactStore.create(stateDirectory),
-    xiaohongshuReplyArtifacts: await XiaohongshuReplyArtifactStore.create(stateDirectory)
+    xiaohongshuReplyArtifacts: await XiaohongshuReplyArtifactStore.create(stateDirectory),
+    zhihuOfficialArtifacts
   };
   const issued = await collectorServiceClients.issue(collectorServiceClientCreateInput({
     label: 'Route contract test',

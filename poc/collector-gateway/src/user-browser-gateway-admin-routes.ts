@@ -31,6 +31,7 @@ import {
 } from './user-browser-collector-service-access';
 import type { OperationalLog } from './operational-log';
 import { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION } from '@intelligence/collector-contracts';
+import type { ZhihuOfficialArtifactStore } from './zhihu-official-artifacts';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const DIRECT_ARTIFACT = new RegExp(`^/v1/collect/artifacts/([^/]+)/(${UUID})$`, 'i');
@@ -54,6 +55,7 @@ export interface UserBrowserGatewayAdminRouteContext {
   xiaohongshuNotePublicDetailArtifacts: XiaohongshuNotePublicDetailArtifactStore;
   xiaohongshuNotePublicCommentsArtifacts: XiaohongshuNotePublicCommentsArtifactStore;
   xiaohongshuReplyArtifacts: XiaohongshuReplyArtifactStore;
+  zhihuOfficialArtifacts: ZhihuOfficialArtifactStore;
 }
 
 /**

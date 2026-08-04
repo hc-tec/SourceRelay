@@ -13,13 +13,13 @@ function digest(value: unknown): string {
 }
 
 describe('user-browser service compatibility identity', () => {
-  test('binds all fifteen direct capabilities to exact OpenAPI request schemas and execution targets', () => {
+  test('binds all eighteen direct capabilities to exact OpenAPI request schemas and execution targets', () => {
     const origin = 'http://127.0.0.1:43127';
     const catalog = userBrowserCapabilityCatalogContract(origin);
     const openApi = userBrowserCollectorServiceOpenApiDocument(origin) as Record<string, any>;
     expect(catalog.schemaVersion).toBe(3);
-    expect(catalog.capabilities).toHaveLength(18);
-    expect(catalog.directContracts).toHaveLength(15);
+    expect(catalog.capabilities).toHaveLength(21);
+    expect(catalog.directContracts).toHaveLength(18);
     expect(catalog.catalogDigest).toBe(digest({
       capabilities: catalog.capabilities,
       directContracts: catalog.directContracts
@@ -34,10 +34,13 @@ describe('user-browser service compatibility identity', () => {
       expect(contract.defaultExecutionTarget).toBe(registry.executionTargets[0]);
       expect(contract.executionTargetMode).toBe(registry.executionTargets.length === 1 ? 'fixed' : 'enum');
       expect(contract.budgetPolicy).toBe(registry.budgetPolicy);
+      expect(contract.executionProvider).toBe(registry.executionProvider ?? 'browser_extension');
       expect(schema.required).toContain('clientRequestId');
       expect(schema.properties.clientRequestId, contract.capability)
         .toEqual({ type: 'string', format: 'uuid' });
     }
+    expect(catalog.directContracts.filter((entry) => entry.executionProvider === 'official_api'))
+      .toHaveLength(3);
   });
 
   test('publishes origin-independent OpenAPI/catalog digests and exact feature flags', () => {

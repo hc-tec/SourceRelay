@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Static cross-language contract gate for the user-owned-browser direct lane.
+ * Static cross-language contract gate for all registered direct providers.
  * The source packages intentionally do not import one another at runtime, so
  * this check reads the UTF-8 source declarations and compares their sets.
  */
@@ -16,31 +16,60 @@ export async function readCoreCapabilityMatrix(pocRoot = resolve(here, '..')) {
     openapi: resolve(pocRoot, 'collector-gateway/src/user-browser-collector-service-openapi.ts'),
     javascript: resolve(pocRoot, 'collector-client/src/constants.mjs'),
     python: resolve(pocRoot, 'collector-python-client/src/intelligence_collector/constants.py'),
-    extension: resolve(pocRoot, 'collector-extension/src/background/user-browser-gateway-types.ts')
+    extension: resolve(pocRoot, 'collector-extension/src/background/user-browser-gateway-types.ts'),
+    officialContract: resolve(pocRoot, 'collector-gateway/src/zhihu-official-contract.ts'),
+    officialOpenApi: resolve(pocRoot, 'collector-gateway/src/zhihu-official-openapi.ts')
   };
   const source = {};
   for (const [name, path] of Object.entries(files)) source[name] = await readFile(path, 'utf8');
 
   const registry = extractObjectKeys(source.registry);
   const artifacts = extractObjectKeys(source.artifacts);
-  const openapiRequests = extractOpenApiRequestCapabilities(source.openapi);
+  const openapiRequests = [
+    ...extractOpenApiRequestCapabilities(source.openapi),
+    ...extractOfficialOpenApiRequestCapabilities(source.officialOpenApi)
+  ];
   const openapiOperations = extractOpenApiEnum(source.openapi, 'Operation');
   const openapiArtifacts = extractOpenApiEnum(source.openapi, 'ArtifactResponse');
   const javascript = extractQuotedBlock(source.javascript, 'DIRECT_CAPABILITY_NAMES');
   const python = extractQuotedBlock(source.python, 'DIRECT_CAPABILITY_NAMES');
   const extension = extractQuotedBlock(source.extension, 'USER_BROWSER_DIRECT_WORK_CAPABILITIES');
+  const officialRegistry = extractRegistryCapabilitiesByProvider(source.registry, 'official_api');
+  const officialContract = [...source.officialContract.matchAll(
+    /export const ZHIHU_OFFICIAL_[A-Z_]+_CAPABILITY\s*=\s*['"]([^'"]+)['"]/g
+  )].map((match) => match[1]);
 
-  return { registry, artifacts, openapiRequests, openapiOperations, openapiArtifacts, javascript, python, extension };
+  return {
+    registry, artifacts, openapiRequests, openapiOperations, openapiArtifacts, javascript, python,
+    extension, officialRegistry, officialContract
+  };
 }
 
 export function compareCoreCapabilityMatrix(matrix) {
-  const names = Object.keys(matrix);
   const baseline = [...new Set(matrix.registry)].sort();
   const mismatches = [];
-  for (const name of names) {
+  const providerSpecific = new Set(['extension', 'officialRegistry', 'officialContract']);
+  for (const name of Object.keys(matrix).filter((name) => !providerSpecific.has(name))) {
     const values = [...new Set(matrix[name])].sort();
     if (values.join('\n') !== baseline.join('\n')) {
       mismatches.push({ source: name, expected: baseline, actual: values });
+    }
+  }
+  if (matrix.officialRegistry || matrix.officialContract) {
+    const officialRegistry = [...new Set(matrix.officialRegistry ?? [])].sort();
+    const officialContract = [...new Set(matrix.officialContract ?? [])].sort();
+    if (officialContract.join('\n') !== officialRegistry.join('\n')) {
+      mismatches.push({ source: 'officialContract', expected: officialRegistry, actual: officialContract });
+    }
+    const browserBaseline = baseline.filter((capability) => !officialRegistry.includes(capability));
+    const extension = [...new Set(matrix.extension ?? [])].sort();
+    if (extension.join('\n') !== browserBaseline.join('\n')) {
+      mismatches.push({ source: 'extension', expected: browserBaseline, actual: extension });
+    }
+  } else if (matrix.extension) {
+    const extension = [...new Set(matrix.extension)].sort();
+    if (extension.join('\n') !== baseline.join('\n')) {
+      mismatches.push({ source: 'extension', expected: baseline, actual: extension });
     }
   }
   return mismatches;
@@ -65,6 +94,18 @@ function extractObjectKeys(source) {
   return values;
 }
 
+function extractRegistryCapabilitiesByProvider(source, provider) {
+  const entries = [...source.matchAll(/^\s{2}'([^']+)':\s*\{/gm)];
+  const values = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const end = entries[index + 1]?.index ?? source.length;
+    const block = source.slice(entry.index, end);
+    if (block.includes(`executionProvider: '${provider}'`)) values.push(entry[1]);
+  }
+  return values;
+}
+
 function extractQuotedBlock(source, name) {
   const start = source.indexOf(name);
   if (start < 0) throw new Error(`collector_core_capability_declaration_missing:${name}`);
@@ -86,6 +127,11 @@ function extractOpenApiRequestCapabilities(source) {
   for (const match of requestSource.matchAll(pattern)) values.push(match[1]);
   for (const match of requestSource.matchAll(/profileCollectRequest\(['"]([^'"]+)['"]\)/g)) values.push(match[1]);
   return [...new Set(values)];
+}
+
+function extractOfficialOpenApiRequestCapabilities(source) {
+  return [...source.matchAll(/officialRequestSchema\(\s*['"](?:zhihu|web)['"],\s*['"]([^'"]+)['"]/g)]
+    .map((match) => match[1]);
 }
 
 function extractOpenApiEnum(source, schemaName) {

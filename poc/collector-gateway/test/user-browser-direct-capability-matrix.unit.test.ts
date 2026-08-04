@@ -24,9 +24,9 @@ describe('user-owned browser direct capability matrix', () => {
       .filter((entry) => entry.dispatchState !== 'direct_ready')
       .map((entry) => entry.capability);
 
-    expect(catalog).toHaveLength(18);
+    expect(catalog).toHaveLength(21);
     expect(new Set(names).size).toBe(names.length);
-    expect(directNames).toHaveLength(15);
+    expect(directNames).toHaveLength(18);
     expect(migrationNames).toHaveLength(3);
     expect(asSet(listDirectCapabilities())).toEqual(asSet(directNames));
 

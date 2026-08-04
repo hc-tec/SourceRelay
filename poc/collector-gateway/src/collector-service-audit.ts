@@ -39,7 +39,10 @@ export type CollectorServiceAuditCapability =
   | 'xiaohongshu.account.public_notes.v1'
   | 'xiaohongshu.note.public_detail.v1'
   | 'xiaohongshu.note.public_comments.v1'
-  | 'xiaohongshu.note.public_comment_replies.v1';
+  | 'xiaohongshu.note.public_comment_replies.v1'
+  | 'zhihu.search.public_content.v1'
+  | 'zhihu.hot_list.public_content.v1'
+  | 'web.search.global.zhihu_provider.v1';
 
 /**
  * Deliberately small, de-identified call history.  In particular it has no
@@ -170,7 +173,10 @@ function auditEvent(value: unknown): CollectorServiceAuditEvent {
       candidate.capability === 'xiaohongshu.account.public_notes.v1' ||
       candidate.capability === 'xiaohongshu.note.public_detail.v1' ||
       candidate.capability === 'xiaohongshu.note.public_comments.v1' ||
-      candidate.capability === 'xiaohongshu.note.public_comment_replies.v1') ||
+      candidate.capability === 'xiaohongshu.note.public_comment_replies.v1' ||
+      candidate.capability === 'zhihu.search.public_content.v1' ||
+      candidate.capability === 'zhihu.hot_list.public_content.v1' ||
+      candidate.capability === 'web.search.global.zhihu_provider.v1') ||
     !(candidate.profileIdDigest === null ||
       (typeof candidate.profileIdDigest === 'string' && PROFILE_DIGEST_PATTERN.test(candidate.profileIdDigest))) ||
     !(candidate.artifactId === null ||

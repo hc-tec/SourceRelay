@@ -11,7 +11,9 @@ const ARTIFACT_PATH_PATTERN = new RegExp(
   '^/v1/collect/artifacts/(' +
     'bilibili\\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|' +
       'dynamic|collection_series\\.(?:overview|detail)|danmaku|discussion)|' +
-    'xiaohongshu\\.(?:(?:search|account)\\.public_notes|note\\.public_(?:detail|comments|comment_replies))\\.v1' +
+    'xiaohongshu\\.(?:(?:search|account)\\.public_notes|note\\.public_(?:detail|comments|comment_replies))\\.v1|' +
+    'zhihu\\.(?:search|hot_list)\\.public_content\\.v1|' +
+    'web\\.search\\.global\\.zhihu_provider\\.v1' +
   ')/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$',
   'i'
 );
@@ -29,16 +31,25 @@ export function isTerminalOperationState(state) {
 }
 
 export function validateCollectRequest(value) {
-  if (!isRecord(value) || !exactKeys(value, [
-    'schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'
-  ]) || value.schemaVersion !== 3 || !UUID_PATTERN.test(value.clientRequestId) ||
-    !UUID_PATTERN.test(value.browserBindingId) ||
-    (value.platform !== 'bilibili' && value.platform !== 'xiaohongshu') ||
-    typeof value.capability !== 'string' || !DIRECT_CAPABILITIES.has(value.capability) ||
-    (value.platform === 'bilibili' && !value.capability.startsWith('bilibili.')) ||
-    (value.platform === 'xiaohongshu' && !value.capability.startsWith('xiaohongshu.')) ||
-    typeof value.executionTarget !== 'string' || !DIRECT_EXECUTION_TARGETS.has(value.executionTarget) ||
-    !isRecord(value.input)) {
+  if (!isRecord(value) || value.schemaVersion !== 3 || !UUID_PATTERN.test(value.clientRequestId) ||
+    typeof value.capability !== 'string' || !DIRECT_CAPABILITIES.has(value.capability) || !isRecord(value.input)) {
+    throw new CollectorClientError('collector_client_collect_request_invalid', 400);
+  }
+  const official = value.executionTarget === 'official_api';
+  const expectedKeys = official
+    ? ['schemaVersion', 'clientRequestId', 'platform', 'capability', 'executionTarget', 'input']
+    : ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'];
+  const validOfficialIdentity =
+    (value.platform === 'zhihu' &&
+      (value.capability === 'zhihu.search.public_content.v1' || value.capability === 'zhihu.hot_list.public_content.v1')) ||
+    (value.platform === 'web' && value.capability === 'web.search.global.zhihu_provider.v1');
+  const validBrowserIdentity =
+    ((value.platform === 'bilibili' && value.capability.startsWith('bilibili.')) ||
+      (value.platform === 'xiaohongshu' && value.capability.startsWith('xiaohongshu.'))) &&
+    typeof value.browserBindingId === 'string' && UUID_PATTERN.test(value.browserBindingId);
+  if (!exactKeys(value, expectedKeys) ||
+      (official ? !validOfficialIdentity : !validBrowserIdentity) ||
+      typeof value.executionTarget !== 'string' || !DIRECT_EXECUTION_TARGETS.has(value.executionTarget)) {
     throw new CollectorClientError('collector_client_collect_request_invalid', 400);
   }
 }

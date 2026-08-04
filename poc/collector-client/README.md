@@ -1,8 +1,9 @@
 # Collector Client
 
-`@intelligence/collector-client` 是给本地上层应用使用的薄客户端。它只调用
-user-owned-browser direct API，不管理浏览器、不读取 Profile/Cookie，也不暴露任意
-URL、tab、selector、脚本、CDP 或 Network 接口。
+`@intelligence/collector-client` 是给本地上层应用使用的薄客户端。它只调用 Gateway
+已经登记的 direct provider：浏览器能力由用户日常浏览器中的扩展执行，官方数据能力由
+Gateway 直接执行。SDK 不管理浏览器、不读取 Profile/Cookie、不接收平台凭证，也不暴露
+任意 URL、tab、selector、脚本、CDP 或 Network 接口。
 
 ## 最小用法
 
@@ -40,7 +41,7 @@ console.log(artifact?.artifact);
 
 - `listDirectCapabilities()`：读取客户端当前允许提交的 direct capability 名称；它不能替代 Gateway 的 `dispatchState`、预算和绑定状态检查；
 - `listCapabilities()`：读取能力目录；上层应只提交 `dispatchState: direct_ready` 的能力；
-- `readCapabilityCatalog()`：读取带 SHA-256 身份和 15 项 direct contract 的完整能力目录；
+- `readCapabilityCatalog()`：读取带 SHA-256 身份和 18 项 direct contract 的完整能力目录；
 - `readRelease()`：读取 Core release manifest，确认本地扩展、Gateway、Browser Host 和服务 schema 的兼容性；
 - `readOpenApi()`：读取当前 `/v2` OpenAPI 3.1 机器契约，构造请求前应优先使用它核对输入边界；
 - `listBrowserBindings()`：读取已配对浏览器绑定的安全摘要；
@@ -66,7 +67,8 @@ ID、搜索词，小红书短时 profile URL、详情序号以及评论/回复/�
 import {
   bilibiliNativeSearch,
   createClientRequestId,
-  xiaohongshuAccountPublicNotes
+  xiaohongshuAccountPublicNotes,
+  zhihuOfficialSearch
 } from '@intelligence/collector-client';
 
 const searchRequest = bilibiliNativeSearch({
@@ -82,9 +84,18 @@ const profileRequest = xiaohongshuAccountPublicNotes({
   executionTarget: 'ephemeral_public_profile_url',
   profileUrl: shortLivedProfileUrl
 });
+
+const zhihuRequest = zhihuOfficialSearch({
+  clientRequestId: createClientRequestId(),
+  query: 'RAG',
+  count: 10
+});
 ```
 
-当前 builder 覆盖全部 15 项 `direct_ready` 能力。小红书搜索/详情不接受调用方 URL；
+当前 builder 覆盖全部 18 项 `direct_ready` 能力：15 项浏览器扩展能力，以及知乎官方
+站内搜索、热榜、全网搜索 3 项官方 Provider 能力。官方 builder 不接受
+`browserBindingId` 或 Access Secret；凭证只存在于 Gateway 进程的
+`ZHIHU_ACCESS_SECRET`。小红书搜索/详情不接受调用方 URL；
 短时主页链接只允许进入 `ephemeral_public_profile_url`，并保留签名 URL 原文。所有
 builder 都拒绝 selector、脚本、tab ID、CDP 和任意 Network 控制字段。
 
@@ -108,7 +119,7 @@ SDK 本身仍不自动重试 POST。
 src/
 ├─ transport.mjs   loopback HTTP、token、超时和有界 JSON
 ├─ validation.mjs  capability、request、operation、artifact path 校验
-├─ requests.mjs    15 项能力化 request builder 与 URL/预算边界
+├─ requests.mjs    18 项能力化 request builder 与 URL/预算边界
 ├─ models.mjs      operation / artifact / collection 结构化 raw-first 模型
 ├─ client.mjs      collect / wait / artifact 工作流
 ├─ public.mjs      稳定公共 allowlist 导出

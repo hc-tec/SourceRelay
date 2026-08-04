@@ -33,8 +33,8 @@ try {
   const capabilities = await readJson('/v2/capabilities');
   if (release.releaseVersion !== '0.7.17' || release.service?.schemaVersion !== 3 ||
       release.compatibility?.digestAlgorithm !== 'sha256-canonical-json-v1' ||
-      capabilities.schemaVersion !== 3 || capabilities.capabilities?.length !== 18 ||
-      capabilities.directContracts?.length !== 15) {
+      capabilities.schemaVersion !== 3 || capabilities.capabilities?.length !== 21 ||
+      capabilities.directContracts?.length !== 18) {
     throw new Error('user_browser_api_catalog_probe_failed');
   }
 
@@ -48,7 +48,7 @@ try {
   const sdkRelease = await client.readRelease();
   const sdkCapabilities = await client.listCapabilities();
   const bindings = await client.listBrowserBindings();
-  if (sdkRelease.releaseVersion !== release.releaseVersion || sdkCapabilities.length !== 18 || bindings.length !== 0) {
+  if (sdkRelease.releaseVersion !== release.releaseVersion || sdkCapabilities.length !== 21 || bindings.length !== 0) {
     throw new Error('user_browser_api_sdk_probe_failed');
   }
 
@@ -103,7 +103,8 @@ try {
     gate: 'user-browser-sdk-gateway-operation-artifact-smoke',
     releaseVersion: release.releaseVersion,
     catalogCount: capabilities.capabilities.length,
-    directCapabilityRequiresOnlineBinding: true,
+    browserCapabilitiesRequireOnlineBinding: true,
+    officialCapabilitiesRequireBrowserBinding: false,
     catalogOnlyCapabilityRejected: true,
     artifactCapabilityBoundaryChecked: true,
     scopeIsolationChecked: true,

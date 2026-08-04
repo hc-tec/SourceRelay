@@ -219,6 +219,62 @@ describe('user-owned browser collector service', () => {
     })).toThrow('user_browser_collector_service_request_invalid');
   });
 
+  test('admits fixed-contract Zhihu official requests without any browser binding', () => {
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 3,
+      clientRequestId,
+      platform: 'zhihu',
+      capability: 'zhihu.search.public_content.v1',
+      executionTarget: 'official_api',
+      input: { query: '  RAG\n系统  ' }
+    })).toEqual({
+      schemaVersion: 3,
+      clientRequestId,
+      platform: 'zhihu',
+      capability: 'zhihu.search.public_content.v1',
+      executionTarget: 'official_api',
+      input: { query: 'RAG 系统', count: 10 }
+    });
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 3,
+      clientRequestId,
+      platform: 'zhihu',
+      capability: 'zhihu.hot_list.public_content.v1',
+      executionTarget: 'official_api',
+      input: { limit: 1 }
+    })).toMatchObject({ input: { limit: 1 } });
+    expect(userBrowserCollectorServiceRequestInput({
+      schemaVersion: 3,
+      clientRequestId,
+      platform: 'web',
+      capability: 'web.search.global.zhihu_provider.v1',
+      executionTarget: 'official_api',
+      input: {
+        query: 'AI', count: 2, searchDatabase: 'realtime', site: 'News.Example.com',
+        publishedAfter: '2026-08-01T00:00:00+08:00'
+      }
+    })).toMatchObject({
+      input: {
+        query: 'AI', count: 2, searchDatabase: 'realtime', site: 'news.example.com',
+        publishedAfter: '2026-07-31T16:00:00.000Z'
+      }
+    });
+    for (const invalid of [
+      {
+        schemaVersion: 3, clientRequestId, browserBindingId, platform: 'zhihu',
+        capability: 'zhihu.search.public_content.v1', executionTarget: 'official_api', input: { query: 'RAG' }
+      },
+      {
+        schemaVersion: 3, clientRequestId, platform: 'web',
+        capability: 'web.search.global.zhihu_provider.v1', executionTarget: 'official_api',
+        input: { query: 'RAG', site: 'zhihu.com' }
+      }
+    ]) {
+      expect(() => userBrowserCollectorServiceRequestInput(invalid))
+        .toThrow('user_browser_collector_service_request_invalid');
+    }
+  });
+
   test('publishes direct and canary passive capabilities without a Profile or browser-control primitive', () => {
     const document = userBrowserCollectorServiceOpenApiDocument('http://127.0.0.1:43127') as Record<string, any>;
     const variants = document.components.schemas.UserBrowserCollectRequest.oneOf;
@@ -237,7 +293,10 @@ describe('user-owned browser collector service', () => {
       { $ref: '#/components/schemas/UserBrowserXiaohongshuAccountPublicNotesCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicDetailCollectRequest' },
       { $ref: '#/components/schemas/UserBrowserXiaohongshuNotePublicCommentsCollectRequest' },
-      { $ref: '#/components/schemas/UserBrowserXiaohongshuReplyCollectRequest' }
+      { $ref: '#/components/schemas/UserBrowserXiaohongshuReplyCollectRequest' },
+      { $ref: '#/components/schemas/ZhihuOfficialSearchCollectRequest' },
+      { $ref: '#/components/schemas/ZhihuOfficialHotListCollectRequest' },
+      { $ref: '#/components/schemas/ZhihuOfficialGlobalSearchCollectRequest' }
     ]);
     expect(document.components.schemas.UserBrowserNativeSearchCollectRequest.properties).toMatchObject({
       capability: { const: 'bilibili.native_search' },
@@ -375,7 +434,7 @@ describe('user-owned browser collector service', () => {
     expect(document.components.schemas.Operation.properties.executionTarget).toMatchObject({
       enum: ['collector_work_tab', 'user_selected_tab', 'existing_public_explore_tab',
         'existing_public_profile_tab', 'ephemeral_public_profile_url', 'discover_public_profile_from_note', 'existing_public_search_tab',
-        'existing_public_note_overlay']
+        'existing_public_note_overlay', 'official_api']
     });
     expect(document.components.schemas.Operation.properties.capability.enum).toEqual(expect.arrayContaining([
       'xiaohongshu.search.public_notes.v1', 'xiaohongshu.account.public_notes.v1',

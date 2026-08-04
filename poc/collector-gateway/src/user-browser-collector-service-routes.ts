@@ -10,6 +10,7 @@ import type {
   CollectorServiceIdempotencyRecord
 } from './collector-service-idempotency';
 import { canonicalJson, sha256Hex } from './canonical-json';
+import { readCollectorOperation } from './collector-operation-reader';
 import { reconcileExpiredExtensionWork, type ExtensionWorkRouteContext } from './extension-work-routes';
 import { readJsonBody, safeErrorCode, sendJson } from './gateway-http';
 import {
@@ -23,19 +24,24 @@ import {
   sendUserBrowserServiceAccessDenied,
   type UserBrowserServicePrincipal
 } from './user-browser-collector-service-access';
-import { dispatchUserBrowserCapability } from './user-browser-capability-registry';
+import {
+  dispatchUserBrowserCapability,
+  type UserBrowserCapabilityDispatchContext
+} from './user-browser-capability-registry';
 import {
   userBrowserCapabilityCatalogContract,
   userBrowserServiceCompatibility
 } from './user-browser-service-compatibility';
 import { collectorCoreReleaseManifest } from '@intelligence/collector-contracts';
+import type { OfficialSourceOperationStore } from './official-source-operation-store';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 
-export interface UserBrowserCollectorServiceRouteContext extends ExtensionWorkRouteContext {
+export interface UserBrowserCollectorServiceRouteContext extends UserBrowserCapabilityDispatchContext {
   collectorServiceClients: CollectorServiceClientRegistry;
   collectorServiceAudit: CollectorServiceAuditLog;
   collectorServiceIdempotency: CollectorServiceIdempotencyLedger;
+  officialSourceOperations: OfficialSourceOperationStore;
 }
 
 /**
@@ -174,15 +180,29 @@ export async function handleUserBrowserCollectorServiceRoute(
       });
     }
     await context.operationalLog.record({
-      eventType: 'collector.operation.queued',
+      eventType: operation.state === 'completed'
+        ? 'collector.operation.completed_inline'
+        : 'collector.operation.queued',
       requestId: context.requestId ?? null,
       operationId,
       capability: collection.capability,
       durationMs: Math.max(0, Date.now() - startedAt),
-      outcome: 'started',
-      details: { executionTarget: operation.executionTarget, idempotentReplay: false }
+      outcome: operation.state === 'completed' ? 'completed' : 'started',
+      details: {
+        executionTarget: operation.executionTarget,
+        executionProvider: operation.executionTarget === 'official_api' ? 'official_api' : 'browser_extension',
+        idempotentReplay: false
+      }
     });
-    await audit(context, access.principal, 'collect', collection.capability, operationId, 'queued', null);
+    await audit(
+      context,
+      access.principal,
+      'collect',
+      collection.capability,
+      operationId,
+      outcomeForState(operation.state),
+      null
+    );
     sendJson(response, 201, {
       schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
       clientRequestId: collection.clientRequestId,
@@ -201,7 +221,7 @@ export async function handleUserBrowserCollectorServiceRoute(
       return true;
     }
     await reconcileExpiredExtensionWork(context);
-    const result = await context.workQueue.get(operation[1]!);
+    const result = await readCollectorOperation(context, operation[1]!);
     if (!result) {
       await audit(context, access.principal, 'operation_read', null, operation[1]!, 'not_found', 'extension_work_not_found');
       sendJson(response, 404, { schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION, ok: false, error: 'extension_work_not_found' });
@@ -226,23 +246,7 @@ async function audit(
   context: UserBrowserCollectorServiceRouteContext,
   principal: UserBrowserServicePrincipal | null,
   action: CollectorServiceAuditAction,
-  capability:
-    | 'bilibili.video_detail'
-    | 'bilibili.native_search'
-    | 'bilibili.native_search_batch'
-    | 'bilibili.account_profile'
-    | 'bilibili.account_inventory'
-    | 'bilibili.discussion'
-    | 'bilibili.dynamic'
-    | 'bilibili.collection_series.overview'
-    | 'bilibili.collection_series.detail'
-    | 'bilibili.danmaku'
-    | 'xiaohongshu.search.public_notes.v1'
-    | 'xiaohongshu.account.public_notes.v1'
-    | 'xiaohongshu.note.public_detail.v1'
-    | 'xiaohongshu.note.public_comments.v1'
-    | 'xiaohongshu.note.public_comment_replies.v1'
-    | null,
+  capability: import('./user-browser-collector-service-contract').UserBrowserCollectorServiceRequest['capability'] | null,
   operationId: string | null,
   outcome: CollectorServiceAuditOutcome,
   errorCode: string | null
@@ -257,12 +261,26 @@ async function audit(
   });
 }
 
-function operationStatus(errorCode: string): 400 | 409 {
+function operationStatus(errorCode: string): 400 | 409 | 429 | 502 | 503 | 504 {
+  if (errorCode === 'zhihu_official_api_rate_limited' || errorCode === 'zhihu_official_api_quota_exhausted') {
+    return 429;
+  }
+  if (errorCode === 'zhihu_official_api_timeout') return 504;
+  if (errorCode === 'zhihu_official_api_source_unavailable') return 503;
+  if (errorCode === 'zhihu_official_api_server_error' ||
+    errorCode === 'zhihu_official_api_response_invalid' ||
+    errorCode === 'zhihu_official_api_response_media_type_invalid' ||
+    errorCode === 'zhihu_official_api_response_origin_invalid' ||
+    errorCode === 'zhihu_official_api_response_contains_credential' ||
+    errorCode === 'zhihu_official_api_response_too_large' ||
+    errorCode === 'zhihu_official_api_http_error') return 502;
   return errorCode === 'collector_service_idempotency_conflict' ||
     errorCode === 'collector_service_idempotency_outcome_unknown' ||
     errorCode === 'collector_service_idempotency_operation_unavailable' ||
     errorCode === 'browser_binding_offline' || errorCode.startsWith('browser_binding_safety_') ||
-    errorCode.startsWith('extension_work_binding_')
+    errorCode.startsWith('extension_work_binding_') ||
+    errorCode === 'zhihu_official_api_credential_required' ||
+    errorCode === 'zhihu_official_api_authentication_failed'
     ? 409
     : 400;
 }
@@ -294,7 +312,7 @@ async function sendIdempotentReplay(
     return;
   }
 
-  const operation = await context.workQueue.get(record.operationId);
+  const operation = await readCollectorOperation(context, record.operationId);
   if (!operation) {
     const code = record.state === 'accepted'
       ? 'collector_service_idempotency_operation_unavailable'

@@ -51,12 +51,16 @@ JavaScript 包内部进一步拆分为 `transport.mjs`、`validation.mjs`、`cli
 
 负责：
 
-- 15 项 direct capability allowlist；
-- 8 个受限 execution target；
-- `schemaVersion: 2` 和顶层 exact-key；
+- 18 项 direct capability allowlist；
+- 9 个受限 execution target，其中 `official_api` 不进入扩展；
+- `schemaVersion: 3` 和按 Provider 区分的顶层 exact-key；
 - `operationId` / `browserBindingId` / artifact ID 格式；
 - operation capability 与 artifact retrieval path 绑定；
 - 3 项迁移边界的拒绝。
+
+浏览器 Provider 请求必须带 `browserBindingId`；官方 Provider 请求必须不带该字段。两种
+请求继续共享 `clientRequestId`、Operation、Artifact、审计和幂等语义，但 SDK 永远不接收
+平台 Access Secret。
 
 能力名称和 OpenAPI schema 不能在上层应用中另写一份。SDK 的静态 allowlist 由能力矩阵
 回归测试与 Gateway catalog、OpenAPI request/operation/artifact 集合比较；运行时仍以

@@ -1,6 +1,6 @@
 # Intelligence Collector Python SDK
 
-这是当前 user-owned-browser Collector `/v2` API 的 Python SDK。它与
+这是当前 Collector `/v2` registered-provider API 的 Python SDK。它与
 `@intelligence/collector-client`（JavaScript SDK）共享同一份 Gateway 协议，但使用
 独立的 Python 包、类型、测试和发布边界；它不是旧
 `poc/deepresearch-gateway/deepresearch_gateway` 客户端的别名。
@@ -56,7 +56,7 @@ asyncio.run(main())
 intelligence_collector
 ├─ transport.py   loopback origin、token、超时、JSON 大小和 HTTP 错误
 ├─ validation.py  exact request、direct allowlist、operation 和 artifact path
-├─ requests.py    15 项能力化请求 builder 与 URL/预算边界
+├─ requests.py    18 项能力化请求 builder 与 URL/预算边界
 ├─ models.py      operation / artifact / collection 结构化 raw-first 模型
 ├─ client.py      collect / wait / artifact workflow
 └─ __init__.py    稳定公共导出
@@ -70,7 +70,8 @@ poc/collector-client
 ```
 
 两个 SDK 不互相导入，不共享平台抓取代码，也不接触浏览器 Profile、Cookie、平台
-Token 或原始 Network body。协议真源只有：
+Token 或原始 Network body。知乎 Access Secret 只属于 Gateway 进程，不会进入 SDK
+请求。协议真源只有：
 
 ```text
 GET /v2/capabilities
@@ -112,6 +113,7 @@ from intelligence_collector import (
     bilibili_video_detail,
     create_client_request_id,
     xiaohongshu_public_notes_search,
+    zhihu_official_search,
 )
 
 bilibili_request = bilibili_video_detail(
@@ -128,12 +130,20 @@ xiaohongshu_request = xiaohongshu_public_notes_search(
     comments_maximum_scrolls=2,
     replies_maximum_threads=1,
 )
+
+zhihu_request = zhihu_official_search(
+    client_request_id=create_client_request_id(),
+    query="RAG",
+    count=10,
+)
 ```
 
-可用 builder 覆盖全部 15 项 `direct_ready` 能力：
+可用 builder 覆盖全部 18 项 `direct_ready` 能力：
 
 - B站：视频详情、站内搜索/固定两页搜索、账号资料、投稿首屏、动态、合集/系列概览与详情、弹幕、自动 work-tab 评论；
-- 小红书：公开搜索、公开博主笔记、公开笔记详情、评论和评论回复。
+- 小红书：公开搜索、公开博主笔记、公开笔记详情、评论和评论回复；
+- 知乎官方 Provider：站内搜索、热榜、全网搜索。三项 builder 不接受
+  `browser_binding_id` 或 Access Secret，也不要求浏览器在线。
 
 小红书账号 builder 只有在 `execution_target="ephemeral_public_profile_url"` 时才
 接受短时 `profile_url`，并保留签名链接原文；搜索和详情 builder 不接受调用方 URL。
@@ -170,7 +180,7 @@ README 中安装并运行知识包测试和 opt-in 真实 Gateway smoke。
 
 - 只允许 `http://127.0.0.1:<port>` loopback Gateway；
 - `collect()` 对顶层字段做 exact-key 校验，并拒绝任意 selector、脚本、tab、URL 或 CDP 字段；
-- 只接受 15 项 `direct_ready` capability；
+- 只接受 18 项 `direct_ready` capability，并按 Provider 强制两种 exact envelope；
 - `collect()` 一次调用只发出一次 `POST /v2/collect`；
 - `wait_operation()` 只读取 operation，不重投平台任务；
 - artifact path 必须从 operation 的 capability-bound 返回值推导；
@@ -186,5 +196,5 @@ python -m compileall -q src tests
 ```
 
 测试使用 `httpx.MockTransport` 只覆盖 SDK transport、contract 和 workflow；真实平台
-能力仍必须由项目的真实 Gateway→扩展→隔离验证浏览器 canary 验证，不能用 fake 页面或
-fake XHR 代替。
+能力仍必须按 Provider 走真实 canary：浏览器能力使用 Gateway→扩展→真实页面，官方
+能力使用 Gateway→官方 API。不能用 fake 页面、fake XHR 或 fake Gateway 代替。

@@ -6,6 +6,90 @@ import { canonicalJson, sha256Hex } from '../src/canonical-json.js';
 import { createUserBrowserServiceRouteHarness } from './support/user-browser-service-route-harness.js';
 
 describe('Collector Service route-level idempotency', () => {
+  test('completes an official Zhihu request inline and replays without a second provider call', async () => {
+    let providerCalls = 0;
+    const harness = await createUserBrowserServiceRouteHarness({
+      zhihuAccessSecret: 'route-unit-secret',
+      zhihuFetchImpl: async () => {
+        providerCalls += 1;
+        return new Response(JSON.stringify({
+          Code: 0,
+          Message: 'success',
+          Data: {
+            HasMore: false,
+            Items: [{
+              Title: '公开结果', ContentType: 'Answer', ContentID: '123', ContentText: '公开摘要',
+              Url: 'https://www.zhihu.com/question/1/answer/2', CommentCount: 1, VoteUpCount: 2,
+              AuthorName: '公开作者', AuthorAvatar: '', AuthorBadge: '', AuthorBadgeText: '',
+              EditTime: 1, AuthorityLevel: '1', RankingScore: 0.9
+            }]
+          }
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+    });
+    try {
+      const request: ZhihuSearchRequest = {
+        schemaVersion: 3,
+        clientRequestId: randomUUID(),
+        platform: 'zhihu',
+        capability: 'zhihu.search.public_content.v1',
+        executionTarget: 'official_api',
+        input: { query: 'route-query-sentinel', count: 1 }
+      };
+      const first = await postCollect(harness.origin, harness.token, request);
+      expect(first.status).toBe(201);
+      expect(first.body).toMatchObject({
+        clientRequestId: request.clientRequestId,
+        idempotentReplay: false,
+        result: {
+          browserBindingId: null,
+          platform: 'zhihu',
+          capability: request.capability,
+          executionTarget: 'official_api',
+          state: 'completed'
+        }
+      });
+      const operationId = first.body.result.operationId as string;
+      const artifactId = first.body.result.artifact.artifactId as string;
+      const operationResponse = await fetch(`${harness.origin}/v2/collect/operations/${operationId}`, {
+        headers: { authorization: `Bearer ${harness.token}` }
+      });
+      expect(operationResponse.status).toBe(200);
+      expect(await operationResponse.json()).toMatchObject({ result: { operationId, artifact: { artifactId } } });
+      const artifactResponse = await fetch(
+        `${harness.origin}/v2/collect/artifacts/${artifactId}/content?offset=0&maxBytes=65536`,
+        { headers: { authorization: `Bearer ${harness.token}` } }
+      );
+      expect(artifactResponse.status).toBe(200);
+      const window = await artifactResponse.json() as Record<string, any>;
+      expect(JSON.parse(window.window.text)).toMatchObject({
+        capability: request.capability,
+        artifact: {
+          operationId,
+          capability: request.capability,
+          response: { Code: 0 }
+        }
+      });
+
+      const replay = await postCollect(harness.origin, harness.token, request);
+      expect(replay.status).toBe(200);
+      expect(replay.body).toMatchObject({
+        idempotentReplay: true,
+        result: { operationId, artifact: { artifactId } }
+      });
+      expect(providerCalls).toBe(1);
+      const stateText = (await Promise.all([
+        readFile(join(harness.stateDirectory, 'collector-service-idempotency.json'), 'utf8'),
+        readFile(join(harness.stateDirectory, 'collector-service-audit.json'), 'utf8'),
+        readFile(join(harness.stateDirectory, 'official-source-operations.json'), 'utf8')
+      ])).join('\n');
+      expect(stateText).not.toContain('route-unit-secret');
+      expect(stateText).not.toContain('route-query-sentinel');
+    } finally {
+      await harness.close();
+    }
+  });
+
   test('keeps one reply Operation identity across ledger, queue, response, and replay', async () => {
     const harness = await createUserBrowserServiceRouteHarness();
     try {
@@ -176,6 +260,15 @@ interface ReplyRequest {
   input: { maximumThreads: 1 };
 }
 
+interface ZhihuSearchRequest {
+  schemaVersion: 3;
+  clientRequestId: string;
+  platform: 'zhihu';
+  capability: 'zhihu.search.public_content.v1';
+  executionTarget: 'official_api';
+  input: { query: string; count: number };
+}
+
 function videoRequest(clientRequestId: string, browserBindingId: string): VideoRequest {
   return {
     schemaVersion: 3,
@@ -208,7 +301,7 @@ function requestDigest(request: VideoRequest): string {
 async function postCollect(
   origin: string,
   token: string,
-  request: VideoRequest | ReplyRequest
+  request: VideoRequest | ReplyRequest | ZhihuSearchRequest
 ): Promise<{ status: number; body: Record<string, any> }> {
   const response = await fetch(`${origin}/v2/collect`, {
     method: 'POST',

@@ -4,7 +4,7 @@
   "files": ["src"],
   "private": true,
   "type": "module",
-  "description": "Small, safety-preserving client for the user-owned-browser Collector Gateway API.",
+  "description": "Small, safety-preserving client for registered Collector Gateway providers.",
   "exports": {
     ".": "./src/index.mjs"
   },

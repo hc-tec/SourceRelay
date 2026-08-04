@@ -6,10 +6,15 @@ import {
   listUserBrowserXiaohongshuCapabilities,
   type UserBrowserXiaohongshuCapabilityDescriptor
 } from './user-browser-xiaohongshu-capabilities';
+import {
+  listOfficialSourceCapabilities,
+  type OfficialSourceCapabilityDescriptor
+} from './user-browser-official-source-capabilities';
 
 export type UserBrowserCapabilityDescriptor =
   | UserBrowserBilibiliCapabilityDescriptor
-  | UserBrowserXiaohongshuCapabilityDescriptor;
+  | UserBrowserXiaohongshuCapabilityDescriptor
+  | OfficialSourceCapabilityDescriptor;
 
 /**
  * Public capability truth for upper applications. A catalog entry describes
@@ -18,6 +23,7 @@ export type UserBrowserCapabilityDescriptor =
 export function listUserBrowserCapabilities(): UserBrowserCapabilityDescriptor[] {
   return [
     ...listUserBrowserBilibiliCapabilities(),
-    ...listUserBrowserXiaohongshuCapabilities()
+    ...listUserBrowserXiaohongshuCapabilities(),
+    ...listOfficialSourceCapabilities()
   ];
 }

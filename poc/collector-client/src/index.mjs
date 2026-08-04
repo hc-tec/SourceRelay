@@ -17,7 +17,10 @@ export {
   xiaohongshuNotePublicCommentReplies,
   xiaohongshuNotePublicComments,
   xiaohongshuNotePublicDetail,
-  xiaohongshuPublicNotesSearch
+  xiaohongshuPublicNotesSearch,
+  zhihuOfficialGlobalSearch,
+  zhihuOfficialHotList,
+  zhihuOfficialSearch
 } from './requests.mjs';
 export {
   CORE_RELEASE_VERSION,

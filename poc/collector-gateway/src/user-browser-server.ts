@@ -26,6 +26,10 @@ import { loadGatewayIdentity } from './identity';
 import { PairingBroker } from './pairing';
 import { handleUserBrowserGatewayRoute } from './user-browser-gateway-routes';
 import { OperationalLog } from './operational-log';
+import { OfficialSourceOperationStore } from './official-source-operation-store';
+import { ZhihuOfficialApiProvider } from './zhihu-official-api-provider';
+import { ZhihuOfficialArtifactStore } from './zhihu-official-artifacts';
+import { loadZhihuOfficialApiConfig } from './zhihu-official-config';
 
 const config = loadUserBrowserGatewayConfig();
 await assertUserBrowserStateIsolation(config.stateDirectory);
@@ -38,6 +42,13 @@ const workQueue = await ExtensionWorkQueue.create(identity, config.stateDirector
 const collectorServiceClients = await CollectorServiceClientRegistry.create(config.stateDirectory);
 const collectorServiceAudit = await CollectorServiceAuditLog.create(config.stateDirectory);
 const collectorServiceIdempotency = await CollectorServiceIdempotencyLedger.create(config.stateDirectory);
+const officialSourceOperations = await OfficialSourceOperationStore.create(config.stateDirectory);
+const zhihuOfficialArtifacts = await ZhihuOfficialArtifactStore.create(config.stateDirectory);
+const zhihuOfficialApiProvider = new ZhihuOfficialApiProvider({
+  ...loadZhihuOfficialApiConfig(),
+  artifacts: zhihuOfficialArtifacts,
+  operations: officialSourceOperations
+});
 const videoDetailArtifacts = await BilibiliVideoDetailArtifactStore.create(config.stateDirectory);
 const nativeSearchArtifacts = await BilibiliNativeSearchArtifactStore.create(config.stateDirectory);
 const nativeSearchBatchDirectArtifacts = await ExtensionWorkNativeSearchBatchArtifactStore.create(config.stateDirectory);
@@ -94,6 +105,8 @@ const server = createServer(async (request, response) => {
       collectorServiceClients,
       collectorServiceAudit,
       collectorServiceIdempotency,
+      officialSourceOperations,
+      zhihuOfficialApiProvider,
       videoDetailArtifacts,
       nativeSearchArtifacts,
       nativeSearchBatchDirectArtifacts,
@@ -104,7 +117,8 @@ const server = createServer(async (request, response) => {
       xiaohongshuAccountPublicNotesArtifacts,
       xiaohongshuNotePublicDetailArtifacts,
       xiaohongshuNotePublicCommentsArtifacts,
-      xiaohongshuReplyArtifacts
+      xiaohongshuReplyArtifacts,
+      zhihuOfficialArtifacts
     });
     if (!handled) sendJson(response, 404, {
       schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,

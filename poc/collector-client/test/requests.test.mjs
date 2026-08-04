@@ -20,7 +20,10 @@ import {
   xiaohongshuNotePublicCommentReplies,
   xiaohongshuNotePublicComments,
   xiaohongshuNotePublicDetail,
-  xiaohongshuPublicNotesSearch
+  xiaohongshuPublicNotesSearch,
+  zhihuOfficialGlobalSearch,
+  zhihuOfficialHotList,
+  zhihuOfficialSearch
 } from '../src/index.mjs';
 
 const bindingId = '11111111-1111-4111-8111-111111111111';
@@ -84,6 +87,35 @@ test('Xiaohongshu builders preserve short-lived profile URL and budgets', () => 
   assert.deepEqual(replies.input, { maximumThreads: 2 });
 });
 
+test('Zhihu official builders omit browser identity and emit bounded provider shapes', () => {
+  const search = zhihuOfficialSearch({ clientRequestId, query: '  RAG\n系统  ', count: 1 });
+  const hotList = zhihuOfficialHotList({ clientRequestId, limit: 2 });
+  const globalSearch = zhihuOfficialGlobalSearch({
+    clientRequestId,
+    query: '人工智能',
+    count: 3,
+    searchDatabase: 'realtime',
+    site: 'News.Example.com',
+    publishedAfter: '2026-08-01T00:00:00+08:00'
+  });
+  for (const request of [search, hotList, globalSearch]) {
+    assert.deepEqual(Object.keys(request).sort(), [
+      'capability', 'clientRequestId', 'executionTarget', 'input', 'platform', 'schemaVersion'
+    ]);
+    assert.equal(request.executionTarget, 'official_api');
+    assert.equal(Object.hasOwn(request, 'browserBindingId'), false);
+  }
+  assert.deepEqual(search.input, { query: 'RAG 系统', count: 1 });
+  assert.deepEqual(hotList.input, { limit: 2 });
+  assert.deepEqual(globalSearch.input, {
+    query: '人工智能',
+    count: 3,
+    searchDatabase: 'realtime',
+    site: 'news.example.com',
+    publishedAfter: '2026-07-31T16:00:00.000Z'
+  });
+});
+
 test('builders reject unsafe or incomplete inputs', () => {
   const invalid = [
     () => bilibiliVideoDetail({ ...requestIdentity, canonicalVideoUrl: 'https://evil.example/video/BV1qZSLBYEpa' }),
@@ -93,7 +125,11 @@ test('builders reject unsafe or incomplete inputs', () => {
     () => xiaohongshuAccountPublicNotes({ ...requestIdentity, maximumScrolls: 4 }),
     () => xiaohongshuAccountPublicNotes({ ...requestIdentity, maximumScrolls: 1, executionTarget: 'ephemeral_public_profile_url' }),
     () => xiaohongshuNotePublicDetail({ ...requestIdentity, resultRank: 21 }),
-    () => bilibiliNativeSearch({ browserBindingId: bindingId, query: 'missing request id' })
+    () => bilibiliNativeSearch({ browserBindingId: bindingId, query: 'missing request id' }),
+    () => zhihuOfficialSearch({ clientRequestId, query: 'RAG', browserBindingId: bindingId }),
+    () => zhihuOfficialSearch({ clientRequestId, query: 'RAG', count: 11 }),
+    () => zhihuOfficialGlobalSearch({ clientRequestId, query: 'RAG', site: 'zhihu.com' }),
+    () => zhihuOfficialGlobalSearch({ clientRequestId, query: 'RAG', searchDatabase: 'unknown' })
   ];
   for (const factory of invalid) {
     assert.throws(factory, (error) => error instanceof CollectorClientError && error.code === 'collector_client_request_builder_invalid');

@@ -28,7 +28,10 @@ export const DIRECT_CAPABILITY_NAMES = Object.freeze([
   'xiaohongshu.account.public_notes.v1',
   'xiaohongshu.note.public_detail.v1',
   'xiaohongshu.note.public_comments.v1',
-  'xiaohongshu.note.public_comment_replies.v1'
+  'xiaohongshu.note.public_comment_replies.v1',
+  'zhihu.search.public_content.v1',
+  'zhihu.hot_list.public_content.v1',
+  'web.search.global.zhihu_provider.v1'
 ]);
 export const DIRECT_CAPABILITIES = new Set(DIRECT_CAPABILITY_NAMES);
 export const DIRECT_EXECUTION_TARGETS = new Set([
@@ -39,5 +42,6 @@ export const DIRECT_EXECUTION_TARGETS = new Set([
   'ephemeral_public_profile_url',
   'discover_public_profile_from_note',
   'existing_public_search_tab',
-  'existing_public_note_overlay'
+  'existing_public_note_overlay',
+  'official_api'
 ]);

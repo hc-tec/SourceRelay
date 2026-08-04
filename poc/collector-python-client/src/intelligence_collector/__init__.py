@@ -19,6 +19,9 @@ from .requests import (
     xiaohongshu_note_public_comments,
     xiaohongshu_note_public_detail,
     xiaohongshu_public_notes_search,
+    zhihu_official_global_search,
+    zhihu_official_hot_list,
+    zhihu_official_search,
 )
 from .validation import artifact_path_from_operation
 
@@ -56,4 +59,7 @@ __all__ = [
     "xiaohongshu_note_public_detail",
     "xiaohongshu_note_public_comments",
     "xiaohongshu_note_public_comment_replies",
+    "zhihu_official_search",
+    "zhihu_official_hot_list",
+    "zhihu_official_global_search",
 ]

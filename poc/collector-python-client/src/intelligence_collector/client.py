@@ -36,7 +36,7 @@ SleepFunction = Callable[[float], Awaitable[None]]
 
 
 class CollectorClient:
-    """Async Python SDK for the direct user-owned-browser Collector API.
+    """Async Python SDK for the registered direct-provider Collector API.
 
     This client never accepts a browser path, tab ID, selector, script, CDP
     command, platform URL or arbitrary artifact path. A collect call submits

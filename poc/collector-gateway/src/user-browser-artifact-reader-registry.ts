@@ -13,6 +13,7 @@ import type { XiaohongshuNotePublicDetailArtifactStore } from './xiaohongshu-not
 import type { XiaohongshuPublicNotesArtifactStore } from './xiaohongshu-public-notes-artifacts';
 import type { XiaohongshuReplyArtifactStore } from './xiaohongshu-note-public-comment-replies-artifacts';
 import type { UserBrowserCollectorServiceRequest } from './user-browser-collector-service-contract';
+import type { ZhihuOfficialArtifactStore } from './zhihu-official-artifacts';
 
 export type UserBrowserArtifactCapability = UserBrowserCollectorServiceRequest['capability'];
 
@@ -28,6 +29,7 @@ export interface UserBrowserArtifactReaderContext {
   xiaohongshuNotePublicDetailArtifacts: XiaohongshuNotePublicDetailArtifactStore;
   xiaohongshuNotePublicCommentsArtifacts: XiaohongshuNotePublicCommentsArtifactStore;
   xiaohongshuReplyArtifacts: XiaohongshuReplyArtifactStore;
+  zhihuOfficialArtifacts: ZhihuOfficialArtifactStore;
 }
 
 type ArtifactView = unknown;
@@ -56,7 +58,13 @@ const ARTIFACT_READERS: Readonly<Record<UserBrowserArtifactCapability, ArtifactR
   'xiaohongshu.account.public_notes.v1': (context, artifactId) => context.xiaohongshuAccountPublicNotesArtifacts.get(artifactId),
   'xiaohongshu.note.public_detail.v1': (context, artifactId) => context.xiaohongshuNotePublicDetailArtifacts.get(artifactId),
   'xiaohongshu.note.public_comments.v1': (context, artifactId) => context.xiaohongshuNotePublicCommentsArtifacts.get(artifactId),
-  'xiaohongshu.note.public_comment_replies.v1': (context, artifactId) => context.xiaohongshuReplyArtifacts.get(artifactId)
+  'xiaohongshu.note.public_comment_replies.v1': (context, artifactId) => context.xiaohongshuReplyArtifacts.get(artifactId),
+  'zhihu.search.public_content.v1': (context, artifactId) =>
+    readZhihuOfficialArtifact(context, 'zhihu.search.public_content.v1', artifactId),
+  'zhihu.hot_list.public_content.v1': (context, artifactId) =>
+    readZhihuOfficialArtifact(context, 'zhihu.hot_list.public_content.v1', artifactId),
+  'web.search.global.zhihu_provider.v1': (context, artifactId) =>
+    readZhihuOfficialArtifact(context, 'web.search.global.zhihu_provider.v1', artifactId)
 };
 
 export function listUserBrowserArtifactCapabilities(): UserBrowserArtifactCapability[] {
@@ -91,6 +99,15 @@ export async function findUserBrowserArtifact(
     found = { capability, artifactId, view };
   }
   return found;
+}
+
+async function readZhihuOfficialArtifact(
+  context: UserBrowserArtifactReaderContext,
+  capability: Extract<UserBrowserArtifactCapability, `zhihu.${string}` | `web.${string}`>,
+  artifactId: string
+): Promise<ArtifactView> {
+  const artifact = await context.zhihuOfficialArtifacts.get(artifactId);
+  return artifact?.capability === capability ? artifact : null;
 }
 
 export type { PassiveDirectCapability };

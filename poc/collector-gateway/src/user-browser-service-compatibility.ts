@@ -19,6 +19,7 @@ export const USER_BROWSER_SERVICE_FEATURES = [
 
 export interface UserBrowserDirectCapabilityContract {
   capability: UserBrowserExecutableCapability;
+  executionProvider: 'browser_extension' | 'official_api';
   requestSchemaRef: string;
   requestSchemaDigest: string;
   executionTargets: readonly string[];
@@ -53,6 +54,7 @@ export function userBrowserCapabilityCatalogContract(
     if (!schema) throw new Error('user_browser_capability_request_schema_missing');
     return {
       capability,
+      executionProvider: registry.executionProvider ?? 'browser_extension',
       requestSchemaRef: `#/components/schemas/${registry.requestSchemaName}`,
       requestSchemaDigest: digest(schema),
       executionTargets: [...registry.executionTargets],

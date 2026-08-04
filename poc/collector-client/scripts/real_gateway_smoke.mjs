@@ -21,7 +21,7 @@ async function run() {
   const directReady = new Set(
     capabilities.filter((item) => item?.dispatchState === 'direct_ready').map((item) => item.capability)
   );
-  if (capabilities.length !== 18 || directReady.size !== 15) throw new Error('unexpected_capability_catalog_shape');
+  if (capabilities.length !== 21 || directReady.size !== 18) throw new Error('unexpected_capability_catalog_shape');
   if (new Set(listDirectCapabilities()).size !== directReady.size ||
       listDirectCapabilities().some((value) => !directReady.has(value))) {
     throw new Error('javascript_allowlist_catalog_mismatch');

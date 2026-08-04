@@ -29,6 +29,7 @@
     "update:user-browser-deployment": "npm run build:user-browser-runtime && npm run prepare:user-browser-extension --workspace @intelligence/collector-gateway -- --replace",
     "verify:user-browser-deployment": "node scripts/verify-user-browser-deployment.mjs",
     "verify:user-browser-api-smoke": "npm run build:user-browser-runtime && node scripts/verify-user-browser-api-smoke.mjs",
+    "validate:zhihu-official-provider": "npm run build:user-browser-runtime && node scripts/verify-zhihu-official-provider-live.mjs",
     "start:user-browser": "npm run build:user-browser-runtime && npm run start:user-browser --workspace @intelligence/collector-gateway",
     "check:user-browser": "npm run check:user-browser --workspace @intelligence/collector-gateway --",
     "start:validation-browser": "npm run validation-browser --workspace @intelligence/collector-browser-host -- start",
