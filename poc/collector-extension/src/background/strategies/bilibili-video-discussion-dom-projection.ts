@@ -36,10 +36,28 @@ export interface BilibiliVideoDiscussionDomSnapshot {
   };
 }
 
+type BilibiliVideoDiscussionDomProbe = Omit<BilibiliVideoDiscussionDomSnapshot, 'loginGateVisible'> & {
+  loginReadPromptVisible: boolean;
+};
+
 const BILIBILI_DISCUSSION_SCRIPT_TIMEOUT_MS = 5_000;
 const BILIBILI_DISCUSSION_DEBUGGER_ATTACH_TIMEOUT_MS = 2_500;
 const BILIBILI_DISCUSSION_DEBUGGER_INPUT_TIMEOUT_MS = 2_500;
 const BILIBILI_DISCUSSION_DEBUGGER_DETACH_TIMEOUT_MS = 1_500;
+const BILIBILI_DISCUSSION_BLOCKING_LOGIN_TEXT = '登录后查看';
+
+export function isBlockingBilibiliDiscussionLoginText(value: string): boolean {
+  return value.includes(BILIBILI_DISCUSSION_BLOCKING_LOGIN_TEXT);
+}
+
+export function isBlockingBilibiliDiscussionLoginObservation(input: {
+  loginReadPromptVisible: boolean;
+  commentContentState: BilibiliVideoDiscussionDomSnapshot['commentContentState'];
+  rootCommentCount: number;
+}): boolean {
+  return input.loginReadPromptVisible && input.rootCommentCount === 0 &&
+    (input.commentContentState === 'loading' || input.commentContentState === 'unknown');
+}
 
 /**
  * Fixed Bilibili discussion DOM projection. Bilibili's current desktop
@@ -51,13 +69,13 @@ export async function captureBilibiliVideoDiscussionDom(
   tabId: number,
   documentId: string
 ): Promise<BilibiliVideoDiscussionDomSnapshot> {
-  let results: chrome.scripting.InjectionResult<BilibiliVideoDiscussionDomSnapshot>[];
+  let results: chrome.scripting.InjectionResult<BilibiliVideoDiscussionDomProbe>[];
   try {
     results = await withTimeout(
       chrome.scripting.executeScript({
         target: { tabId, documentIds: [documentId] },
         world: 'ISOLATED',
-        func: () => {
+        func: (blockingLoginText: string) => {
         const clean = (value: string | null | undefined, maximum: number): string =>
           (value ?? '').replace(/\s+/g, ' ').trim().slice(0, maximum);
         const rendered = (element: Element | null): element is HTMLElement => {
@@ -299,14 +317,15 @@ export async function captureBilibiliVideoDiscussionDom(
             replyPageCount,
             replyHasMore,
             replyCoverage,
-            loginGateVisible: /登录后查看|登录参与社区互动/.test(commentText),
+            loginReadPromptVisible: commentText.includes(blockingLoginText),
             risk: {
               verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(commentText),
               rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(commentText),
               sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(commentText)
             }
           };
-        }
+        },
+        args: [BILIBILI_DISCUSSION_BLOCKING_LOGIN_TEXT]
       }),
       BILIBILI_DISCUSSION_SCRIPT_TIMEOUT_MS,
       'video_discussion_strategy_document_context_changed'
@@ -316,7 +335,18 @@ export async function captureBilibiliVideoDiscussionDom(
   }
   const result = results[0]?.result;
   if (!result) throw new Error('video_discussion_strategy_document_context_changed');
-  return result;
+  const { loginReadPromptVisible, ...projection } = result;
+  return {
+    ...projection,
+    // A login phrase in a composer, nested thread or secondary control is
+    // not a global read gate once the requested public root-comment outcome
+    // is already ready or empty.
+    loginGateVisible: isBlockingBilibiliDiscussionLoginObservation({
+      loginReadPromptVisible,
+      commentContentState: result.commentContentState,
+      rootCommentCount: result.rootCommentTexts.length
+    })
+  };
 }
 
 interface BilibiliVideoDiscussionScrollProbe {

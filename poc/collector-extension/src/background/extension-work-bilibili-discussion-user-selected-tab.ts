@@ -120,6 +120,22 @@ export function discussionTabNeedsForeground(
   return tab.active !== true || window?.focused !== true;
 }
 
+export function discussionObservationTerminal(
+  observation: Pick<BilibiliVideoDiscussionUserSelectedTabDomObservation,
+    'commentContentState' | 'rootCommentTexts' | 'commentHostPresent' |
+    'commentHostVisible' | 'commentHostInViewport' | 'loginGateVisible'>
+): 'discussion_ready' | 'discussion_empty' | 'login_required' | null {
+  if (observation.commentContentState === 'ready' && observation.rootCommentTexts.length > 0 &&
+    observation.commentHostPresent && observation.commentHostVisible && observation.commentHostInViewport) {
+    return 'discussion_ready';
+  }
+  if (observation.commentContentState === 'empty' && observation.rootCommentTexts.length === 0 &&
+    observation.commentHostPresent && observation.commentHostVisible && observation.commentHostInViewport) {
+    return 'discussion_empty';
+  }
+  return observation.loginGateVisible ? 'login_required' : null;
+}
+
 async function observeDiscussion(
   workTab: ExtensionWorkTabLease,
   expectedBvid: string,
@@ -171,9 +187,6 @@ async function observeDiscussion(
     if (current.bvid !== expectedBvid) {
       return { kind: 'stopped', observation: current, errorCode: 'bilibili_discussion_target_mismatch', terminalReason: 'document_context_changed' };
     }
-    if (current.loginGateVisible) {
-      return { kind: 'stopped', observation: current, errorCode: 'bilibili_login_required', terminalReason: 'login_required' };
-    }
     if (current.risk.verificationRequired) {
       return { kind: 'stopped', observation: current, errorCode: 'bilibili_verification_required', terminalReason: 'verification_required' };
     }
@@ -209,13 +222,15 @@ async function observeDiscussion(
       await delay(OBSERVATION_INTERVAL_MS);
       continue;
     }
-    if (current.commentContentState === 'ready' && current.rootCommentTexts.length > 0 &&
-      current.commentHostPresent && current.commentHostVisible && current.commentHostInViewport) {
+    const terminal = discussionObservationTerminal(current);
+    if (terminal === 'discussion_ready') {
       return { kind: 'ready', observation: current, terminalReason: 'discussion_ready', errorCode: null };
     }
-    if (current.commentContentState === 'empty' && current.rootCommentTexts.length === 0 &&
-      current.commentHostPresent && current.commentHostVisible && current.commentHostInViewport) {
+    if (terminal === 'discussion_empty') {
       return { kind: 'empty', observation: current, terminalReason: 'discussion_empty', errorCode: null };
+    }
+    if (terminal === 'login_required') {
+      return { kind: 'stopped', observation: current, errorCode: 'bilibili_login_required', terminalReason: 'login_required' };
     }
     await delay(OBSERVATION_INTERVAL_MS);
   }

@@ -111,6 +111,41 @@ describe('user-selected Bilibili inventory tab lease', () => {
 });
 
 describe('user-selected Bilibili video discussion tab lease', () => {
+  test('keeps a posting login prompt separate from a blocking read gate', async () => {
+    const executor = await import('../src/background/extension-work-bilibili-discussion-user-selected-tab.js');
+    const strategy = await import('../src/background/strategies/bilibili-video-discussion-dom-projection.js');
+    expect(strategy.isBlockingBilibiliDiscussionLoginText('登录参与社区互动')).toBe(false);
+    expect(strategy.isBlockingBilibiliDiscussionLoginText('登录后查看')).toBe(true);
+    expect(strategy.isBlockingBilibiliDiscussionLoginObservation({
+      loginReadPromptVisible: true,
+      commentContentState: 'ready',
+      rootCommentCount: 2
+    })).toBe(false);
+    expect(strategy.isBlockingBilibiliDiscussionLoginObservation({
+      loginReadPromptVisible: true,
+      commentContentState: 'unknown',
+      rootCommentCount: 0
+    })).toBe(true);
+    expect(executor.discussionObservationTerminal({
+      commentContentState: 'ready',
+      rootCommentTexts: ['公开评论'],
+      commentHostPresent: true,
+      commentHostVisible: true,
+      commentHostInViewport: true,
+      // Even a stale/legacy broad login signal must not discard public data
+      // whose complete read postconditions are already satisfied.
+      loginGateVisible: true
+    })).toBe('discussion_ready');
+    expect(executor.discussionObservationTerminal({
+      commentContentState: 'unknown',
+      rootCommentTexts: [],
+      commentHostPresent: true,
+      commentHostVisible: true,
+      commentHostInViewport: true,
+      loginGateVisible: true
+    })).toBe('login_required');
+  });
+
   test('detects a background leased tab without naming or selecting another tab', async () => {
     const executor = await import('../src/background/extension-work-bilibili-discussion-user-selected-tab.js');
     expect(executor.discussionTabNeedsForeground({ active: true }, { focused: true })).toBe(false);
