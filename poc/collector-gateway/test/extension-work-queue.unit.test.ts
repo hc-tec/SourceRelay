@@ -45,10 +45,13 @@ describe('extension work queue state machine', () => {
     const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-extension-work-reply-ttl-'));
     try {
       const queue = await ExtensionWorkQueue.create(identity(), stateDirectory, base);
+      const requestedOperationId = '33333333-3333-4333-8333-333333333333';
       const single = await queue.enqueueXiaohongshuNotePublicCommentReplies({
+        operationId: requestedOperationId,
         browserBindingId: bindingId,
         maximumThreads: 1
       }, base);
+      expect(single.operationId).toBe(requestedOperationId);
       await expect(queue.get(single.operationId, new Date(base.getTime() + 60_001))).resolves.toMatchObject({
         state: 'stopped',
         errorCode: 'extension_work_expired'

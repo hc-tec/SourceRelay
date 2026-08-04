@@ -948,7 +948,7 @@ export class ExtensionWorkQueue {
     }
     const expired=this.#expire(now);if(expired.length>0)await this.#save();this.#assertBindingIdle(input.browserBindingId);
     const issuedAt=now.toISOString();const unsigned:UnsignedExtensionWorkItem={schemaVersion:EXTENSION_WORK_SCHEMA_VERSION,
-      protocolVersion:EXTENSION_WORK_PROTOCOL_VERSION,workId:randomUUID(),operationId:randomUUID(),
+      protocolVersion:EXTENSION_WORK_PROTOCOL_VERSION,workId:randomUUID(),operationId:this.#operationId(input.operationId),
       browserBindingId:input.browserBindingId,platform:'xiaohongshu',capability:'xiaohongshu.note.public_comment_replies.v1',
       executionTarget:'existing_public_note_overlay',issuedAt,expiresAt:new Date(now.getTime()+
         (input.maximumThreads > 1 ? XIAOHONGSHU_MULTI_REPLY_WORK_TTL_MS : WORK_ITEM_TTL_MS)).toISOString(),

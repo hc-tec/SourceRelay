@@ -90,12 +90,10 @@ npm run smoke:gateway
 
 ## 小红书已完成矩阵的 JS SDK 对账
 
-已经完成的小红书 5 项 L3 Operation 可以通过 JS SDK 做零新增平台动作的消费者验收。4 项
-具有 `/v2/collect` 幂等账本记录，入口使用正式 typed builder 重建原请求并以原
-`clientRequestId` 提交，Gateway 必须返回同一 Operation 与 Artifact。回复项的成功 Operation
-来自早期内部真实验证入口，没有 Collector Service 幂等记录，因此该项只能通过 SDK 只读
-既有 Operation/Artifact，不能伪造 request ID 或篡改账本。5 项随后都通过 `/v2`
-metadata/window 接口复算完整 SHA-256，但不输出 Artifact 正文、搜索词、binding ID 或 token。
+已经完成的小红书 5 项 L3 Operation 可以通过 JS SDK 做零新增平台动作的消费者验收。入口
+使用正式 typed builder 重建全部 5 个原请求，并以原 `clientRequestId` 做幂等提交；Gateway
+必须为每一项返回同一 Operation 与 Artifact。随后通过 `/v2` metadata/window 接口复算
+完整 SHA-256，但不输出 Artifact 正文、搜索词、binding ID 或 token。
 
 运行时提供原始搜索词和同一在线验证 binding；它们都不得写入 Git：
 
@@ -109,5 +107,5 @@ npm run smoke:xiaohongshu:reconcile
 证据清单只保存 request/Operation/Artifact 身份、输入摘要、字节数和哈希，位于
 [`docs/validation/xiaohongshu-sdk-reconciliation-v0.7.17.json`](../../docs/validation/xiaohongshu-sdk-reconciliation-v0.7.17.json)。
 任何输入、Operation、Artifact、终态、字节数或哈希不一致都会 fail closed；脚本不会改用
-新请求 ID，也不会自动重试或触发一套“替代验证”。成功摘要明确区分 4 次
-`idempotent_collect` 与 1 次 `retained_operation_read`，不得把后者写成完整 SDK 提交闭环。
+新请求 ID，也不会自动重试或触发一套“替代验证”。5 项都必须是
+`idempotent_collect`，共享清单不再接受缺少 Collector Service 幂等记录的只读替代项。

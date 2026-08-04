@@ -56,13 +56,9 @@ def build_request(
     *,
     browser_binding_id: str,
     query: str,
-    client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    request_id = client_request_id or evidence.get("clientRequestId")
-    if not isinstance(request_id, str) or not UUID.fullmatch(request_id):
-        raise RuntimeError("xiaohongshu_reconciliation_client_request_id_missing")
     common = {
-        "client_request_id": request_id,
+        "client_request_id": evidence["clientRequestId"],
         "browser_binding_id": browser_binding_id,
     }
     input_evidence = evidence["inputEvidence"]
@@ -107,15 +103,6 @@ async def reconcile_case(
 ) -> dict[str, Any]:
     result = await client.collect_and_wait_model(request)
     return await verify_case(client, evidence, result, "idempotent_collect")
-
-
-async def read_retained_case(
-    client: CollectorClient,
-    evidence: Mapping[str, Any],
-) -> dict[str, Any]:
-    operation = await client.get_operation(evidence["expectedOperationId"])
-    result = CollectionResult.from_mapping(await client.read_artifact_from_operation(operation))
-    return await verify_case(client, evidence, result, "retained_operation_read")
 
 
 async def verify_case(
@@ -211,19 +198,14 @@ async def run() -> dict[str, Any]:
 
         cases = []
         for evidence in manifest["cases"]:
-            if evidence["reconciliationMode"] == "retained_operation_read":
-                cases.append(await read_retained_case(client, evidence))
-                continue
             request = build_request(evidence, browser_binding_id=binding_id, query=query)
             cases.append(await reconcile_case(client, evidence, request))
-    collection_submissions = sum(1 for item in cases if item["collectionSubmitted"])
     return {
         "ok": True,
         "language": "python",
         "releaseVersion": manifest["releaseVersion"],
         "caseCount": len(cases),
-        "collectionSubmissions": collection_submissions,
-        "retainedOperationReads": len(cases) - collection_submissions,
+        "collectionSubmissions": len(cases),
         "expectedNewCoreOperations": 0,
         "expectedLivePlatformActions": manifest["livePlatformActionsExpected"],
         "browserBindingOnline": True,
@@ -246,8 +228,6 @@ def validate_manifest(value: Any) -> dict[str, Any]:
     ):
         raise RuntimeError("xiaohongshu_reconciliation_manifest_invalid")
     seen: set[str] = set()
-    idempotent_collect_cases = 0
-    retained_operation_read_cases = 0
     for evidence in value["cases"]:
         artifact = evidence.get("artifact") if isinstance(evidence, dict) else None
         case_id = evidence.get("caseId") if isinstance(evidence, dict) else None
@@ -255,7 +235,10 @@ def validate_manifest(value: Any) -> dict[str, Any]:
             not isinstance(evidence, dict)
             or EXPECTED_CASES.get(case_id) != evidence.get("capability")
             or case_id in seen
-            or not valid_reconciliation_identity(evidence)
+            or evidence.get("reconciliationMode") != "idempotent_collect"
+            or not isinstance(evidence.get("clientRequestId"), str)
+            or not UUID.fullmatch(evidence["clientRequestId"])
+            or "provenanceGap" in evidence
             or not isinstance(evidence.get("expectedOperationId"), str)
             or not UUID.fullmatch(evidence["expectedOperationId"])
             or not isinstance(evidence.get("expectedTerminalReason"), str)
@@ -272,34 +255,10 @@ def validate_manifest(value: Any) -> dict[str, Any]:
             or not BUILD_FINGERPRINT.fullmatch(evidence["sourceBuildFingerprint"])
         ):
             raise RuntimeError("xiaohongshu_reconciliation_manifest_case_invalid")
-        if evidence["reconciliationMode"] == "idempotent_collect":
-            idempotent_collect_cases += 1
-        else:
-            retained_operation_read_cases += 1
         seen.add(case_id)
-    if (
-        seen != set(EXPECTED_CASES)
-        or idempotent_collect_cases != 4
-        or retained_operation_read_cases != 1
-    ):
+    if seen != set(EXPECTED_CASES):
         raise RuntimeError("xiaohongshu_reconciliation_manifest_case_missing")
     return json.loads(json.dumps(value))
-
-
-def valid_reconciliation_identity(evidence: Mapping[str, Any]) -> bool:
-    if evidence.get("reconciliationMode") == "idempotent_collect":
-        client_request_id = evidence.get("clientRequestId")
-        return (
-            isinstance(client_request_id, str)
-            and UUID.fullmatch(client_request_id) is not None
-            and "provenanceGap" not in evidence
-        )
-    return (
-        evidence.get("reconciliationMode") == "retained_operation_read"
-        and "clientRequestId" not in evidence
-        and evidence.get("provenanceGap")
-        == "operation_created_without_collector_service_idempotency_record"
-    )
 
 
 async def verify_artifact_windows(client: CollectorClient, artifact: Mapping[str, Any]) -> int:

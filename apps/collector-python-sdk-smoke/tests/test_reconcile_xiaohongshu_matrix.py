@@ -9,7 +9,6 @@ from collector_sdk_smoke.reconcile_xiaohongshu_matrix import build_request, read
 
 BINDING_ID = "11111111-1111-4111-8111-111111111111"
 QUERY = "人工智能"
-RETAINED_READ_BUILDER_ID = "55555555-5555-4555-8555-555555555555"
 
 
 def test_shared_evidence_contains_five_safe_reconciliation_identities() -> None:
@@ -18,8 +17,7 @@ def test_shared_evidence_contains_five_safe_reconciliation_identities() -> None:
 
     assert len(manifest["cases"]) == 5
     assert manifest["livePlatformActionsExpected"] == 0
-    assert sum(case["reconciliationMode"] == "idempotent_collect" for case in manifest["cases"]) == 4
-    assert sum(case["reconciliationMode"] == "retained_operation_read" for case in manifest["cases"]) == 1
+    assert all(case["reconciliationMode"] == "idempotent_collect" for case in manifest["cases"])
     assert QUERY not in serialized
     assert "browserBindingId" not in serialized
     assert "profileUrl" not in serialized
@@ -28,12 +26,7 @@ def test_shared_evidence_contains_five_safe_reconciliation_identities() -> None:
 def test_all_python_builders_reconstruct_exact_bounded_capability_requests() -> None:
     manifest = read_manifest()
     requests = [
-        build_request(
-            evidence,
-            browser_binding_id=BINDING_ID,
-            query=QUERY,
-            client_request_id=evidence.get("clientRequestId", RETAINED_READ_BUILDER_ID),
-        )
+        build_request(evidence, browser_binding_id=BINDING_ID, query=QUERY)
         for evidence in manifest["cases"]
     ]
 
@@ -41,13 +34,12 @@ def test_all_python_builders_reconstruct_exact_bounded_capability_requests() -> 
         evidence["capability"] for evidence in manifest["cases"]
     ]
     assert [request["clientRequestId"] for request in requests] == [
-        evidence.get("clientRequestId", RETAINED_READ_BUILDER_ID)
-        for evidence in manifest["cases"]
+        evidence["clientRequestId"] for evidence in manifest["cases"]
     ]
     assert [request["input"] for request in requests] == [
         {"query": QUERY, "maximumDetails": 0},
         {"resultRank": 1},
-        {"maximumScrolls": 2},
+        {"maximumScrolls": 3},
         {"maximumThreads": 1},
         {"maximumScrolls": 3},
     ]

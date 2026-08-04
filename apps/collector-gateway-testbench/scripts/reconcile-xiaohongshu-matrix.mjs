@@ -2,7 +2,6 @@ import { fileURLToPath } from 'node:url';
 import { CollectorClient } from '@intelligence/collector-client';
 import {
   buildXiaohongshuReconciliationRequest,
-  readRetainedXiaohongshuCase,
   readXiaohongshuReconciliationManifest,
   reconcileXiaohongshuCase
 } from '../src/xiaohongshu-reconciliation.mjs';
@@ -40,21 +39,15 @@ try {
 
   const cases = [];
   for (const evidence of manifest.cases) {
-    if (evidence.reconciliationMode === 'retained_operation_read') {
-      cases.push(await readRetainedXiaohongshuCase(client, evidence));
-      continue;
-    }
     const request = buildXiaohongshuReconciliationRequest(evidence, { browserBindingId, query });
     cases.push(await reconcileXiaohongshuCase(client, evidence, request));
   }
-  const collectionSubmissions = cases.filter((item) => item.collectionSubmitted).length;
   process.stdout.write(`${JSON.stringify({
     ok: true,
     language: 'javascript',
     releaseVersion: manifest.releaseVersion,
     caseCount: cases.length,
-    collectionSubmissions,
-    retainedOperationReads: cases.length - collectionSubmissions,
+    collectionSubmissions: cases.length,
     expectedNewCoreOperations: 0,
     expectedLivePlatformActions: manifest.livePlatformActionsExpected,
     browserBindingOnline: true,

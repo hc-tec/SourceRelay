@@ -90,10 +90,9 @@ python -m pytest -q
 ## 小红书已完成矩阵的 Python SDK 对账
 
 Python 参考应用提供与 JS Testbench 对等的零新增平台动作验收。它从共享去敏证据清单读取
-5 个已完成 Operation：其中 4 项使用 Python typed builder 重建原请求，以原
-`clientRequestId` 做幂等提交；回复项来自早期内部真实验证入口，没有 Collector Service
-幂等记录，只通过 SDK 读取既有 Operation/Artifact。5 项都必须匹配原 Operation、Artifact、
-字节数和 SHA-256。Artifact 正文只在进程内用于 UTF-8 window 与完整哈希验证，不会输出。
+5 个已完成 Operation，全部使用 Python typed builder 重建原请求，以原 `clientRequestId`
+做幂等提交，并要求 Gateway 返回完全相同的 Operation、Artifact、字节数和 SHA-256。
+Artifact 正文只在进程内用于 UTF-8 window 与完整哈希验证，不会输出。
 
 运行时提供原始搜索词和同一在线验证 binding；不得把它们写入仓库：
 
@@ -107,5 +106,4 @@ collector-python-sdk-xiaohongshu-reconcile
 共享证据位于
 [`docs/validation/xiaohongshu-sdk-reconciliation-v0.7.17.json`](../../docs/validation/xiaohongshu-sdk-reconciliation-v0.7.17.json)。
 脚本不会生成新请求 ID、不会修改请求参数、不会自动重试，也不会在对账失败后创建另一套
-平台任务。结果明确报告 4 次 `idempotent_collect` 与 1 次 `retained_operation_read`，避免把
-缺少历史幂等记录的回复项误报为完整 SDK 提交闭环。
+平台任务。共享清单的 5 项都必须具有真实 Collector Service 幂等记录，不接受只读替代项。

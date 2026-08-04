@@ -12,15 +12,13 @@ const manifestPath = fileURLToPath(new URL(
 ));
 const bindingId = '11111111-1111-4111-8111-111111111111';
 const query = '人工智能';
-const retainedReadBuilderId = '55555555-5555-4555-8555-555555555555';
 
 test('shared Xiaohongshu evidence contains five safe reconciliation identities', async () => {
   const manifest = await readXiaohongshuReconciliationManifest(manifestPath);
   const serialized = JSON.stringify(manifest);
   assert.equal(manifest.cases.length, 5);
   assert.equal(manifest.livePlatformActionsExpected, 0);
-  assert.equal(manifest.cases.filter((item) => item.reconciliationMode === 'idempotent_collect').length, 4);
-  assert.equal(manifest.cases.filter((item) => item.reconciliationMode === 'retained_operation_read').length, 1);
+  assert.equal(manifest.cases.every((item) => item.reconciliationMode === 'idempotent_collect'), true);
   assert.equal(serialized.includes(query), false);
   assert.equal(serialized.includes('browserBindingId'), false);
   assert.equal(serialized.includes('profileUrl'), false);
@@ -29,18 +27,14 @@ test('shared Xiaohongshu evidence contains five safe reconciliation identities',
 test('all JavaScript builders reconstruct the exact bounded capability requests', async () => {
   const manifest = await readXiaohongshuReconciliationManifest(manifestPath);
   const requests = manifest.cases.map((evidence) =>
-    buildXiaohongshuReconciliationRequest(evidence, {
-      browserBindingId: bindingId,
-      query,
-      clientRequestId: evidence.clientRequestId ?? retainedReadBuilderId
-    }));
+    buildXiaohongshuReconciliationRequest(evidence, { browserBindingId: bindingId, query }));
   assert.deepEqual(requests.map((request) => request.capability), manifest.cases.map((item) => item.capability));
   assert.deepEqual(requests.map((request) => request.clientRequestId),
-    manifest.cases.map((item) => item.clientRequestId ?? retainedReadBuilderId));
+    manifest.cases.map((item) => item.clientRequestId));
   assert.deepEqual(requests.map((request) => request.input), [
     { query, maximumDetails: 0 },
     { resultRank: 1 },
-    { maximumScrolls: 2 },
+    { maximumScrolls: 3 },
     { maximumThreads: 1 },
     { maximumScrolls: 3 }
   ]);

@@ -32,14 +32,8 @@ export async function readXiaohongshuReconciliationManifest(path) {
   return validateManifest(value);
 }
 
-export function buildXiaohongshuReconciliationRequest(
-  evidence,
-  { browserBindingId, query, clientRequestId = evidence.clientRequestId }
-) {
-  if (!UUID.test(clientRequestId ?? '')) {
-    throw new Error('xiaohongshu_reconciliation_client_request_id_missing');
-  }
-  const common = { clientRequestId, browserBindingId };
+export function buildXiaohongshuReconciliationRequest(evidence, { browserBindingId, query }) {
+  const common = { clientRequestId: evidence.clientRequestId, browserBindingId };
   switch (evidence.caseId) {
     case 'xiaohongshu.public-notes-search':
       if (sha256(query) !== evidence.inputEvidence.querySha256) {
@@ -84,12 +78,6 @@ export async function reconcileXiaohongshuCase(client, evidence, request) {
     maxDelayMs: 1_000
   });
   return await verifyXiaohongshuCase(client, evidence, result, 'idempotent_collect');
-}
-
-export async function readRetainedXiaohongshuCase(client, evidence) {
-  const operation = await client.getOperation(evidence.expectedOperationId);
-  const result = new CollectionResult(await client.readArtifactFromOperation(operation));
-  return await verifyXiaohongshuCase(client, evidence, result, 'retained_operation_read');
 }
 
 async function verifyXiaohongshuCase(client, evidence, result, reconciliationMode) {
@@ -148,12 +136,11 @@ function validateManifest(value) {
     throw new Error('xiaohongshu_reconciliation_manifest_invalid');
   }
   const ids = new Set();
-  let idempotentCollectCases = 0;
-  let retainedOperationReadCases = 0;
   for (const evidence of value.cases) {
     if (!record(evidence) || EXPECTED_CASES.get(evidence.caseId) !== evidence.capability ||
       ids.has(evidence.caseId) ||
-      !validReconciliationIdentity(evidence) ||
+      evidence.reconciliationMode !== 'idempotent_collect' ||
+      !UUID.test(evidence.clientRequestId) || evidence.provenanceGap !== undefined ||
       !UUID.test(evidence.expectedOperationId) ||
       typeof evidence.expectedTerminalReason !== 'string' ||
       !record(evidence.inputEvidence) || !record(evidence.artifact) ||
@@ -163,25 +150,13 @@ function validateManifest(value) {
       !BUILD_FINGERPRINT.test(evidence.sourceBuildFingerprint)) {
       throw new Error('xiaohongshu_reconciliation_manifest_case_invalid');
     }
-    if (evidence.reconciliationMode === 'idempotent_collect') idempotentCollectCases += 1;
-    else retainedOperationReadCases += 1;
     ids.add(evidence.caseId);
   }
-  if ([...EXPECTED_CASES.keys()].some((caseId) => !ids.has(caseId)) ||
-    idempotentCollectCases !== 4 || retainedOperationReadCases !== 1) {
+  if ([...EXPECTED_CASES.keys()].some((caseId) => !ids.has(caseId))) {
     throw new Error('xiaohongshu_reconciliation_manifest_case_missing');
   }
   const detached = structuredClone(value);
   return Object.freeze({ ...detached, cases: Object.freeze(detached.cases.map(Object.freeze)) });
-}
-
-function validReconciliationIdentity(evidence) {
-  if (evidence.reconciliationMode === 'idempotent_collect') {
-    return UUID.test(evidence.clientRequestId ?? '') && evidence.provenanceGap === undefined;
-  }
-  return evidence.reconciliationMode === 'retained_operation_read' &&
-    evidence.clientRequestId === undefined &&
-    evidence.provenanceGap === 'operation_created_without_collector_service_idempotency_record';
 }
 
 async function verifyArtifactWindows(client, artifact) {

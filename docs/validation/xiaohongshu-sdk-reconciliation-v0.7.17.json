@@ -46,35 +46,35 @@
       "caseId": "xiaohongshu.note-public-comments",
       "capability": "xiaohongshu.note.public_comments.v1",
       "reconciliationMode": "idempotent_collect",
-      "clientRequestId": "a0713ddc-d051-4c9c-8712-20c7616b9596",
-      "expectedOperationId": "d8362dbd-35b8-47c8-b50c-674b6f1e29af",
+      "clientRequestId": "00c5e7ee-37ac-4932-b1b4-c15e11b2a25a",
+      "expectedOperationId": "468abce7-5fab-40e1-8bbb-d3c89eec0cb9",
       "expectedTerminalReason": "note_comments_ready",
       "inputEvidence": {
-        "maximumScrolls": 2
+        "maximumScrolls": 3
       },
       "artifact": {
-        "artifactId": "b3c12bca-a9af-4215-83bd-32ddf881fd23",
-        "byteLength": 11135,
-        "sha256": "sha256:2ccfa9b716c28172c0df312e1473b1528410cbabaaa1bd64578a87eacbad1320"
+        "artifactId": "169be512-1976-4391-9c21-792d6d53088e",
+        "byteLength": 11595,
+        "sha256": "sha256:847469f6b6d001a7a9f80f5ae6434fca451298379a7ab4cd33be3c40af935724"
       },
-      "sourceBuildFingerprint": "769a7810f8ab84bb087efc7d036a2519a1e0da6bbfd0e18a5eb40a127a186d47"
+      "sourceBuildFingerprint": "631e8a778a7efa8be00341fd52339946b245198f84e20581359e7ab8817be630"
     },
     {
       "caseId": "xiaohongshu.note-public-comment-replies",
       "capability": "xiaohongshu.note.public_comment_replies.v1",
-      "reconciliationMode": "retained_operation_read",
-      "provenanceGap": "operation_created_without_collector_service_idempotency_record",
-      "expectedOperationId": "27fe8232-c753-4ad5-8961-8fab968f0af7",
+      "reconciliationMode": "idempotent_collect",
+      "clientRequestId": "a86f213b-ae04-4d0b-bb91-93c3edaf1025",
+      "expectedOperationId": "2260c539-d07b-483b-9031-331da8d112e9",
       "expectedTerminalReason": "comment_replies_ready",
       "inputEvidence": {
         "maximumThreads": 1
       },
       "artifact": {
-        "artifactId": "88891659-eeaf-400c-a9c9-036564d3b2d4",
-        "byteLength": 1869,
-        "sha256": "sha256:c57d30aef67fcb45ac70f7f83c15f6146a9325c948703d137e1677d21e69734a"
+        "artifactId": "557d7aaa-2c01-4c26-8ab0-70e653f3b633",
+        "byteLength": 1972,
+        "sha256": "sha256:fa15467aba46952fae3428a0df4f5e10a086c4afe9f60bb9eb2db9540b975259"
       },
-      "sourceBuildFingerprint": "769a7810f8ab84bb087efc7d036a2519a1e0da6bbfd0e18a5eb40a127a186d47"
+      "sourceBuildFingerprint": "631e8a778a7efa8be00341fd52339946b245198f84e20581359e7ab8817be630"
     },
     {
       "caseId": "xiaohongshu.account-public-notes",

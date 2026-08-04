@@ -6,6 +6,53 @@ import { canonicalJson, sha256Hex } from '../src/canonical-json.js';
 import { createUserBrowserServiceRouteHarness } from './support/user-browser-service-route-harness.js';
 
 describe('Collector Service route-level idempotency', () => {
+  test('keeps one reply Operation identity across ledger, queue, response, and replay', async () => {
+    const harness = await createUserBrowserServiceRouteHarness();
+    try {
+      const browserBindingId = await harness.createOnlineBinding();
+      const request = replyRequest(randomUUID(), browserBindingId);
+
+      const first = await postCollect(harness.origin, harness.token, request);
+      expect(first.status).toBe(201);
+      expect(first.body).toMatchObject({
+        clientRequestId: request.clientRequestId,
+        idempotentReplay: false,
+        result: {
+          capability: 'xiaohongshu.note.public_comment_replies.v1',
+          state: 'queued'
+        }
+      });
+      const operationId = first.body.result.operationId as string;
+      expect(harness.context.collectorServiceIdempotency.list()).toContainEqual(
+        expect.objectContaining({
+          clientRequestId: request.clientRequestId,
+          operationId,
+          state: 'accepted'
+        })
+      );
+      await expect(harness.context.workQueue.get(operationId)).resolves.toMatchObject({
+        operationId,
+        capability: 'xiaohongshu.note.public_comment_replies.v1',
+        state: 'queued'
+      });
+
+      const replay = await postCollect(harness.origin, harness.token, request);
+      expect(replay.status).toBe(200);
+      expect(replay.body).toMatchObject({
+        clientRequestId: request.clientRequestId,
+        idempotentReplay: true,
+        result: { operationId }
+      });
+
+      const operations = JSON.parse(
+        await readFile(join(harness.stateDirectory, 'extension-work-operations.json'), 'utf8')
+      ) as unknown[];
+      expect(operations).toHaveLength(1);
+    } finally {
+      await harness.close();
+    }
+  });
+
   test('persists identity before dispatch and never converts replay ambiguity into a second action', async () => {
     const harness = await createUserBrowserServiceRouteHarness();
     try {
@@ -119,6 +166,16 @@ interface VideoRequest {
   input: { canonicalVideoUrl: string };
 }
 
+interface ReplyRequest {
+  schemaVersion: 3;
+  clientRequestId: string;
+  browserBindingId: string;
+  platform: 'xiaohongshu';
+  capability: 'xiaohongshu.note.public_comment_replies.v1';
+  executionTarget: 'existing_public_note_overlay';
+  input: { maximumThreads: 1 };
+}
+
 function videoRequest(clientRequestId: string, browserBindingId: string): VideoRequest {
   return {
     schemaVersion: 3,
@@ -131,6 +188,18 @@ function videoRequest(clientRequestId: string, browserBindingId: string): VideoR
   };
 }
 
+function replyRequest(clientRequestId: string, browserBindingId: string): ReplyRequest {
+  return {
+    schemaVersion: 3,
+    clientRequestId,
+    browserBindingId,
+    platform: 'xiaohongshu',
+    capability: 'xiaohongshu.note.public_comment_replies.v1',
+    executionTarget: 'existing_public_note_overlay',
+    input: { maximumThreads: 1 }
+  };
+}
+
 function requestDigest(request: VideoRequest): string {
   const { clientRequestId: _clientRequestId, ...canonicalRequest } = request;
   return sha256Hex(canonicalJson(canonicalRequest));
@@ -139,7 +208,7 @@ function requestDigest(request: VideoRequest): string {
 async function postCollect(
   origin: string,
   token: string,
-  request: VideoRequest
+  request: VideoRequest | ReplyRequest
 ): Promise<{ status: number; body: Record<string, any> }> {
   const response = await fetch(`${origin}/v2/collect`, {
     method: 'POST',
