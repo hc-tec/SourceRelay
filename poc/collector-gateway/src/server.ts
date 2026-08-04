@@ -51,6 +51,10 @@ import { XiaohongshuNotePublicCommentsArtifactStore } from './xiaohongshu-note-p
 import { XiaohongshuReplyArtifactStore } from './xiaohongshu-note-public-comment-replies-artifacts';
 import { BrowserProfileRegistry } from './profiles';
 import { OperationalLog } from './operational-log';
+import { OfficialSourceOperationStore } from './official-source-operation-store';
+import { ZhihuOfficialApiProvider } from './zhihu-official-api-provider';
+import { ZhihuOfficialArtifactStore } from './zhihu-official-artifacts';
+import { loadZhihuOfficialApiConfig } from './zhihu-official-config';
 
 const config = loadGatewayConfig();
 const identity = await loadGatewayIdentity(config);
@@ -61,6 +65,13 @@ const workQueue = await ExtensionWorkQueue.create(identity, config.stateDirector
 const collectorServiceClients = await CollectorServiceClientRegistry.create(config.stateDirectory);
 const collectorServiceAudit = await CollectorServiceAuditLog.create(config.stateDirectory);
 const collectorServiceIdempotency = await CollectorServiceIdempotencyLedger.create(config.stateDirectory);
+const officialSourceOperations = await OfficialSourceOperationStore.create(config.stateDirectory);
+const zhihuOfficialArtifacts = await ZhihuOfficialArtifactStore.create(config.stateDirectory);
+const zhihuOfficialApiProvider = new ZhihuOfficialApiProvider({
+  ...loadZhihuOfficialApiConfig(),
+  artifacts: zhihuOfficialArtifacts,
+  operations: officialSourceOperations
+});
 const profileRegistry = await BrowserProfileRegistry.create(config.profileDirectory, config.stateDirectory);
 const accountSafety = await AccountSafetyRegistry.create(config.stateDirectory);
 const browserManager = new CollectionBrowserManager(config, profileRegistry);
@@ -214,6 +225,8 @@ const server = createServer(async (request, response) => {
       collectorServiceClients,
       collectorServiceAudit,
       collectorServiceIdempotency,
+      officialSourceOperations,
+      zhihuOfficialApiProvider,
       browserManager,
       profileRegistry,
       accountSafety,

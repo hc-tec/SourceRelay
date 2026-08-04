@@ -41,7 +41,7 @@ test('a real installed MV3 extension pairs with the direct Gateway without creat
     };
     expect(release).toMatchObject({
       product: 'collector-core',
-      service: { schemaVersion: 2, openApiVersion: '2.0.0-experimental' },
+      service: { schemaVersion: 3, openApiVersion: '3.0.0-experimental' },
       boundaries: { upperApplications: 'external_projects_only', arbitraryBrowserControl: 'not_exposed' }
     });
     expect(release.releaseVersion).toMatch(/^\d+\.\d+\.\d+$/);

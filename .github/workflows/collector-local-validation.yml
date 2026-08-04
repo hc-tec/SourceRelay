@@ -26,6 +26,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: poc/package-lock.json
+          registry-url: https://registry.npmjs.org
 
       - name: Install locked dependencies
         run: npm ci
