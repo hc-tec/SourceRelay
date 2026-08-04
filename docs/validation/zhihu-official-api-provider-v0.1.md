@@ -54,7 +54,7 @@ client、停止临时 Gateway 并删除临时目录。没有启动、重启、�
 ## 后续独立复验与限流
 
 完整三能力成功后，又在完成 OpenAPI 模块拆分和官方 `Content-Type` header 对齐后发起了
-两次彼此独立的新 canary。两次都在第一项站内搜索收到官方 429：
+三次彼此独立的新 canary。三次都在第一项站内搜索收到官方 429：
 
 ```text
 zhihu_official_api_rate_limited
