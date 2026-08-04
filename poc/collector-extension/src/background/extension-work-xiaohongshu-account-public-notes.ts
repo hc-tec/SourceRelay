@@ -24,6 +24,10 @@ import {
   completeXiaohongshuProfileLinkDiscovery,
   recordXiaohongshuProfileLinkDiscoveryIntent
 } from './xiaohongshu-profile-link-discovery-ledger';
+import {
+  readXiaohongshuPublicAuthorTarget,
+  xiaohongshuProfileEntryPublicSurface
+} from './xiaohongshu-public-author-target';
 
 interface ProfileDocument {
   tabId: number;
@@ -258,15 +262,6 @@ export async function cleanupXiaohongshuAccountPublicNotesExtensionWorkObserver(
   }).catch(() => undefined);
 }
 
-interface AuthorAvatarTarget {
-  tabId: number;
-  windowId: number;
-  documentId: string;
-  x: number;
-  y: number;
-  targetMode: 'same_tab' | 'new_tab';
-}
-
 interface DiscoveredProfileTarget {
   tabId: number;
   targetMode: 'same_tab' | 'new_tab';
@@ -284,7 +279,7 @@ async function discoverProfileFromAuthorAvatar(
 ): Promise<DiscoveredProfileTarget> {
   const source = await findUniquePublicEntryDocument();
   await foreground(source);
-  const target = await readAuthorAvatarTarget(source);
+  const target = await readXiaohongshuPublicAuthorTarget(source);
   if (!target) throw new Error('xiaohongshu_profile_source_tab_required');
   const baselineTabs = await chrome.tabs.query({});
   const baselineTabIds = new Set(baselineTabs
@@ -316,7 +311,7 @@ async function discoverProfileFromAuthorAvatar(
 async function findUniquePublicEntryDocument(): Promise<ProfileDocument> {
   const tabs = await chrome.tabs.query({});
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
-    !tab.incognito && ['explore', 'search'].includes(xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '') ?? ''));
+    !tab.incognito && xiaohongshuProfileEntryPublicSurface(tab.url ?? '') !== null);
   const active = eligible.filter((tab) => tab.active === true);
   const selected = eligible.length === 1 ? eligible : active.length === 1 ? active : [];
   if (selected.length !== 1) {
@@ -326,54 +321,10 @@ async function findUniquePublicEntryDocument(): Promise<ProfileDocument> {
   }
   const tab = selected[0]!;
   const frame = await chrome.webNavigation.getFrame({ tabId: tab.id!, frameId: 0 }).catch(() => null);
-  if (!frame?.documentId || !['explore', 'search'].includes(xiaohongshuCurrentPageNetworkPublicSurface(frame.url) ?? '')) {
+  if (!frame?.documentId || xiaohongshuProfileEntryPublicSurface(frame.url) === null) {
     throw new Error('xiaohongshu_profile_source_tab_required');
   }
   return { tabId: tab.id!, windowId: tab.windowId!, documentId: frame.documentId };
-}
-
-async function readAuthorAvatarTarget(profileDocument: ProfileDocument): Promise<AuthorAvatarTarget | null> {
-  const results = await chrome.scripting.executeScript({
-    target: { tabId: profileDocument.tabId, documentIds: [profileDocument.documentId] },
-    func: () => {
-      const visible = (element: Element): boolean => {
-        const rect = element.getBoundingClientRect();
-        const style = getComputedStyle(element);
-        return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
-          style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
-      };
-      const cards = Array.from(document.querySelectorAll('section.note-item')).filter(visible)
-        .sort((left, right) => left.getBoundingClientRect().y - right.getBoundingClientRect().y ||
-          left.getBoundingClientRect().x - right.getBoundingClientRect().x);
-      const card = cards[0] ?? null;
-      if (!card) return null;
-      const avatar = Array.from(card.querySelectorAll('a[href*="/user/profile/"]')).find((element) =>
-        visible(element) && Boolean(element.querySelector('img, [class*="avatar"], [class*="Avatar"]'))
-      ) as HTMLAnchorElement | undefined;
-      const fallback = Array.from(card.querySelectorAll('a[href*="/user/profile/"]')).find(visible) as HTMLAnchorElement | undefined;
-      const anchor = avatar ?? fallback;
-      if (!anchor) return null;
-      const rect = anchor.getBoundingClientRect();
-      const center = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-      if (!center || !(center === anchor || anchor.contains(center))) return null;
-      return {
-        x: rect.x + rect.width / 2,
-        y: rect.y + rect.height / 2,
-        targetMode: anchor.target && anchor.target !== '_self' ? 'new_tab' as const : 'same_tab' as const
-      };
-    }
-  });
-  const value = results[0]?.result as { x?: unknown; y?: unknown; targetMode?: unknown } | null | undefined;
-  if (!value || typeof value.x !== 'number' || typeof value.y !== 'number' ||
-    (value.targetMode !== 'same_tab' && value.targetMode !== 'new_tab')) return null;
-  return {
-    tabId: profileDocument.tabId,
-    windowId: profileDocument.windowId,
-    documentId: profileDocument.documentId,
-    x: value.x,
-    y: value.y,
-    targetMode: value.targetMode
-  };
 }
 
 async function waitForProfileToken(

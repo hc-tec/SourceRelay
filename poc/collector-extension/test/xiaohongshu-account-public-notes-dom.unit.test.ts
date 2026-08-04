@@ -5,6 +5,11 @@ import {
   mergeProfileNotesProjection,
   selectXiaohongshuProfileTabId
 } from '../src/background/extension-work-xiaohongshu-account-public-notes.js';
+import {
+  selectXiaohongshuPublicAuthorTargetCandidate,
+  xiaohongshuProfileEntryPublicSurface,
+  type XiaohongshuPublicAuthorTargetCandidate
+} from '../src/background/xiaohongshu-public-author-target.js';
 import type { XiaohongshuManagedProfileNotesProjectionResult } from '@intelligence/collector-contracts';
 
 const originalChrome = globalThis.chrome;
@@ -33,7 +38,75 @@ const networkProjection: XiaohongshuManagedProfileNotesProjectionResult = {
   }]
 };
 
+const authorCandidate = (
+  overrides: Partial<XiaohongshuPublicAuthorTargetCandidate> = {}
+): XiaohongshuPublicAuthorTargetCandidate => ({
+  source: 'search_card',
+  x: 120,
+  y: 160,
+  width: 40,
+  height: 40,
+  targetMode: 'same_tab',
+  pointerHitTarget: true,
+  containsAvatar: true,
+  alignedWithOverlayHeader: false,
+  insideCommentRegion: false,
+  insideStateChangingControl: false,
+  order: 0,
+  ...overrides
+});
+
 describe('Xiaohongshu profile note projection merge', () => {
+  test('admits the same-document public note route as a profile-discovery source', () => {
+    expect(xiaohongshuProfileEntryPublicSurface('https://www.xiaohongshu.com/explore')).toBe('explore');
+    expect(xiaohongshuProfileEntryPublicSurface('https://www.xiaohongshu.com/search_result?keyword=public'))
+      .toBe('search');
+    expect(xiaohongshuProfileEntryPublicSurface('https://www.xiaohongshu.com/explore/public-note?xsec_source=pc_search'))
+      .toBe('public_note_detail');
+    expect(xiaohongshuProfileEntryPublicSurface('https://www.xiaohongshu.com/user/profile/public-author'))
+      .toBeNull();
+  });
+
+  test('prefers the visible overlay header author over background search-card authors', () => {
+    const overlayAuthor = authorCandidate({
+      source: 'note_overlay', y: 72, alignedWithOverlayHeader: true, order: 1
+    });
+    expect(selectXiaohongshuPublicAuthorTargetCandidate({
+      overlayPresent: true,
+      candidates: [authorCandidate(), overlayAuthor]
+    })).toEqual(overlayAuthor);
+  });
+
+  test('never selects a comment or reply author as the note author', () => {
+    const commentAuthor = authorCandidate({
+      source: 'note_overlay', y: 140, alignedWithOverlayHeader: true, insideCommentRegion: true
+    });
+    expect(selectXiaohongshuPublicAuthorTargetCandidate({
+      overlayPresent: true,
+      candidates: [commentAuthor]
+    })).toBeNull();
+  });
+
+  test('falls back to a visible search-card author only when no overlay exists', () => {
+    const cardAuthor = authorCandidate();
+    expect(selectXiaohongshuPublicAuthorTargetCandidate({
+      overlayPresent: false,
+      candidates: [cardAuthor]
+    })).toEqual(cardAuthor);
+  });
+
+  test('rejects obstructed, malformed, or state-changing author targets', () => {
+    for (const candidate of [
+      authorCandidate({ pointerHitTarget: false }),
+      authorCandidate({ width: 0 }),
+      authorCandidate({ insideStateChangingControl: true }),
+      authorCandidate({ source: 'note_overlay', alignedWithOverlayHeader: false })
+    ]) expect(selectXiaohongshuPublicAuthorTargetCandidate({
+      overlayPresent: candidate.source === 'note_overlay',
+      candidates: [candidate]
+    })).toBeNull();
+  });
+
   test('keeps an ephemeral navigation bound to its own profile tab when another profile is open', () => {
     expect(selectXiaohongshuProfileTabId([11, 22], 22)).toBe(22);
     expect(selectXiaohongshuProfileTabId([11, 22], 33)).toBeNull();
