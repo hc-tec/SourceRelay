@@ -72,10 +72,17 @@ export class Artifact {
     }
     const payload = clone(value.artifact);
     this.capability = value.capability;
-    this.artifactId = typeof payload.artifactId === 'string' ? payload.artifactId : null;
     this.summary = payload.summary && typeof payload.summary === 'object' && !Array.isArray(payload.summary)
       ? clone(payload.summary)
       : {};
+    const payloadArtifactId = typeof payload.artifactId === 'string' ? payload.artifactId : null;
+    const summaryArtifactId = typeof this.summary.artifactId === 'string' ? this.summary.artifactId : null;
+    if ((payload.artifactId !== undefined && payload.artifactId !== null && payloadArtifactId === null) ||
+        (this.summary.artifactId !== undefined && this.summary.artifactId !== null && summaryArtifactId === null) ||
+        (payloadArtifactId !== null && summaryArtifactId !== null && payloadArtifactId !== summaryArtifactId)) {
+      throw new CollectorClientError('collector_client_artifact_invalid', 502);
+    }
+    this.artifactId = payloadArtifactId ?? summaryArtifactId;
     this.provenance = payload.provenance && typeof payload.provenance === 'object' && !Array.isArray(payload.provenance)
       ? clone(payload.provenance)
       : null;

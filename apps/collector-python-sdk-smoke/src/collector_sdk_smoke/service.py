@@ -8,6 +8,7 @@ from intelligence_collector import (
     CollectorClientError,
     bilibili_native_search,
     bilibili_native_search_batch,
+    create_client_request_id,
     xiaohongshu_public_notes_search,
 )
 
@@ -75,7 +76,11 @@ class CollectorApplication:
         binding_id = await self._resolve_binding_id(browser_binding_id)
         request = (
             bilibili_native_search_batch if batch else bilibili_native_search
-        )(browser_binding_id=binding_id, query=query)
+        )(
+            client_request_id=create_client_request_id(),
+            browser_binding_id=binding_id,
+            query=query,
+        )
         return CollectionResult.from_mapping(await self.client.collect_and_wait(request))
 
     async def xiaohongshu_search(
@@ -91,6 +96,7 @@ class CollectorApplication:
 
         binding_id = await self._resolve_binding_id(browser_binding_id)
         request = xiaohongshu_public_notes_search(
+            client_request_id=create_client_request_id(),
             browser_binding_id=binding_id,
             query=query,
             maximum_details=maximum_details,

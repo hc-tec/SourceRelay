@@ -132,7 +132,10 @@ test('structured JS models project stable fields and preserve future payload fie
     schemaVersion: 3,
     capability: 'bilibili.native_search',
     artifact: {
-      summary: { capturedItems: 1 },
+      summary: {
+        artifactId: '33333333-3333-4333-8333-333333333333',
+        capturedItems: 1
+      },
       provenance: { surface: 'public' },
       result: { items: [{ title: '结果' }] },
       futurePayloadField: 'kept'
@@ -145,10 +148,25 @@ test('structured JS models project stable fields and preserve future payload fie
   assert.equal(operation.succeeded, true);
   assert.deepEqual(operation.raw.futureField, { kept: true });
   assert.equal(artifact.result.items[0].title, '结果');
+  assert.equal(artifact.artifactId, '33333333-3333-4333-8333-333333333333');
   assert.deepEqual(artifact.provenance, { surface: 'public' });
   assert.equal(artifact.payload.futurePayloadField, 'kept');
   assert.deepEqual(result.result, { items: [{ title: '结果' }] });
   const detached = result.toJSON();
   detached.operation.future = true;
   assert.equal(result.raw.operation.future, undefined);
+});
+
+test('structured JS artifact rejects conflicting payload and summary identities', () => {
+  assert.throws(
+    () => new Artifact({
+      schemaVersion: 3,
+      capability: 'bilibili.native_search',
+      artifact: {
+        artifactId: '33333333-3333-4333-8333-333333333333',
+        summary: { artifactId: '44444444-4444-4444-8444-444444444444' }
+      }
+    }),
+    (error) => error instanceof CollectorClientError && error.code === 'collector_client_artifact_invalid'
+  );
 });

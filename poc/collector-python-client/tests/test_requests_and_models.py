@@ -154,7 +154,10 @@ def test_models_project_envelope_and_keep_unknown_fields() -> None:
         "schemaVersion": 3,
         "capability": "bilibili.native_search",
         "artifact": {
-            "summary": {"capturedItems": 1},
+            "summary": {
+                "artifactId": "33333333-3333-4333-8333-333333333333",
+                "capturedItems": 1,
+            },
             "provenance": {"surface": "public"},
             "result": {"items": [{"title": "结果"}]},
             "futurePayloadField": "kept",
@@ -169,9 +172,24 @@ def test_models_project_envelope_and_keep_unknown_fields() -> None:
     assert operation.artifact is not None
     assert operation.raw["futureField"] == {"kept": True}
     assert artifact.result["items"][0]["title"] == "结果"
+    assert artifact.artifact_id == "33333333-3333-4333-8333-333333333333"
     assert artifact.provenance == {"surface": "public"}
     assert artifact.payload["futurePayloadField"] == "kept"
     assert result.result == {"items": [{"title": "结果"}]}
     raw = result.to_dict()
     raw["operation"]["future"] = True
     assert "future" not in result.raw["operation"]
+
+
+def test_artifact_rejects_conflicting_payload_and_summary_identities() -> None:
+    with pytest.raises(CollectorClientError) as failure:
+        Artifact.from_mapping({
+            "schemaVersion": 3,
+            "capability": "bilibili.native_search",
+            "artifact": {
+                "artifactId": "33333333-3333-4333-8333-333333333333",
+                "summary": {"artifactId": "44444444-4444-4444-8444-444444444444"},
+            },
+        })
+
+    assert failure.value.code == "collector_client_artifact_invalid"

@@ -12,6 +12,7 @@ dev = [
 
 [project.scripts]
 collector-python-sdk = "collector_sdk_smoke.main:main"
+collector-python-sdk-xiaohongshu-reconcile = "collector_sdk_smoke.reconcile_xiaohongshu_matrix:main"
 
 [build-system]
 requires = ["setuptools>=75"]

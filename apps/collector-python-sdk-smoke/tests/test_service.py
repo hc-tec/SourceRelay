@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+from uuid import UUID
 
 import pytest
 
@@ -100,3 +101,33 @@ def test_typed_bilibili_search_uses_online_binding_and_structured_result() -> No
     assert result.result == {"items": []}
     assert client.requests[0]["input"] == {"query": "Deep Seek"}
     assert client.requests[0]["browserBindingId"] == "11111111-1111-4111-8111-111111111111"
+    assert UUID(client.requests[0]["clientRequestId"]).version == 4
+
+
+def test_typed_xiaohongshu_search_uses_explicit_binding_and_bounded_enrichment() -> None:
+    client = TypedFakeCollectorClient([])
+    app = CollectorApplication(client)  # type: ignore[arg-type]
+    binding_id = "44444444-4444-4444-8444-444444444444"
+
+    result = asyncio.run(app.xiaohongshu_search(
+        "public notes",
+        browser_binding_id=binding_id,
+        maximum_details=3,
+        comments_maximum_scrolls=2,
+        replies_maximum_threads=1,
+    ))
+
+    assert result.succeeded is True
+    assert result.operation.capability == "xiaohongshu.search.public_notes.v1"
+    assert result.result == {"items": []}
+    request = client.requests[0]
+    assert request["browserBindingId"] == binding_id
+    assert UUID(request["clientRequestId"]).version == 4
+    assert request["input"] == {
+        "query": "public notes",
+        "maximumDetails": 3,
+        "comments": {
+            "maximumScrolls": 2,
+            "replies": {"maximumThreads": 1},
+        },
+    }

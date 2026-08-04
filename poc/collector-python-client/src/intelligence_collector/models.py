@@ -126,9 +126,19 @@ class Artifact:
         provenance_value = payload.get("provenance")
         provenance = clone(dict(provenance_value)) if isinstance(provenance_value, Mapping) else None
         result = clone(payload["result"]) if "result" in payload else clone(payload)
-        artifact_id = payload.get("artifactId")
-        if artifact_id is not None and not isinstance(artifact_id, str):
+        payload_artifact_id = payload.get("artifactId")
+        summary_artifact_id = summary.get("artifactId")
+        if (
+            (payload_artifact_id is not None and not isinstance(payload_artifact_id, str))
+            or (summary_artifact_id is not None and not isinstance(summary_artifact_id, str))
+            or (
+                isinstance(payload_artifact_id, str)
+                and isinstance(summary_artifact_id, str)
+                and payload_artifact_id != summary_artifact_id
+            )
+        ):
             raise CollectorClientError("collector_client_artifact_invalid", 502)
+        artifact_id = payload_artifact_id or summary_artifact_id
         return cls(
             capability=capability,
             artifact_id=artifact_id,

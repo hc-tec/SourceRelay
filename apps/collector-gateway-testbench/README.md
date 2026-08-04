@@ -87,3 +87,27 @@ npm run smoke:gateway
 `npm run check` 只测试纯输入映射、loopback 配置与 artifact 路径边界；不使用 fake Gateway 或 fake 平台页面。`npm run smoke:gateway` 读取当前真实 Gateway 的 `/v1/status` 与 `/v2/openapi.json`，不需要 token、不会触发扩展任务或平台导航。
 
 真正的端到端验证必须从这个 UI 显式提交一个低频、只读任务，并以 Gateway 返回的真实 terminal operation 和 artifact 为证据。
+
+## 小红书已完成矩阵的 JS SDK 对账
+
+已经完成的小红书 5 项 L3 Operation 可以通过 JS SDK 做零新增平台动作的消费者验收。4 项
+具有 `/v2/collect` 幂等账本记录，入口使用正式 typed builder 重建原请求并以原
+`clientRequestId` 提交，Gateway 必须返回同一 Operation 与 Artifact。回复项的成功 Operation
+来自早期内部真实验证入口，没有 Collector Service 幂等记录，因此该项只能通过 SDK 只读
+既有 Operation/Artifact，不能伪造 request ID 或篡改账本。5 项随后都通过 `/v2`
+metadata/window 接口复算完整 SHA-256，但不输出 Artifact 正文、搜索词、binding ID 或 token。
+
+运行时提供原始搜索词和同一在线验证 binding；它们都不得写入 Git：
+
+```powershell
+$env:COLLECTOR_SERVICE_TOKEN = '<least-privilege temporary token>'
+$env:COLLECTOR_SERVICE_BINDING_ID = '<the original online validation binding ID>'
+$env:COLLECTOR_XIAOHONGSHU_RECONCILE_QUERY = '<original query matching the committed digest>'
+npm run smoke:xiaohongshu:reconcile
+```
+
+证据清单只保存 request/Operation/Artifact 身份、输入摘要、字节数和哈希，位于
+[`docs/validation/xiaohongshu-sdk-reconciliation-v0.7.17.json`](../../docs/validation/xiaohongshu-sdk-reconciliation-v0.7.17.json)。
+任何输入、Operation、Artifact、终态、字节数或哈希不一致都会 fail closed；脚本不会改用
+新请求 ID，也不会自动重试或触发一套“替代验证”。成功摘要明确区分 4 次
+`idempotent_collect` 与 1 次 `retained_operation_read`，不得把后者写成完整 SDK 提交闭环。
