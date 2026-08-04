@@ -41,6 +41,10 @@ poc/runtime/core-release-0.7.17/
 因此发布目录可以复制到另一台机器，仅凭目录内文件完成完整性复核，不需要访问 npm、PyPI、
 浏览器或任何真实平台。
 
+Python wheel 构建固定了 `SOURCE_DATE_EPOCH=0` 和 `PYTHONHASHSEED=0`；在相同提交、相同
+锁文件下重复运行 `npm run package:core-release`，wheel、SBOM、manifest 和校验清单的哈希
+应保持一致。
+
 可以用下面的命令重新生成并查看结果：
 
 ```powershell
