@@ -15,6 +15,8 @@ npm run package:core-release
 ```text
 poc/runtime/core-release-0.7.17/
 ├─ release-manifest.json
+├─ sha256sums.json                     # manifest、SBOM 和全部制品的 SHA-256
+├─ sbom.cdx.json                       # 确定性的 CycloneDX 1.5 依赖清单
 ├─ extension/                         # 用户常用浏览器加载的 MV3 扩展目录
 ├─ gateway/                           # user-browser Gateway bundle 和启动脚本
 │  ├─ dist/user-browser-server.js
@@ -27,7 +29,26 @@ poc/runtime/core-release-0.7.17/
    └─ intelligence_collector_client-0.7.17-py3-none-any.whl
 ```
 
-发布脚本会从干净构建产物生成 sha256 文件清单，并且不访问真实平台。
+发布脚本会从构建产物生成两个可复核的完整性文件，并且不访问真实平台：
+
+- `release-manifest.json` 的 `files` 列出扩展、Gateway、NPM tarball、Python wheel 和 SBOM，
+  每项包含相对路径、字节数和 SHA-256。它排除自身与 `sha256sums.json`，避免自引用循环；
+- `sha256sums.json` 覆盖上述所有文件以及 `release-manifest.json` 本身，只排除它自己；
+- `sbom.cdx.json` 是不带时间戳、随机 UUID 或本机绝对路径的 CycloneDX 1.5 文档，来源是
+  `poc/package-lock.json`。依赖条目记录名称、版本、许可证（来自包元数据）、发布来源 URL
+  和 npm integrity（转换为 CycloneDX hashes），并附带锁文件 SHA-256。
+
+因此发布目录可以复制到另一台机器，仅凭目录内文件完成完整性复核，不需要访问 npm、PyPI、
+浏览器或任何真实平台。
+
+可以用下面的命令重新生成并查看结果：
+
+```powershell
+npm run package:core-release
+Get-Content -Encoding utf8 .\runtime\core-release-0.7.17\release-manifest.json
+Get-Content -Encoding utf8 .\runtime\core-release-0.7.17\sha256sums.json
+Get-Content -Encoding utf8 .\runtime\core-release-0.7.17\sbom.cdx.json
+```
 
 ## 验证 SDK 脱离源码安装
 
@@ -42,6 +63,7 @@ npm run verify:sdk-release-installation
 - 检查 `CORE_RELEASE_VERSION`、18 项 direct capability 和 request builder；
 - 确认没有从仓库源码路径导入包；
 - 使用真实 Python venv 和 npm 安装流程；
+- 对发布目录的每个 manifest 条目、SBOM 和 SHA-256 清单逐文件重新计算并校验；
 - 不启动浏览器、不访问平台、不伪造平台采集结果。
 
 SDK 的 `readRelease()` 会拒绝与自身兼容锚点不一致的 Gateway release manifest，避免上层

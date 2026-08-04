@@ -16,6 +16,8 @@ npm run verify:release-candidate
 - 执行 Core import boundary 与跨语言 capability matrix 门禁；
 - 构建 Contracts、MV3 Extension 和 user-browser Gateway；
 - 将扩展准备到临时 `COLLECTOR_USER_BROWSER_HOME`；
+- 生成 Core 发布目录，并验证 `release-manifest.json`、确定性 CycloneDX SBOM 和
+  `sha256sums.json` 的文件集合、字节数与 SHA-256；
 - 启动临时 Gateway，读取 `/v2/release`、`/v2/capabilities` 和 `/v2/openapi.json`；
 - 确认 release manifest、OpenAPI release anchor 与 18 项 direct-ready capability 一致；
 - 确认没有创建 `profiles`、`browser-profiles.json` 或 `browser-host` 等历史 Profile 状态；
