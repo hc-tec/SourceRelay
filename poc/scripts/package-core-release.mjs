@@ -162,6 +162,8 @@ async function buildSbom(releaseVersion) {
   const lockfile = JSON.parse(lockfileBytes.toString('utf8'));
   const entries = [];
   for (const [lockPath, record] of Object.entries(lockfile.packages ?? {})) {
+    // The root workspace is represented by metadata.component below, not twice in components.
+    if (lockPath === '') continue;
     if (!record || typeof record !== 'object' || typeof record.version !== 'string') continue;
     const packageJson = await packageMetadata(lockPath);
     const name = typeof record.name === 'string'
