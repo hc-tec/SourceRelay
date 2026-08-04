@@ -65,6 +65,35 @@ Gateway 正确返回 HTTP 429，SDK 保留同一机器错误码；验证脚本�
 的是官方当前限流状态，不覆盖前一轮三能力真实成功证据，也不被描述成第二次完整通过。
 后续人工重新执行 live gate 应等官方额度/限流窗口恢复，不能在 CI 中循环重试。
 
+## 最终加固版本复验成功
+
+随后使用项目所有者新提供、具备可用实名额度的 Gateway-only 凭证，对最终加固代码重新
+执行了一次完整 gate。文档不记录凭证值、所属用户身份、query、标题、正文、作者或 URL。
+
+本轮结果：
+
+| Capability | Items | Artifact bytes | Canonical Artifact SHA-256 | Replay |
+| --- | ---: | ---: | --- | --- |
+| `zhihu.search.public_content.v1` | 1 | 4579 | `sha256:71b81990d4d1e933c22c41b5071c7e918c5fdd588e2e3ff1fd22a25117cf2c9c` | 同 Operation/Artifact |
+| `zhihu.hot_list.public_content.v1` | 1 | 2084 | `sha256:6d9c6038d434c87d5c2e9244493f6633c03c553ea2de8cd9f89570fd92055417` | 同 Operation/Artifact |
+| `web.search.global.zhihu_provider.v1` | 1 | 8675 | `sha256:9a4c242a636bd51f35e6848d48c84d36d8e53c1b1dc837d01eb89ef585f8cbb2` | 同 Operation/Artifact |
+
+汇总：
+
+- final hardened code：通过；
+- official capability：3；
+- live platform requests：3，每项一次，无自动重试；
+- completed Operation：3；
+- persisted Artifact：3；
+- idempotent replay：三项全部稳定；
+- `browserBindingRequired=false`；
+- browser process started：false；
+- browser window delta：0；
+- Secret persisted：false。
+
+因此，前述 429 可以归因到原凭证的额度或限流状态，不是 Gateway Provider、SDK、
+OpenAPI 模块拆分、`Content-Type` 对齐或响应凭证反射防线引入的功能回归。
+
 为避免把公开内容样本变成长期身份记录，验证文档不保存 query、标题、正文、作者或 URL；只
 保存 capability、计数、字节数和内容摘要。
 
