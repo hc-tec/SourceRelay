@@ -57,10 +57,13 @@ function installChromeMock(input: {
         publicSurface: 'search',
         queryEchoed: true,
         renderedCardCount: 19,
-        loginRequired: input.risk === 'login',
-        verificationRequired: input.risk === 'verification',
-        rateLimited: input.risk === 'rate_limit',
-        sourceUnavailable: input.risk === 'source'
+        pathname: input.risk === 'verification' ? '/website-login/captcha' : '/search_result_ai',
+        title: input.risk === 'verification' ? '安全验证' : '人工智能 - 小红书搜索',
+        visibleText: input.risk === 'login' ? '请登录后继续' :
+          input.risk === 'verification' ? '请完成安全验证' :
+            input.risk === 'rate_limit' ? '请求过于频繁，请稍后再试' :
+              input.risk === 'source' ? '页面不存在' :
+                '人工智能在金融风控、风险识别和客户服务中的应用'
       } }];
     }
     if (source.includes('text.trim() === expected') || source.includes('input.value === expected')) {

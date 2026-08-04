@@ -127,6 +127,19 @@ describe('Xiaohongshu current-page network policy contract', () => {
     });
   });
 
+  test('does not mistake public risk-control content for a platform rate limit', () => {
+    expect(classifyXiaohongshuCurrentPageRisk({
+      pathname: '/search_result_ai',
+      title: '人工智能 - 小红书搜索',
+      visibleText: '人工智能在金融风控、风险识别和客户服务中的应用'
+    }).rateLimited).toBe(false);
+    expect(classifyXiaohongshuCurrentPageRisk({
+      pathname: '/search_result',
+      title: '小红书搜索',
+      visibleText: '请求过于频繁，请稍后再试'
+    }).rateLimited).toBe(true);
+  });
+
   test('recognises only the initial public Explore or search surface without retaining URL data', () => {
     expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/explore')).toBe('explore');
     expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/search_result?keyword=%E6%B5%8B%E8%AF%95'))

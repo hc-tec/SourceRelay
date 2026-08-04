@@ -1,4 +1,7 @@
-import { xiaohongshuCurrentPageNetworkPublicSurface } from '@intelligence/collector-contracts';
+import {
+  classifyXiaohongshuCurrentPageRisk,
+  xiaohongshuCurrentPageNetworkPublicSurface
+} from '@intelligence/collector-contracts';
 
 const ACTION_STORAGE_KEY = 'collector.xiaohongshu.trusted-input-action.v1';
 const DEBUGGER_PROTOCOL_VERSION = '1.3';
@@ -57,6 +60,15 @@ interface PagePostcondition {
   verificationRequired: boolean;
   rateLimited: boolean;
   sourceUnavailable: boolean;
+}
+
+interface PagePostconditionProbe {
+  publicSurface: PagePostcondition['publicSurface'];
+  queryEchoed: boolean;
+  renderedCardCount: number;
+  pathname: string;
+  title: string;
+  visibleText: string;
 }
 
 export interface XiaohongshuTrustedInputLifecycle {
@@ -379,16 +391,29 @@ async function readPostcondition(eligibleDocument: EligibleDocument, query: stri
           /^\/search_result(?:_ai)?\/?$/.test(pathname) ? 'search' : null,
         queryEchoed,
         renderedCardCount: Math.min(40, cards),
-        loginRequired: /登录后|请登录|扫码登录|登录小红书/.test(bodyText),
-        verificationRequired: /安全验证|验证身份|扫码验证/.test(bodyText),
-        rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(bodyText),
-        sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|暂时无法浏览/.test(bodyText)
+        pathname,
+        title: document.title.slice(0, 300),
+        visibleText: bodyText
       };
     }
   });
-  const value = results[0]?.result as PagePostcondition | undefined;
-  if (!value) throw new Error('xiaohongshu_trusted_input_postcondition_unavailable');
-  return value;
+  const value = results[0]?.result as PagePostconditionProbe | undefined;
+  if (!value || (value.publicSurface !== 'explore' && value.publicSurface !== 'search' && value.publicSurface !== null) ||
+    typeof value.queryEchoed !== 'boolean' || !Number.isSafeInteger(value.renderedCardCount) ||
+    value.renderedCardCount < 0 || value.renderedCardCount > 40 || typeof value.pathname !== 'string' ||
+    typeof value.title !== 'string' || typeof value.visibleText !== 'string') {
+    throw new Error('xiaohongshu_trusted_input_postcondition_unavailable');
+  }
+  return {
+    publicSurface: value.publicSurface,
+    queryEchoed: value.queryEchoed,
+    renderedCardCount: value.renderedCardCount,
+    ...classifyXiaohongshuCurrentPageRisk({
+      pathname: value.pathname,
+      title: value.title,
+      visibleText: value.visibleText
+    })
+  };
 }
 
 function stopForRisk(value: PagePostcondition): void {
