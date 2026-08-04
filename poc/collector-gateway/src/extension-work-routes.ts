@@ -31,7 +31,7 @@ import type { BilibiliAccountProfileArtifactStore } from './bilibili-account-pro
 import type { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
 import type { BilibiliNativeSearchArtifactStore } from './bilibili-native-search-artifacts';
 import type { BilibiliVideoDetailArtifactStore } from './bilibili-video-detail-artifacts';
-import type { BrowserBindingSafetyRegistry } from './browser-binding-safety';
+import type { BrowserBindingPlatform, BrowserBindingSafetyRegistry } from './browser-binding-safety';
 import { recordBilibiliAccountInventoryExtensionWork } from './extension-work-bilibili-account-inventory';
 import { recordBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
 import { recordBilibiliNativeSearchExtensionWork } from './extension-work-bilibili-native-search';
@@ -179,6 +179,21 @@ export async function handleExtensionWorkRoute(
     return true;
   }
 
+  const platformSafety = url.pathname.match(new RegExp(
+    `^/v1/browser-bindings/(${UUID})/safety/(bilibili|xiaohongshu)$`,
+    'i'
+  ));
+  if (request.method === 'GET' && platformSafety) {
+    if (!requireSameOrigin(request, response, context.identity.publicIdentity.loopbackOrigin)) return true;
+    const binding = context.pairingBroker.getBrowserBinding(platformSafety[1]!);
+    const platform = platformSafety[2]!.toLowerCase() as BrowserBindingPlatform;
+    sendJson(response, 200, {
+      schemaVersion: 1,
+      safety: context.browserBindingSafety.get(binding.browserBindingId, platform)
+    });
+    return true;
+  }
+
   const unlock = url.pathname.match(new RegExp(`^/v1/browser-bindings/(${UUID})/safety/unlock$`, 'i'));
   if (request.method === 'POST' && unlock) {
     if (!requireSameOrigin(request, response, context.identity.publicIdentity.loopbackOrigin)) return true;
@@ -188,6 +203,26 @@ export async function handleExtensionWorkRoute(
       sendJson(response, 200, {
         schemaVersion: 1,
         safety: await context.browserBindingSafety.unlock(binding.browserBindingId, 'bilibili')
+      });
+    } catch (error) {
+      sendJson(response, workOperationStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
+    }
+    return true;
+  }
+
+  const platformUnlock = url.pathname.match(new RegExp(
+    `^/v1/browser-bindings/(${UUID})/safety/(bilibili|xiaohongshu)/unlock$`,
+    'i'
+  ));
+  if (request.method === 'POST' && platformUnlock) {
+    if (!requireSameOrigin(request, response, context.identity.publicIdentity.loopbackOrigin)) return true;
+    try {
+      const binding = context.pairingBroker.getBrowserBinding(platformUnlock[1]!);
+      const platform = platformUnlock[2]!.toLowerCase() as BrowserBindingPlatform;
+      unlockInput(await readJsonBody(request));
+      sendJson(response, 200, {
+        schemaVersion: 1,
+        safety: await context.browserBindingSafety.unlock(binding.browserBindingId, platform)
       });
     } catch (error) {
       sendJson(response, workOperationStatus(error), { schemaVersion: 1, ok: false, error: safeErrorCode(error) });
