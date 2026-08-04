@@ -1,18 +1,22 @@
-# 中文个人情报 Collector
+# SourceRelay
 
-这个仓库正在建设一个“需要时才启动”的本地个人情报系统。当前正式产品路线不是传统爬虫、私有 API 模拟器或提前囤积所有平台数据，而是：
+> Turn your logged-in browser and official data sources into safe local APIs for AI agents.
+
+SourceRelay 把用户已经登录的日常浏览器和经过登记的官方数据源，变成 AI 与本地应用可调用的安全接口。
+
+这个仓库提供“需要时才启动”的本地公开信息采集基础服务。正式产品路线不是传统爬虫、私有 API 模拟器或提前囤积所有平台数据，而是：
 
 ```text
 External Local Applications (revocable local API token)
-  -> Local Collector Service API (registered capabilities only)
-  -> paired MV3 Collector Core installed in the user's existing browser
-  -> bounded DOM / trusted-input / Network observation in the selected tab
-  -> operation and raw-first local artifact
+  -> SourceRelay Local Service API (registered capabilities only)
+  -> Browser Provider: paired MV3 extension in the user's existing browser
+  -> Official Provider: allowlisted official data-source adapters in Gateway
+  -> asynchronous operation and raw-first local artifact
 ```
 
-宿主浏览器自然持有用户正常登录状态；Core 不创建、接管或复制生产 Profile。系统不设计 Cookie 导入、导出、注入或跨进程分发，不索要密码、Token、二维码、验证码、Profile 路径或代理凭据，也不授权绕过登录、付费限制、限流和平台安全措施。
+Browser Provider 依靠宿主浏览器已有的正常登录状态，并通过有界 DOM、可信输入与 Network 观察执行已登记策略；Core 不创建、接管或复制生产 Profile。Official Provider 的凭证只属于 Gateway 进程。系统不设计 Cookie 导入、导出、注入或跨进程分发，不索要密码、Token、二维码、验证码、Profile 路径或代理凭据，也不授权绕过登录、付费限制、限流和平台安全措施。
 
-## 当前产品组件
+## 核心组件
 
 ```text
 poc/collector-contracts/   版本化 Core wire contracts
@@ -51,19 +55,22 @@ API/OpenAPI/SDK 使用 Collector Core；当前仓库内的 `apps/` 仅用于 smo
 - 可撤销 Local API token、显式最小权限 scope（Profile / collect / artifact）、去敏持久化调用审计，以及不持有浏览器控制权的独立本地 Reference Client；
 - 测试任务与生产 user-owned-browser binding 分层；测试 Profile、任意磁盘路径和匿名 Profile 不能混入正式生产 API；
 - 独立的短时 Validation Run、真实 Chrome 权限、终态恢复、字段白名单、人工 review 与显式源码 admission；
-- B站匿名 `breadth_search + visible_dom` 的精确策略 `v1.1.0` 已完成真实验证；其他 `build_ready` 能力仍不能批准。
+- 当前发布 21 项目录能力：15 项 Browser Provider、3 项 Official Provider 可直接执行，另有 3 项保留为 catalog-only/migration-required 边界。
 
 实现与风险矩阵见 [Collector 实现状态](docs/design/collector-implementation-status.md)。
 
 ## 当前平台能力真相
 
-`/v2/capabilities` 是唯一的运行时能力真相：当前 catalog 共 18 项，其中 15 项
+`/v2/capabilities` 是唯一的运行时能力真相：当前 catalog 共 21 项，其中 18 项
 `direct_ready` 可以通过 `/v2/collect` 执行，3 项仍是 catalog-only/migration-required。
 Gateway Registry、Artifact Reader、OpenAPI、JavaScript SDK 和 Python SDK 由
-`npm run verify:core-capability-matrix` 强制保持同一组 15 项 direct capability。
+`npm run verify:core-capability-matrix` 强制保持同一组 18 项 direct capability。
 
-当前直接能力覆盖 B 站公开详情、站内搜索、账号主页与投稿首屏、动态、合集/系列、
-弹幕和用户已选评论页，以及小红书公开搜索、博主笔记列表、笔记详情、评论和评论回复。
+其中 15 项 Browser Provider 能力覆盖 B 站公开详情、站内搜索、账号主页与投稿首屏、动态、
+合集/系列、弹幕和用户已选评论页，以及小红书公开搜索、博主笔记列表、笔记详情、评论和评论回复。
+它们必须携带有效 `browserBindingId`，只在用户已有浏览器中执行已登记策略。3 项 Official Provider
+能力为 `zhihu.search.public_content.v1`、`zhihu.hot_list.public_content.v1` 和
+`web.search.global.zhihu_provider.v1`；它们禁止携带 `browserBindingId`，凭证只允许存在于 Gateway 进程。
 字幕、B 站视频投稿翻页和小红书当前页网络元数据仍不会因为“存在旧实现”而自动开放。
 第三方平台爬虫仓库只能作为页面与产品调研参考，不能复制、集成、执行或成为采集后端。
 
@@ -93,7 +100,7 @@ poc/intelligence-gateway/
 从仓库根目录执行完整的 Collector 本地验证：
 
 ```powershell
-Set-Location D:\AIProject\inteligence\poc
+Set-Location .\poc
 npm ci
 npx playwright install chromium
 npm run verify:collector
@@ -124,7 +131,7 @@ npm run test:e2e:local
 扩展：
 
 ```powershell
-Set-Location D:\AIProject\inteligence\poc\collector-extension
+Set-Location .\poc\collector-extension
 npm install
 npm run setup:build-browser
 npm run verify:build
@@ -133,7 +140,7 @@ npm run verify:build
 Gateway：
 
 ```powershell
-Set-Location D:\AIProject\inteligence\poc\collector-gateway
+Set-Location .\poc\collector-gateway
 npm install
 npm run setup:browser
 npm run verify:build
@@ -155,12 +162,12 @@ npm run verify:build
 
 Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git。平台公开可见信息未来进入加密 Evidence Vault；页面公开联系方式不会被“去敏”误删，但认证材料、隐藏状态和未呈现 response 字段不得进入长期证据。
 
-## 下一阶段
+## 后续演进原则
 
-1. 已完成独立 Contracts、Browser Host、受管多页面池、PageLease、真实本地 Chromium 生命周期门禁和 B站采集 runner；
-2. 将已有 runner 统一经由版本化的 Local Collector Service API 提供给其他本地应用；
-3. 已为独立本地客户端补充 Console 签发、仅摘要持久化、可即时撤销的 Local API token，以及显式 scope 和去敏调用审计；不放宽 loopback、Profile 或平台安全边界；
-4. 后续只按同一 API capability 模型逐个平台增加经过真实页面侦察验证的能力；不开放任意浏览器控制接口。
+1. 保持 Local Service API、OpenAPI、JavaScript SDK 与 Python SDK 的能力矩阵一致；
+2. Browser Provider 只使用用户已有浏览器，测试 Profile 只服务于自主验证，不进入生产部署模型；
+3. 新平台能力必须先完成真实页面侦察和低频只读验证，再进入登记目录；
+4. 不开放任意浏览器控制、任意脚本、任意 selector 或任意 Network response body 接口。
 
 当前 Core 版本化发布与用户常用浏览器部署入口见：
 
@@ -176,3 +183,7 @@ Gateway identity 和 pairing authorization 是本机运行状态，不进入 Git
 - [Browser Host 与受管页面池 MVP](docs/design/managed-page-pool-browser-host-mvp.md)
 - [1–170 题决策账本](docs/design/collector-grilling-decision-log.md)
 - [Collector 实现状态](docs/design/collector-implementation-status.md)
+
+## License
+
+SourceRelay 使用 [Apache License 2.0](LICENSE) 开源。

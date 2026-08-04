@@ -1,4 +1,4 @@
-name: Collector local validation
+name: SourceRelay local validation
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   local-validation:
-    name: Local execution spine
+    name: SourceRelay local execution spine
     runs-on: windows-latest
     defaults:
       run:

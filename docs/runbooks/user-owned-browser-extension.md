@@ -240,14 +240,15 @@ Python 使用独立的 `intelligence-collector-client` SDK，不要导入旧的
 [`poc/collector-python-client/README.md`](../../poc/collector-python-client/README.md)：
 
 ```powershell
-Set-Location D:\AIProject\inteligence\poc\collector-python-client
+Set-Location .\poc\collector-python-client
 python -m pip install -e ".[dev]"
 ```
 
 Python SDK 使用 `asyncio`，方法名采用 snake_case；协议字段仍保持 Gateway 的 camelCase。
 它和 JS SDK 共享 `/v2/capabilities`、`/v2/openapi.json`，但包、依赖、测试和源码完全
-分开。两套 SDK 都只允许 15 项 `direct_ready` capability，不接受任意 URL、tab、selector、
-脚本、CDP 或 Network body。可直接复制的上层应用入口见
+分开。两套 SDK 都只允许 18 项 `direct_ready` capability：15 项 Browser Provider 请求必须
+携带 `browserBindingId`，3 项 Official Provider 请求禁止携带该字段。两条路径都不接受任意
+URL、tab、selector、脚本、CDP 或 Network body。可直接复制的上层应用入口见
 [`apps/collector-python-sdk-smoke`](../../apps/collector-python-sdk-smoke/README.md)。
 
 ## 8. 停止、风险与恢复

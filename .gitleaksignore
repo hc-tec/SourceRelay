@@ -1,0 +1,11 @@
+# Exact historical false positives reviewed before the first public release.
+# The first three are deterministic test-only token literals.
+0a9da8c42e7f622de6340b3696df48c580571940:apps/collector-gateway-testbench/test/contracts.test.mjs:generic-api-key:93
+0a9da8c42e7f622de6340b3696df48c580571940:apps/collector-gateway-testbench/test/contracts.test.mjs:generic-api-key:96
+bd68daa3c6a025521cec9d6148386098dde05ed7:poc/collector-gateway/test/collector-service-audit.unit.test.ts:generic-api-key:17
+
+# This is a non-secret extension storage key prefix.
+fbf0afaf64bf9d624c842e1b07284a4e8de68c16:poc/collector-extension/src/background/evidence-submission.ts:generic-api-key:11
+
+# This is an explicit replacement placeholder in a historical .env.example.
+371dbed66f86c62b838b526465abc113ad1a01a5:poc/maxun/.env.example:generic-api-key:4

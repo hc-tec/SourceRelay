@@ -1,6 +1,7 @@
 # Local agent/workspace metadata
 /.agents/
 /.codex/
+/.playwright-cli/
 
 # Environment files and credentials
 **/.env
@@ -20,6 +21,7 @@
 **/__pycache__/
 **/*.py[cod]
 **/*.egg-info/
+**/build/
 **/.pytest_cache/
 **/node_modules/
 
@@ -46,4 +48,3 @@ Desktop.ini
 .vscode/
 *.swp
 *.tmp
-

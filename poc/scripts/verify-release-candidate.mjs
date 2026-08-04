@@ -56,7 +56,7 @@ try {
   if (release?.boundaries?.browserMode !== 'user_owned_browser_only' || release?.boundaries?.arbitraryBrowserControl !== 'not_exposed') {
     throw new Error('release_candidate_deployment_boundary_invalid');
   }
-  if (!Array.isArray(capabilities?.capabilities) || capabilities.capabilities.filter((entry) => entry?.dispatchState === 'direct_ready').length !== 15) {
+  if (!Array.isArray(capabilities?.capabilities) || capabilities.capabilities.filter((entry) => entry?.dispatchState === 'direct_ready').length !== 18) {
     throw new Error('release_candidate_capability_catalog_invalid');
   }
   if (openapi?.info?.version !== release?.service?.openApiVersion) {
@@ -70,7 +70,7 @@ try {
     branch,
     releaseVersion: release.releaseVersion,
     packagedSdkArtifacts: true,
-    directCapabilities: 15,
+    directCapabilities: 18,
     browserProfileCreated: false,
     livePlatformRequests: 0
   }, null, 2));

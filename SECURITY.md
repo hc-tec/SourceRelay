@@ -1,4 +1,4 @@
-# Security policy
+# SourceRelay security policy
 
 Collector Core 只接受影响本地 loopback Gateway、MV3 扩展、配对/鉴权、能力边界、
 artifact 去敏或测试隔离的安全报告。
@@ -8,3 +8,7 @@ Profile、真实账号标识或平台原始响应。使用最小化、去敏的�
 
 Core 不支持绕过登录、验证码、付费限制、限流或平台安全措施；也不接受新增任意脚本、
 任意 selector、任意 tab 控制、CDP 或 Network response body 接口的“修复”。
+
+Browser Provider 不导入、导出或复制浏览器凭证；Official Provider 的访问凭证只能由本机
+Gateway 进程读取，不得进入扩展、SDK、artifact、日志或 Git。报告问题前请先确认复现材料
+已经去除这些内容。

@@ -6,7 +6,7 @@ Contracts、MV3 Extension、Gateway、JS SDK、Python SDK 和控制面兼容性�
 ## 生成发布目录
 
 ```powershell
-Set-Location D:\AIProject\inteligence\poc
+Set-Location .\poc
 npm run package:core-release
 ```
 
@@ -40,7 +40,7 @@ npm run verify:sdk-release-installation
 - 从 npm tarball 安装 JS SDK；
 - 从 Python wheel 安装 Python SDK；
 - 检查 `CORE_RELEASE_VERSION`、18 项 direct capability 和 request builder；
-- 确认没有从 `D:\AIProject\inteligence\poc` 导入源码；
+- 确认没有从仓库源码路径导入包；
 - 使用真实 Python venv 和 npm 安装流程；
 - 不启动浏览器、不访问平台、不伪造平台采集结果。
 
@@ -50,7 +50,7 @@ SDK 的 `readRelease()` 会拒绝与自身兼容锚点不一致的 Gateway relea
 ## 上层应用安装
 
 外部上层应用只能依赖版本化 Python wheel 或 JS tarball。开发期的相邻 checkout editable
-安装不再是推荐路径；`D:\AIProject\inteligence-apps\README.md` 已改为使用
+安装不再是推荐路径；仓库外的上层应用应使用
 `intelligence-collector-client==0.7.17`。
 
 ## 升级原则
