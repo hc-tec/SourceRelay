@@ -268,12 +268,16 @@ function runNpm(args, cwd) {
 }
 
 function runPython(args, cwd) {
-  return run(process.platform === 'win32' ? 'python.exe' : 'python3', args, cwd);
+  return run(process.platform === 'win32' ? 'python.exe' : 'python3', args, cwd, {
+    ...process.env,
+    SOURCE_DATE_EPOCH: '0',
+    PYTHONHASHSEED: '0'
+  });
 }
 
-function run(command, args, cwd) {
+function run(command, args, cwd, env = process.env) {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, args, { cwd, stdio: 'inherit', windowsHide: true });
+    const child = spawn(command, args, { cwd, env, stdio: 'inherit', windowsHide: true });
     child.once('error', rejectRun);
     child.once('exit', (code, signal) => code === 0
       ? resolveRun()
