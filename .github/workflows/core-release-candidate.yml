@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   package-and-verify:
@@ -53,3 +53,32 @@ jobs:
           path: poc/runtime/core-release-0.7.17
           if-no-files-found: error
           retention-days: 14
+
+      - name: Read verified release metadata
+        id: release
+        shell: bash
+        run: |
+          version="$(node -p "require('./runtime/core-release-0.7.17/release-manifest.json').releaseVersion")"
+          test "$version" = "0.7.17"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=core-v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Archive verified Core release directory
+        run: |
+          tar -czf "runtime/sourcerelay-core-${{ steps.release.outputs.version }}.tar.gz" \
+            -C runtime "core-release-${{ steps.release.outputs.version }}"
+
+      # A manual run and a core-v* tag are both intentional release events for
+      # this workflow. softprops/action-gh-release creates the tag on a manual
+      # run when it does not exist, and updates the same release on reruns.
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: SourceRelay Core ${{ steps.release.outputs.version }}
+          generate_release_notes: true
+          files: |
+            poc/runtime/sourcerelay-core-${{ steps.release.outputs.version }}.tar.gz
+            poc/runtime/core-release-${{ steps.release.outputs.version }}/release-manifest.json
+            poc/runtime/core-release-${{ steps.release.outputs.version }}/sha256sums.json

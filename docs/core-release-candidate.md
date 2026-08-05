@@ -33,7 +33,13 @@ Native Messaging 集成测试，也不替代需要单独人工身份输入的真
 
 `.github/workflows/core-release-candidate.yml` 只在手动触发或推送 `core-v*` 标签时运行，避免
 每个普通提交重复构建发布包。它会生成并上传 14 天保留期的 Core release directory，同时
-运行 clean checkout、SDK 脱离源码安装、SBOM 和 SHA-256 完整性校验。
+运行 clean checkout、SDK 脱离源码安装、SBOM 和 SHA-256 完整性校验。验证全部通过后，workflow
+还会创建或更新 GitHub Release，并附带完整的 `tar.gz` 发布包、`release-manifest.json` 和
+`sha256sums.json`。手动运行时，如果 `core-v0.7.17` tag 尚不存在，发布动作会在当前提交上创建
+该 tag；重复运行会更新同一个 release，而不会生成第二个版本。
+
+因此，Actions 页面里的 artifact 和仓库 Releases 页面是两个不同的对象：artifact 是短期 CI
+产物，GitHub Release 才是供上层应用下载的版本化发布入口。
 
 普通 push / pull request 使用的 `collector-local-validation.yml` 也把 Windows 真实 Chromium
 分层测试和 Ubuntu release-candidate 测试拆成两个并行 job。浏览器集成测试变慢或进入诊断
