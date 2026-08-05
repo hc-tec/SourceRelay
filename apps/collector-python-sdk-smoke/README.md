@@ -40,7 +40,8 @@ collector-python-sdk xiaohongshu-search "人工智能" --maximum-details 3
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "clientRequestId": "22222222-2222-4222-8222-222222222222",
   "browserBindingId": "11111111-1111-4111-8111-111111111111",
   "platform": "bilibili",
   "capability": "bilibili.native_search",
@@ -50,6 +51,8 @@ collector-python-sdk xiaohongshu-search "人工智能" --maximum-details 3
   }
 }
 ```
+
+`clientRequestId` 必须是新的 UUID；同一份请求在需要安全重放时才复用同一个值。生产代码更推荐使用下方的 typed builder，由 SDK 自动生成请求身份并固定能力字段。
 
 上层应用不能通过本示例传入任意 URL、tab ID、selector、脚本、坐标、CDP 或 Network
 body；Gateway 仍是最终的权限和输入边界。

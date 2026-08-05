@@ -82,7 +82,15 @@ def test_application_passes_only_catalog_ready_request_to_sdk() -> None:
         }
     ])
     app = CollectorApplication(client)  # type: ignore[arg-type]
-    request = {"capability": "bilibili.native_search", "input": {"query": "DeepSeek"}}
+    request = {
+        "schemaVersion": 3,
+        "clientRequestId": "11111111-1111-4111-8111-111111111111",
+        "browserBindingId": "11111111-1111-4111-8111-111111111111",
+        "platform": "bilibili",
+        "capability": "bilibili.native_search",
+        "executionTarget": "collector_work_tab",
+        "input": {"query": "DeepSeek"},
+    }
 
     result = asyncio.run(app.collect(request))
 
