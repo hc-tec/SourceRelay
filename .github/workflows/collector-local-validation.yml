@@ -41,5 +41,38 @@ jobs:
       - name: Run layered Collector validation
         run: npm run verify:collector
 
+  release-candidate:
+    name: SourceRelay clean release candidate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: poc
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: poc/package-lock.json
+          registry-url: https://registry.npmjs.org
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      # This gate is intentionally independent from the Windows real-Chromium
+      # job above. A slow or quarantined browser test must not hide release
+      # manifest, SBOM, SDK and loopback Gateway regressions.
       - name: Verify clean Core release candidate
         run: npm run verify:release-candidate
+
+      - name: Verify SDK installation from release artifacts
+        run: npm run verify:sdk-release-installation

@@ -33,6 +33,10 @@ Native Messaging 集成测试，也不替代需要单独人工身份输入的真
 每个普通提交重复构建发布包。它会生成并上传 14 天保留期的 Core release directory，同时
 运行 clean checkout、SDK 脱离源码安装、SBOM 和 SHA-256 完整性校验。
 
+普通 push / pull request 使用的 `collector-local-validation.yml` 也把 Windows 真实 Chromium
+分层测试和 Ubuntu release-candidate 测试拆成两个并行 job。浏览器集成测试变慢或进入诊断
+时，不会阻塞 Core 发布合同、SDK artifact 和 loopback Gateway 的结果。
+
 AgentKit 的 `.github/workflows/released-core-l2.yml` 会 checkout Core `main`，从 Core 的
 `package-core-release` 生成发布目录，再让 packaged MCP 连接该目录中的 Gateway entrypoint。
 它不会连接 Core 源码 `dist`，也不会访问真实平台；Core 与 AgentKit 的发布锚点不一致时，
