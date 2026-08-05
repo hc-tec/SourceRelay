@@ -77,17 +77,8 @@ test('a real installed MV3 extension pairs with the direct Gateway without creat
     await controlPage.locator('input[name="pairingSessionId"]').fill(pairingSessionId!);
     await controlPage.locator('input[name="pairingCode"]').fill(pairingCode!);
 
-    // The user may close the control surface before submitting. Input events
-    // must already have persisted a complete short-lived draft.
-    await expect.poll(async () => await launched!.worker.evaluate(async () => (
-      await chrome.storage.local.get('collector.user-browser.gateway-pairing-draft.v1')
-    )['collector.user-browser.gateway-pairing-draft.v1'])).toMatchObject({
-      schemaVersion: 1,
-      loopbackOrigin: gatewayOrigin,
-      identityFingerprint,
-      pairingSessionId,
-      pairingCode
-    });
+    // The user may close the control surface immediately after the final
+    // input event, before an asynchronous storage promise settles.
     await controlPage.close();
     const restoredBeforeSubmit = await launched.context.newPage();
     await restoredBeforeSubmit.goto(`chrome-extension://${extensionId}/control.html`);

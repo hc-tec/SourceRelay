@@ -95,9 +95,12 @@ function readPairingInputFromForm(): PairUserBrowserGatewayInput {
 
 function queuePairingDraftSave(): Promise<void> {
   const input = readPairingInputFromForm();
+  // Start this write immediately. saveGatewayPairingDraft also updates a
+  // synchronous extension-local mirror, so a popup closed on this event still
+  // has the final complete snapshot available on the next open.
+  const write = saveGatewayPairingDraft(input);
   pairingDraftWriteQueue = pairingDraftWriteQueue
-    .catch(() => undefined)
-    .then(() => saveGatewayPairingDraft(input))
+    .then(() => write)
     // Draft persistence should never block the pairing attempt or expose a
     // storage error (which could contain implementation details) in the UI.
     .catch(() => undefined);
