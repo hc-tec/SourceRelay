@@ -55,7 +55,7 @@ async function render(): Promise<void> {
     readRuntimeBootstrap(),
     loadGatewayPairingDraft()
   ]);
-  restorePairingDraft(connection, draft);
+  restorePairingDraft(draft);
   runtimeStatus.textContent = runtime
     ? `v${runtime.collectorVersion} · r${runtime.controlSurfaceRevision} · ${runtime.buildFingerprint.slice(0, 12)}`
     : `v${chrome.runtime.getManifest().version} · worker marker unavailable`;
@@ -68,14 +68,11 @@ async function render(): Promise<void> {
   document.documentElement.dataset.collectorControlReady = 'true';
 }
 
-function restorePairingDraft(
-  connection: UserBrowserGatewayConnection,
-  draft: GatewayPairingDraft | null
-): void {
-  // An old pairing record may leave the Gateway temporarily offline. The
-  // draft is still the only way to recover an interrupted re-pair attempt;
-  // only an already-online pairing should suppress it.
-  if (!draft || connection.state === 'online' || pairingFormTouched) return;
+function restorePairingDraft(draft: GatewayPairingDraft | null): void {
+  // A successful pairing clears the draft. Therefore any surviving draft is
+  // an explicit unfinished-input signal and must be restored regardless of
+  // whether an older pairing record is currently online or offline.
+  if (!draft || pairingFormTouched) return;
   setInputValue('loopbackOrigin', draft.loopbackOrigin);
   setInputValue('identityFingerprint', draft.identityFingerprint);
   setInputValue('pairingSessionId', draft.pairingSessionId);
