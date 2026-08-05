@@ -6,6 +6,8 @@
 
 当前 `bilibili.discussion` 的 `/v2` direct 请求目标是扩展自有 `collector_work_tab`；旧验收表中“用户已选页面”的描述属于历史实现，不代表现在的上层请求契约。
 
+2026-08-05 当前构建又完成一次独立、可见、隔离 Chromium 的账号/合集 live canary：`bilibili.account_profile`、`bilibili.account_inventory`、`bilibili.collection_series.overview`、`bilibili.collection_series.detail` 四项均为 `completed`；投稿首屏投影 40 条，合集概览 9 个公开列表，详情 ID 由概览结果选择为合法 `season` `333822`，四个规范目标各只导航一次。运行只输出脱敏摘要，临时 Gateway 状态和浏览器会话均在终态清理。
+
 - 分支：`feat/browser-extension-system`
 - 状态日期：2026-07-26
 - 权威决策：[collector-grilling-decision-log.md](collector-grilling-decision-log.md)
