@@ -42,8 +42,11 @@ import {
 import {
   currentExtensionWorkTabLossCause,
   initialiseExtensionWorkTabs,
+  recoverInterruptedExtensionWorkTab,
+  recoverOrphanedExtensionWorkTabs,
   resetExtensionWorkTabLossCause,
-  type WorkTabAcquisition
+  type WorkTabAcquisition,
+  type WorkTabDisposition
 } from './extension-work-tabs';
 import { loadGatewayPairingRecord } from './user-browser-gateway-storage';
 
@@ -81,9 +84,16 @@ export async function pollForExtensionWork(): Promise<void> {
 
     const interrupted = await loadActiveExtensionWork();
     if (interrupted) {
+      const recoveredWorkTabDisposition = interrupted.item.platform === 'bilibili' &&
+        interrupted.item.executionTarget === 'collector_work_tab'
+        ? await recoverInterruptedExtensionWorkTab({
+            workTabAcquisition: interrupted.workTabAcquisition,
+            navigationIntentCount: interrupted.navigationIntentCount
+          })
+        : null;
       await savePendingExtensionWorkResult({
         schemaVersion: 1,
-        result: await interruptedResult(interrupted),
+        result: await interruptedResult(interrupted, recoveredWorkTabDisposition),
         deliveryAttempts: 0,
         lastErrorCode: null
       });
@@ -92,6 +102,8 @@ export async function pollForExtensionWork(): Promise<void> {
       if (recovered) await deliverPendingResult(recovered);
       return;
     }
+
+    await recoverOrphanedExtensionWorkTabs();
 
     const pairing = await loadGatewayPairingRecord();
     if (!pairing) return;
@@ -283,7 +295,10 @@ async function emitExtensionDiagnostic(
   }
 }
 
-async function interruptedResult(active: ActiveExtensionWork): Promise<ExtensionWorkResult> {
+async function interruptedResult(
+  active: ActiveExtensionWork,
+  recoveredWorkTabDisposition: Exclude<WorkTabDisposition, 'idle_reusable'> | null = null
+): Promise<ExtensionWorkResult> {
   if (active.item.platform === 'xiaohongshu') {
     await cleanupXiaohongshuSearchObserver(active.item.workId).catch(() => undefined);
   }
@@ -451,9 +466,9 @@ async function interruptedResult(active: ActiveExtensionWork): Promise<Extension
         attemptCount: active.navigationIntentCount
       },
       workTabAcquisition: active.workTabAcquisition,
-      workTabDisposition: active.workTabAcquisition === 'not_acquired'
+      workTabDisposition: recoveredWorkTabDisposition ?? (active.workTabAcquisition === 'not_acquired'
         ? 'closed_or_missing'
-        : 'retained_not_reusable',
+        : 'retained_not_reusable'),
       observation: null
     };
   }
@@ -478,9 +493,9 @@ async function interruptedResult(active: ActiveExtensionWork): Promise<Extension
       attemptCount: (navigationAttempted ? 1 : 0) as 0 | 1
     },
     workTabAcquisition: active.workTabAcquisition,
-    workTabDisposition: active.workTabAcquisition === 'not_acquired'
+    workTabDisposition: recoveredWorkTabDisposition ?? (active.workTabAcquisition === 'not_acquired'
       ? 'closed_or_missing' as const
-      : 'retained_not_reusable' as const
+      : 'retained_not_reusable' as const)
   };
   if (active.item.capability === 'bilibili.video_detail') {
     return { ...base, capability: 'bilibili.video_detail', observation: null };

@@ -52,6 +52,7 @@ function installChromeTabsMock(input: { foregroundAvailable?: boolean } = {}) {
   const removedListeners: Array<(tabId: number) => void> = [];
   const movedListeners: Array<(tabId: number) => void> = [];
   const updatedListeners: Array<(tabId: number, changeInfo: chrome.tabs.TabChangeInfo) => void> = [];
+  const sessionData = new Map<string, unknown>();
   let nextTabId = 2;
   let windowFocused = false;
 
@@ -110,6 +111,10 @@ function installChromeTabsMock(input: { foregroundAvailable?: boolean } = {}) {
           if (!tab) throw new Error('No tab with id');
           return copy(tab);
         }),
+        remove: vi.fn(async (tabId: number) => {
+          tabs.delete(tabId);
+          for (const listener of removedListeners) listener(tabId);
+        }),
         update,
         onActivated: { addListener: (listener: (info: chrome.tabs.TabActiveInfo) => void) => activatedListeners.push(listener) },
         onRemoved: { addListener: (listener: (tabId: number) => void) => removedListeners.push(listener) },
@@ -118,7 +123,22 @@ function installChromeTabsMock(input: { foregroundAvailable?: boolean } = {}) {
           addListener: (listener: (tabId: number, changeInfo: chrome.tabs.TabChangeInfo) => void) => updatedListeners.push(listener)
         }
       },
-      windows: { update: windowsUpdate, get: windowsGet }
+      windows: { update: windowsUpdate, get: windowsGet },
+      storage: {
+        session: {
+          get: vi.fn(async (key?: string | string[]) => {
+            if (typeof key === 'string') return { [key]: sessionData.get(key) };
+            if (Array.isArray(key)) return Object.fromEntries(key.map((entry) => [entry, sessionData.get(entry)]));
+            return Object.fromEntries(sessionData.entries());
+          }),
+          set: vi.fn(async (value: Record<string, unknown>) => {
+            for (const [key, entry] of Object.entries(value)) sessionData.set(key, structuredClone(entry));
+          }),
+          remove: vi.fn(async (key: string | string[]) => {
+            for (const entry of Array.isArray(key) ? key : [key]) sessionData.delete(entry);
+          })
+        }
+      }
     } as unknown as typeof chrome
   });
 
@@ -127,6 +147,7 @@ function installChromeTabsMock(input: { foregroundAvailable?: boolean } = {}) {
     update,
     windowsUpdate,
     windowsGet,
+    sessionData,
     activate,
     remove(tabId: number) {
       tabs.delete(tabId);
@@ -286,5 +307,67 @@ describe('extension-owned work-tab foreground lifecycle', () => {
 
     await expect(readExtensionWorkTab(lease)).rejects.toThrow('work_tab_user_taken_over');
     expect(currentExtensionWorkTabLossCause()).toBe('tab_became_inactive');
+  });
+
+  test('restores the extension-owned idle tab after an MV3 worker restart', async () => {
+    const browser = installChromeTabsMock();
+    const first = await import('../src/background/extension-work-tabs.js');
+    const firstLease = await first.acquireExtensionWorkTab();
+    expect(firstLease.acquisition).toBe('created');
+    expect(first.releaseExtensionWorkTab(firstLease)).toBe('idle_reusable');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    vi.resetModules();
+    const second = await import('../src/background/extension-work-tabs.js');
+    const secondLease = await second.acquireExtensionWorkTab();
+
+    expect(secondLease.acquisition).toBe('reused');
+    expect(secondLease.tabId).toBe(firstLease.tabId);
+    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect(browser.sessionData.size).toBe(1);
+  });
+
+  test('closes an interrupted pre-navigation blank tab instead of retaining an orphan', async () => {
+    const browser = installChromeTabsMock();
+    const first = await import('../src/background/extension-work-tabs.js');
+    const firstLease = await first.acquireExtensionWorkTab();
+    expect(firstLease.acquisition).toBe('created');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    vi.resetModules();
+    const second = await import('../src/background/extension-work-tabs.js');
+    await expect(second.recoverInterruptedExtensionWorkTab({
+      workTabAcquisition: 'created',
+      navigationIntentCount: 0
+    })).resolves.toBe('closed_or_missing');
+
+    expect(browser.tabs.has(firstLease.tabId)).toBe(false);
+    expect((globalThis.chrome.tabs.remove as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(firstLease.tabId);
+    expect(browser.sessionData.size).toBe(1);
+  });
+
+  test('clears a stale leased blank tab before the next queued work item', async () => {
+    const browser = installChromeTabsMock();
+    const first = await import('../src/background/extension-work-tabs.js');
+    const firstLease = await first.acquireExtensionWorkTab();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    vi.resetModules();
+    const second = await import('../src/background/extension-work-tabs.js');
+    await second.recoverOrphanedExtensionWorkTabs();
+
+    expect(browser.tabs.has(firstLease.tabId)).toBe(false);
+    expect((globalThis.chrome.tabs.remove as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(firstLease.tabId);
+  });
+
+  test('does not open a replacement after the user takes over a retained work tab', async () => {
+    const browser = installChromeTabsMock();
+    const tabs = await import('../src/background/extension-work-tabs.js');
+    const lease = await tabs.acquireExtensionWorkTab();
+    expect(tabs.abandonExtensionWorkTab(lease)).toBe('retained_not_reusable');
+
+    await expect(tabs.acquireExtensionWorkTab()).rejects.toThrow('work_tab_user_taken_over');
+    expect(browser.tabs.size).toBe(2);
+    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
   });
 });

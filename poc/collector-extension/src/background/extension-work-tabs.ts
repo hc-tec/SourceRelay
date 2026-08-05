@@ -38,7 +38,7 @@ export interface ExtensionWorkTabLease {
 interface ManagedWorkTab {
   tabId: number;
   windowId: number;
-  state: 'idle_reusable' | 'leased';
+  state: 'idle_reusable' | 'leased' | 'blocked';
   leaseId: string | null;
   expectedCanonicalUrl: string | null;
   expectedNavigationUntil: number | null;
@@ -52,17 +52,41 @@ interface ManagedWorkTab {
   initialBlankNavigationUntil: number;
 }
 
+interface PersistedWorkTab {
+  schemaVersion: 1;
+  tabId: number;
+  windowId: number;
+  state: ManagedWorkTab['state'];
+  leaseId: string | null;
+  expectedCanonicalUrl: string | null;
+  initialBlankNavigationUntil: number;
+  lastUsedAt: number;
+}
+
+interface PersistedWorkTabRegistry {
+  schemaVersion: 1;
+  tabs: PersistedWorkTab[];
+}
+
 const managedTabs = new Map<number, ManagedWorkTab>();
 const leaseLosses = new Map<string, Exclude<WorkTabDisposition, 'idle_reusable'>>();
 let listenersInitialised = false;
+let registryLoaded = false;
+let registryLoading: Promise<void> | null = null;
+let persistenceChain: Promise<void> = Promise.resolve();
 let latestLossCause: WorkTabLossCause | null = null;
 const FOREGROUND_ACTIVATION_GRACE_MS = 2_000;
 const FOREGROUND_SETTLE_MS = 350;
+const WORK_TAB_REGISTRY_KEY = 'collector.extension-work-tabs.v1';
+const WORK_TAB_REGISTRY_SCHEMA_VERSION = 1 as const;
+const MAX_LEASED_WORK_TABS = 1 as const;
+const MAX_REUSABLE_WORK_TABS = 1 as const;
 
 /**
- * Only tabs created by this module enter `managedTabs`.  There is no tab
- * inventory, no persistent tab identity, and no path that can adopt a normal
- * user tab after the worker starts or restarts.
+ * Only tabs created by this module enter `managedTabs`. The small registry is
+ * persisted in `chrome.storage.session` so an MV3 worker restart can recover
+ * those exact tab IDs; there is still no tab inventory and no path that can
+ * adopt a normal user tab.
  */
 export function initialiseExtensionWorkTabs(): void {
   if (listenersInitialised) return;
@@ -117,10 +141,18 @@ export function initialiseExtensionWorkTabs(): void {
       Date.now() <= record.initialBlankNavigationUntil) return;
     forgetTab(tabId, 'user_taken_over', 'unexpected_url_update');
   });
+  if ('onReplaced' in chrome.tabs && chrome.tabs.onReplaced) {
+    chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
+      forgetTab(removedTabId, 'closed_or_missing', 'managed_tab_removed');
+      // A replacement tab has no proof of extension ownership. Do not adopt it.
+      void addedTabId;
+    });
+  }
 }
 
 export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> {
   initialiseExtensionWorkTabs();
+  await ensureWorkTabRegistryLoaded();
   for (const record of managedTabs.values()) {
     if (record.state !== 'idle_reusable') continue;
     try {
@@ -129,10 +161,21 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
         forgetTab(record.tabId, 'user_taken_over', 'idle_tab_active_before_reuse');
         continue;
       }
-      return lease(record, 'reused');
+      const result = lease(record, 'reused');
+      await persistWorkTabRegistry();
+      return result;
     } catch {
       forgetTab(record.tabId, 'closed_or_missing', 'idle_tab_missing_before_reuse');
     }
+  }
+
+  await pruneClosedBlockedTabs();
+  if ([...managedTabs.values()].some((record) => record.state === 'blocked')) {
+    throw new Error('work_tab_user_taken_over');
+  }
+  const leasedCount = [...managedTabs.values()].filter((record) => record.state === 'leased').length;
+  if (leasedCount >= MAX_LEASED_WORK_TABS) {
+    throw new Error('extension_work_tab_busy');
   }
 
   const tab = await chrome.tabs.create({ url: 'about:blank', active: false });
@@ -150,7 +193,9 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
     initialBlankNavigationUntil: Date.now() + 2_000
   };
   managedTabs.set(record.tabId, record);
-  return lease(record, 'created');
+  const result = lease(record, 'created');
+  await persistWorkTabRegistry();
+  return result;
 }
 
 /** One capability-approved platform navigation, issued exactly once per lease. */
@@ -236,6 +281,7 @@ export function releaseExtensionWorkTab(workTab: ExtensionWorkTabLease): WorkTab
   record.expectedCanonicalUrl = null;
   record.expectedNavigationUntil = null;
   record.expectedForegroundActivationUntil = null;
+  void persistWorkTabRegistry();
   return 'idle_reusable';
 }
 
@@ -249,9 +295,84 @@ export function abandonExtensionWorkTab(workTab: ExtensionWorkTabLease): WorkTab
   if (!record || record.state !== 'leased' || record.leaseId !== workTab.leaseId) {
     return currentDisposition(workTab);
   }
-  managedTabs.delete(workTab.tabId);
+  record.state = 'blocked';
+  record.leaseId = null;
+  record.expectedCanonicalUrl = null;
+  record.expectedNavigationUntil = null;
+  record.expectedForegroundActivationUntil = null;
+  managedTabs.set(workTab.tabId, record);
   leaseLosses.set(workTab.leaseId, 'retained_not_reusable');
+  void persistWorkTabRegistry();
   return 'retained_not_reusable';
+}
+
+/**
+ * Recover a worker-interrupted work tab without replaying a platform action.
+ * A tab that never received a navigation intent is still an extension-owned
+ * blank tab and can be closed safely. Once navigation was recorded, preserve
+ * the visible page for review and remove it from the reusable pool.
+ */
+export async function recoverInterruptedExtensionWorkTab(input: {
+  workTabAcquisition: WorkTabAcquisition | 'not_acquired';
+  navigationIntentCount: 0 | 1 | 2;
+}): Promise<Exclude<WorkTabDisposition, 'idle_reusable'> | null> {
+  initialiseExtensionWorkTabs();
+  await ensureWorkTabRegistryLoaded();
+  if (input.workTabAcquisition === 'not_acquired') return null;
+  const leased = [...managedTabs.values()].filter((record) => record.state === 'leased');
+  if (leased.length === 0) return 'closed_or_missing';
+  let disposition: WorkTabDisposition = 'closed_or_missing';
+  for (const record of leased) {
+    const leaseId = record.leaseId;
+    const tab = await chrome.tabs.get(record.tabId).catch(() => null);
+    const safeBlankClose = input.navigationIntentCount === 0 && tab !== null &&
+      tab.url === 'about:blank' && tab.active !== true;
+    if (safeBlankClose) {
+      managedTabs.delete(record.tabId);
+      await chrome.tabs.remove(record.tabId).catch(() => undefined);
+      disposition = 'closed_or_missing';
+    } else {
+      record.state = 'blocked';
+      record.leaseId = null;
+      record.expectedCanonicalUrl = null;
+      record.expectedNavigationUntil = null;
+      record.expectedForegroundActivationUntil = null;
+      managedTabs.set(record.tabId, record);
+      disposition = 'retained_not_reusable';
+    }
+    if (leaseId) leaseLosses.set(leaseId, safeBlankClose ? 'closed_or_missing' : 'retained_not_reusable');
+  }
+  await persistWorkTabRegistry();
+  return disposition;
+}
+
+/**
+ * Remove stale leased records left by a worker restart when no active work
+ * record survived. Unknown navigated pages remain visible for review; only a
+ * proven inactive about:blank tab is closed.
+ */
+export async function recoverOrphanedExtensionWorkTabs(): Promise<void> {
+  initialiseExtensionWorkTabs();
+  await ensureWorkTabRegistryLoaded();
+  for (const record of [...managedTabs.values()]) {
+    if (record.state !== 'leased') continue;
+    const tab = await chrome.tabs.get(record.tabId).catch(() => null);
+    const safeBlankClose = tab !== null && tab.url === 'about:blank' && tab.active !== true;
+    const leaseId = record.leaseId;
+    if (safeBlankClose) {
+      managedTabs.delete(record.tabId);
+      await chrome.tabs.remove(record.tabId).catch(() => undefined);
+    } else {
+      record.state = 'blocked';
+      record.leaseId = null;
+      record.expectedCanonicalUrl = null;
+      record.expectedNavigationUntil = null;
+      record.expectedForegroundActivationUntil = null;
+      managedTabs.set(record.tabId, record);
+    }
+    if (leaseId) leaseLosses.set(leaseId, safeBlankClose ? 'closed_or_missing' : 'retained_not_reusable');
+  }
+  await persistWorkTabRegistry();
 }
 
 export function currentExtensionWorkTabDisposition(workTab: ExtensionWorkTabLease): WorkTabDisposition {
@@ -340,12 +461,131 @@ function forgetTab(
       leaseLosses.delete(oldest);
     }
   }
+  if (disposition === 'user_taken_over') {
+    record.state = 'blocked';
+    record.leaseId = null;
+    record.expectedCanonicalUrl = null;
+    record.expectedNavigationUntil = null;
+    record.expectedForegroundActivationUntil = null;
+    managedTabs.set(tabId, record);
+  }
+  if (registryLoaded) void persistWorkTabRegistry();
 }
 
 function currentDisposition(workTab: ExtensionWorkTabLease): WorkTabDisposition {
   const record = managedTabs.get(workTab.tabId);
   if (record?.state === 'leased' && record.leaseId === workTab.leaseId) return 'idle_reusable';
   return leaseLosses.get(workTab.leaseId) ?? 'closed_or_missing';
+}
+
+async function ensureWorkTabRegistryLoaded(): Promise<void> {
+  if (registryLoaded) return;
+  if (!registryLoading) {
+    registryLoading = restoreWorkTabRegistry();
+  }
+  await registryLoading;
+}
+
+async function restoreWorkTabRegistry(): Promise<void> {
+  const storage = extensionStorageArea();
+  if (!storage) {
+    registryLoaded = true;
+    return;
+  }
+  try {
+    const stored = await storage.get(WORK_TAB_REGISTRY_KEY);
+    const registry = parsePersistedWorkTabRegistry(stored[WORK_TAB_REGISTRY_KEY]);
+    const candidates = registry?.tabs ?? [];
+    const seen = new Set<number>();
+    let restoredIdleTabs = 0;
+    for (const candidate of candidates.sort((left, right) => right.lastUsedAt - left.lastUsedAt)) {
+      if (seen.has(candidate.tabId)) continue;
+      const tab = await chrome.tabs.get(candidate.tabId).catch(() => null);
+      if (!tab || tab.windowId !== candidate.windowId || tab.active && candidate.state === 'idle_reusable') continue;
+      if (candidate.state === 'idle_reusable' && restoredIdleTabs >= MAX_REUSABLE_WORK_TABS) {
+        if (!tab.active) await chrome.tabs.remove(candidate.tabId).catch(() => undefined);
+        continue;
+      }
+      seen.add(candidate.tabId);
+      managedTabs.set(candidate.tabId, {
+        tabId: candidate.tabId,
+        windowId: candidate.windowId,
+        state: candidate.state,
+        leaseId: candidate.leaseId,
+        expectedCanonicalUrl: candidate.expectedCanonicalUrl,
+        expectedNavigationUntil: null,
+        expectedForegroundActivationUntil: null,
+        initialBlankNavigationUntil: candidate.initialBlankNavigationUntil
+      });
+      if (candidate.state === 'idle_reusable') restoredIdleTabs += 1;
+    }
+  } finally {
+    registryLoaded = true;
+    registryLoading = null;
+    await persistWorkTabRegistry();
+  }
+}
+
+function extensionStorageArea(): chrome.storage.StorageArea | null {
+  return globalThis.chrome?.storage?.session ?? null;
+}
+
+function parsePersistedWorkTabRegistry(value: unknown): PersistedWorkTabRegistry | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = value as Partial<PersistedWorkTabRegistry>;
+  if (candidate.schemaVersion !== WORK_TAB_REGISTRY_SCHEMA_VERSION || !Array.isArray(candidate.tabs)) return null;
+  const tabs = candidate.tabs.filter(isPersistedWorkTab);
+  return { schemaVersion: WORK_TAB_REGISTRY_SCHEMA_VERSION, tabs };
+}
+
+function isPersistedWorkTab(value: unknown): value is PersistedWorkTab {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as Partial<PersistedWorkTab>;
+  return candidate.schemaVersion === WORK_TAB_REGISTRY_SCHEMA_VERSION &&
+    Number.isSafeInteger(candidate.tabId) && Number(candidate.tabId) > 0 &&
+    Number.isSafeInteger(candidate.windowId) && Number(candidate.windowId) > 0 &&
+    (candidate.state === 'idle_reusable' || candidate.state === 'leased' || candidate.state === 'blocked') &&
+    (candidate.leaseId === null || typeof candidate.leaseId === 'string') &&
+    (candidate.state === 'idle_reusable' || candidate.state === 'blocked'
+      ? candidate.leaseId === null
+      : typeof candidate.leaseId === 'string') &&
+    (candidate.expectedCanonicalUrl === null || typeof candidate.expectedCanonicalUrl === 'string') &&
+    Number.isSafeInteger(candidate.initialBlankNavigationUntil) &&
+    Number.isSafeInteger(candidate.lastUsedAt);
+}
+
+async function pruneClosedBlockedTabs(): Promise<void> {
+  let changed = false;
+  for (const record of [...managedTabs.values()]) {
+    if (record.state !== 'blocked') continue;
+    const tab = await chrome.tabs.get(record.tabId).catch(() => null);
+    if (tab) continue;
+    managedTabs.delete(record.tabId);
+    changed = true;
+  }
+  if (changed) await persistWorkTabRegistry();
+}
+
+function persistWorkTabRegistry(): Promise<void> {
+  const storage = extensionStorageArea();
+  if (!storage) return Promise.resolve();
+  const value: PersistedWorkTabRegistry = {
+    schemaVersion: WORK_TAB_REGISTRY_SCHEMA_VERSION,
+    tabs: [...managedTabs.values()].map((record) => ({
+      schemaVersion: WORK_TAB_REGISTRY_SCHEMA_VERSION,
+      tabId: record.tabId,
+      windowId: record.windowId,
+      state: record.state,
+      leaseId: record.leaseId,
+      expectedCanonicalUrl: record.expectedCanonicalUrl,
+      initialBlankNavigationUntil: record.initialBlankNavigationUntil,
+      lastUsedAt: Date.now()
+    }))
+  };
+  persistenceChain = persistenceChain.then(async () => {
+    await storage.set({ [WORK_TAB_REGISTRY_KEY]: value });
+  });
+  return persistenceChain;
 }
 
 /**

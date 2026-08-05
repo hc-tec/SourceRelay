@@ -72,7 +72,10 @@ extensionInstanceId  ── 扩展首次安装后在 chrome.storage.local 生成
 
 - `extensionInstanceId`：区分同一扩展 ID 在不同用户浏览器安装中的实例；不包含任何登录身份。
 - `browserBindingId`：上层服务选择哪一个已配对浏览器扩展实例时使用的稳定逻辑 ID；Gateway 只保存扩展 ID、实例 ID、协议/能力版本、配对状态和安全摘要。
-- `tabLeaseId`：一次任务对一个标签页的临时独占权；不对上层 API 公开，浏览器重启、扩展重载、标签页关闭或用户接管后立即失效。
+- `tabLeaseId`：一次任务对一个标签页的临时独占权；不对上层 API 公开，标签页关闭、用户接管或
+  Worker 中断后的 active run 立即失效。成功释放的 work tab 归属摘要只保存在扩展的
+  `chrome.storage.session` 注册表中，用于同一浏览器会话内的 Worker 挂起/重启恢复；不会恢复一个
+  中断中的平台动作，也不会跨浏览器会话猜测或接管 tab。
 
 Gateway 不保存 tab 标题、完整 URL、浏览器窗口句柄、Profile 路径或账号凭据。必要的来源身份只能以能力声明中的规范目标摘要和短期运行元数据表示。
 
@@ -96,10 +99,17 @@ Gateway 不保存 tab 标题、完整 URL、浏览器窗口句柄、Profile 路�
 对于“按需搜索”“收集某作者全部投稿”“批量读取一组已批准详情”等不应打断用户当前阅读的任务，扩展在用户的**同一日常浏览器会话**中创建一个可见的 Collector 工作标签页。它使用现有登录态，但标签页本身由扩展建立因果记录并持有。
 
 - 只可导航到已登记 capability 产生的规范平台目标，不能接收任意 URL；
-- 只复用扩展明确创建并仍满足身份核验的空闲工作标签页；绝不把普通用户标签页当作可复用资源；
+- 只复用扩展明确创建、记录在 `chrome.storage.session` 且仍满足窗口/活跃态/页面身份核验的空闲
+  工作标签页；绝不枚举或把普通用户标签页当作可复用资源；
+- MVP 同时只允许一个 leased work tab。并发请求不会各自新建 tab，而是在已有租约未结束时返回
+  有界的 `extension_work_tab_busy`，由上层按 Core 的异步 Operation 终态处理；
 - run 成功后进入可见的 `idle_reusable`，不“测完瞬间关浏览器/关标签”；
 - 用户关闭、移动、导航或接管工作标签页时视为外部状态变化，停止该 run，不自动重开；
-- 仅在用户从扩展控制页显式清理工作标签页、或用户明确要求关闭时关闭；
+- MV3 Worker 挂起/重启时只恢复精确记录的 idle tab；active lease 不恢复平台动作。Worker 在导航
+  前中断时，仍可证明归属且未激活的 `about:blank` work tab 可以安全关闭；已经导航的页面保留给
+  用户复核并从池中移除；
+- 仅在用户从扩展控制页显式清理、用户明确要求关闭，或上述“未导航空白 tab”安全回收条件满足时
+  关闭；
 - 多标签并行只在扩展的工作标签池内发生，并仍受每平台/每账号动作预算和全局输入许可限制。
 
 这使上层应用可以在不触碰用户正在使用的标签页的前提下发起自动任务，也避免旧 Browser Host 那种“刚打开就关掉、反复新开标签”的异常体验。
@@ -187,7 +197,8 @@ POST /v1/collect {
 规则如下：
 
 - `browserBindingId` 只能引用已配对、在线、授权了目标平台、且未被账号安全锁定的扩展实例；
-- `collector_work_tab` 只复用扩展自己创建、当前 worker session 仍可证明所有权的 tab；
+- `collector_work_tab` 只复用扩展自己创建、由当前浏览器会话的 session 注册表精确恢复且仍可证明
+  所有权的 tab；active Worker lease 中断后必须停止，不得重放原平台动作；
 - 当前 `user_selected_tab` 只对 `bilibili.account_inventory` 的公开投稿**第 1 页**开放。它只能消费用户刚刚从扩展 UI 显式建立的 120 秒、单次 tab/document lease；缺失、关闭、重载、目标不匹配或第 2 页都会明确停止，不能回退到任意浏览器 tab，也不能自动翻页；
 - `input` 依旧只能是 capability 注册的强类型输入。例如 B站详情可以接受规范 BV URL；两种 direct 搜索都只接受 `query`，单页能力固定第 1 页、batch 能力固定第 1/2 页，不能把 URL、页码、排序、selector、脚本或鼠标坐标的权力下放给调用方；
 - `browserBindingId` 是服务选择目标扩展的标识，不是账号标识；若用户在浏览器中切换登录账号，平台策略必须在动作前用允许的公开可见身份证据重新核验，无法核验则阻断；
@@ -209,7 +220,7 @@ profileId + browserSessionId
 extensionId + extensionInstanceId + browserBindingId
 ```
 
-Native Messaging 若保留，只能作为本地唤醒/传输实现细节，不能再安装临时 native host 来控制 Browser Host、不能携带 Profile 路径、不能成为 Playwright 代理。优先路径是扩展的受认证 loopback 控制面；MV3 worker 被浏览器回收时，任务应通过安全的短轮询/显式用户触发恢复，不应借此重放平台动作。
+Native Messaging 若保留，只能作为本地唤醒/传输实现细节，不能再安装临时 native host 来控制 Browser Host、不能携带 Profile 路径、不能成为 Playwright 代理。优先路径是扩展的受认证 loopback 控制面；MV3 Worker 被浏览器回收时，任务通过安全的短轮询发现中断状态，恢复的只能是精确 idle tab 归属或安全关闭未导航空白 tab，绝不重放平台动作。
 
 ## 9. 故障与安全语义
 
