@@ -46,8 +46,8 @@ Manifest 当前版本为 `0.7.17`。它不申请 `cookies`、`debugger`、`downl
 loopback host permission 是首次配对时由浏览器显示、用户批准的 optional permission。扩展还会验证精确 loopback origin、Gateway P-256 身份指纹、签名、短时 nonce 与 HMAC 请求认证；网页没有 `externally_connectable` 通道可以绕过控制面。
 
 配对记录只保存在扩展自身受限 storage。首次申请 loopback optional permission 时，Chrome 可能关闭
-action popup；提交中的 Gateway 地址、身份指纹、配对会话 ID 和配对码只暂存在
-`chrome.storage.session`，重新打开控制页会恢复，成功配对后立即清除。Gateway 侧只保留去敏的
+action popup；输入中的 Gateway 地址、身份指纹、配对会话 ID 和配对码会自动保存到扩展自己的
+`chrome.storage.local`，草稿 30 分钟后自动过期，重新打开控制页会恢复，成功配对后立即清除。Gateway 侧只保留去敏的
 `browserBindingId + extensionId + extensionInstanceId` 与安全状态；没有浏览器路径、账号凭据、Cookie
 或 tab ID。
 

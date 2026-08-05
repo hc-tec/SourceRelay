@@ -77,10 +77,30 @@ test('a real installed MV3 extension pairs with the direct Gateway without creat
     await controlPage.locator('input[name="pairingSessionId"]').fill(pairingSessionId!);
     await controlPage.locator('input[name="pairingCode"]').fill(pairingCode!);
 
-    const approval = approveExactExtensionPermission(extensionSourceDirectory, '127.0.0.1', '127.0.0.1', 20);
-    await controlPage.locator('#pair-gateway button[type="submit"]').click();
+    // The user may close the control surface before submitting. Input events
+    // must already have persisted a complete short-lived draft.
     await expect.poll(async () => await launched!.worker.evaluate(async () => (
-      await chrome.storage.session.get('collector.user-browser.gateway-pairing-draft.v1')
+      await chrome.storage.local.get('collector.user-browser.gateway-pairing-draft.v1')
+    )['collector.user-browser.gateway-pairing-draft.v1'])).toMatchObject({
+      schemaVersion: 1,
+      loopbackOrigin: gatewayOrigin,
+      identityFingerprint,
+      pairingSessionId,
+      pairingCode
+    });
+    await controlPage.close();
+    const restoredBeforeSubmit = await launched.context.newPage();
+    await restoredBeforeSubmit.goto(`chrome-extension://${extensionId}/control.html`);
+    await expect(restoredBeforeSubmit.locator('html[data-collector-control-ready="true"]')).toHaveCount(1);
+    await expect(restoredBeforeSubmit.locator('input[name="loopbackOrigin"]')).toHaveValue(gatewayOrigin);
+    await expect(restoredBeforeSubmit.locator('input[name="identityFingerprint"]')).toHaveValue(identityFingerprint!);
+    await expect(restoredBeforeSubmit.locator('input[name="pairingSessionId"]')).toHaveValue(pairingSessionId!);
+    await expect(restoredBeforeSubmit.locator('input[name="pairingCode"]')).toHaveValue(pairingCode!);
+
+    const approval = approveExactExtensionPermission(extensionSourceDirectory, '127.0.0.1', '127.0.0.1', 20);
+    await restoredBeforeSubmit.locator('#pair-gateway button[type="submit"]').click();
+    await expect.poll(async () => await launched!.worker.evaluate(async () => (
+      await chrome.storage.local.get('collector.user-browser.gateway-pairing-draft.v1')
     )['collector.user-browser.gateway-pairing-draft.v1'])).toMatchObject({
       schemaVersion: 1,
       loopbackOrigin: gatewayOrigin,
@@ -91,7 +111,7 @@ test('a real installed MV3 extension pairs with the direct Gateway without creat
     // A real action popup is destroyed by Chrome while the native permission
     // prompt is visible. Close this extension page at the same lifecycle point
     // and prove the next control surface restores the submitted draft.
-    await controlPage.close();
+    await restoredBeforeSubmit.close();
     await approval;
     const reopenedControlPage = await launched.context.newPage();
     await reopenedControlPage.goto(`chrome-extension://${extensionId}/control.html`);
@@ -109,7 +129,7 @@ test('a real installed MV3 extension pairs with the direct Gateway without creat
     await expect(reopenedControlPage.locator('#select-current-bilibili-account-inventory')).toHaveCount(0);
     await expect(reopenedControlPage.locator('#user-selected-inventory-tab-state')).toHaveCount(0);
     await expect.poll(async () => await launched!.worker.evaluate(async () => (
-      await chrome.storage.session.get('collector.user-browser.gateway-pairing-draft.v1')
+      await chrome.storage.local.get('collector.user-browser.gateway-pairing-draft.v1')
     )['collector.user-browser.gateway-pairing-draft.v1'])).toBeUndefined();
 
     const permissions = await launched.worker.evaluate(async () => await chrome.permissions.getAll());

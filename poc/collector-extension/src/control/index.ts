@@ -11,6 +11,7 @@ import {
 } from '../background/user-browser-gateway';
 import {
   loadGatewayPairingDraft,
+  saveGatewayPairingDraft,
   type GatewayPairingDraft
 } from '../background/user-browser-gateway-storage';
 import {
@@ -19,6 +20,7 @@ import {
 } from '../background/xiaohongshu-current-page-network';
 import {
   USER_BROWSER_DIRECT_WORK_CAPABILITIES,
+  type PairUserBrowserGatewayInput,
   type UserBrowserDirectWorkCapability,
   type UserBrowserGatewayCapabilityDescriptor
 } from '../background/user-browser-gateway-types';
@@ -40,6 +42,11 @@ const xiaohongshuCurrentPageNetworkState = element<HTMLDivElement>('xiaohongshu-
 const armNextXiaohongshuCurrentPageNetwork = element<HTMLButtonElement>(
   'arm-next-xiaohongshu-current-page-network'
 );
+
+// Input events are persisted one at a time. This keeps the last complete form
+// snapshot ordered even when Chrome is busy with another storage operation.
+let pairingDraftWriteQueue: Promise<void> = Promise.resolve();
+let pairingFormTouched = false;
 
 async function render(): Promise<void> {
   const [connection, runtime, draft] = await Promise.all([
@@ -64,7 +71,7 @@ function restorePairingDraft(
   connection: UserBrowserGatewayConnection,
   draft: GatewayPairingDraft | null
 ): void {
-  if (!draft || connection.state !== 'unpaired') return;
+  if (!draft || connection.state !== 'unpaired' || pairingFormTouched) return;
   setInputValue('loopbackOrigin', draft.loopbackOrigin);
   setInputValue('identityFingerprint', draft.identityFingerprint);
   setInputValue('pairingSessionId', draft.pairingSessionId);
@@ -74,6 +81,27 @@ function restorePairingDraft(
 function setInputValue(name: string, value: string): void {
   const input = pairingForm.elements.namedItem(name);
   if (input instanceof HTMLInputElement) input.value = value;
+}
+
+function readPairingInputFromForm(): PairUserBrowserGatewayInput {
+  const form = new FormData(pairingForm);
+  return {
+    loopbackOrigin: String(form.get('loopbackOrigin') ?? '').trim(),
+    identityFingerprint: String(form.get('identityFingerprint') ?? '').trim().toLowerCase(),
+    pairingSessionId: String(form.get('pairingSessionId') ?? '').trim(),
+    pairingCode: String(form.get('pairingCode') ?? '').trim()
+  };
+}
+
+function queuePairingDraftSave(): Promise<void> {
+  const input = readPairingInputFromForm();
+  pairingDraftWriteQueue = pairingDraftWriteQueue
+    .catch(() => undefined)
+    .then(() => saveGatewayPairingDraft(input))
+    // Draft persistence should never block the pairing attempt or expose a
+    // storage error (which could contain implementation details) in the UI.
+    .catch(() => undefined);
+  return pairingDraftWriteQueue;
 }
 
 async function renderXiaohongshuCurrentPageNetwork(): Promise<void> {
@@ -230,20 +258,21 @@ function safeErrorCode(error: unknown): string {
   return /^[a-z0-9_.-]{1,120}$/i.test(code) ? code : 'gateway_capability_catalog_unavailable';
 }
 
+pairingForm.addEventListener('input', () => {
+  pairingFormTouched = true;
+  void queuePairingDraftSave();
+});
+
 pairingForm.addEventListener('submit', (event) => {
   event.preventDefault();
-  const form = new FormData(pairingForm);
+  const pairing = readPairingInputFromForm();
   const submit = pairingForm.querySelector<HTMLButtonElement>('button[type="submit"]');
   if (!submit) return;
   submit.disabled = true;
   controlError.hidden = true;
-  void pairUserBrowserGateway({
-    loopbackOrigin: String(form.get('loopbackOrigin') ?? '').trim(),
-    identityFingerprint: String(form.get('identityFingerprint') ?? '').trim().toLowerCase(),
-    pairingSessionId: String(form.get('pairingSessionId') ?? '').trim(),
-    pairingCode: String(form.get('pairingCode') ?? '').trim()
-  }).then(async () => {
+  void pairingDraftWriteQueue.then(() => pairUserBrowserGateway(pairing)).then(async () => {
     pairingForm.reset();
+    pairingFormTouched = false;
     const origin = pairingForm.elements.namedItem('loopbackOrigin');
     if (origin instanceof HTMLInputElement) origin.value = 'http://127.0.0.1:43127';
     // Pairing changes the availability of user-selected passive observation.

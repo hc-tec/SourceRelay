@@ -37,7 +37,7 @@
           <label>八位配对码
             <input name="pairingCode" required inputmode="numeric" pattern="[0-9]{8}" maxlength="8" autocomplete="one-time-code">
           </label>
-          <p class="pairing-hint">首次配对时 Chrome 可能弹出“允许访问网站数据”确认并关闭此弹窗；已提交的配置只暂存于本次浏览器会话，重新打开会自动恢复。</p>
+          <p class="pairing-hint">输入时会自动保存一份仅限扩展本地、30 分钟后过期的配对草稿。首次配对时 Chrome 可能弹出“允许访问网站数据”确认并关闭此弹窗；重新打开会自动恢复。</p>
           <div class="pairing-row">
             <button type="submit">授权并配对此浏览器</button>
             <button id="forget-gateway" type="button" class="secondary" hidden>忘记本地配对</button>

@@ -8,9 +8,11 @@ import { UUID, type PairUserBrowserGatewayInput } from './user-browser-gateway-t
 const EXTENSION_INSTANCE_KEY = 'collector.user-browser.extension-instance.v1';
 const GATEWAY_PAIRING_KEY = 'collector.user-browser.gateway-pairing.v1';
 const GATEWAY_PAIRING_DRAFT_KEY = 'collector.user-browser.gateway-pairing-draft.v1';
+const GATEWAY_PAIRING_DRAFT_TTL_MS = 30 * 60 * 1000;
 
 export interface GatewayPairingDraft extends PairUserBrowserGatewayInput {
   schemaVersion: 1;
+  expiresAt: string;
 }
 
 export async function loadExtensionInstanceId(): Promise<string> {
@@ -40,29 +42,36 @@ export async function clearGatewayPairingRecord(): Promise<void> {
 
 /**
  * A popup is destroyed when Chrome opens the native optional-permission
- * confirmation. Keep only the in-progress form in session storage so the
- * next popup can restore it without turning pairing credentials into durable
- * extension state.
+ * confirmation. Keep the in-progress form in local extension storage so it
+ * survives popup destruction and a short MV3 worker restart, but expire it
+ * automatically instead of treating pairing material as durable state.
  */
 export async function loadGatewayPairingDraft(): Promise<GatewayPairingDraft | null> {
-  const stored = await chrome.storage.session.get(GATEWAY_PAIRING_DRAFT_KEY);
-  return gatewayPairingDraft(stored[GATEWAY_PAIRING_DRAFT_KEY]);
+  const stored = await chrome.storage.local.get(GATEWAY_PAIRING_DRAFT_KEY);
+  const draft = gatewayPairingDraft(stored[GATEWAY_PAIRING_DRAFT_KEY]);
+  if (!draft) return null;
+  if (Date.parse(draft.expiresAt) <= Date.now()) {
+    await clearGatewayPairingDraft();
+    return null;
+  }
+  return draft;
 }
 
 export async function saveGatewayPairingDraft(input: PairUserBrowserGatewayInput): Promise<void> {
-  await chrome.storage.session.set({
+  await chrome.storage.local.set({
     [GATEWAY_PAIRING_DRAFT_KEY]: {
       schemaVersion: 1,
       loopbackOrigin: input.loopbackOrigin,
       identityFingerprint: input.identityFingerprint,
       pairingSessionId: input.pairingSessionId,
-      pairingCode: input.pairingCode
+      pairingCode: input.pairingCode,
+      expiresAt: new Date(Date.now() + GATEWAY_PAIRING_DRAFT_TTL_MS).toISOString()
     } satisfies GatewayPairingDraft
   });
 }
 
 export async function clearGatewayPairingDraft(): Promise<void> {
-  await chrome.storage.session.remove(GATEWAY_PAIRING_DRAFT_KEY);
+  await chrome.storage.local.remove(GATEWAY_PAIRING_DRAFT_KEY);
 }
 
 export function gatewayPairingSummary(record: GatewayPairingRecord): GatewayPairingSummary {
@@ -108,13 +117,15 @@ function gatewayPairingDraft(value: unknown): GatewayPairingDraft | null {
     typeof candidate.loopbackOrigin !== 'string' || candidate.loopbackOrigin.length > 100 ||
     typeof candidate.identityFingerprint !== 'string' || candidate.identityFingerprint.length > 100 ||
     typeof candidate.pairingSessionId !== 'string' || candidate.pairingSessionId.length > 100 ||
-    typeof candidate.pairingCode !== 'string' || candidate.pairingCode.length > 20
+    typeof candidate.pairingCode !== 'string' || candidate.pairingCode.length > 20 ||
+    typeof candidate.expiresAt !== 'string' || !Number.isFinite(Date.parse(candidate.expiresAt))
   ) return null;
   return {
     schemaVersion: 1,
     loopbackOrigin: candidate.loopbackOrigin,
     identityFingerprint: candidate.identityFingerprint,
     pairingSessionId: candidate.pairingSessionId,
-    pairingCode: candidate.pairingCode
+    pairingCode: candidate.pairingCode,
+    expiresAt: candidate.expiresAt
   };
 }
