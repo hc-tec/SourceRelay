@@ -8,7 +8,6 @@ import { UUID, type PairUserBrowserGatewayInput } from './user-browser-gateway-t
 const EXTENSION_INSTANCE_KEY = 'collector.user-browser.extension-instance.v1';
 const GATEWAY_PAIRING_KEY = 'collector.user-browser.gateway-pairing.v1';
 const GATEWAY_PAIRING_DRAFT_KEY = 'collector.user-browser.gateway-pairing-draft.v1';
-const GATEWAY_PAIRING_DRAFT_MIRROR_KEY = `${GATEWAY_PAIRING_DRAFT_KEY}.mirror`;
 const GATEWAY_PAIRING_DRAFT_TTL_MS = 30 * 60 * 1000;
 
 export interface GatewayPairingDraft extends PairUserBrowserGatewayInput {
@@ -48,21 +47,12 @@ export async function clearGatewayPairingRecord(): Promise<void> {
  * automatically instead of treating pairing material as durable state.
  */
 export async function loadGatewayPairingDraft(): Promise<GatewayPairingDraft | null> {
-  const mirrored = gatewayPairingDraft(readGatewayPairingDraftMirror());
   const stored = await chrome.storage.local.get(GATEWAY_PAIRING_DRAFT_KEY);
-  const persisted = gatewayPairingDraft(stored[GATEWAY_PAIRING_DRAFT_KEY]);
-  const draft = newerGatewayPairingDraft(mirrored, persisted);
+  const draft = gatewayPairingDraft(stored[GATEWAY_PAIRING_DRAFT_KEY]);
   if (!draft) return null;
   if (Date.parse(draft.expiresAt) <= Date.now()) {
     await clearGatewayPairingDraft();
     return null;
-  }
-  // Keep the two extension-private stores convergent. The synchronous mirror
-  // protects the final input event; storage.local remains the durable source
-  // for the rest of the extension lifecycle.
-  writeGatewayPairingDraftMirror(draft);
-  if (!persisted || Date.parse(persisted.expiresAt) !== Date.parse(draft.expiresAt)) {
-    await chrome.storage.local.set({ [GATEWAY_PAIRING_DRAFT_KEY]: draft });
   }
   return draft;
 }
@@ -76,14 +66,10 @@ export async function saveGatewayPairingDraft(input: PairUserBrowserGatewayInput
     pairingCode: input.pairingCode,
     expiresAt: new Date(Date.now() + GATEWAY_PAIRING_DRAFT_TTL_MS).toISOString()
   } satisfies GatewayPairingDraft;
-  // localStorage is synchronous in the control document. Write it before the
-  // async storage call so closing the popup cannot lose the final snapshot.
-  writeGatewayPairingDraftMirror(draft);
   await chrome.storage.local.set({ [GATEWAY_PAIRING_DRAFT_KEY]: draft });
 }
 
 export async function clearGatewayPairingDraft(): Promise<void> {
-  removeGatewayPairingDraftMirror();
   await chrome.storage.local.remove(GATEWAY_PAIRING_DRAFT_KEY);
 }
 
@@ -141,55 +127,4 @@ function gatewayPairingDraft(value: unknown): GatewayPairingDraft | null {
     pairingCode: candidate.pairingCode,
     expiresAt: candidate.expiresAt
   };
-}
-
-function newerGatewayPairingDraft(
-  left: GatewayPairingDraft | null,
-  right: GatewayPairingDraft | null
-): GatewayPairingDraft | null {
-  if (!left) return right;
-  if (!right) return left;
-  return Date.parse(left.expiresAt) >= Date.parse(right.expiresAt) ? left : right;
-}
-
-function readGatewayPairingDraftMirror(): unknown {
-  const storage = extensionLocalStorage();
-  if (!storage) return undefined;
-  const raw = storage.getItem(GATEWAY_PAIRING_DRAFT_MIRROR_KEY);
-  if (!raw) return undefined;
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    storage.removeItem(GATEWAY_PAIRING_DRAFT_MIRROR_KEY);
-    return undefined;
-  }
-}
-
-function writeGatewayPairingDraftMirror(draft: GatewayPairingDraft): void {
-  const storage = extensionLocalStorage();
-  if (!storage) return;
-  try {
-    storage.setItem(GATEWAY_PAIRING_DRAFT_MIRROR_KEY, JSON.stringify(draft));
-  } catch {
-    // chrome.storage.local remains the normal persistence path when the
-    // document's synchronous storage is unavailable or quota-limited.
-  }
-}
-
-function removeGatewayPairingDraftMirror(): void {
-  const storage = extensionLocalStorage();
-  if (!storage) return;
-  try {
-    storage.removeItem(GATEWAY_PAIRING_DRAFT_MIRROR_KEY);
-  } catch {
-    // Best effort; the storage.local record is still cleared below.
-  }
-}
-
-function extensionLocalStorage(): Storage | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage;
-  } catch {
-    return null;
-  }
 }

@@ -95,9 +95,8 @@ function readPairingInputFromForm(): PairUserBrowserGatewayInput {
 
 function queuePairingDraftSave(): Promise<void> {
   const input = readPairingInputFromForm();
-  // Start this write immediately. saveGatewayPairingDraft also updates a
-  // synchronous extension-local mirror, so a popup closed on this event still
-  // has the final complete snapshot available on the next open.
+  // Start this write immediately. The queue only tracks all in-flight writes
+  // so submit can wait for them; it must not delay the final input event.
   const write = saveGatewayPairingDraft(input);
   pairingDraftWriteQueue = pairingDraftWriteQueue
     .then(() => write)
