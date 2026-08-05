@@ -34,9 +34,11 @@ test('the real Chrome action popup persists pairing input after popup destructio
     }
 
     // This is the real MV3 action target, not a copied control-page fixture.
-    // Closing its target models the same document destruction caused by focus
-    // leaving the Chrome action bubble.
-    await browserCdp.send('Target.closeTarget', { targetId: firstPopup.targetId });
+    // Detach the observer, focus the ordinary browser page, and click outside
+    // the action bubble exactly as a user does. Chrome then destroys the popup.
+    await browserCdp.send('Target.detachFromTarget', { sessionId: firstPopup.sessionId });
+    await hostPage.bringToFront();
+    await hostPage.mouse.click(20, 20);
     await expect.poll(async () => await popupTarget(browserCdp)).toBeNull();
     await expect.poll(async () => await launched.worker.evaluate(async () => (
       await chrome.storage.local.get('collector.user-browser.gateway-pairing-draft.v1')
@@ -56,7 +58,9 @@ test('the real Chrome action popup persists pairing input after popup destructio
         `document.querySelector('input[name="${name}"]').value`
       )).toBe(value);
     }
-    await browserCdp.send('Target.closeTarget', { targetId: reopenedPopup.targetId });
+    await browserCdp.send('Target.detachFromTarget', { sessionId: reopenedPopup.sessionId });
+    await hostPage.bringToFront();
+    await hostPage.mouse.click(20, 20);
   } finally {
     await launched.close();
   }

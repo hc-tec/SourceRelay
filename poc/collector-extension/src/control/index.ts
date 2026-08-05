@@ -47,6 +47,7 @@ const armNextXiaohongshuCurrentPageNetwork = element<HTMLButtonElement>(
 // snapshot ordered even when Chrome is busy with another storage operation.
 let pairingDraftWriteQueue: Promise<void> = Promise.resolve();
 let pairingFormTouched = false;
+let pairingCompleted = false;
 
 async function render(): Promise<void> {
   const [connection, runtime, draft] = await Promise.all([
@@ -71,7 +72,10 @@ function restorePairingDraft(
   connection: UserBrowserGatewayConnection,
   draft: GatewayPairingDraft | null
 ): void {
-  if (!draft || connection.state !== 'unpaired' || pairingFormTouched) return;
+  // An old pairing record may leave the Gateway temporarily offline. The
+  // draft is still the only way to recover an interrupted re-pair attempt;
+  // only an already-online pairing should suppress it.
+  if (!draft || connection.state === 'online' || pairingFormTouched) return;
   setInputValue('loopbackOrigin', draft.loopbackOrigin);
   setInputValue('identityFingerprint', draft.identityFingerprint);
   setInputValue('pairingSessionId', draft.pairingSessionId);
@@ -260,10 +264,26 @@ function safeErrorCode(error: unknown): string {
   return /^[a-z0-9_.-]{1,120}$/i.test(code) ? code : 'gateway_capability_catalog_unavailable';
 }
 
-pairingForm.addEventListener('input', () => {
+function handlePairingFormMutation(): void {
   pairingFormTouched = true;
   void queuePairingDraftSave();
+}
+
+pairingForm.addEventListener('input', handlePairingFormMutation);
+pairingForm.addEventListener('change', handlePairingFormMutation);
+pairingForm.addEventListener('blur', handlePairingFormMutation, true);
+
+// Chrome can destroy an action popup before the final input promise settles.
+// These lifecycle hooks send one last snapshot through the worker. They are
+// disabled after a successful pairing so cleanup cannot be undone by pagehide.
+function persistPairingDraftBeforePopupTeardown(): void {
+  if (!pairingCompleted) void queuePairingDraftSave();
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') persistPairingDraftBeforePopupTeardown();
 });
+window.addEventListener('pagehide', persistPairingDraftBeforePopupTeardown);
 
 pairingForm.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -273,6 +293,7 @@ pairingForm.addEventListener('submit', (event) => {
   submit.disabled = true;
   controlError.hidden = true;
   void pairingDraftWriteQueue.then(() => pairUserBrowserGateway(pairing)).then(async () => {
+    pairingCompleted = true;
     pairingForm.reset();
     pairingFormTouched = false;
     const origin = pairingForm.elements.namedItem('loopbackOrigin');
