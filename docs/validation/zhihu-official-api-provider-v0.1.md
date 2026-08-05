@@ -123,6 +123,15 @@ Provider 单元覆盖：
 - Operation/Artifact restart-safe；
 - route-level replay 不第二次调用 Provider。
 
+## 运行态凭证与 catalog 身份修复（2026-08-05）
+
+此前 capability catalog 的 `runtimeState`（`ready` / `credential_required`）被错误地纳入
+`capabilityCatalogDigest`，导致同一发布版本在有无 `ZHIHU_ACCESS_SECRET` 时出现两个 digest，
+从而阻断上层 MCP 的正式兼容性门禁。Core 现在通过
+`capabilities.catalog_digest_excludes_runtime_state.v1` 明确声明：运行态 readiness 仍公开给
+调用方，但不参与静态 catalog 身份。修复后的有凭证和无凭证进程使用同一稳定 digest；对应的
+AgentKit MCP L3 证据见其仓库的 `developer-readiness-zhihu-l3-matrix.md`。
+
 ## 验证中发现并修复的问题
 
 三项 capability 共用一个 `ZhihuOfficialArtifactStore`。初版全局 Artifact ID 搜索会对同一
