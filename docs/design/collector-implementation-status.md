@@ -1,5 +1,9 @@
 # Collector 实现状态
 
+> **2026-08-05 当前基线（覆盖旧快照中的能力计数）。** 当前 user-owned-browser `/v2` 服务使用 Collector Service schema v3，能力目录共 **21 项**：**18 项 `direct_ready`**，其中 **15 项通过浏览器扩展执行**（B 站 10 项、小红书 5 项），另有 **3 项 Zhihu/全网官方 API provider**；3 项仍为不可调度迁移边界。Gateway registry、extension runner、artifact reader、OpenAPI、JavaScript/Python SDK 的 18 项 direct 集合已通过一致性回归。新增 route-admission 矩阵逐项覆盖 15 个浏览器 direct capability，所有项目都能生成对应签名 work item。当前版本仍为 `0.7.17`，MV3 build fingerprint 为 `f8aa62d588b15a9cd3e5175a470f9c448e47e1c495ef5176c4734dbf76c5ab78`，control-surface revision 为 `16`。
+
+本次本地完整验证 `npm run verify:collector` 已通过：100 个测试文件 / 356 个测试、9 个真实本地 MV3/Gateway 集成与 E2E、构建和 artifact 门禁全部通过；真实低频 B 站 canary 的视频详情、站内搜索、双页搜索、动态、评论以及 JS/Python SDK 入口均通过。旧的 `python_knowledge_pack` canary 入口已移除，因为该上层应用脚本不属于核心仓库；知识包应在 AgentKit 仓库验证，不得让核心 canary 引用不存在的文件。
+
 - 分支：`feat/browser-extension-system`
 - 状态日期：2026-07-26
 - 权威决策：[collector-grilling-decision-log.md](collector-grilling-decision-log.md)

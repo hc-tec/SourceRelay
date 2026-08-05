@@ -1,5 +1,7 @@
 # Collector 上层 API 与采集能力全面验收（2026-07-30）
 
+> **2026-08-05 当前基线修正。** 本文主体记录的是 2026-07-30 的历史验收快照；当前运行时应以以下数字为准：能力目录 **21 项**，其中 **18 项 `direct_ready`**（15 项浏览器扩展 direct capability + 3 项官方 API provider），3 项不可调度迁移边界。当前服务 schema 为 `v3`，版本保持 `0.7.17`。15 项浏览器 direct capability 已由 Gateway route-admission 矩阵逐项验证，新增测试位于 `poc/collector-gateway/test/user-browser-collector-service-routes.unit.test.ts`；完整 `npm run verify:collector` 已通过。历史段落中的 18/15、旧 build fingerprint 和旧 canary 数字不应作为当前运行时计数。
+
 ## 结论
 
 当前 user-owned-browser 直连服务的能力目录共有 **18 项**：
