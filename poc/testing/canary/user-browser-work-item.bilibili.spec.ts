@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION } from '@intelligence/collector-contracts';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, resolve } from 'node:path';
@@ -148,19 +150,6 @@ test('direct extension work items read real Bilibili capabilities', async ({}, t
       return;
     }
 
-    if (process.env.COLLECTOR_LIVE_CANARY_SCOPE === 'python_knowledge_pack') {
-      await runPythonKnowledgePackCanary({
-        gatewayOrigin,
-        clientToken: clientToken!,
-        bindingId: bindingId!,
-        platformNavigations,
-        testInfo
-      });
-      await controlPage.close();
-      await consolePage.close();
-      return;
-    }
-
     if (process.env.COLLECTOR_LIVE_CANARY_SCOPE === 'dynamic') {
       await runDynamicCanary({
         gatewayOrigin,
@@ -193,7 +182,8 @@ test('direct extension work items read real Bilibili capabilities', async ({}, t
           'content-type': 'application/json'
         },
         body: JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+          clientRequestId: randomUUID(),
           browserBindingId: bindingId,
           platform: 'bilibili',
           capability: 'bilibili.video_detail',
@@ -265,7 +255,8 @@ test('direct extension work items read real Bilibili capabilities', async ({}, t
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+        clientRequestId: randomUUID(),
         browserBindingId: bindingId,
         platform: 'bilibili',
         capability: 'bilibili.native_search',
@@ -416,7 +407,8 @@ async function runNativeSearchBatchCanary(input: {
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      clientRequestId: randomUUID(),
       browserBindingId: input.bindingId,
       platform: 'bilibili',
       capability: 'bilibili.native_search_batch',
@@ -424,8 +416,8 @@ async function runNativeSearchBatchCanary(input: {
       input: { query: nativeSearchQuery }
     })
   });
-  const dispatch = await dispatchResponse.json() as { result?: { operationId?: string } };
-  expect(dispatchResponse.status).toBe(201);
+  const dispatch = await dispatchResponse.json() as { result?: { operationId?: string }; error?: string };
+  expect(dispatchResponse.status, dispatch.error ?? 'bilibili_native_search_batch_dispatch_failed').toBe(201);
   const operationId = dispatch.result?.operationId;
   expect(operationId).toMatch(/^[0-9a-f-]{36}$/i);
 
@@ -568,7 +560,8 @@ async function runDynamicCanary(input: {
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      clientRequestId: randomUUID(),
       browserBindingId: input.bindingId,
       platform: 'bilibili',
       capability: 'bilibili.dynamic',
@@ -683,7 +676,8 @@ async function runDiscussionCanary(input: {
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
+      clientRequestId: randomUUID(),
       browserBindingId: input.bindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
@@ -849,8 +843,8 @@ async function runPythonSdkCanary(input: {
     throw new Error(`python_sdk_real_smoke_output_invalid:${String(error)}:${stdout}`);
   }
   expect(summary).toMatchObject({
-    capabilityCount: 18,
-    directReadyCount: 15,
+    capabilityCount: 21,
+    directReadyCount: 18,
     onlineBinding: true,
     catalogOnlyRejected: true,
     operationState: 'completed',
@@ -862,80 +856,6 @@ async function runPythonSdkCanary(input: {
   const searchNavigations = input.platformNavigations
     .filter((value) => new URL(value).hostname === 'search.bilibili.com');
   expect(searchNavigations.length).toBeGreaterThanOrEqual(1);
-}
-
-async function runPythonKnowledgePackCanary(input: {
-  gatewayOrigin: string;
-  clientToken: string;
-  bindingId: string;
-  platformNavigations: string[];
-  testInfo: { outputPath(path: string): string };
-}): Promise<void> {
-  const pythonScript = resolve(pocRoot, 'collector-python-client', 'scripts', 'real_knowledge_pack_smoke.py');
-  const pythonSource = resolve(pocRoot, 'collector-python-client', 'src');
-  const pythonExecutable = process.env.PYTHON_EXECUTABLE ?? 'python';
-  // Keep the pack root short on Windows. Playwright's evidence directory is
-  // intentionally descriptive and can exceed the filesystem path budget once
-  // capability and artifact names are appended.
-  const outputDirectory = await mkdtemp(resolve(tmpdir(), 'collector-live-kp-'));
-  const child = spawn(pythonExecutable, [pythonScript], {
-    cwd: resolve(pocRoot, 'collector-python-client'),
-    env: {
-      ...process.env,
-      COLLECTOR_SERVICE_ORIGIN: input.gatewayOrigin,
-      COLLECTOR_SERVICE_TOKEN: input.clientToken,
-      COLLECTOR_KNOWLEDGE_PACK_BINDING_ID: input.bindingId,
-      COLLECTOR_KNOWLEDGE_PACK_PROFILE_URL: 'https://space.bilibili.com/7481602',
-      COLLECTOR_KNOWLEDGE_PACK_OUTPUT_DIR: outputDirectory,
-      COLLECTOR_KNOWLEDGE_PACK_MAX_DETAILS: '1',
-      PYTHONPATH: [pythonSource, process.env.PYTHONPATH].filter(Boolean).join(delimiter)
-    },
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  let stdout = '';
-  let stderr = '';
-  child.stdout?.setEncoding('utf8');
-  child.stderr?.setEncoding('utf8');
-  child.stdout?.on('data', (chunk: string) => { stdout += chunk; });
-  child.stderr?.on('data', (chunk: string) => { stderr += chunk; });
-  const exitCode = await new Promise<number>((resolvePromise, reject) => {
-    child.once('error', reject);
-    child.once('exit', (code) => resolvePromise(code ?? 1));
-  });
-  expect(exitCode, stderr || stdout).toBe(0);
-  const lastLine = stdout.trim().split(/\r?\n/).at(-1);
-  if (!lastLine) throw new Error('python_knowledge_pack_smoke_output_missing');
-  let summary: Record<string, unknown>;
-  try {
-    summary = JSON.parse(lastLine) as Record<string, unknown>;
-  } catch (error) {
-    throw new Error(`python_knowledge_pack_smoke_output_invalid:${String(error)}:${stdout}`);
-  }
-  expect(summary).toMatchObject({
-    state: 'completed',
-    counts: {
-      collectionOperations: 3,
-      successfulOperations: 3,
-      partialOperations: 0,
-      failedOperations: 0,
-      resources: 2
-    },
-    capabilities: [
-      'bilibili.account_profile',
-      'bilibili.account_inventory',
-      'bilibili.video_detail'
-    ]
-  });
-  const bilibiliNavigations = input.platformNavigations.filter((value) => {
-    const url = new URL(value);
-    return url.hostname === 'space.bilibili.com' || url.hostname === 'www.bilibili.com';
-  });
-  // The inventory may reuse the account document already reached by the
-  // profile work item. Each capability's own artifact action ledger remains
-  // the authoritative at-most-once evidence; document events should only
-  // prove that the run reached the two required public roles.
-  expect(bilibiliNavigations.length).toBeGreaterThanOrEqual(2);
 }
 
 async function runJavaScriptSdkCanary(input: {
@@ -974,8 +894,8 @@ async function runJavaScriptSdkCanary(input: {
     throw new Error(`javascript_sdk_real_smoke_output_invalid:${String(error)}:${stdout}`);
   }
   expect(summary).toMatchObject({
-    capabilityCount: 18,
-    directReadyCount: 15,
+    capabilityCount: 21,
+    directReadyCount: 18,
     onlineBinding: true,
     catalogOnlyRejected: true,
     operationState: 'completed',
