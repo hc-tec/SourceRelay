@@ -81,7 +81,8 @@ Extension 能力矩阵只包含 15 项浏览器能力；Gateway/OpenAPI/JS/Pytho
 - 不进入 JS/Python builder；
 - 不进入 Extension work item；
 - 不写 `.env`、普通配置、Git、Artifact、审计或 operational log；
-- capability catalog 只公开 `runtimeState: ready | credential_required`；
+- capability catalog 只公开 `runtimeState: ready | credential_required`；该运行时字段不参与
+  `capabilityCatalogDigest`，因此凭证配置变化不会改变静态兼容身份；
 - OpenAPI 明确声明 caller-supplied platform credential 被排除。
 
 缺少凭证时能力仍可发现，但 `runtimeState=credential_required`；提交返回稳定错误，不回退到

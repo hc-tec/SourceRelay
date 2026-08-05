@@ -233,7 +233,8 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                   'artifacts.metadata.v1',
                   'capabilities.direct_contracts.v1',
                   'collect.client_request_id.v1',
-                  'operations.exact_core_state.v1'
+                  'operations.exact_core_state.v1',
+                  'capabilities.catalog_digest_excludes_runtime_state.v1'
                 ]
               }
             }

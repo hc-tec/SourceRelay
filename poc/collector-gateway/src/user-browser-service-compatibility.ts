@@ -14,7 +14,8 @@ export const USER_BROWSER_SERVICE_FEATURES = [
   'artifacts.metadata.v1',
   'capabilities.direct_contracts.v1',
   'collect.client_request_id.v1',
-  'operations.exact_core_state.v1'
+  'operations.exact_core_state.v1',
+  'capabilities.catalog_digest_excludes_runtime_state.v1'
 ] as const;
 
 export interface UserBrowserDirectCapabilityContract {
@@ -66,10 +67,31 @@ export function userBrowserCapabilityCatalogContract(
   const capabilities = listUserBrowserCapabilities();
   return {
     schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
-    catalogDigest: digest({ capabilities, directContracts }),
+    catalogDigest: digest({
+      capabilities: stableCapabilityCatalogProjection(capabilities),
+      directContracts
+    }),
     capabilities,
     directContracts
   };
+}
+
+/**
+ * Catalog identity describes the executable contract, not transient provider readiness.
+ * Official providers expose `runtimeState` so callers can distinguish a configured Gateway
+ * from a credential-less one; that operational field must not change the release/catalog digest.
+ */
+export function stableCapabilityCatalogProjection(
+  capabilities: ReturnType<typeof listUserBrowserCapabilities>
+): Array<Record<string, unknown>> {
+  return capabilities.map((capability) => {
+    const value = capability as unknown as Record<string, unknown>;
+    if (Object.hasOwn(value, 'runtimeState')) {
+      const { runtimeState: _runtimeState, ...stable } = value;
+      return stable;
+    }
+    return { ...value };
+  });
 }
 
 export function userBrowserServiceCompatibility(loopbackOrigin: string): UserBrowserServiceCompatibility {

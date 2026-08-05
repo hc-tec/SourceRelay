@@ -4,6 +4,7 @@ import { USER_BROWSER_CAPABILITY_REGISTRY } from '../src/user-browser-capability
 import { userBrowserCollectorServiceOpenApiDocument } from '../src/user-browser-collector-service-openapi.js';
 import {
   USER_BROWSER_SERVICE_FEATURES,
+  stableCapabilityCatalogProjection,
   userBrowserCapabilityCatalogContract,
   userBrowserServiceCompatibility
 } from '../src/user-browser-service-compatibility.js';
@@ -21,7 +22,7 @@ describe('user-browser service compatibility identity', () => {
     expect(catalog.capabilities).toHaveLength(21);
     expect(catalog.directContracts).toHaveLength(18);
     expect(catalog.catalogDigest).toBe(digest({
-      capabilities: catalog.capabilities,
+      capabilities: stableCapabilityCatalogProjection(catalog.capabilities),
       directContracts: catalog.directContracts
     }));
 
@@ -41,6 +42,22 @@ describe('user-browser service compatibility identity', () => {
     }
     expect(catalog.directContracts.filter((entry) => entry.executionProvider === 'official_api'))
       .toHaveLength(3);
+  });
+
+  test('keeps catalog identity stable when an official provider changes readiness', () => {
+    const ready = [{ capability: 'zhihu.search.public_content.v1', runtimeState: 'ready' }];
+    const credentialRequired = [{
+      capability: 'zhihu.search.public_content.v1',
+      runtimeState: 'credential_required'
+    }];
+    const directContracts = [{ capability: 'zhihu.search.public_content.v1' }];
+    expect(digest({
+      capabilities: stableCapabilityCatalogProjection(ready as never),
+      directContracts
+    })).toBe(digest({
+      capabilities: stableCapabilityCatalogProjection(credentialRequired as never),
+      directContracts
+    }));
   });
 
   test('publishes origin-independent OpenAPI/catalog digests and exact feature flags', () => {
