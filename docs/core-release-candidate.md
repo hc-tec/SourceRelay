@@ -3,6 +3,9 @@
 Collector Core 的发布候选验证必须在干净 checkout 中执行，不能依赖当前工作区的
 `node_modules`、兄弟仓库源码、用户常用浏览器 Profile 或真实平台请求。
 
+验证按当前提交的 commit ID 创建临时 checkout，而不是依赖当前分支名；因此在 GitHub Actions
+以 detached `core-v*` tag 运行时，与手动运行和普通分支运行使用完全相同的代码路径。
+
 从 `poc` 目录运行：
 
 ```powershell

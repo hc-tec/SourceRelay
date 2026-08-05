@@ -7,8 +7,10 @@ import { verifyReleaseBundle } from './release-bundle.mjs';
 
 const sourceRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = resolve(sourceRoot, '..');
-const branch = await git(['branch', '--show-current'], repositoryRoot);
-if (!branch) throw new Error('release_candidate_branch_unavailable');
+// GitHub Actions checks out a pushed tag as detached HEAD. Resolve the exact
+// commit instead of depending on a local branch name so the same gate works
+// for workflow_dispatch, branch pushes, and core-v* release tags.
+const revision = await git(['rev-parse', 'HEAD'], repositoryRoot);
 
 const checkout = await mkdtemp(join(tmpdir(), 'collector-core-release-candidate-'));
 const userHome = join(checkout, 'runtime', 'user-browser');
@@ -17,7 +19,8 @@ const port = 43127 + (process.pid % 200);
 let gateway = null;
 
 try {
-  await git(['clone', '--no-local', '--branch', branch, repositoryRoot, checkout], repositoryRoot);
+  await git(['clone', '--no-local', repositoryRoot, checkout], repositoryRoot);
+  await git(['checkout', '--detach', revision], checkout);
   const environment = {
     ...process.env,
     COLLECTOR_USER_BROWSER_HOME: userHome,
@@ -69,7 +72,7 @@ try {
   console.log(JSON.stringify({
     ok: true,
     gate: 'collector-core-release-candidate',
-    branch,
+    revision,
     releaseVersion: release.releaseVersion,
     packagedSdkArtifacts: true,
     directCapabilities: 18,
