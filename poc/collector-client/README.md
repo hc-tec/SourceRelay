@@ -37,6 +37,21 @@ if (operation.state !== 'completed' && operation.state !== 'partial') {
 console.log(artifact?.artifact);
 ```
 
+## 宿主 Gateway 契约 smoke（不触发平台动作）
+
+在已经运行的用户宿主 Gateway 上验证 SDK 与 Core 契约时，使用下面的命令：
+
+```powershell
+$env:COLLECTOR_SERVICE_ORIGIN = 'http://127.0.0.1:43127'
+$env:COLLECTOR_SERVICE_TOKEN = 'cst_...'
+npm run smoke:gateway-contract
+```
+
+该命令只读取状态、能力目录、OpenAPI、release 和在线浏览器绑定，构造一个 B 站 typed
+request，并验证不可调度迁移能力在 SDK 本地被拒绝。它不会调用 `POST /v2/collect`，
+不会导航平台页面，也不会接管或控制浏览器。真实平台闭环必须使用项目的隔离 Profile
+live canary，例如 `COLLECTOR_LIVE_CANARY_SCOPE=javascript_sdk`。
+
 ## 方法边界
 
 - `listDirectCapabilities()`：读取客户端当前允许提交的 direct capability 名称；它不能替代 Gateway 的 `dispatchState`、预算和绑定状态检查；

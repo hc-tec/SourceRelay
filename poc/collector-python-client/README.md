@@ -14,6 +14,21 @@ Set-Location D:\AIProject\inteligence\poc\collector-python-client
 python -m pip install -e ".[dev]"
 ```
 
+## 宿主 Gateway 契约 smoke（不触发平台动作）
+
+在已经运行的用户宿主 Gateway 上验证 Python SDK 与 Core 契约时，使用：
+
+```powershell
+$env:COLLECTOR_SERVICE_ORIGIN = 'http://127.0.0.1:43127'
+$env:COLLECTOR_SERVICE_TOKEN = 'cst_...'
+python scripts/gateway_contract_smoke.py
+```
+
+该命令只读取状态、能力目录、OpenAPI、release 和在线浏览器绑定，构造一个 B 站 typed
+request，并验证不可调度迁移能力在 SDK 本地被拒绝。它不会调用 `POST /v2/collect`、
+不会导航平台页面，也不会接管或控制浏览器。真实平台闭环必须使用项目的隔离 Profile
+live canary，例如 `COLLECTOR_LIVE_CANARY_SCOPE=python_sdk`。
+
 ## 最小调用
 
 SDK 是异步的，适合 FastAPI、DeepAgents、LangGraph、AgentScope 和其他 Python

@@ -9,7 +9,8 @@
     ".": "./src/index.mjs"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "smoke:gateway-contract": "node scripts/gateway_contract_smoke.mjs"
   },
   "engines": {
     "node": ">=22"
