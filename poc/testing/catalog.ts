@@ -279,6 +279,28 @@ export const collectorValidationCatalog = [
       maturity: 'research_canary_proved_not_admitted'
     },
     canaryRecord: 'docs/validation/bilibili-account-video-page-two-v0.1.md'
+  },
+  {
+    id: 'bilibili-account-series-direct-live-canary',
+    tier: 'live_canary',
+    owner: 'collector-bilibili-strategy',
+    runner: 'production_canary',
+    command: null,
+    timeoutMs: null,
+    platformPolicy: 'managed_profile_low_frequency',
+    ci: 'never',
+    capabilities: [
+      'bilibili-account-profile',
+      'bilibili-account-inventory',
+      'bilibili-collection-series-overview',
+      'bilibili-collection-series-detail'
+    ],
+    strategy: {
+      id: 'bilibili.user-browser.account-series.direct.v1',
+      version: '0.7.17',
+      maturity: 'research_canary_proved_not_admitted'
+    },
+    canaryRecord: 'docs/validation/bilibili-account-series-direct-canary-2026-08-05.md'
   }
 ] as const satisfies readonly ValidationCatalogEntry[];
 
