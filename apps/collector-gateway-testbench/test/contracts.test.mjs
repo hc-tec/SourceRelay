@@ -6,10 +6,26 @@ import {
   readTestbenchConfig,
   TestbenchInputError
 } from '../src/contracts.mjs';
+import { toCollectorRequest } from '../src/gateway-client.mjs';
 
 const bindingId = '11111111-1111-4111-8111-111111111111';
 const operationId = '22222222-2222-4222-8222-222222222222';
 const artifactId = '33333333-3333-4333-8333-333333333333';
+const UUID_PATTERN = /^[0-9a-f-]{36}$/i;
+
+test('normalises the Testbench intent into the released v3 SDK request at the Gateway boundary', () => {
+  const intent = parseTestbenchSubmission({
+    browserBindingId: bindingId,
+    kind: 'video_detail',
+    input: { bvid: 'BV1qZSLBYEpa' }
+  });
+  const request = toCollectorRequest(intent);
+  assert.equal(request.schemaVersion, 3);
+  assert.match(request.clientRequestId, UUID_PATTERN);
+  assert.equal(request.browserBindingId, bindingId);
+  assert.equal(request.capability, 'bilibili.video_detail');
+  assert.notEqual(request, intent);
+});
 
 test('maps a BVID-only detail test into the fixed direct-mode Gateway contract', () => {
   assert.deepEqual(parseTestbenchSubmission({
@@ -38,7 +54,7 @@ test('maps a BVID-only detail test into the fixed direct-mode Gateway contract',
   });
 });
 
-test('maps a BVID-only discussion test into the fixed user-selected-tab contract', () => {
+test('maps a BVID-only discussion test into the fixed extension work-tab contract', () => {
   assert.deepEqual(parseTestbenchSubmission({
     browserBindingId: bindingId,
     kind: 'discussion',
@@ -48,7 +64,7 @@ test('maps a BVID-only discussion test into the fixed user-selected-tab contract
     browserBindingId: bindingId,
     platform: 'bilibili',
     capability: 'bilibili.discussion',
-    executionTarget: 'user_selected_tab',
+    executionTarget: 'collector_work_tab',
     input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
   });
   assert.throws(() => parseTestbenchSubmission({

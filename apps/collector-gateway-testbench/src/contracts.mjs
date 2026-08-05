@@ -6,6 +6,8 @@ const XIAOHONGSHU_PROFILE_PATH_PATTERN = /^\/user\/profile\/[A-Za-z0-9_-]+\/?$/;
 const ARTIFACT_PATH_PATTERN = /^\/v1\/collect\/artifacts\/(bilibili\.(?:video_detail|native_search|native_search_batch|account_profile|account_inventory|dynamic|collection_series\.(?:overview|detail)|danmaku|discussion)|xiaohongshu\.(?:(?:search|account)\.public_notes|note\.public_(?:detail|comments|comment_replies))\.v1)\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
 export const TESTBENCH_SCHEMA_VERSION = 1;
+// Private Testbench intent envelope. gateway-client.mjs upgrades this to the
+// released Collector Service v3 wire request and adds clientRequestId.
 export const DIRECT_SCHEMA_VERSION = 2;
 export const DEFAULT_GATEWAY_ORIGIN = 'http://127.0.0.1:43127';
 export const DEFAULT_TESTBENCH_PORT = 43128;
@@ -265,7 +267,7 @@ export function parseTestbenchSubmission(value) {
       browserBindingId: value.browserBindingId,
       platform: 'bilibili',
       capability: 'bilibili.discussion',
-      executionTarget: 'user_selected_tab',
+      executionTarget: 'collector_work_tab',
       input: { canonicalVideoUrl: `https://www.bilibili.com/video/${bvid}` }
     };
   }

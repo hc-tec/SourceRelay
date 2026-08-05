@@ -1,7 +1,9 @@
 import {
   CollectorClient,
   CollectorClientError,
-  artifactPathFromOperation
+  artifactPathFromOperation,
+  CORE_SERVICE_SCHEMA_VERSION,
+  createClientRequestId
 } from '@intelligence/collector-client';
 
 /**
@@ -37,8 +39,24 @@ export async function readBrowserBindings(config) {
 }
 
 export async function enqueueOperation(config, request) {
-  const operation = await call(config, (client) => client.collect(request));
+  const operation = await call(config, (client) => client.collect(toCollectorRequest(request)));
   return { schemaVersion: 2, result: operation };
+}
+
+/**
+ * The Testbench owns a small UI intent envelope.  Convert it at this one
+ * boundary to the released Collector Service wire contract instead of
+ * maintaining a second versioned HTTP protocol in the app.
+ */
+export function toCollectorRequest(request) {
+  if (!request || typeof request !== 'object' || Array.isArray(request)) {
+    throw new GatewayClientError('testbench_request_invalid', 400);
+  }
+  return {
+    ...request,
+    schemaVersion: CORE_SERVICE_SCHEMA_VERSION,
+    clientRequestId: createClientRequestId()
+  };
 }
 
 export async function readOperation(config, operationId) {

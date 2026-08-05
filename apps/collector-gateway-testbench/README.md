@@ -18,13 +18,13 @@ Collector Gateway Testbench :43128
 ## 当前用途
 
 - 读取 Gateway 与在线 `browserBindingId`；
-- 从 Gateway 读取全部 12 项 B站既有能力的 direct-mode 登记状态；
+- 从 Gateway 读取当前 15 项浏览器 direct 能力登记状态（B站 10 项、小红书 5 项；官方 API provider 不属于本测试台）；
 - 投递一个 `bilibili.video_detail` 测试（输入仅为 BVID）；
 - 投递一个 `bilibili.native_search` 测试（输入仅为关键词）；
 - 投递一个 `bilibili.native_search_batch` 测试（输入仅为关键词；Gateway 固定派生综合相关性第 1、2 页，调用方不能传 URL、页码、排序或点击指令）；
 - 投递一个 `bilibili.account_profile` 测试（输入仅为 UP 主 MID）；
 - 投递一个 `bilibili.account_inventory` 测试（输入仅为 UP 主 MID，固定投稿视频首屏）；
-- 投递一个 `bilibili.discussion` 测试（输入仅为 BVID；要求用户先把评论区滚到可见位置并在扩展 popup 选择当前视频页，随后只对同一 document 做一次被动 DOM 投影）；
+- 投递一个 `bilibili.discussion` 测试（输入仅为 BVID；扩展在自有工作标签页完成一次有界导航和评论区 DOM 投影，不接受 tab/document ID）；
 - 投递一个 `xiaohongshu.account.public_notes.v1` 测试：既支持已有公开主页 tab 的 1–3 次滚动，也支持一次性短时公开主页链接的单次导航、最多 20 次滚动；链接只在当前进程请求期间使用，不写入测试台状态或 artifact；
 - 读取同一测试台提交过的 operation，并从该 operation 推导固定 artifact retrieval path；
 - 显示真实 Gateway 返回的 operation 与 artifact。
@@ -72,7 +72,7 @@ $env:COLLECTOR_TESTBENCH_PORT = '43128'
 
 ## 真实测试语义
 
-一次提交只会向 Gateway 发起一个 `POST /v2/collect`。大多数 direct capability 最多执行一次已签名的平台导航；`bilibili.native_search_batch` 是唯一例外，但也只能按签名顺序执行固定第 1、2 页，最多两次导航、零 DOM 语义动作、零 response body，并在第 1 页为空、风险、用户接管、页面身份漂移、网络结果未知或任务过期时停止，不会进入第 2 页。小红书临时主页链接模式同样只允许一次导航，随后在固定滚动/投影预算内运行；它不刷新、不创建新 tab、不重试，Network/XHR 投影优先、可见 DOM 补充。`bilibili.discussion` 反过来是零导航能力：必须先由用户本人把评论区滚到可见位置并从扩展 popup 选择当前页，测试台只提交 canonical BVID，Gateway 不会得到 tab/document ID；扩展随后不滚动、不排序、不展开回复、不刷新，也不读取 response body。Gateway 与扩展仍负责 at-most-once claim、工作项过期、账号安全锁与任务终态。Testbench 的自动轮询仅是读取本机 operation，最多 25 次；它不会在失败、超时、验证码、风控或登录失效后重新投递任务。
+一次提交只会向 Gateway 发起一个 `POST /v2/collect`。大多数 direct capability 最多执行一次已签名的平台导航；`bilibili.native_search_batch` 是唯一例外，但也只能按签名顺序执行固定第 1、2 页，最多两次导航、零 DOM 语义动作、零 response body，并在第 1 页为空、风险、用户接管、页面身份漂移、网络结果未知或任务过期时停止，不会进入第 2 页。小红书临时主页链接模式同样只允许一次导航，随后在固定滚动/投影预算内运行；它不刷新、不创建新 tab、不重试，Network/XHR 投影优先、可见 DOM 补充。`bilibili.discussion` 使用扩展自有工作标签页完成一次有界导航和评论区 DOM 投影，测试台只提交 canonical BVID，Gateway 不会得到 tab/document ID；扩展不排序、不展开回复、不刷新，也不读取 response body。Gateway 与扩展仍负责 at-most-once claim、工作项过期、账号安全锁与任务终态。Testbench 的自动轮询仅是读取本机 operation，最多 25 次；它不会在失败、超时、验证码、风控或登录失效后重新投递任务。
 
 每次 operation / artifact 读取都必须来自本 Testbench 当前进程已经提交并记住的 `operationId`。浏览器页面不能传任意 Gateway path，也不能把 token 带到前端。
 
