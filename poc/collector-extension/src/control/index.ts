@@ -10,6 +10,7 @@ import {
   type UserBrowserGatewayConnection
 } from '../background/user-browser-gateway';
 import {
+  GATEWAY_PAIRING_DRAFT_STORAGE_KEY,
   loadGatewayPairingDraft,
   requestSaveGatewayPairingDraft,
   type GatewayPairingDraft
@@ -281,6 +282,18 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') persistPairingDraftBeforePopupTeardown();
 });
 window.addEventListener('pagehide', persistPairingDraftBeforePopupTeardown);
+
+// A popup reopened immediately after the previous one closes can render before
+// the worker's storage write finishes. Re-read and restore when that write
+// lands, provided the user has not started editing this new popup yet.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local' || !changes[GATEWAY_PAIRING_DRAFT_STORAGE_KEY] || pairingCompleted || pairingFormTouched) {
+    return;
+  }
+  void loadGatewayPairingDraft().then((draft) => {
+    restorePairingDraft(draft);
+  }).catch(() => undefined);
+});
 
 pairingForm.addEventListener('submit', (event) => {
   event.preventDefault();

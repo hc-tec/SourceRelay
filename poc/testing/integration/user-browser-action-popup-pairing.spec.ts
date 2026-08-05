@@ -40,12 +40,6 @@ test('the real Chrome action popup persists pairing input after popup destructio
     await hostPage.bringToFront();
     await hostPage.mouse.click(20, 20);
     await expect.poll(async () => await popupTarget(browserCdp)).toBeNull();
-    await expect.poll(async () => await launched.worker.evaluate(async () => (
-      await chrome.storage.local.get('collector.user-browser.gateway-pairing-draft.v1')
-    )['collector.user-browser.gateway-pairing-draft.v1'])).toMatchObject({
-      schemaVersion: 1,
-      ...values
-    });
 
     await launched.worker.evaluate(async () => {
       await chrome.action.openPopup();
@@ -58,6 +52,12 @@ test('the real Chrome action popup persists pairing input after popup destructio
         `document.querySelector('input[name="${name}"]').value`
       )).toBe(value);
     }
+    await expect.poll(async () => await launched.worker.evaluate(async () => (
+      await chrome.storage.local.get('collector.user-browser.gateway-pairing-draft.v1')
+    )['collector.user-browser.gateway-pairing-draft.v1'])).toMatchObject({
+      schemaVersion: 1,
+      ...values
+    });
     await browserCdp.send('Target.detachFromTarget', { sessionId: reopenedPopup.sessionId });
     await hostPage.bringToFront();
     await hostPage.mouse.click(20, 20);

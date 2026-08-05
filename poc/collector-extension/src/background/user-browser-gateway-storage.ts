@@ -7,7 +7,8 @@ import { UUID, type PairUserBrowserGatewayInput } from './user-browser-gateway-t
 
 const EXTENSION_INSTANCE_KEY = 'collector.user-browser.extension-instance.v1';
 const GATEWAY_PAIRING_KEY = 'collector.user-browser.gateway-pairing.v1';
-const GATEWAY_PAIRING_DRAFT_KEY = 'collector.user-browser.gateway-pairing-draft.v1';
+export const GATEWAY_PAIRING_DRAFT_STORAGE_KEY = 'collector.user-browser.gateway-pairing-draft.v1';
+const GATEWAY_PAIRING_DRAFT_KEY = GATEWAY_PAIRING_DRAFT_STORAGE_KEY;
 const GATEWAY_PAIRING_DRAFT_TTL_MS = 30 * 60 * 1000;
 export const SAVE_GATEWAY_PAIRING_DRAFT_MESSAGE = 'collector.user-browser.gateway-pairing-draft.save';
 
