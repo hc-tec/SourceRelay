@@ -4,6 +4,8 @@
 
 本次本地完整验证 `npm run verify:collector` 已通过：100 个测试文件 / 356 个测试、9 个真实本地 MV3/Gateway 集成与 E2E、构建和 artifact 门禁全部通过；真实低频 B 站 canary 的视频详情、站内搜索、双页搜索、动态、评论以及 JS/Python SDK 入口均通过。旧的 `python_knowledge_pack` canary 入口已移除，因为该上层应用脚本不属于核心仓库；知识包应在 AgentKit 仓库验证，不得让核心 canary 引用不存在的文件。
 
+当前 `bilibili.discussion` 的 `/v2` direct 请求目标是扩展自有 `collector_work_tab`；旧验收表中“用户已选页面”的描述属于历史实现，不代表现在的上层请求契约。
+
 - 分支：`feat/browser-extension-system`
 - 状态日期：2026-07-26
 - 权威决策：[collector-grilling-decision-log.md](collector-grilling-decision-log.md)
