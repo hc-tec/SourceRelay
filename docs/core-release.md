@@ -49,6 +49,7 @@ Python wheel 构建固定了 `SOURCE_DATE_EPOCH=0` 和 `PYTHONHASHSEED=0`；在�
 
 ```powershell
 npm run package:core-release
+npm run verify:core-release-bundle -- --directory .\runtime\core-release-0.7.17
 Get-Content -Encoding utf8 .\runtime\core-release-0.7.17\release-manifest.json
 Get-Content -Encoding utf8 .\runtime\core-release-0.7.17\sha256sums.json
 Get-Content -Encoding utf8 .\runtime\core-release-0.7.17\sbom.cdx.json

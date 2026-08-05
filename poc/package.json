@@ -22,6 +22,7 @@
     "verify:core-capability-matrix": "node scripts/verify-core-capability-matrix.mjs",
     "verify:release-candidate": "node scripts/verify-release-candidate.mjs",
     "package:core-release": "node scripts/package-core-release.mjs",
+    "verify:core-release-bundle": "node scripts/verify-core-release-bundle.mjs",
     "verify:sdk-release-installation": "node scripts/verify-sdk-release-installation.mjs",
     "build:collector-runtime": "npm run build:contracts && npm run build:extension && npm run build --workspace @intelligence/collector-browser-host && npm run build --workspace @intelligence/collector-gateway",
     "build:user-browser-runtime": "npm run build:contracts && npm run build:extension && npm run build:user-browser --workspace @intelligence/collector-gateway",
