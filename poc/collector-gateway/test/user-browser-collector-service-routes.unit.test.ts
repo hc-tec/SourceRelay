@@ -6,6 +6,102 @@ import { canonicalJson, sha256Hex } from '../src/canonical-json.js';
 import { createUserBrowserServiceRouteHarness } from './support/user-browser-service-route-harness.js';
 
 describe('Collector Service route-level idempotency', () => {
+  test('admits every direct browser capability into the signed extension queue', async () => {
+    const harness = await createUserBrowserServiceRouteHarness();
+    try {
+      const cases = [
+        {
+          platform: 'bilibili', capability: 'bilibili.native_search', executionTarget: 'collector_work_tab',
+          input: { query: 'DeepSeek' }
+        },
+        {
+          platform: 'bilibili', capability: 'bilibili.native_search_batch', executionTarget: 'collector_work_tab',
+          input: { query: 'DeepSeek' }
+        },
+        {
+          platform: 'bilibili', capability: 'bilibili.account_profile', executionTarget: 'collector_work_tab',
+          input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+        },
+        {
+          platform: 'bilibili', capability: 'bilibili.account_inventory', executionTarget: 'collector_work_tab',
+          input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+        },
+        {
+          platform: 'bilibili', capability: 'bilibili.video_detail', executionTarget: 'collector_work_tab',
+          input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+        },
+        {
+          platform: 'bilibili', capability: 'bilibili.discussion', executionTarget: 'collector_work_tab',
+          input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+        },
+        {
+          platform: 'bilibili', capability: 'bilibili.danmaku', executionTarget: 'collector_work_tab',
+          input: { canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa' }
+        },
+        {
+          platform: 'bilibili', capability: 'bilibili.dynamic', executionTarget: 'collector_work_tab',
+          input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+        },
+        {
+          platform: 'bilibili', capability: 'bilibili.collection_series.overview', executionTarget: 'collector_work_tab',
+          input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602' }
+        },
+        {
+          platform: 'bilibili', capability: 'bilibili.collection_series.detail', executionTarget: 'collector_work_tab',
+          input: { canonicalProfileUrl: 'https://space.bilibili.com/7481602', stableSeriesId: '123', listType: 'series' }
+        },
+        {
+          platform: 'xiaohongshu', capability: 'xiaohongshu.search.public_notes.v1', executionTarget: 'existing_public_explore_tab',
+          input: { query: '咖啡' }
+        },
+        {
+          platform: 'xiaohongshu', capability: 'xiaohongshu.account.public_notes.v1', executionTarget: 'existing_public_profile_tab',
+          input: { maximumScrolls: 1 }
+        },
+        {
+          platform: 'xiaohongshu', capability: 'xiaohongshu.note.public_detail.v1', executionTarget: 'existing_public_search_tab',
+          input: { resultRank: 1 }
+        },
+        {
+          platform: 'xiaohongshu', capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
+          input: { maximumScrolls: 1 }
+        },
+        {
+          platform: 'xiaohongshu', capability: 'xiaohongshu.note.public_comment_replies.v1', executionTarget: 'existing_public_note_overlay',
+          input: { maximumThreads: 1 }
+        }
+      ] as const;
+
+      for (const candidate of cases) {
+        const browserBindingId = await harness.createOnlineBinding();
+        const request = {
+          schemaVersion: 3,
+          clientRequestId: randomUUID(),
+          browserBindingId,
+          ...candidate
+        };
+        const response = await postCollect(harness.origin, harness.token, request);
+        expect(response.status, `${candidate.capability}: ${JSON.stringify(response.body)}`).toBe(201);
+        const result = response.body.result as { operationId?: string } | undefined;
+        expect(result).toMatchObject({
+          capability: candidate.capability,
+          executionTarget: candidate.executionTarget,
+          state: 'queued'
+        });
+        expect(result?.operationId).toMatch(/^[0-9a-f-]{36}$/i);
+        await expect(harness.context.workQueue.get(result!.operationId!)).resolves.toMatchObject({
+          operationId: result!.operationId,
+          browserBindingId,
+          capability: candidate.capability,
+          executionTarget: candidate.executionTarget,
+          state: 'queued'
+        });
+      }
+    } finally {
+      await harness.close();
+    }
+  });
+
   test('completes an official Zhihu request inline and replays without a second provider call', async () => {
     let providerCalls = 0;
     const harness = await createUserBrowserServiceRouteHarness({
@@ -301,7 +397,7 @@ function requestDigest(request: VideoRequest): string {
 async function postCollect(
   origin: string,
   token: string,
-  request: VideoRequest | ReplyRequest | ZhihuSearchRequest
+  request: object
 ): Promise<{ status: number; body: Record<string, any> }> {
   const response = await fetch(`${origin}/v2/collect`, {
     method: 'POST',
