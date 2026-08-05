@@ -66,6 +66,20 @@ failed:work_tab_user_taken_over:work_tab_user_taken_over
 | production extension artifact gate | 通过；MV3、host permissions、静态平台脚本边界保持不变 |
 | automatic production extension load | 通过；MV3 worker、control surface、runtime marker 与 build fingerprint 匹配 |
 
+## Release asset 边界
+
+本轮源码已经推送到 Core `main`（`298d303`），但 GitHub Actions 的 Core release workflow 只在
+`workflow_dispatch` 或 `core-v*` tag 事件上运行。当前环境没有 `gh` CLI/API token，因此没有改写
+已经发布的 `core-v0.7.17` tag，也没有假装公开 asset 已经更新。
+
+- 最终源码在本机生成的待发布归档：`sourcerelay-core-0.7.17.tar.gz`
+- 待发布归档 SHA-256：`b28e65f40e849c04daec116f6d898af5de53228960340b7804e11605b8ae0eb3`
+- 当前 GitHub 公开 `core-v0.7.17` asset SHA-256：
+  `ab444468be0209100371651de2e65284e07cee319bee8eed8db3822ded7784d7`
+
+因此在 release workflow 被手动触发并完成之前，AgentKit 继续下载公开包时仍会得到旧归档；源码
+修复本身不依赖这个待办，且不会影响当前本地 canary 结论。
+
 ## 尚未声称的能力
 
 本记录证明的是“正常终态复用 + 用户接管停止 + 单 work-tab 数量边界”。它不把历史版本已经
