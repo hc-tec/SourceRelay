@@ -11,7 +11,7 @@ import {
 } from '../background/user-browser-gateway';
 import {
   loadGatewayPairingDraft,
-  saveGatewayPairingDraft,
+  requestSaveGatewayPairingDraft,
   type GatewayPairingDraft
 } from '../background/user-browser-gateway-storage';
 import {
@@ -97,7 +97,7 @@ function queuePairingDraftSave(): Promise<void> {
   const input = readPairingInputFromForm();
   // Start this write immediately. The queue only tracks all in-flight writes
   // so submit can wait for them; it must not delay the final input event.
-  const write = saveGatewayPairingDraft(input);
+  const write = requestSaveGatewayPairingDraft(input);
   pairingDraftWriteQueue = pairingDraftWriteQueue
     .then(() => write)
     // Draft persistence should never block the pairing attempt or expose a

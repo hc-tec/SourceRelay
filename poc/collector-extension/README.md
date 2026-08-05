@@ -47,7 +47,7 @@ loopback host permission 是首次配对时由浏览器显示、用户批准的 
 
 配对记录只保存在扩展自身受限 storage。首次申请 loopback optional permission 时，Chrome 可能关闭
 action popup；输入中的 Gateway 地址、身份指纹、配对会话 ID 和配对码会自动保存到扩展自己的
-`chrome.storage.local`，草稿 30 分钟后自动过期，重新打开控制页会恢复，成功配对后立即清除。Gateway 侧只保留去敏的
+`chrome.storage.local`（由 MV3 service worker 写入，不依赖 popup 生命周期），草稿 30 分钟后自动过期，重新打开控制页会恢复，成功配对后立即清除。Gateway 侧只保留去敏的
 `browserBindingId + extensionId + extensionInstanceId` 与安全状态；没有浏览器路径、账号凭据、Cookie
 或 tab ID。
 

@@ -10,6 +10,7 @@ import { initialiseNetworkObserverController } from './network-observer-controll
 import { initialiseXiaohongshuCurrentPageNetworkObserver } from './xiaohongshu-current-page-network';
 import { initialiseExtensionWorkRunner } from './extension-work-runner';
 import { cleanupStrategyScriptRegistrations } from './strategy-script-lifecycle';
+import { initialiseGatewayPairingDraftPersistence } from './user-browser-gateway-storage';
 import { initialiseBilibiliAccountProfileDocumentBridge } from './strategies/bilibili-account-profile-strategy';
 import { initialiseBilibiliAccountVideoInventoryDocumentBridge } from './strategies/bilibili-account-video-inventory-strategy';
 import { initialiseBilibiliNativeSearchDocumentBridge } from './strategies/bilibili-native-search-strategy';
@@ -26,6 +27,7 @@ const runtimeBootstrap: CollectorRuntimeBootstrap = {
 
 void chrome.storage.session.set({ [COLLECTOR_RUNTIME_BOOTSTRAP_KEY]: runtimeBootstrap });
 initialiseNetworkObserverController();
+initialiseGatewayPairingDraftPersistence();
 initialiseXiaohongshuCurrentPageNetworkObserver();
 initialiseBilibiliAccountProfileDocumentBridge();
 initialiseBilibiliAccountVideoInventoryDocumentBridge();

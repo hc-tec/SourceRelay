@@ -9,11 +9,19 @@ const EXTENSION_INSTANCE_KEY = 'collector.user-browser.extension-instance.v1';
 const GATEWAY_PAIRING_KEY = 'collector.user-browser.gateway-pairing.v1';
 const GATEWAY_PAIRING_DRAFT_KEY = 'collector.user-browser.gateway-pairing-draft.v1';
 const GATEWAY_PAIRING_DRAFT_TTL_MS = 30 * 60 * 1000;
+export const SAVE_GATEWAY_PAIRING_DRAFT_MESSAGE = 'collector.user-browser.gateway-pairing-draft.save';
+
+interface GatewayPairingDraftMessage {
+  type: typeof SAVE_GATEWAY_PAIRING_DRAFT_MESSAGE;
+  input: PairUserBrowserGatewayInput;
+}
 
 export interface GatewayPairingDraft extends PairUserBrowserGatewayInput {
   schemaVersion: 1;
   expiresAt: string;
 }
+
+let gatewayPairingDraftWriteQueue: Promise<void> = Promise.resolve();
 
 export async function loadExtensionInstanceId(): Promise<string> {
   const stored = await chrome.storage.local.get(EXTENSION_INSTANCE_KEY);
@@ -58,6 +66,7 @@ export async function loadGatewayPairingDraft(): Promise<GatewayPairingDraft | n
 }
 
 export async function saveGatewayPairingDraft(input: PairUserBrowserGatewayInput): Promise<void> {
+  if (!gatewayPairingDraftInput(input)) throw new Error('gateway_pairing_draft_invalid');
   const draft = {
     schemaVersion: 1,
     loopbackOrigin: input.loopbackOrigin,
@@ -67,6 +76,43 @@ export async function saveGatewayPairingDraft(input: PairUserBrowserGatewayInput
     expiresAt: new Date(Date.now() + GATEWAY_PAIRING_DRAFT_TTL_MS).toISOString()
   } satisfies GatewayPairingDraft;
   await chrome.storage.local.set({ [GATEWAY_PAIRING_DRAFT_KEY]: draft });
+}
+
+/**
+ * Popup pages are destroyed as soon as focus leaves the action surface. Send
+ * the write to the MV3 worker instead of making popup lifetime part of the
+ * storage guarantee.
+ */
+export async function requestSaveGatewayPairingDraft(
+  input: PairUserBrowserGatewayInput
+): Promise<void> {
+  const response = await chrome.runtime.sendMessage({
+    type: SAVE_GATEWAY_PAIRING_DRAFT_MESSAGE,
+    input
+  } satisfies GatewayPairingDraftMessage);
+  if (!response || typeof response !== 'object' || (response as { ok?: unknown }).ok !== true) {
+    throw new Error('gateway_pairing_draft_save_failed');
+  }
+}
+
+/** Register the worker-side persistence endpoint once during service-worker boot. */
+export function initialiseGatewayPairingDraftPersistence(): void {
+  chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+    if (!isGatewayPairingDraftMessage(message)) return false;
+    if (sender.id !== chrome.runtime.id || sender.url !== chrome.runtime.getURL('control.html')) {
+      sendResponse({ ok: false, error: 'gateway_pairing_draft_sender_rejected' });
+      return false;
+    }
+    const write = gatewayPairingDraftWriteQueue
+      .catch(() => undefined)
+      .then(() => saveGatewayPairingDraft(message.input));
+    gatewayPairingDraftWriteQueue = write.catch(() => undefined);
+    void write.then(
+      () => sendResponse({ ok: true }),
+      () => sendResponse({ ok: false, error: 'gateway_pairing_draft_save_failed' })
+    );
+    return true;
+  });
 }
 
 export async function clearGatewayPairingDraft(): Promise<void> {
@@ -127,4 +173,19 @@ function gatewayPairingDraft(value: unknown): GatewayPairingDraft | null {
     pairingCode: candidate.pairingCode,
     expiresAt: candidate.expiresAt
   };
+}
+
+function isGatewayPairingDraftMessage(value: unknown): value is GatewayPairingDraftMessage {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as Partial<GatewayPairingDraftMessage>;
+  return candidate.type === SAVE_GATEWAY_PAIRING_DRAFT_MESSAGE && gatewayPairingDraftInput(candidate.input);
+}
+
+function gatewayPairingDraftInput(value: unknown): value is PairUserBrowserGatewayInput {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as Partial<PairUserBrowserGatewayInput>;
+  return typeof candidate.loopbackOrigin === 'string' && candidate.loopbackOrigin.length <= 100 &&
+    typeof candidate.identityFingerprint === 'string' && candidate.identityFingerprint.length <= 100 &&
+    typeof candidate.pairingSessionId === 'string' && candidate.pairingSessionId.length <= 100 &&
+    typeof candidate.pairingCode === 'string' && candidate.pairingCode.length <= 20;
 }

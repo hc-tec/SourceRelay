@@ -9,8 +9,8 @@ import {
   clearGatewayPairingDraft,
   gatewayPairingSummary,
   loadExtensionInstanceId,
-  saveGatewayPairingDraft,
   loadGatewayPairingRecord,
+  requestSaveGatewayPairingDraft,
   saveGatewayPairingRecord
 } from './user-browser-gateway-storage';
 import {
@@ -41,7 +41,7 @@ export async function pairUserBrowserGateway(
   const pairing = pairingInput(rawInput);
   // Persist before requesting optional host permission. Chrome may destroy the
   // popup while showing its native confirmation dialog.
-  await saveGatewayPairingDraft(pairing);
+  await requestSaveGatewayPairingDraft(pairing);
   if (!await ensureLoopbackPermission()) throw new Error('gateway_loopback_permission_required');
 
   const extensionId = chrome.runtime.id;
