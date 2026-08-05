@@ -38,6 +38,12 @@ header,
   margin-top: 12px;
 }
 
+.pairing-hint {
+  color: #667281;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .pairing-form label {
   display: grid;
   gap: 5px;

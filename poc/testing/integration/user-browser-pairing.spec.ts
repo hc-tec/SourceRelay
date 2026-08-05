@@ -79,11 +79,38 @@ test('a real installed MV3 extension pairs with the direct Gateway without creat
 
     const approval = approveExactExtensionPermission(extensionSourceDirectory, '127.0.0.1', '127.0.0.1', 20);
     await controlPage.locator('#pair-gateway button[type="submit"]').click();
+    await expect.poll(async () => await launched!.worker.evaluate(async () => (
+      await chrome.storage.session.get('collector.user-browser.gateway-pairing-draft.v1')
+    )['collector.user-browser.gateway-pairing-draft.v1'])).toMatchObject({
+      schemaVersion: 1,
+      loopbackOrigin: gatewayOrigin,
+      identityFingerprint,
+      pairingSessionId,
+      pairingCode
+    });
+    // A real action popup is destroyed by Chrome while the native permission
+    // prompt is visible. Close this extension page at the same lifecycle point
+    // and prove the next control surface restores the submitted draft.
+    await controlPage.close();
     await approval;
-    await expect(controlPage.locator('#gateway-state')).toContainText('已连接');
-    await expect(controlPage.locator('h2').filter({ hasText: '研究型页面预置' })).toBeVisible();
-    await expect(controlPage.locator('#select-current-bilibili-account-inventory')).toHaveCount(0);
-    await expect(controlPage.locator('#user-selected-inventory-tab-state')).toHaveCount(0);
+    const reopenedControlPage = await launched.context.newPage();
+    await reopenedControlPage.goto(`chrome-extension://${extensionId}/control.html`);
+    await expect(reopenedControlPage.locator('html[data-collector-control-ready="true"]')).toHaveCount(1);
+    const reopenedGatewayState = await reopenedControlPage.locator('#gateway-state').textContent();
+    if (!reopenedGatewayState?.includes('已连接')) {
+      await expect(reopenedControlPage.locator('input[name="loopbackOrigin"]')).toHaveValue(gatewayOrigin);
+      await expect(reopenedControlPage.locator('input[name="identityFingerprint"]')).toHaveValue(identityFingerprint!);
+      await expect(reopenedControlPage.locator('input[name="pairingSessionId"]')).toHaveValue(pairingSessionId!);
+      await expect(reopenedControlPage.locator('input[name="pairingCode"]')).toHaveValue(pairingCode!);
+      await reopenedControlPage.locator('#pair-gateway button[type="submit"]').click();
+    }
+    await expect(reopenedControlPage.locator('#gateway-state')).toContainText('已连接');
+    await expect(reopenedControlPage.locator('h2').filter({ hasText: '研究型页面预置' })).toBeVisible();
+    await expect(reopenedControlPage.locator('#select-current-bilibili-account-inventory')).toHaveCount(0);
+    await expect(reopenedControlPage.locator('#user-selected-inventory-tab-state')).toHaveCount(0);
+    await expect.poll(async () => await launched!.worker.evaluate(async () => (
+      await chrome.storage.session.get('collector.user-browser.gateway-pairing-draft.v1')
+    )['collector.user-browser.gateway-pairing-draft.v1'])).toBeUndefined();
 
     const permissions = await launched.worker.evaluate(async () => await chrome.permissions.getAll());
     expect(permissions.origins).toContain('http://127.0.0.1/*');
@@ -120,13 +147,13 @@ test('a real installed MV3 extension pairs with the direct Gateway without creat
       browserBindingCount: 1,
       browserProcessControl: 'not_available'
     });
-    expect(controlPage.isClosed()).toBe(false);
+    expect(reopenedControlPage.isClosed()).toBe(false);
     expect(consolePage.isClosed()).toBe(false);
     const restartedStateEntries = await readdir(stateDirectory);
     expect(restartedStateEntries).not.toContain('profiles');
     expect(restartedStateEntries).not.toContain('browser-host');
 
-    await controlPage.close();
+    await reopenedControlPage.close();
     await consolePage.close();
   } finally {
     await launched?.close();

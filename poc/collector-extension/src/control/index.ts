@@ -10,6 +10,10 @@ import {
   type UserBrowserGatewayConnection
 } from '../background/user-browser-gateway';
 import {
+  loadGatewayPairingDraft,
+  type GatewayPairingDraft
+} from '../background/user-browser-gateway-storage';
+import {
   armNextXiaohongshuCurrentPageNetworkDocument,
   getXiaohongshuCurrentPageNetworkSelectionSummary
 } from '../background/xiaohongshu-current-page-network';
@@ -38,10 +42,12 @@ const armNextXiaohongshuCurrentPageNetwork = element<HTMLButtonElement>(
 );
 
 async function render(): Promise<void> {
-  const [connection, runtime] = await Promise.all([
+  const [connection, runtime, draft] = await Promise.all([
     getUserBrowserGatewayConnection(),
-    readRuntimeBootstrap()
+    readRuntimeBootstrap(),
+    loadGatewayPairingDraft()
   ]);
+  restorePairingDraft(connection, draft);
   runtimeStatus.textContent = runtime
     ? `v${runtime.collectorVersion} · r${runtime.controlSurfaceRevision} · ${runtime.buildFingerprint.slice(0, 12)}`
     : `v${chrome.runtime.getManifest().version} · worker marker unavailable`;
@@ -52,6 +58,22 @@ async function render(): Promise<void> {
   ]);
   await renderDirectCapabilities(connection);
   document.documentElement.dataset.collectorControlReady = 'true';
+}
+
+function restorePairingDraft(
+  connection: UserBrowserGatewayConnection,
+  draft: GatewayPairingDraft | null
+): void {
+  if (!draft || connection.state !== 'unpaired') return;
+  setInputValue('loopbackOrigin', draft.loopbackOrigin);
+  setInputValue('identityFingerprint', draft.identityFingerprint);
+  setInputValue('pairingSessionId', draft.pairingSessionId);
+  setInputValue('pairingCode', draft.pairingCode);
+}
+
+function setInputValue(name: string, value: string): void {
+  const input = pairingForm.elements.namedItem(name);
+  if (input instanceof HTMLInputElement) input.value = value;
 }
 
 async function renderXiaohongshuCurrentPageNetwork(): Promise<void> {

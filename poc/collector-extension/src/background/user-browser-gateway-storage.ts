@@ -3,10 +3,15 @@ import type {
   GatewayPairingSummary
 } from '@intelligence/collector-contracts';
 import { normaliseLoopbackOrigin } from './user-browser-gateway-validation';
-import { UUID } from './user-browser-gateway-types';
+import { UUID, type PairUserBrowserGatewayInput } from './user-browser-gateway-types';
 
 const EXTENSION_INSTANCE_KEY = 'collector.user-browser.extension-instance.v1';
 const GATEWAY_PAIRING_KEY = 'collector.user-browser.gateway-pairing.v1';
+const GATEWAY_PAIRING_DRAFT_KEY = 'collector.user-browser.gateway-pairing-draft.v1';
+
+export interface GatewayPairingDraft extends PairUserBrowserGatewayInput {
+  schemaVersion: 1;
+}
 
 export async function loadExtensionInstanceId(): Promise<string> {
   const stored = await chrome.storage.local.get(EXTENSION_INSTANCE_KEY);
@@ -27,7 +32,37 @@ export async function saveGatewayPairingRecord(record: GatewayPairingRecord): Pr
 }
 
 export async function clearGatewayPairingRecord(): Promise<void> {
-  await chrome.storage.local.remove(GATEWAY_PAIRING_KEY);
+  await Promise.all([
+    chrome.storage.local.remove(GATEWAY_PAIRING_KEY),
+    clearGatewayPairingDraft()
+  ]);
+}
+
+/**
+ * A popup is destroyed when Chrome opens the native optional-permission
+ * confirmation. Keep only the in-progress form in session storage so the
+ * next popup can restore it without turning pairing credentials into durable
+ * extension state.
+ */
+export async function loadGatewayPairingDraft(): Promise<GatewayPairingDraft | null> {
+  const stored = await chrome.storage.session.get(GATEWAY_PAIRING_DRAFT_KEY);
+  return gatewayPairingDraft(stored[GATEWAY_PAIRING_DRAFT_KEY]);
+}
+
+export async function saveGatewayPairingDraft(input: PairUserBrowserGatewayInput): Promise<void> {
+  await chrome.storage.session.set({
+    [GATEWAY_PAIRING_DRAFT_KEY]: {
+      schemaVersion: 1,
+      loopbackOrigin: input.loopbackOrigin,
+      identityFingerprint: input.identityFingerprint,
+      pairingSessionId: input.pairingSessionId,
+      pairingCode: input.pairingCode
+    } satisfies GatewayPairingDraft
+  });
+}
+
+export async function clearGatewayPairingDraft(): Promise<void> {
+  await chrome.storage.session.remove(GATEWAY_PAIRING_DRAFT_KEY);
 }
 
 export function gatewayPairingSummary(record: GatewayPairingRecord): GatewayPairingSummary {
@@ -63,4 +98,23 @@ function gatewayPairingRecord(value: unknown): GatewayPairingRecord | null {
   } catch {
     return null;
   }
+}
+
+function gatewayPairingDraft(value: unknown): GatewayPairingDraft | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = value as Partial<GatewayPairingDraft>;
+  if (
+    candidate.schemaVersion !== 1 ||
+    typeof candidate.loopbackOrigin !== 'string' || candidate.loopbackOrigin.length > 100 ||
+    typeof candidate.identityFingerprint !== 'string' || candidate.identityFingerprint.length > 100 ||
+    typeof candidate.pairingSessionId !== 'string' || candidate.pairingSessionId.length > 100 ||
+    typeof candidate.pairingCode !== 'string' || candidate.pairingCode.length > 20
+  ) return null;
+  return {
+    schemaVersion: 1,
+    loopbackOrigin: candidate.loopbackOrigin,
+    identityFingerprint: candidate.identityFingerprint,
+    pairingSessionId: candidate.pairingSessionId,
+    pairingCode: candidate.pairingCode
+  };
 }

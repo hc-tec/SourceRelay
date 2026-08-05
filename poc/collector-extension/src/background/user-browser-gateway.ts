@@ -6,8 +6,10 @@ import {
 } from './user-browser-gateway-client';
 import {
   clearGatewayPairingRecord,
+  clearGatewayPairingDraft,
   gatewayPairingSummary,
   loadExtensionInstanceId,
+  saveGatewayPairingDraft,
   loadGatewayPairingRecord,
   saveGatewayPairingRecord
 } from './user-browser-gateway-storage';
@@ -37,6 +39,9 @@ export async function pairUserBrowserGateway(
   rawInput: PairUserBrowserGatewayInput
 ): Promise<UserBrowserGatewayConnection> {
   const pairing = pairingInput(rawInput);
+  // Persist before requesting optional host permission. Chrome may destroy the
+  // popup while showing its native confirmation dialog.
+  await saveGatewayPairingDraft(pairing);
   if (!await ensureLoopbackPermission()) throw new Error('gateway_loopback_permission_required');
 
   const extensionId = chrome.runtime.id;
@@ -56,6 +61,7 @@ export async function pairUserBrowserGateway(
     pairedAt: new Date().toISOString()
   };
   await saveGatewayPairingRecord(record);
+  await clearGatewayPairingDraft();
   return await connectionFor(record);
 }
 
