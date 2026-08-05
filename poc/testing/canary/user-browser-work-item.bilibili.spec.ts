@@ -217,11 +217,23 @@ test('direct extension work items read real Bilibili capabilities', async ({}, t
     });
     expect(artifactResponse.status).toBe(200);
     const detailArtifact = await artifactResponse.json() as {
-      artifact?: { manifest?: { actions?: Array<{ attempted?: unknown; attemptCount?: unknown }> } };
+      artifact?: {
+        manifest?: {
+          actions?: Array<{ attempted?: unknown; attemptCount?: unknown }>;
+          safeguards?: {
+            targetTabSelection?: string;
+            targetPage?: string;
+          };
+        };
+      };
     };
     expect(detailArtifact.artifact?.manifest?.actions).toEqual([
       expect.objectContaining({ attempted: true, attemptCount: 1 })
     ]);
+    expect(detailArtifact.artifact?.manifest?.safeguards).toMatchObject({
+      targetTabSelection: 'created_extension_work_tab',
+      targetPage: 'idle_reusable'
+    });
     // Bilibili currently redirects the no-slash canonical input to its
     // trailing-slash representation. Browser-level document events can also
     // include a source-owned reload after a rejected first response, so use
@@ -241,6 +253,8 @@ test('direct extension work items read real Bilibili capabilities', async ({}, t
     expect((await retainedWorkTab.screenshot({
       path: testInfo.outputPath('bilibili-video-detail-visible.png')
     })).byteLength).toBeGreaterThan(0);
+    const firstWorkTab = retainedWorkTab;
+    expect(bilibiliPlatformPages(launched.context)).toHaveLength(1);
 
     // A narrow foreground canary should not spend a second platform action
     // when the video-detail tab alone is enough to prove the shared work-tab
@@ -312,7 +326,9 @@ test('direct extension work items read real Bilibili capabilities', async ({}, t
       acquisition: 'extension_owned_tab_navigation_plus_bounded_dom_projection',
       sortAndFilter: 'fixed_comprehensive_first_page_no_input',
       pagination: 'fixed_first_page_no_input',
-      responseBodies: 'not_read'
+      responseBodies: 'not_read',
+      targetTabSelection: 'reused_extension_work_tab',
+      targetPage: 'idle_reusable'
     });
     expect(searchArtifact.artifact?.manifest?.actions).toEqual([
       expect.objectContaining({ attempted: true, attemptCount: 1 })
@@ -327,6 +343,8 @@ test('direct extension work items read real Bilibili capabilities', async ({}, t
     expect(retainedSearchTab).toBeTruthy();
     expect(retainedSearchTab?.isClosed()).toBe(false);
     if (!retainedSearchTab) throw new Error('live_canary_retained_search_work_tab_missing');
+    expect(retainedSearchTab).toBe(firstWorkTab);
+    expect(bilibiliPlatformPages(launched.context)).toHaveLength(1);
     await expect(retainedSearchTab.evaluate(() => document.visibilityState)).resolves.toBe('visible');
     expect((await retainedSearchTab.screenshot({
       path: testInfo.outputPath('bilibili-native-search-visible.png')
@@ -340,6 +358,18 @@ test('direct extension work items read real Bilibili capabilities', async ({}, t
     await rm(stateDirectory, { recursive: true, force: true });
   }
 });
+
+function bilibiliPlatformPages(context: { pages(): Array<{ url(): string }> }): Array<{ url(): string }> {
+  return context.pages().filter((page) => {
+    try {
+      const hostname = new URL(page.url()).hostname;
+      return hostname === 'www.bilibili.com' || hostname === 'search.bilibili.com' ||
+        hostname === 'space.bilibili.com';
+    } catch {
+      return false;
+    }
+  });
+}
 
 async function availableLoopbackPort(): Promise<number> {
   const server = createServer();

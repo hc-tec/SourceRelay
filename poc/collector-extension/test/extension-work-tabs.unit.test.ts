@@ -327,6 +327,53 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     expect(browser.sessionData.size).toBe(1);
   });
 
+  test('reuses a normally released foreground tab instead of treating it as user takeover', async () => {
+    const browser = installChromeTabsMock();
+    const first = await import('../src/background/extension-work-tabs.js');
+    const firstLease = await first.acquireExtensionWorkTab();
+    await first.navigateExtensionWorkTabOnce(firstLease, videoDetailWork());
+    expect(browser.tabs.get(firstLease.tabId)?.active).toBe(true);
+    expect(first.releaseExtensionWorkTab(firstLease)).toBe('idle_reusable');
+
+    const secondLease = await first.acquireExtensionWorkTab();
+
+    expect(secondLease.acquisition).toBe('reused');
+    expect(secondLease.tabId).toBe(firstLease.tabId);
+    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+  });
+
+  test('restores a normally released foreground tab after an MV3 worker restart', async () => {
+    const browser = installChromeTabsMock();
+    const first = await import('../src/background/extension-work-tabs.js');
+    const firstLease = await first.acquireExtensionWorkTab();
+    await first.navigateExtensionWorkTabOnce(firstLease, videoDetailWork());
+    expect(first.releaseExtensionWorkTab(firstLease)).toBe('idle_reusable');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    vi.resetModules();
+    const second = await import('../src/background/extension-work-tabs.js');
+    const secondLease = await second.acquireExtensionWorkTab();
+
+    expect(secondLease.acquisition).toBe('reused');
+    expect(secondLease.tabId).toBe(firstLease.tabId);
+    expect(browser.tabs.get(firstLease.tabId)?.active).toBe(true);
+    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+  });
+
+  test('quarantines an idle work tab after the person switches to another tab', async () => {
+    const browser = installChromeTabsMock();
+    const tabs = await import('../src/background/extension-work-tabs.js');
+    const lease = await tabs.acquireExtensionWorkTab();
+    await tabs.navigateExtensionWorkTabOnce(lease, videoDetailWork());
+    expect(tabs.releaseExtensionWorkTab(lease)).toBe('idle_reusable');
+
+    browser.activate(1);
+
+    await expect(tabs.acquireExtensionWorkTab()).rejects.toThrow('work_tab_user_taken_over');
+    expect(tabs.currentExtensionWorkTabLossCause()).toBe('another_tab_activated');
+    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+  });
+
   test('closes an interrupted pre-navigation blank tab instead of retaining an orphan', async () => {
     const browser = installChromeTabsMock();
     const first = await import('../src/background/extension-work-tabs.js');

@@ -24,6 +24,7 @@ export type WorkTabLossCause =
   | 'managed_tab_moved'
   | 'managed_tab_removed'
   | 'unexpected_url_update'
+  | 'idle_tab_activated'
   | 'idle_tab_active_before_reuse'
   | 'idle_tab_missing_before_reuse'
   | 'tab_became_inactive'
@@ -95,6 +96,14 @@ export function initialiseExtensionWorkTabs(): void {
   chrome.tabs.onMoved.addListener((tabId) => forgetTab(tabId, 'user_taken_over', 'managed_tab_moved'));
   chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
     const activated = managedTabs.get(tabId);
+    if (activated?.state === 'idle_reusable') {
+      // A normal terminal release deliberately leaves the work tab visible so
+      // the person can inspect it.  If a later activation event arrives while
+      // it is idle, that activation is user-owned interaction, not a pending
+      // extension acquisition; quarantine the tab before any future task can
+      // reuse it.
+      forgetTab(tabId, 'user_taken_over', 'idle_tab_activated');
+    }
     const foregroundActivationExpected = activated?.expectedForegroundActivationUntil !== null &&
       activated?.expectedForegroundActivationUntil !== undefined &&
       Date.now() <= activated.expectedForegroundActivationUntil;
@@ -124,6 +133,11 @@ export function initialiseExtensionWorkTabs(): void {
             : 'another_tab_activated'
         );
       }
+      if (record.state === 'idle_reusable' && record.windowId === windowId && record.tabId !== tabId) {
+        // The person left an idle work tab for another tab.  It is no longer
+        // safe to take over that visible page on a later request.
+        forgetTab(record.tabId, 'user_taken_over', 'another_tab_activated');
+      }
     }
   });
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
@@ -133,7 +147,7 @@ export function initialiseExtensionWorkTabs(): void {
     // A source navigation can redirect the exact canonical URL during the
     // short extension-initiated navigation window.  Outside that window a
     // URL change is an external takeover; do not repurpose that page.
-    if (record.state === 'leased' && record.expectedCanonicalUrl !== null &&
+    if (record.expectedCanonicalUrl !== null &&
       isExpectedExtensionWorkNavigation(record.expectedCanonicalUrl, changeInfo.url)) return;
     if (record.state === 'leased' && record.expectedNavigationUntil !== null &&
       Date.now() <= record.expectedNavigationUntil) return;
@@ -157,10 +171,18 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
     if (record.state !== 'idle_reusable') continue;
     try {
       const tab = await chrome.tabs.get(record.tabId);
-      if (tab.windowId !== record.windowId || tab.active) {
+      if (tab.windowId !== record.windowId) {
         forgetTab(record.tabId, 'user_taken_over', 'idle_tab_active_before_reuse');
         continue;
       }
+      if (record.expectedCanonicalUrl !== null &&
+        !isExpectedExtensionWorkNavigation(record.expectedCanonicalUrl, tab.url ?? '')) {
+        forgetTab(record.tabId, 'user_taken_over', 'unexpected_url_update');
+        continue;
+      }
+      // The normal release path leaves the owned page in the foreground for
+      // review.  It is still reusable until a subsequent activation,
+      // navigation, move, or close proves that the user took it over.
       const result = lease(record, 'reused');
       await persistWorkTabRegistry();
       return result;
@@ -278,7 +300,6 @@ export function releaseExtensionWorkTab(workTab: ExtensionWorkTabLease): WorkTab
   }
   record.state = 'idle_reusable';
   record.leaseId = null;
-  record.expectedCanonicalUrl = null;
   record.expectedNavigationUntil = null;
   record.expectedForegroundActivationUntil = null;
   void persistWorkTabRegistry();
@@ -501,7 +522,18 @@ async function restoreWorkTabRegistry(): Promise<void> {
     for (const candidate of candidates.sort((left, right) => right.lastUsedAt - left.lastUsedAt)) {
       if (seen.has(candidate.tabId)) continue;
       const tab = await chrome.tabs.get(candidate.tabId).catch(() => null);
-      if (!tab || tab.windowId !== candidate.windowId || tab.active && candidate.state === 'idle_reusable') continue;
+      if (!tab || tab.windowId !== candidate.windowId) continue;
+      // A normal release may intentionally leave the owned page in the
+      // foreground.  Restore that exact tab only when the persisted target
+      // identity still matches the observed URL.  Older records without a
+      // target identity remain conservatively non-restorable while active.
+      if (candidate.state === 'idle_reusable' && candidate.expectedCanonicalUrl === null && tab.active) {
+        continue;
+      }
+      if (candidate.state === 'idle_reusable' && candidate.expectedCanonicalUrl !== null &&
+        !isExpectedExtensionWorkNavigation(candidate.expectedCanonicalUrl, tab.url ?? '')) {
+        continue;
+      }
       if (candidate.state === 'idle_reusable' && restoredIdleTabs >= MAX_REUSABLE_WORK_TABS) {
         if (!tab.active) await chrome.tabs.remove(candidate.tabId).catch(() => undefined);
         continue;
