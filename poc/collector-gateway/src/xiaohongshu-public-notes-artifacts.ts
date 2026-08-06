@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 import {
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
   isXiaohongshuManagedSearchProjectionResult,
+  type ExtensionWorkTabAcquisition,
+  type ExtensionWorkTabDisposition,
   type XiaohongshuPublicNotesSearchWorkItem,
   type XiaohongshuPublicNotesSearchWorkResult
 } from '@intelligence/collector-contracts';
@@ -34,7 +36,7 @@ export interface XiaohongshuPublicNotesArtifactView {
     environment: 'user_owned_browser_extension';
     executionTarget: 'existing_public_explore_tab';
     captureMode: 'current_document_main_world_public_projection';
-    platformNavigations: 0;
+    platformNavigations: 0 | 1;
     pageReloads: 0;
     pageInitiatedNewTabs: 0;
     semanticActions: 0 | 1;
@@ -42,6 +44,8 @@ export interface XiaohongshuPublicNotesArtifactView {
     rawPayloadStored: false;
     responseUrlsStored: false;
     debuggerDetached: boolean;
+    workTabAcquisition?: ExtensionWorkTabAcquisition;
+    workTabDisposition?: ExtensionWorkTabDisposition;
   };
   queryDigest: string;
   result: {
@@ -49,12 +53,14 @@ export interface XiaohongshuPublicNotesArtifactView {
     errorCode: string | null;
     terminalReason: XiaohongshuPublicNotesSearchWorkResult['terminalReason'];
     completedAt: string;
-    navigation: { attempted: false; attemptCount: 0 };
+    navigation: { attempted: boolean; attemptCount: 0 | 1 };
     semanticAction: { attempted: boolean; attemptCount: 0 | 1 };
     input: { queryEchoed: boolean; enterAttempted: boolean };
     detailActions?: XiaohongshuPublicNotesSearchWorkResult['detailActions'];
     page: XiaohongshuPublicNotesSearchWorkResult['page'];
     projection: XiaohongshuPublicNotesSearchWorkResult['projection'];
+    workTabAcquisition?: ExtensionWorkTabAcquisition;
+    workTabDisposition?: ExtensionWorkTabDisposition;
   };
 }
 
@@ -113,14 +119,18 @@ export class XiaohongshuPublicNotesArtifactStore {
         environment: 'user_owned_browser_extension' as const,
         executionTarget: 'existing_public_explore_tab' as const,
         captureMode: 'current_document_main_world_public_projection' as const,
-        platformNavigations: 0 as const,
+        platformNavigations: input.result.navigation.attemptCount,
         pageReloads: 0 as const,
         pageInitiatedNewTabs: 0 as const,
         semanticActions: input.result.semanticAction.attemptCount,
         responseBodies: 'temporarily_read_projected_not_stored' as const,
         rawPayloadStored: false as const,
         responseUrlsStored: false as const,
-        debuggerDetached: input.result.debuggerDetached
+        debuggerDetached: input.result.debuggerDetached,
+        ...(input.result.workTabAcquisition === undefined ? {} : {
+          workTabAcquisition: input.result.workTabAcquisition,
+          workTabDisposition: input.result.workTabDisposition!
+        })
       },
       queryDigest,
       result: {
@@ -135,7 +145,11 @@ export class XiaohongshuPublicNotesArtifactStore {
           ? { detailActions: structuredClone(input.result.detailActions) }
           : {}),
         page: structuredClone(input.result.page),
-        projection: structuredClone(input.result.projection)
+        projection: structuredClone(input.result.projection),
+        ...(input.result.workTabAcquisition === undefined ? {} : {
+          workTabAcquisition: input.result.workTabAcquisition,
+          workTabDisposition: input.result.workTabDisposition!
+        })
       }
     };
     const stored: StoredArtifact = {
@@ -207,25 +221,54 @@ function isStoredArtifact(value: unknown): value is StoredArtifact {
   return value.schemaVersion === 1 && value.artifactId === value.summary.artifactId &&
     value.operationId === value.summary.operationId && value.capability === value.summary.capability &&
     value.state === value.summary.state && value.capturedAt === value.summary.capturedAt &&
-    value.queryDigest === value.summary.queryDigest && exactKeys(provenance, [
-      'environment', 'executionTarget', 'captureMode', 'platformNavigations', 'pageReloads',
-      'pageInitiatedNewTabs', 'semanticActions', 'responseBodies', 'rawPayloadStored', 'responseUrlsStored',
-      'debuggerDetached'
-    ]) && provenance.environment === 'user_owned_browser_extension' &&
+    value.queryDigest === value.summary.queryDigest && provenanceKeys(provenance) &&
+    provenance.environment === 'user_owned_browser_extension' &&
     provenance.executionTarget === 'existing_public_explore_tab' &&
     provenance.captureMode === 'current_document_main_world_public_projection' &&
-    provenance.platformNavigations === 0 && provenance.pageReloads === 0 && provenance.pageInitiatedNewTabs === 0 &&
+    (provenance.platformNavigations === 0 || provenance.platformNavigations === 1) &&
+    provenance.pageReloads === 0 && provenance.pageInitiatedNewTabs === 0 &&
     (provenance.semanticActions === 0 || provenance.semanticActions === 1) &&
     provenance.responseBodies === 'temporarily_read_projected_not_stored' &&
     provenance.rawPayloadStored === false && provenance.responseUrlsStored === false &&
-    typeof provenance.debuggerDetached === 'boolean' && storedResultKeys(result) &&
+    typeof provenance.debuggerDetached === 'boolean' && workTabFields(provenance) && storedResultKeys(result) &&
+    navigation(result.navigation) && workTabFields(result) &&
     validDetailActions(result.detailActions) &&
     (result.projection === null || isXiaohongshuManagedSearchProjectionResult(result.projection));
 }
 
+function provenanceKeys(value: Record<string, unknown>): boolean {
+  const base = [
+      'environment', 'executionTarget', 'captureMode', 'platformNavigations', 'pageReloads',
+      'pageInitiatedNewTabs', 'semanticActions', 'responseBodies', 'rawPayloadStored', 'responseUrlsStored',
+      'debuggerDetached'
+  ] as const;
+  return exactKeys(value, base) || exactKeys(value, [...base, 'workTabAcquisition', 'workTabDisposition']);
+}
+
 function storedResultKeys(value: Record<string, any>): boolean {
   const base = ['state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction', 'input', 'page', 'projection'] as const;
-  return exactKeys(value, base) || exactKeys(value, [...base.slice(0, 6), 'detailActions', ...base.slice(6)]);
+  const withDetails = [...base.slice(0, 6), 'detailActions', ...base.slice(6)];
+  const withWorkTab = [...base, 'workTabAcquisition', 'workTabDisposition'];
+  const withDetailsAndWorkTab = [...withDetails, 'workTabAcquisition', 'workTabDisposition'];
+  return exactKeys(value, base) || exactKeys(value, withDetails) || exactKeys(value, withWorkTab) ||
+    exactKeys(value, withDetailsAndWorkTab);
+}
+
+function navigation(value: unknown): boolean {
+  return record(value) && exactKeys(value, ['attempted', 'attemptCount']) &&
+    typeof value.attempted === 'boolean' && (value.attemptCount === 0 || value.attemptCount === 1) &&
+    value.attemptCount === (value.attempted ? 1 : 0);
+}
+
+function workTabFields(value: Record<string, unknown>): boolean {
+  const hasAcquisition = Object.hasOwn(value, 'workTabAcquisition');
+  const hasDisposition = Object.hasOwn(value, 'workTabDisposition');
+  if (hasAcquisition !== hasDisposition) return false;
+  if (!hasAcquisition) return true;
+  return (value.workTabAcquisition === 'created' || value.workTabAcquisition === 'reused' ||
+      value.workTabAcquisition === 'not_acquired') &&
+    (value.workTabDisposition === 'idle_reusable' || value.workTabDisposition === 'retained_not_reusable' ||
+      value.workTabDisposition === 'user_taken_over' || value.workTabDisposition === 'closed_or_missing');
 }
 
 function validDetailActions(value: unknown): boolean {

@@ -24,7 +24,7 @@ const item: XiaohongshuPublicNotesSearchWorkItem = {
   expiresAt: '2026-07-28T08:01:00.000Z',
   input: { query: '咖啡' },
   budget: {
-    maximumPlatformNavigations: 0,
+    maximumPlatformNavigations: 1,
     maximumPageReloads: 0,
     maximumPageInitiatedNewDocuments: 0,
     maximumSemanticActions: 1,
@@ -36,7 +36,7 @@ const item: XiaohongshuPublicNotesSearchWorkItem = {
 };
 
 describe('signed Xiaohongshu public-notes work contract', () => {
-  test('admits query-only, navigationless work and has no target URL', () => {
+  test('admits query-only work with one bounded Explore navigation and has no target URL', () => {
     expect(isExtensionWorkItem(item)).toBe(true);
     expect(() => extensionWorkTargetUrl(item)).toThrow('extension_work_target_navigation_forbidden');
     expect(extensionWorkSigningPayload(item)).not.toContain('gatewaySignature');
@@ -53,7 +53,7 @@ describe('signed Xiaohongshu public-notes work contract', () => {
     ]) expect(isExtensionWorkItem({ ...item, input: { ...item.input, ...extra } })).toBe(false);
   });
 
-  test('accepts only a completed result with one action, zero navigation and a bounded projection', () => {
+  test('accepts a completed result with one action, at most one navigation and a bounded projection', () => {
     const result = {
       schemaVersion: 1,
       protocolVersion: 1,
@@ -95,7 +95,8 @@ describe('signed Xiaohongshu public-notes work contract', () => {
       debuggerDetached: true
     };
     expect(isExtensionWorkResultForItem(result, item)).toBe(true);
-    expect(isExtensionWorkResultForItem({ ...result, navigation: { attempted: true, attemptCount: 1 } }, item)).toBe(false);
+    expect(isExtensionWorkResultForItem({ ...result, navigation: { attempted: true, attemptCount: 1 } }, item)).toBe(true);
+    expect(isExtensionWorkResultForItem({ ...result, navigation: { attempted: true, attemptCount: 2 } }, item)).toBe(false);
     expect(isExtensionWorkResultForItem({ ...result, semanticAction: { attempted: true, attemptCount: 0 } }, item)).toBe(false);
     expect(isExtensionWorkResultForItem({ ...result, debuggerDetached: false }, item)).toBe(false);
   });

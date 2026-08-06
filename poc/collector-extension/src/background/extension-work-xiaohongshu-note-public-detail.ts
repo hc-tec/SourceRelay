@@ -48,6 +48,10 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     collectReplies?: { maximumThreads: 1 | 2 | 3 };
     /** Reuse a debugger lease already owned by the enclosing search action. */
     debuggee?: chrome.debugger.Debuggee;
+    /** Internal managed-tab binding; never accepted from an AI request. */
+    expectedTabId?: number;
+    /** The enclosing managed search already foregrounded this tab. */
+    skipForeground?: boolean;
   } = {}
 ): Promise<XiaohongshuNotePublicDetailWorkResult> {
   let pageDocument: DetailDocument | null = null;
@@ -59,8 +63,10 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
   let errorCode: string | null = null;
   const profileDocument = item.executionTarget === 'existing_public_profile_tab';
   try {
-    pageDocument = profileDocument ? await findUniqueProfileDocument() : await findUniqueSearchDocument();
-    await foreground(pageDocument);
+    pageDocument = profileDocument
+      ? await findUniqueProfileDocument(options.expectedTabId)
+      : await findUniqueSearchDocument(options.expectedTabId);
+    if (!options.skipForeground) await foreground(pageDocument);
     try {
       await requireSameDocument(pageDocument, profileDocument);
     } catch {
@@ -382,8 +388,10 @@ async function readCloseContinuity(tabId: number): Promise<{
   return { documentId: frame.documentId, ...value };
 }
 
-async function findUniqueSearchDocument(): Promise<DetailDocument> {
-  const tabs = await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/search_result*'] });
+async function findUniqueSearchDocument(expectedTabId?: number): Promise<DetailDocument> {
+  const tabs = expectedTabId === undefined
+    ? await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/search_result*'] })
+    : [await chrome.tabs.get(expectedTabId).catch(() => null)].filter((tab): tab is chrome.tabs.Tab => tab !== null);
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
     !tab.incognito && tab.status === 'complete' &&
     isSearchContinuitySurface(xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '')));
@@ -397,8 +405,10 @@ async function findUniqueSearchDocument(): Promise<DetailDocument> {
   return { tabId: tab.id!, windowId: tab.windowId!, documentId: frame.documentId };
 }
 
-async function findUniqueProfileDocument(): Promise<DetailDocument> {
-  const tabs = await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/user/profile/*'] });
+async function findUniqueProfileDocument(expectedTabId?: number): Promise<DetailDocument> {
+  const tabs = expectedTabId === undefined
+    ? await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/user/profile/*'] })
+    : [await chrome.tabs.get(expectedTabId).catch(() => null)].filter((tab): tab is chrome.tabs.Tab => tab !== null);
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
     !tab.incognito && tab.status === 'complete' &&
     xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '') === 'public_profile');

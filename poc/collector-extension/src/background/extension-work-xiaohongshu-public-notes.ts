@@ -14,84 +14,139 @@ import {
 } from './xiaohongshu-current-page-network';
 import { executeXiaohongshuTrustedInputSearch } from './xiaohongshu-trusted-input';
 import { executeXiaohongshuNotePublicDetailExtensionWork } from './extension-work-xiaohongshu-note-public-detail';
+import {
+  abandonExtensionWorkTab,
+  acquireExtensionWorkTab,
+  navigateXiaohongshuExploreOnce,
+  releaseExtensionWorkTab,
+  type ExtensionWorkTabLease,
+  type WorkTabAcquisition,
+  type WorkTabDisposition
+} from './extension-work-tabs';
+
+export interface XiaohongshuPublicNotesSearchExtensionLifecycle {
+  onWorkTabAcquired?(acquisition: WorkTabAcquisition): Promise<void>;
+  onNavigationIntent?(): Promise<void>;
+}
 
 export async function executeXiaohongshuPublicNotesSearchExtensionWork(
   item: XiaohongshuPublicNotesSearchWorkItem,
-  internalBinding: { expectedTabId?: number } = {}
+  internalBinding: { expectedTabId?: number } = {},
+  lifecycle: XiaohongshuPublicNotesSearchExtensionLifecycle = {}
 ): Promise<XiaohongshuPublicNotesSearchWorkResult> {
   const projectionBox: { value: XiaohongshuManagedSearchProjectionResult | null } = { value: null };
   const detailActions = { requestedCount: 0, attemptedCount: 0, completedCount: 0, stoppedReason: null as string | null };
   const commentsPlan = item.input.comments;
   let observedTabId: number | null = null;
-  const action = await executeXiaohongshuTrustedInputSearch({
-    schemaVersion: 1,
-    actionId: item.workId,
-    workId: item.workId,
-    runId: item.operationId,
-    browserBindingId: item.browserBindingId,
-    query: item.input.query,
-    expiresAt: item.expiresAt
-  }, {
-    onEligibleDocument: async (document) => {
-      if (internalBinding.expectedTabId !== undefined && document.tabId !== internalBinding.expectedTabId) {
-        throw new Error('xiaohongshu_trusted_input_document_changed');
-      }
-      observedTabId = document.tabId;
-      await armXiaohongshuExistingExploreWorkObserver(document.tabId, item.workId);
-    },
-    onSearchPostcondition: async (document) => {
-      projectionBox.value = await readXiaohongshuExistingExploreWorkProjection(document.tabId, item.workId);
-      if (projectionBox.value.items.length < 1) throw new Error('xiaohongshu_trusted_input_postcondition_unmet');
-      const requestedCount = Math.min(
-        Math.max(0, Math.floor(item.input.maximumDetails ?? 0)),
-        projectionBox.value.items.length
-      );
-      detailActions.requestedCount = requestedCount;
-      if (requestedCount === 0) return;
-      await waitForSearchDocumentStability(document.tabId, item.expiresAt);
-
-      // The search observer owns the initial Explore lease. Detail work uses
-      // its own short-lived same-document lease so each ranked click is
-      // independently at-most-once and can be stopped without replaying the
-      // search action.
-      await clearXiaohongshuWorkObserver(document.tabId, item.workId);
-      const details = [...(projectionBox.value.details ?? [])];
-      for (let rank = 1; rank <= requestedCount; rank += 1) {
-        detailActions.attemptedCount = rank;
-        const detailItem = createDepthDetailWorkItem(item, rank);
-        const detailResult = await executeXiaohongshuNotePublicDetailExtensionWork(detailItem, {
-          closeOverlayAfterCapture: true,
-          collectComments: commentsPlan ? { maximumScrolls: commentsPlan.maximumScrolls } : undefined,
-          collectReplies: commentsPlan?.replies,
-          debuggee: { tabId: document.tabId }
-        });
-        if (detailResult.state !== 'completed' || !detailResult.projection) {
-          detailActions.stoppedReason = detailResult.errorCode ?? 'xiaohongshu_note_detail_postcondition_unmet';
-          throw new Error(detailActions.stoppedReason);
-        }
-        const noteId = projectionBox.value.items[rank - 1]?.noteId;
-        if (noteId) {
-          const enriched = {
-            noteId,
-            publicText: detailResult.projection.publicText,
-            authorNickname: detailResult.projection.authorNickname,
-            interactionText: detailResult.projection.interactionText
-          } as (typeof details)[number];
-          if (detailResult.projection.comments) enriched.comments = detailResult.projection.comments;
-          if (detailResult.projection.replyThread) enriched.replyThread = detailResult.projection.replyThread;
-          if (detailResult.projection.replyThreads) enriched.replyThreads = detailResult.projection.replyThreads;
-          const existingIndex = details.findIndex((detail) => detail.noteId === noteId);
-          if (existingIndex >= 0) details[existingIndex] = { ...details[existingIndex], ...enriched };
-          else {
-            details.push(enriched);
-          }
-        }
-        detailActions.completedCount = rank;
-        if (rank < requestedCount) await delay(1_500);
-      }
-      projectionBox.value = { ...projectionBox.value, details: details.slice(0, 40) };
+  let workTab: ExtensionWorkTabLease | null = null;
+  let acquisition: WorkTabAcquisition | 'not_acquired' = 'not_acquired';
+  let navigationAttempted = false;
+  let workTabDisposition: WorkTabDisposition = 'closed_or_missing';
+  let action: Awaited<ReturnType<typeof executeXiaohongshuTrustedInputSearch>>;
+  try {
+    if (internalBinding.expectedTabId === undefined) {
+      workTab = await acquireExtensionWorkTab();
+      acquisition = workTab.acquisition;
+      await lifecycle.onWorkTabAcquired?.(acquisition);
+      await navigateXiaohongshuExploreOnce(workTab, async () => {
+        navigationAttempted = true;
+        await lifecycle.onNavigationIntent?.();
+      });
+      await waitForXiaohongshuExploreReady(workTab, item.expiresAt);
     }
-  });
+    action = await executeXiaohongshuTrustedInputSearch({
+      schemaVersion: 1,
+      actionId: item.workId,
+      workId: item.workId,
+      runId: item.operationId,
+      browserBindingId: item.browserBindingId,
+      query: item.input.query,
+      expiresAt: item.expiresAt
+    }, {
+      expectedTabId: workTab?.tabId ?? internalBinding.expectedTabId,
+      onEligibleDocument: async (document) => {
+        if (internalBinding.expectedTabId !== undefined && document.tabId !== internalBinding.expectedTabId) {
+          throw new Error('xiaohongshu_trusted_input_document_changed');
+        }
+        observedTabId = document.tabId;
+        await armXiaohongshuExistingExploreWorkObserver(document.tabId, item.workId);
+      },
+      onSearchPostcondition: async (document) => {
+        projectionBox.value = await readXiaohongshuExistingExploreWorkProjection(document.tabId, item.workId);
+        if (projectionBox.value.items.length < 1) throw new Error('xiaohongshu_trusted_input_postcondition_unmet');
+        const requestedCount = Math.min(
+          Math.max(0, Math.floor(item.input.maximumDetails ?? 0)),
+          projectionBox.value.items.length
+        );
+        detailActions.requestedCount = requestedCount;
+        if (requestedCount === 0) return;
+        await waitForSearchDocumentStability(document.tabId, item.expiresAt);
+
+        // The search observer owns the initial Explore lease. Detail work uses
+        // the same managed tab and same document; it never opens a new tab.
+        await clearXiaohongshuWorkObserver(document.tabId, item.workId);
+        const details = [...(projectionBox.value.details ?? [])];
+        for (let rank = 1; rank <= requestedCount; rank += 1) {
+          detailActions.attemptedCount = rank;
+          const detailItem = createDepthDetailWorkItem(item, rank);
+          const detailResult = await executeXiaohongshuNotePublicDetailExtensionWork(detailItem, {
+            closeOverlayAfterCapture: true,
+            collectComments: commentsPlan ? { maximumScrolls: commentsPlan.maximumScrolls } : undefined,
+            collectReplies: commentsPlan?.replies,
+            debuggee: { tabId: document.tabId },
+            expectedTabId: document.tabId,
+            skipForeground: true
+          });
+          if (detailResult.state !== 'completed' || !detailResult.projection) {
+            detailActions.stoppedReason = detailResult.errorCode ?? 'xiaohongshu_note_detail_postcondition_unmet';
+            throw new Error(detailActions.stoppedReason);
+          }
+          const noteId = projectionBox.value.items[rank - 1]?.noteId;
+          if (noteId) {
+            const enriched = {
+              noteId,
+              publicText: detailResult.projection.publicText,
+              authorNickname: detailResult.projection.authorNickname,
+              interactionText: detailResult.projection.interactionText
+            } as (typeof details)[number];
+            if (detailResult.projection.comments) enriched.comments = detailResult.projection.comments;
+            if (detailResult.projection.replyThread) enriched.replyThread = detailResult.projection.replyThread;
+            if (detailResult.projection.replyThreads) enriched.replyThreads = detailResult.projection.replyThreads;
+            const existingIndex = details.findIndex((detail) => detail.noteId === noteId);
+            if (existingIndex >= 0) details[existingIndex] = { ...details[existingIndex], ...enriched };
+            else details.push(enriched);
+          }
+          detailActions.completedCount = rank;
+          if (rank < requestedCount) await delay(1_500);
+        }
+        projectionBox.value = { ...projectionBox.value, details: details.slice(0, 40) };
+      }
+    });
+    if (workTab) {
+      workTabDisposition = action.state === 'completed'
+        ? releaseExtensionWorkTab(workTab)
+        : abandonExtensionWorkTab(workTab);
+      workTab = null;
+    }
+  } catch (error) {
+    const errorCode = safeErrorCode(error);
+    if (workTab) {
+      workTabDisposition = navigationAttempted
+        ? abandonExtensionWorkTab(workTab)
+        : releaseExtensionWorkTab(workTab);
+      workTab = null;
+    }
+    action = {
+      schemaVersion: 1,
+      actionId: item.workId,
+      state: 'stopped',
+      errorCode,
+      semanticAction: { attempted: false, attemptCount: 0 },
+      input: { queryEchoed: false, enterAttempted: false },
+      page: null,
+      debuggerDetached: true
+    };
+  }
   const projection = projectionBox.value;
   const depthRequested = detailActions.requestedCount > 0;
   const depthCompleted = !depthRequested || detailActions.completedCount === detailActions.requestedCount;
@@ -114,7 +169,10 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
       ? depthRequested ? 'search_depth_ready' : 'search_ready'
       : depthStopped ? 'search_depth_stopped' : terminalReason(action.errorCode),
     completedAt: new Date().toISOString(),
-    navigation: { attempted: false, attemptCount: 0 },
+    navigation: { attempted: navigationAttempted, attemptCount: navigationAttempted ? 1 : 0 },
+    ...(internalBinding.expectedTabId === undefined
+      ? { workTabAcquisition: acquisition, workTabDisposition }
+      : {}),
     semanticAction: action.semanticAction,
     input: action.input,
     detailActions: depthRequested ? detailActions : undefined,
@@ -128,6 +186,23 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
   };
   if (observedTabId !== null) await clearXiaohongshuWorkObserver(observedTabId, item.workId).catch(() => undefined);
   return result;
+}
+
+async function waitForXiaohongshuExploreReady(
+  workTab: ExtensionWorkTabLease,
+  expiresAt: string
+): Promise<void> {
+  const deadline = Math.min(Date.parse(expiresAt), Date.now() + 30_000);
+  while (Date.now() < deadline) {
+    const tab = await chrome.tabs.get(workTab.tabId).catch(() => null);
+    if (!tab) throw new Error('work_tab_closed');
+    if (tab.status === 'complete' && xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '') === 'explore') {
+      const frame = await chrome.webNavigation.getFrame({ tabId: workTab.tabId, frameId: 0 }).catch(() => null);
+      if (frame?.documentId && xiaohongshuCurrentPageNetworkPublicSurface(frame.url) === 'explore') return;
+    }
+    await delay(300);
+  }
+  throw new Error('xiaohongshu_explore_navigation_not_ready');
 }
 
 function createDepthDetailWorkItem(
@@ -188,6 +263,11 @@ function terminalReason(errorCode: string | null): XiaohongshuPublicNotesSearchT
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
+}
+
+function safeErrorCode(error: unknown): string {
+  const code = error instanceof Error ? error.message : '';
+  return /^[a-z0-9_]{1,100}$/.test(code) ? code : 'xiaohongshu_search_execution_failed';
 }
 
 async function waitForSearchDocumentStability(tabId: number, expiresAt: string): Promise<void> {

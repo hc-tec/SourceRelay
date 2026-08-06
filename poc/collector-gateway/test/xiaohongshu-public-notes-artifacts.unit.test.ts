@@ -21,7 +21,7 @@ const item: XiaohongshuPublicNotesSearchWorkItem = {
   expiresAt: '2026-07-28T09:01:00.000Z',
   input: { query: '不能进入 artifact 的查询原文' },
   budget: {
-    maximumPlatformNavigations: 0,
+    maximumPlatformNavigations: 1,
     maximumPageReloads: 0,
     maximumPageInitiatedNewDocuments: 0,
     maximumSemanticActions: 1,

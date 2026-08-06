@@ -42,7 +42,7 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
       routeAdmission: 'public_payload_shape_verified_no_url_dependency',
       browserHostFallback: 'forbidden',
       budget: {
-        maximumPlatformNavigations: 0,
+        maximumPlatformNavigations: 1,
         maximumPageReloads: 0,
         maximumPageInitiatedNewDocuments: 0,
         maximumSemanticActions: 1,

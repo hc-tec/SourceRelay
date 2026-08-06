@@ -9,6 +9,7 @@ import {
   isXiaohongshuManagedSearchProjectionResult,
   type XiaohongshuManagedSearchProjectionResult
 } from './xiaohongshu-current-page-network.js';
+import type { ExtensionWorkTabAcquisition, ExtensionWorkTabDisposition } from './extension-work.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SIGNATURE = /^[A-Za-z0-9_-]{40,}$/;
@@ -74,7 +75,11 @@ export interface XiaohongshuPublicNotesSearchWorkResult {
   errorCode: string | null;
   terminalReason: XiaohongshuPublicNotesSearchTerminalReason;
   completedAt: string;
-  navigation: { attempted: false; attemptCount: 0 };
+  navigation: { attempted: boolean; attemptCount: 0 | 1 };
+  /** Present for Collector-managed execution; omitted by the legacy canary. */
+  workTabAcquisition?: ExtensionWorkTabAcquisition;
+  /** Present for Collector-managed execution; omitted by the legacy canary. */
+  workTabDisposition?: ExtensionWorkTabDisposition;
   semanticAction: { attempted: boolean; attemptCount: 0 | 1 };
   input: { queryEchoed: boolean; enterAttempted: boolean };
   detailActions?: {
@@ -115,7 +120,8 @@ export function isXiaohongshuPublicNotesSearchWorkResult(
     value.capability !== XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY ||
     value.executionTarget !== 'existing_public_explore_tab' || (value.state !== 'completed' && value.state !== 'stopped') ||
     !(value.errorCode === null || (typeof value.errorCode === 'string' && SAFE_ERROR.test(value.errorCode))) ||
-    !terminalReason(value.terminalReason) || !timestamp(value.completedAt) || !zeroNavigation(value.navigation) ||
+    !terminalReason(value.terminalReason) || !timestamp(value.completedAt) || !navigation(value.navigation) ||
+    !workTabFields(value) ||
     !semanticAction(value.semanticAction) || !inputResult(value.input) || !detailActions(value.detailActions) || !pageResult(value.page) ||
     !(value.projection === null || isXiaohongshuManagedSearchProjectionResult(value.projection)) ||
     value.rawPayloadStored !== false || value.responseUrlsStored !== false || typeof value.debuggerDetached !== 'boolean') {
@@ -179,7 +185,7 @@ function isBudget(
   const maximumNetworkResponseBodies = Number(value.maximumNetworkResponseBodies);
   const maximumProjectedItems = Number(value.maximumProjectedItems);
   const maximumRawPayloadBytesStored = Number(value.maximumRawPayloadBytesStored);
-  if (maximumPlatformNavigations !== 0 || maximumPageReloads !== 0 || maximumPageInitiatedNewDocuments !== 0 ||
+  if (maximumPlatformNavigations !== 1 || maximumPageReloads !== 0 || maximumPageInitiatedNewDocuments !== 0 ||
     maximumRawPayloadBytesStored !== 0) return false;
   if (Number(input.maximumDetails ?? 0) <= 0) {
     return maximumSemanticActions === 1 && maximumNetworkResponseBodies === 8 && maximumProjectedItems === 40;
@@ -221,15 +227,34 @@ function detailActions(value: unknown): boolean {
 function searchResultKeys(value: Record<string, unknown>): boolean {
   const base = [
     'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
-    'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction',
-    'input', 'page', 'projection', 'rawPayloadStored', 'responseUrlsStored', 'debuggerDetached'
+    'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation',
+    'semanticAction', 'input', 'page', 'projection', 'rawPayloadStored', 'responseUrlsStored', 'debuggerDetached'
   ] as const;
-  return exactKeys(value, base) || exactKeys(value, [...base.slice(0, 15), 'detailActions', ...base.slice(15)]);
+  const withDetails = [...base.slice(0, 15), 'detailActions', ...base.slice(15)];
+  const withWorkTab = [...base.slice(0, 16), 'workTabAcquisition', 'workTabDisposition', ...base.slice(16)];
+  const withDetailsAndWorkTab = [
+    ...base.slice(0, 15), 'detailActions', ...base.slice(15, 16),
+    'workTabAcquisition', 'workTabDisposition', ...base.slice(16)
+  ];
+  return exactKeys(value, base) || exactKeys(value, withDetails) ||
+    exactKeys(value, withWorkTab) || exactKeys(value, withDetailsAndWorkTab);
 }
 
-function zeroNavigation(value: unknown): boolean {
+function navigation(value: unknown): boolean {
   return record(value) && exactKeys(value, ['attempted', 'attemptCount']) &&
-    value.attempted === false && value.attemptCount === 0;
+    typeof value.attempted === 'boolean' && (value.attemptCount === 0 || value.attemptCount === 1) &&
+    value.attemptCount === (value.attempted ? 1 : 0);
+}
+
+function workTabFields(value: Record<string, unknown>): boolean {
+  const hasAcquisition = Object.hasOwn(value, 'workTabAcquisition');
+  const hasDisposition = Object.hasOwn(value, 'workTabDisposition');
+  if (hasAcquisition !== hasDisposition) return false;
+  if (!hasAcquisition) return true;
+  return (value.workTabAcquisition === 'created' || value.workTabAcquisition === 'reused' ||
+      value.workTabAcquisition === 'not_acquired') &&
+    (value.workTabDisposition === 'idle_reusable' || value.workTabDisposition === 'retained_not_reusable' ||
+      value.workTabDisposition === 'user_taken_over' || value.workTabDisposition === 'closed_or_missing');
 }
 
 function semanticAction(value: unknown): boolean {

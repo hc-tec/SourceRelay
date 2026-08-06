@@ -20,7 +20,9 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY =
 export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY =
   'xiaohongshu.account.public_notes.v1' as const;
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET = Object.freeze({
-  maximumPlatformNavigations: 0,
+  // Enter the official Explore surface at most once through a Collector-
+  // managed work tab. Reloads and page-initiated documents remain forbidden.
+  maximumPlatformNavigations: 1,
   maximumPageReloads: 0,
   maximumPageInitiatedNewDocuments: 0,
   maximumSemanticActions: 1,
@@ -50,7 +52,7 @@ export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET = Object.freeze({
  * reloads, opens a page-initiated document, or stores raw payloads.
  */
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET = Object.freeze({
-  maximumPlatformNavigations: 0,
+  maximumPlatformNavigations: 1,
   maximumPageReloads: 0,
   maximumPageInitiatedNewDocuments: 0,
   maximumSemanticActions: 41,
@@ -65,7 +67,7 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET = Object.freeze({
  * the composed operation; raw payloads are still never stored.
  */
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET = Object.freeze({
-  maximumPlatformNavigations: 0,
+  maximumPlatformNavigations: 1,
   maximumPageReloads: 0,
   maximumPageInitiatedNewDocuments: 0,
   maximumSemanticActions: 101,
@@ -80,7 +82,7 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET = Object.free
  * budget. Raw payloads remain projection-only and are never persisted.
  */
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET = Object.freeze({
-  maximumPlatformNavigations: 0,
+  maximumPlatformNavigations: 1,
   maximumPageReloads: 0,
   maximumPageInitiatedNewDocuments: 0,
   maximumSemanticActions: 121,
@@ -90,7 +92,7 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET = Obj
 } as const);
 /** Aggregate upper bound when two or three reply threads are requested per detail. */
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET = Object.freeze({
-  maximumPlatformNavigations: 0,
+  maximumPlatformNavigations: 1,
   maximumPageReloads: 0,
   maximumPageInitiatedNewDocuments: 0,
   maximumSemanticActions: 161,

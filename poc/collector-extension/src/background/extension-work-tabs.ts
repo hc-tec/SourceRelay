@@ -11,6 +11,7 @@ import {
   extensionWorkTargetUrl,
   isBilibiliNativeSearchBatchWorkItem,
   isExtensionWorkItem,
+  xiaohongshuCurrentPageNetworkPublicSurface,
   type BilibiliNativeSearchBatchPageNumber,
   type BilibiliNativeSearchBatchWorkItem,
   type ExtensionWorkItem
@@ -35,6 +36,8 @@ export interface ExtensionWorkTabLease {
   tabId: number;
   acquisition: WorkTabAcquisition;
 }
+
+export const XIAOHONGSHU_EXPLORE_URL = 'https://www.xiaohongshu.com/explore' as const;
 
 interface ManagedWorkTab {
   tabId: number;
@@ -233,6 +236,22 @@ export async function navigateExtensionWorkTabOnce(
 }
 
 /**
+ * Xiaohongshu has no caller-supplied navigation target. The only allowed
+ * entry is the official Explore surface, and an already-ready managed Explore
+ * document is reused without issuing another navigation.
+ */
+export async function navigateXiaohongshuExploreOnce(
+  workTab: ExtensionWorkTabLease,
+  onNavigationIntent?: () => Promise<void> | void
+): Promise<void> {
+  await ensureExtensionWorkTabForeground(workTab);
+  const tab = await chrome.tabs.get(workTab.tabId).catch(() => null);
+  const currentSurface = xiaohongshuCurrentPageNetworkPublicSurface(tab?.url ?? '');
+  if (currentSurface === 'explore') return;
+  await navigateExtensionWorkTabToCanonicalTarget(workTab, XIAOHONGSHU_EXPLORE_URL, onNavigationIntent);
+}
+
+/**
  * The batch runner can navigate only to one of the two URL targets already
  * signed into its work item.  It never accepts a caller-provided URL, page
  * number outside the reviewed pair, selector, or click instruction.
@@ -417,7 +436,7 @@ function lease(record: ManagedWorkTab, acquisition: WorkTabAcquisition): Extensi
  * bring its own managed window to the foreground once; it never reclaims
  * focus after a user takeover.
  */
-async function ensureExtensionWorkTabForeground(workTab: ExtensionWorkTabLease): Promise<void> {
+export async function ensureExtensionWorkTabForeground(workTab: ExtensionWorkTabLease): Promise<void> {
   const record = requireLease(workTab);
   record.expectedForegroundActivationUntil = Date.now() + FOREGROUND_ACTIVATION_GRACE_MS;
   try {
@@ -627,6 +646,14 @@ function persistWorkTabRegistry(): Promise<void> {
  * hard takeover signal.
  */
 export function isExpectedExtensionWorkNavigation(expectedCanonicalUrl: string, observedUrl: string): boolean {
+  if (expectedCanonicalUrl === XIAOHONGSHU_EXPLORE_URL) {
+    // The trusted in-page Enter transitions the same managed document from
+    // Explore to the public search-result route. Both surfaces belong to this
+    // one registered search lease; a profile, note URL, or arbitrary route does
+    // not.
+    const surface = xiaohongshuCurrentPageNetworkPublicSurface(observedUrl);
+    return surface === 'explore' || surface === 'search';
+  }
   const video = canonicalBilibiliVideoWorkUrl(expectedCanonicalUrl);
   if (video && video === expectedCanonicalUrl) {
     return canonicalBilibiliVideoWorkUrl(observedUrl) === expectedCanonicalUrl;

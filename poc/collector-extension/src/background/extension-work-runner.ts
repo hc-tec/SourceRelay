@@ -84,8 +84,9 @@ export async function pollForExtensionWork(): Promise<void> {
 
     const interrupted = await loadActiveExtensionWork();
     if (interrupted) {
-      const recoveredWorkTabDisposition = interrupted.item.platform === 'bilibili' &&
-        interrupted.item.executionTarget === 'collector_work_tab'
+      const recoveredWorkTabDisposition = (interrupted.item.platform === 'bilibili' &&
+        interrupted.item.executionTarget === 'collector_work_tab') ||
+        interrupted.item.capability === 'xiaohongshu.search.public_notes.v1'
         ? await recoverInterruptedExtensionWorkTab({
             workTabAcquisition: interrupted.workTabAcquisition,
             navigationIntentCount: interrupted.navigationIntentCount
@@ -168,7 +169,7 @@ async function execute(item: ExtensionWorkItem, pairing: GatewayPairingRecord): 
     }
   };
   if (item.capability === 'xiaohongshu.search.public_notes.v1') {
-    return await executeXiaohongshuPublicNotesSearchExtensionWork(item);
+    return await executeXiaohongshuPublicNotesSearchExtensionWork(item, {}, lifecycle);
   }
   if (item.capability === 'xiaohongshu.account.public_notes.v1') {
     return await executeXiaohongshuAccountPublicNotesExtensionWork(item);
@@ -402,6 +403,8 @@ async function interruptedResult(
   }
   if (active.item.capability === 'xiaohongshu.search.public_notes.v1') {
     const attempted = await wasXiaohongshuTrustedInputAttempted(active.item.workId);
+    const navigationAttempted = active.navigationIntentCount > 0;
+    const navigationAttemptCount = navigationAttempted ? 1 as const : 0 as const;
     return {
       schemaVersion: 1,
       protocolVersion: 1,
@@ -415,7 +418,11 @@ async function interruptedResult(
       errorCode: 'xiaohongshu_extension_worker_interrupted',
       terminalReason: 'extension_worker_interrupted',
       completedAt: new Date().toISOString(),
-      navigation: { attempted: false, attemptCount: 0 },
+      navigation: { attempted: navigationAttempted, attemptCount: navigationAttemptCount },
+      workTabAcquisition: active.workTabAcquisition,
+      workTabDisposition: recoveredWorkTabDisposition ?? (active.workTabAcquisition === 'not_acquired'
+        ? 'closed_or_missing'
+        : 'retained_not_reusable'),
       semanticAction: { attempted, attemptCount: attempted ? 1 : 0 },
       input: { queryEchoed: false, enterAttempted: false },
       page: null,
@@ -528,7 +535,8 @@ function nextNavigationIntentCount(
   item: ExtensionWorkItem,
   current: ActiveExtensionWork['navigationIntentCount']
 ): ActiveExtensionWork['navigationIntentCount'] {
-  const maximum = item.capability === 'bilibili.native_search_batch' ? 2 : 1;
+  const maximum = item.capability === 'bilibili.native_search_batch' ? 2 :
+    item.capability === 'xiaohongshu.search.public_notes.v1' ? 1 : 1;
   if (current >= maximum) throw new Error('extension_work_navigation_budget_exceeded');
   return (current + 1) as ActiveExtensionWork['navigationIntentCount'];
 }

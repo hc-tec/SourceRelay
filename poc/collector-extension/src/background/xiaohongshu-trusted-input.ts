@@ -72,6 +72,8 @@ interface PagePostconditionProbe {
 }
 
 export interface XiaohongshuTrustedInputLifecycle {
+  /** Internal-only managed-tab binding; never accepted from an AI request. */
+  expectedTabId?: number;
   onEligibleDocument?: (document: Readonly<EligibleDocument>) => Promise<void>;
   onSearchPostcondition?: (
     document: Readonly<EligibleDocument>,
@@ -80,9 +82,11 @@ export interface XiaohongshuTrustedInputLifecycle {
 }
 
 /**
- * Executes exactly one fixed Xiaohongshu search in an already-existing public
- * Explore document. The action accepts no URL, tab ID, selector, coordinate,
- * script or CDP command. It never creates, navigates, reloads or closes a tab.
+ * Executes exactly one fixed Xiaohongshu search in an Explore document. The
+ * normal work-runner path binds this operation to one Collector-managed tab;
+ * the legacy canary may provide an internal expected tab. The action accepts
+ * no caller URL, selector, coordinate, script or CDP command and never
+ * navigates, reloads or closes a tab itself.
  */
 export async function executeXiaohongshuTrustedInputSearch(
   value: unknown,
@@ -105,7 +109,7 @@ export async function executeXiaohongshuTrustedInputSearch(
   let queryEchoed = false;
   let result: XiaohongshuTrustedInputResult;
   try {
-    const document = await findUniqueEligibleExploreDocument();
+    const document = await findUniqueEligibleExploreDocument(lifecycle.expectedTabId);
     await chrome.tabs.update(document.tabId, { active: true });
     await requireSameDocument(document);
     await lifecycle.onEligibleDocument?.(document);
@@ -230,8 +234,10 @@ export async function readXiaohongshuTrustedInputLedgerSummary(): Promise<{
   };
 }
 
-async function findUniqueEligibleExploreDocument(): Promise<EligibleDocument> {
-  const tabs = await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/explore', 'https://www.xiaohongshu.com/explore/'] });
+async function findUniqueEligibleExploreDocument(expectedTabId?: number): Promise<EligibleDocument> {
+  const tabs = expectedTabId === undefined
+    ? await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/explore', 'https://www.xiaohongshu.com/explore/'] })
+    : [await chrome.tabs.get(expectedTabId).catch(() => null)].filter((tab): tab is chrome.tabs.Tab => tab !== null);
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
     !tab.incognito && tab.status === 'complete' && xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '') === 'explore');
   if (eligible.length === 0) throw new Error('xiaohongshu_trusted_input_explore_tab_required');

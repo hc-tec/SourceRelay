@@ -403,7 +403,7 @@ describe('extension work queue state machine', () => {
         executionTarget: 'existing_public_explore_tab',
         input: { query },
         budget: {
-          maximumPlatformNavigations: 0,
+          maximumPlatformNavigations: 1,
           maximumPageReloads: 0,
           maximumPageInitiatedNewDocuments: 0,
           maximumSemanticActions: 1

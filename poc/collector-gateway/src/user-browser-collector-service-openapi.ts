@@ -407,7 +407,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'maximumRawPayloadBytesStored'
               ],
               properties: {
-                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPlatformNavigations: { type: 'integer', const: 1 },
                 maximumPageReloads: { type: 'integer', const: 0 },
                 maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
                 maximumSemanticActions: { type: 'integer', const: 1 },
@@ -424,7 +424,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'maximumRawPayloadBytesStored'
               ],
               properties: {
-                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPlatformNavigations: { type: 'integer', const: 1 },
                 maximumPageReloads: { type: 'integer', const: 0 },
                 maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
                 maximumSemanticActions: { type: 'integer', const: 41 },
@@ -441,7 +441,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'maximumRawPayloadBytesStored'
               ],
               properties: {
-                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPlatformNavigations: { type: 'integer', const: 1 },
                 maximumPageReloads: { type: 'integer', const: 0 },
                 maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
                 maximumSemanticActions: { type: 'integer', const: 101 },
@@ -458,7 +458,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'maximumRawPayloadBytesStored'
               ],
               properties: {
-                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPlatformNavigations: { type: 'integer', const: 1 },
                 maximumPageReloads: { type: 'integer', const: 0 },
                 maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
                 maximumSemanticActions: { type: 'integer', const: 121 },
@@ -475,7 +475,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 'maximumRawPayloadBytesStored'
               ],
               properties: {
-                maximumPlatformNavigations: { type: 'integer', const: 0 },
+                maximumPlatformNavigations: { type: 'integer', const: 1 },
                 maximumPageReloads: { type: 'integer', const: 0 },
                 maximumPageInitiatedNewDocuments: { type: 'integer', const: 0 },
                 maximumSemanticActions: { type: 'integer', const: 161 },
@@ -812,7 +812,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
         },
         UserBrowserXiaohongshuPublicNotesSearchCollectRequest: {
           type: 'object', additionalProperties: false,
-          description: 'Runs one fixed trusted in-page search in the unique existing public Explore tab. An optional maximumDetails (0–20) performs sequential same-document detail captures with a slow fixed delay and closes each overlay before the next rank. An optional comments.maximumScrolls (1–3) collects public comments while each requested detail overlay is open; comments.replies.maximumThreads (1–3) additionally expands up to the requested number of visible reply threads per detail, and is disabled unless comments is enabled. No URL, tab ID, selector, coordinate, script, debugger command, refresh, new tab, or Browser Host fallback can be supplied.',
+          description: 'Runs one fixed trusted in-page search in a Collector-managed work tab. The runner creates or reuses one tab and may navigate it at most once to the official public Explore surface; it never refreshes or opens a page-initiated document. An optional maximumDetails (0–20) performs sequential same-document detail captures with a slow fixed delay and closes each overlay before the next rank. An optional comments.maximumScrolls (1–3) collects public comments while each requested detail overlay is open; comments.replies.maximumThreads (1–3) additionally expands up to the requested number of visible reply threads per detail, and is disabled unless comments is enabled. No URL, tab ID, selector, coordinate, script, debugger command, refresh, new tab, or Browser Host fallback can be supplied.',
           required: ['schemaVersion', 'clientRequestId', 'browserBindingId', 'platform', 'capability', 'executionTarget', 'input'],
           properties: {
             schemaVersion: { type: 'integer', const: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION },
