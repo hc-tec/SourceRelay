@@ -360,7 +360,7 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
   });
 
-  test('quarantines an idle work tab after the person switches to another tab', async () => {
+  test('keeps an idle work tab reusable after the person switches to another tab', async () => {
     const browser = installChromeTabsMock();
     const tabs = await import('../src/background/extension-work-tabs.js');
     const lease = await tabs.acquireExtensionWorkTab();
@@ -369,8 +369,9 @@ describe('extension-owned work-tab foreground lifecycle', () => {
 
     browser.activate(1);
 
-    await expect(tabs.acquireExtensionWorkTab()).rejects.toThrow('work_tab_user_taken_over');
-    expect(tabs.currentExtensionWorkTabLossCause()).toBe('another_tab_activated');
+    const reused = await tabs.acquireExtensionWorkTab();
+    expect(reused.acquisition).toBe('reused');
+    expect(tabs.currentExtensionWorkTabLossCause()).toBeNull();
     expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
   });
 

@@ -77,12 +77,21 @@ export async function runValidationExtensionControl(input: {
     await controlPage.locator('input[name="identityFingerprint"]').fill(request.identityFingerprint);
     await controlPage.locator('input[name="pairingSessionId"]').fill(request.pairingSessionId);
     await controlPage.locator('input[name="pairingCode"]').fill(request.pairingCode);
+    const gatewayStateBeforeSubmit = await controlPage.locator('#gateway-state').textContent();
     await controlPage.locator('#pair-gateway button[type="submit"]').click();
 
     const gatewayState = controlPage.locator('#gateway-state');
+    // A persistent validation profile may still render the previous Gateway
+    // binding while the new pairing request is in flight. Waiting only for
+    // the existing "已连接" label would return that stale binding and let a
+    // subsequent collect request fail with browser_binding_not_found on the
+    // newly started Gateway. Require a post-submit state transition.
+    await controlPage.waitForFunction((before) => {
+      const text = document.querySelector('#gateway-state')?.textContent ?? '';
+      return text.includes('已连接') && text !== before;
+    }, gatewayStateBeforeSubmit ?? '', { timeout: CONTROL_TARGET_TIMEOUT_MS });
     await gatewayState.filter({ hasText: '已连接' }).waitFor({
-      state: 'visible',
-      timeout: CONTROL_TARGET_TIMEOUT_MS
+      state: 'visible', timeout: CONTROL_TARGET_TIMEOUT_MS
     });
     const bindingText = await gatewayState.textContent();
     const browserBindingId = bindingText?.match(BROWSER_BINDING_ID)?.[0] ?? null;

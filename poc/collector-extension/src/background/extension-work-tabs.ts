@@ -99,14 +99,6 @@ export function initialiseExtensionWorkTabs(): void {
   chrome.tabs.onMoved.addListener((tabId) => forgetTab(tabId, 'user_taken_over', 'managed_tab_moved'));
   chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
     const activated = managedTabs.get(tabId);
-    if (activated?.state === 'idle_reusable') {
-      // A normal terminal release deliberately leaves the work tab visible so
-      // the person can inspect it.  If a later activation event arrives while
-      // it is idle, that activation is user-owned interaction, not a pending
-      // extension acquisition; quarantine the tab before any future task can
-      // reuse it.
-      forgetTab(tabId, 'user_taken_over', 'idle_tab_activated');
-    }
     const foregroundActivationExpected = activated?.expectedForegroundActivationUntil !== null &&
       activated?.expectedForegroundActivationUntil !== undefined &&
       Date.now() <= activated.expectedForegroundActivationUntil;
@@ -136,11 +128,11 @@ export function initialiseExtensionWorkTabs(): void {
             : 'another_tab_activated'
         );
       }
-      if (record.state === 'idle_reusable' && record.windowId === windowId && record.tabId !== tabId) {
-        // The person left an idle work tab for another tab.  It is no longer
-        // safe to take over that visible page on a later request.
-        forgetTab(record.tabId, 'user_taken_over', 'another_tab_activated');
-      }
+      // An idle managed tab may remain in the background while the person uses
+      // another tab. Its exact URL/document identity is checked again at the
+      // next acquisition; activation alone is not proof of takeover. This is
+      // what lets the pool reuse one visible work tab instead of accumulating
+      // a new tab for every operation.
     }
   });
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
@@ -183,9 +175,9 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
         forgetTab(record.tabId, 'user_taken_over', 'unexpected_url_update');
         continue;
       }
-      // The normal release path leaves the owned page in the foreground for
-      // review.  It is still reusable until a subsequent activation,
-      // navigation, move, or close proves that the user took it over.
+      // The normal release path leaves the owned page visible for review. It
+      // remains reusable while its exact managed identity is intact; a URL
+      // change, move, or close proves that the user took it over.
       const result = lease(record, 'reused');
       await persistWorkTabRegistry();
       return result;

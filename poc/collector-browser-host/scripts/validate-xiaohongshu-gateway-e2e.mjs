@@ -13,10 +13,12 @@ const extensionSourceDirectory = resolve(pocRoot, 'collector-extension');
 const gatewayDirectory = resolve(pocRoot, 'collector-gateway');
 const profileId = 'xiaohongshu_validation';
 const exploreUrl = 'https://www.xiaohongshu.com/explore';
-// The composed live run keeps one exact page lease across search, same-
-// document detail, comments and bounded replies.  Keep this equal to the
-// validation adoption contract's finite five-minute upper bound so a retained
-// review page can be reused without falling back to a second browser page.
+// The Browser Host baseline page remains a human-visible review surface. The
+// production search executor separately owns one extension work tab and keeps
+// that exact tab across search, same-document detail, comments and replies.
+// Keep the host lease equal to the validation adoption contract's finite
+// five-minute upper bound so the review page can be reused without allocating
+// a second Host page.
 const validationLeaseDurationMs = 300_000;
 const validateCommentRecon = process.argv.includes('--comment-recon');
 const validateReplyRecon = process.argv.includes('--reply-recon');
@@ -172,6 +174,21 @@ try {
     control.controlTargetDisposed !== true) {
     throw new Error('xiaohongshu_gateway_e2e_pairing_postcondition_unmet');
   }
+  const pairedBindings = await apiJson(`${gatewayOrigin}/v1/browser-bindings`, {
+    headers: sameOriginHeaders(gatewayOrigin)
+  }, 200);
+  const pairedBinding = Array.isArray(pairedBindings.bindings)
+    ? pairedBindings.bindings.find((binding) => binding?.browserBindingId === control.browserBindingId)
+    : null;
+  record('gateway_binding_visible', {
+    count: Array.isArray(pairedBindings.bindings) ? pairedBindings.bindings.length : 0,
+    controlBindingPresent: Boolean(pairedBinding),
+    state: pairedBinding?.state ?? null,
+    controlBindingPrefix: typeof control.browserBindingId === 'string' ? control.browserBindingId.slice(0, 8) : null,
+    gatewayBindingPrefix: typeof pairedBindings.bindings?.[0]?.browserBindingId === 'string'
+      ? pairedBindings.bindings[0].browserBindingId.slice(0, 8) : null
+  });
+  if (!pairedBinding) throw new Error('xiaohongshu_gateway_e2e_pairing_binding_missing');
   record('extension_paired', {
     browserBindingId: control.browserBindingId,
     controlTargetDisposed: true,
@@ -192,8 +209,8 @@ try {
       ? { maximumScrolls: accountMaximumScrolls }
       : { maximumScrolls: accountMaximumScrolls, profileUrl: suppliedProfileUrl };
     const accountDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
-      method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
-        browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 3,
+        clientRequestId: randomUUID(), browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
         capability: 'xiaohongshu.account.public_notes.v1',
         executionTarget: accountExecutionTarget,
         input: accountInput })
@@ -246,8 +263,8 @@ try {
     });
     if (validateAccountNoteDetail) {
       const detailDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
-        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
-          browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 3,
+          clientRequestId: randomUUID(), browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
           capability: 'xiaohongshu.note.public_detail.v1',
           executionTarget: 'existing_public_profile_tab', input: { resultRank: 1 } })
       }, 201);
@@ -304,7 +321,8 @@ try {
     method: 'POST',
     headers: serviceHeaders(token),
     body: JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      clientRequestId: randomUUID(),
       browserBindingId: control.browserBindingId,
       platform: 'xiaohongshu',
       capability: 'xiaohongshu.search.public_notes.v1',
@@ -393,7 +411,8 @@ try {
       method: 'POST',
       headers: serviceHeaders(token),
       body: JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
+        clientRequestId: randomUUID(),
         browserBindingId: control.browserBindingId,
         platform: 'xiaohongshu',
         capability: 'xiaohongshu.note.public_detail.v1',
@@ -463,8 +482,8 @@ try {
         ? 'ephemeral_public_profile_url' : 'existing_public_profile_tab';
       const accountMaximumScrolls = suppliedProfileUrl ? 20 : 3;
       const accountDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
-        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
-          browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 3,
+          clientRequestId: randomUUID(), browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
           capability: 'xiaohongshu.account.public_notes.v1', executionTarget: accountExecutionTarget,
           input: suppliedProfileUrl
             ? { maximumScrolls: accountMaximumScrolls, profileUrl: suppliedProfileUrl }
@@ -505,8 +524,8 @@ try {
       });
     } else if (validatePublicComments) {
       const commentsDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
-        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
-          browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 3,
+          clientRequestId: randomUUID(), browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
           capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
           input: { maximumScrolls: 3 } })
       }, 201);
@@ -532,8 +551,8 @@ try {
         rawPayloadStored: false, responseUrlsStored: false });
       if (validatePublicReplies) {
         const repliesDispatch = await apiJson(`${gatewayOrigin}/v2/collect`, {
-          method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 2,
-            browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+        method: 'POST', headers: serviceHeaders(token), body: JSON.stringify({ schemaVersion: 3,
+            clientRequestId: randomUUID(), browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
             capability: 'xiaohongshu.note.public_comment_replies.v1',
             executionTarget: 'existing_public_note_overlay', input: { maximumThreads: standaloneReplyThreads } })
         }, 201);
@@ -669,6 +688,8 @@ try {
     artifact: {
       captureMode: reportedArtifact.summary.captureMode ?? 'search_projection',
       itemCount: reportedArtifact.summary.itemCount ?? null,
+      workTabAcquisition: reportedArtifact.result.workTabAcquisition ?? null,
+      workTabDisposition: reportedArtifact.result.workTabDisposition ?? null,
       detailCount: Array.isArray(reportedArtifact.result.projection?.details)
         ? reportedArtifact.result.projection.details.length : 0,
       publicTextCount: Array.isArray(reportedArtifact.result.projection?.details)
@@ -753,7 +774,7 @@ async function validateCommentsOnExistingOverlay(gatewayOrigin) {
   record('extension_paired', { browserBindingId: control.browserBindingId, platformSelectionPerformed: false });
   const token = await issueClientToken(gatewayOrigin);
   const dispatch = await apiJson(`${gatewayOrigin}/v2/collect`, { method: 'POST', headers: serviceHeaders(token),
-    body: JSON.stringify({ schemaVersion: 2, browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
+    body: JSON.stringify({ schemaVersion: 3, clientRequestId: randomUUID(), browserBindingId: control.browserBindingId, platform: 'xiaohongshu',
       capability: 'xiaohongshu.note.public_comments.v1', executionTarget: 'existing_public_note_overlay',
       input: { maximumScrolls: 3 } }) }, 201);
   const operationId = dispatch.result?.operationId;
@@ -837,8 +858,14 @@ function assertArtifact(artifact, operationId) {
     artifact.capability !== 'xiaohongshu.search.public_notes.v1' || artifact.state !== 'completed' ||
     !/^[a-f0-9]{64}$/.test(artifact.queryDigest) || artifact.summary?.queryDigest !== artifact.queryDigest ||
     artifact.summary?.itemCount < 1 || artifact.result?.projection?.items?.length < 1 ||
-    artifact.result?.navigation?.attempted !== false || artifact.result.navigation.attemptCount !== 0 ||
+    ![0, 1].includes(artifact.result?.navigation?.attemptCount) ||
+    artifact.result.navigation.attempted !== (artifact.result.navigation.attemptCount === 1) ||
     artifact.result?.semanticAction?.attempted !== true || artifact.result.semanticAction.attemptCount !== 1 ||
+    artifact.provenance?.platformNavigations !== artifact.result.navigation.attemptCount ||
+    !['created', 'reused'].includes(artifact.provenance?.workTabAcquisition) ||
+    artifact.provenance?.workTabDisposition !== 'idle_reusable' ||
+    artifact.result?.workTabAcquisition !== artifact.provenance?.workTabAcquisition ||
+    artifact.result?.workTabDisposition !== artifact.provenance?.workTabDisposition ||
     artifact.provenance?.rawPayloadStored !== false || artifact.provenance?.responseUrlsStored !== false ||
     artifact.provenance?.debuggerDetached !== true) {
     throw new Error('xiaohongshu_gateway_e2e_artifact_invalid');
