@@ -8,12 +8,23 @@ import {
   parseZhihuOfficialResponse,
   type ZhihuOfficialCollectorServiceRequest
 } from './zhihu-official-contract';
+import { validateZhihuOfficialAccessSecret } from './zhihu-official-config';
 
 const PROVIDER_ORIGIN = 'https://developer.zhihu.com';
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 type FetchImplementation = typeof globalThis.fetch;
+
+export type ZhihuOfficialCredentialSource = 'none' | 'environment' | 'console_session';
+
+export interface ZhihuOfficialCredentialStatus {
+  provider: 'zhihu_open_platform';
+  runtimeState: 'ready' | 'credential_required';
+  credentialLocation: 'gateway_only';
+  configurationMode: ZhihuOfficialCredentialSource;
+  restartPersistence: 'environment_only' | 'gateway_process_only';
+}
 
 export interface ZhihuOfficialApiProviderOptions {
   accessSecret: string | null;
@@ -26,7 +37,8 @@ export interface ZhihuOfficialApiProviderOptions {
 
 /** Fixed-contract server-to-server provider. It has no browser dependencies. */
 export class ZhihuOfficialApiProvider {
-  readonly #accessSecret: string | null;
+  #accessSecret: string | null;
+  #credentialSource: ZhihuOfficialCredentialSource;
   readonly #artifacts: ZhihuOfficialArtifactStore;
   readonly #operations: OfficialSourceOperationStore;
   readonly #fetch: FetchImplementation;
@@ -35,6 +47,7 @@ export class ZhihuOfficialApiProvider {
 
   constructor(options: ZhihuOfficialApiProviderOptions) {
     this.#accessSecret = options.accessSecret;
+    this.#credentialSource = options.accessSecret === null ? 'none' : 'environment';
     this.#artifacts = options.artifacts;
     this.#operations = options.operations;
     this.#fetch = options.fetchImpl ?? globalThis.fetch;
@@ -49,11 +62,38 @@ export class ZhihuOfficialApiProvider {
     return this.#accessSecret !== null;
   }
 
+  credentialStatus(): ZhihuOfficialCredentialStatus {
+    return {
+      provider: 'zhihu_open_platform',
+      runtimeState: this.#accessSecret === null ? 'credential_required' : 'ready',
+      credentialLocation: 'gateway_only',
+      configurationMode: this.#credentialSource,
+      restartPersistence: this.#credentialSource === 'environment'
+        ? 'environment_only'
+        : 'gateway_process_only'
+    };
+  }
+
+  /** Configure the provider for the current Gateway process only. */
+  configureForCurrentProcess(accessSecret: unknown): ZhihuOfficialCredentialStatus {
+    this.#accessSecret = validateZhihuOfficialAccessSecret(accessSecret);
+    this.#credentialSource = 'console_session';
+    return this.credentialStatus();
+  }
+
+  /** Clear the active in-process credential without touching browser state. */
+  clearCredential(): ZhihuOfficialCredentialStatus {
+    this.#accessSecret = null;
+    this.#credentialSource = 'none';
+    return this.credentialStatus();
+  }
+
   async collect(
     request: ZhihuOfficialCollectorServiceRequest,
     operationId: string
   ): Promise<OfficialSourceOperationSummary> {
-    if (!this.#accessSecret) throw new Error('zhihu_official_api_credential_required');
+    const accessSecret = this.#accessSecret;
+    if (!accessSecret) throw new Error('zhihu_official_api_credential_required');
     const startedAt = this.#now().toISOString();
     const url = officialUrl(request);
     const controller = new AbortController();
@@ -66,7 +106,7 @@ export class ZhihuOfficialApiProvider {
         signal: controller.signal,
         headers: {
           accept: 'application/json',
-          authorization: `Bearer ${this.#accessSecret}`,
+          authorization: `Bearer ${accessSecret}`,
           'content-type': 'application/json',
           'x-request-timestamp': String(Math.floor(this.#now().getTime() / 1_000))
         }
@@ -94,7 +134,7 @@ export class ZhihuOfficialApiProvider {
     let value: unknown;
     try {
       const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-      if (text.includes(this.#accessSecret)) {
+      if (text.includes(accessSecret)) {
         throw new Error('zhihu_official_api_response_contains_credential');
       }
       value = JSON.parse(text);

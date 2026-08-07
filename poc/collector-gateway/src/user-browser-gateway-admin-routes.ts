@@ -32,6 +32,7 @@ import {
 import type { OperationalLog } from './operational-log';
 import { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION } from '@intelligence/collector-contracts';
 import type { ZhihuOfficialArtifactStore } from './zhihu-official-artifacts';
+import type { ZhihuOfficialApiProvider } from './zhihu-official-api-provider';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const DIRECT_ARTIFACT = new RegExp(`^/v1/collect/artifacts/([^/]+)/(${UUID})$`, 'i');
@@ -56,6 +57,7 @@ export interface UserBrowserGatewayAdminRouteContext {
   xiaohongshuNotePublicCommentsArtifacts: XiaohongshuNotePublicCommentsArtifactStore;
   xiaohongshuReplyArtifacts: XiaohongshuReplyArtifactStore;
   zhihuOfficialArtifacts: ZhihuOfficialArtifactStore;
+  zhihuOfficialApiProvider: ZhihuOfficialApiProvider;
 }
 
 /**
@@ -69,6 +71,43 @@ export async function handleUserBrowserGatewayAdminRoute(
   url: URL,
   context: UserBrowserGatewayAdminRouteContext
 ): Promise<boolean> {
+  if (request.method === 'GET' && url.pathname === '/v2/official-providers') {
+    if (!sameOrigin(request, response, context)) return true;
+    sendJson(response, 200, {
+      schemaVersion: 1,
+      providers: [officialProviderStatus(context.zhihuOfficialApiProvider)]
+    });
+    return true;
+  }
+  if (request.method === 'POST' && url.pathname === '/v2/official-providers/zhihu/credential') {
+    if (!sameOrigin(request, response, context)) return true;
+    const body = await readJsonBody(request);
+    const accessSecret = officialCredentialInput(body);
+    const status = context.zhihuOfficialApiProvider.configureForCurrentProcess(accessSecret);
+    await context.operationalLog.record({
+      eventType: 'official_provider.credential_configured',
+      outcome: 'completed',
+      details: {
+        provider: status.provider,
+        configurationMode: status.configurationMode,
+        restartPersistence: status.restartPersistence
+      }
+    });
+    sendJson(response, 200, { schemaVersion: 1, provider: status });
+    return true;
+  }
+  if (request.method === 'POST' && url.pathname === '/v2/official-providers/zhihu/credential/clear') {
+    if (!sameOrigin(request, response, context)) return true;
+    await readJsonBody(request);
+    const status = context.zhihuOfficialApiProvider.clearCredential();
+    await context.operationalLog.record({
+      eventType: 'official_provider.credential_cleared',
+      outcome: 'completed',
+      details: { provider: status.provider, configurationMode: status.configurationMode }
+    });
+    sendJson(response, 200, { schemaVersion: 1, provider: status });
+    return true;
+  }
   if (request.method === 'GET' && url.pathname === '/v2/observability/logs') {
     if (!sameOrigin(request, response, context)) return true;
     const limitValue = Number(url.searchParams.get('limit') ?? '100');
@@ -328,6 +367,29 @@ function userBrowserClientCreateInput(value: unknown) {
     throw new Error('user_browser_collector_service_scope_not_available');
   }
   return input;
+}
+
+function officialProviderStatus(provider: ZhihuOfficialApiProvider) {
+  return {
+    ...provider.credentialStatus(),
+    capabilities: [
+      'zhihu.search.public_content.v1',
+      'zhihu.hot_list.public_content.v1',
+      'web.search.global.zhihu_provider.v1'
+    ]
+  };
+}
+
+function officialCredentialInput(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('zhihu_official_api_credential_invalid');
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (keys.length !== 1 || keys[0] !== 'accessSecret') {
+    throw new Error('zhihu_official_api_credential_invalid');
+  }
+  return record.accessSecret;
 }
 
 function sameOrigin(

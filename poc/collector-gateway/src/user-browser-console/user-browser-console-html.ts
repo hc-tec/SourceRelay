@@ -31,7 +31,54 @@ export const userBrowserConsoleHtml = `<!doctype html>
       </dl>
     </section>
 
-    <section class="panel">
+    <section class="panel onboarding" id="onboarding">
+      <p class="eyebrow">FIRST RUN</p>
+      <h2>先选择你要使用的数据源</h2>
+      <p class="panel-copy">知乎官方数据和 B 站 / 小红书浏览器数据是两条独立路径。只使用知乎时不需要安装扩展；需要使用日常浏览器登录态时，才进行浏览器配对。</p>
+      <div class="path-grid">
+        <article class="path-card">
+          <div>
+            <span class="badge neutral">不需要浏览器</span>
+            <h3>知乎官方数据</h3>
+            <p>使用知乎开放平台 Access Secret。Gateway 直接调用官方 API，不读取浏览器 Cookie，也不要求登录知乎网页。</p>
+          </div>
+          <button class="secondary" data-onboarding-target="official-provider" type="button">配置知乎</button>
+        </article>
+        <article class="path-card">
+          <div>
+            <span class="badge neutral">需要浏览器</span>
+            <h3>B站 / 小红书浏览器数据</h3>
+            <p>扩展运行在你平时使用、已经登录的 Chrome / Edge 中。需要安装扩展、启动 Gateway 并完成一次配对。</p>
+          </div>
+          <button class="secondary" data-onboarding-target="browser-pairing" type="button">配对浏览器</button>
+        </article>
+      </div>
+      <p id="onboarding-status" class="onboarding-status" aria-live="polite">正在读取当前配置状态…</p>
+    </section>
+
+    <section class="panel" id="official-provider">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">OFFICIAL PROVIDER</p>
+          <h2>知乎开放平台</h2>
+        </div>
+        <span id="zhihu-provider-badge" class="badge neutral">检查中</span>
+      </div>
+      <p class="panel-copy">这条路径不使用浏览器扩展。你需要从 <a href="https://developer.zhihu.com/" rel="noreferrer" target="_blank">知乎开放平台</a> 获取 Access Secret，并仅提交给当前 Gateway 进程。它和下方创建的 <code>cst_...</code> 本地应用 token 不是同一个东西。</p>
+      <div id="zhihu-provider-status" class="provider-status" aria-live="polite"></div>
+      <form id="zhihu-provider-form" class="provider-form">
+        <label>知乎 Access Secret
+          <input name="accessSecret" type="password" autocomplete="new-password" spellcheck="false" required placeholder="只在本机 Gateway Console 输入">
+        </label>
+        <div class="provider-actions">
+          <button type="submit">保存到当前 Gateway</button>
+          <button id="clear-zhihu-provider" class="danger" type="button">移除当前凭证</button>
+        </div>
+      </form>
+      <p class="provider-note">保存只做本地格式校验，不会自动消耗知乎额度；首次实际调用时才由官方 API 判断凭证有效性和额度。MVP 配置只在当前 Gateway 进程内生效，重启后需要重新配置；不会写入扩展、Artifact、审计或日志。后续可接入操作系统密钥存储实现持久化。</p>
+    </section>
+
+    <section class="panel" id="browser-pairing">
       <div class="section-heading">
         <div>
           <p class="eyebrow">ONE-TIME PAIRING</p>

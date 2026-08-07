@@ -38,6 +38,41 @@
 
 Collector 不创建、复制、读取、启动或关闭你的浏览器 Profile。浏览器自己的登录态仍只由浏览器维护；扩展不会导出 Cookie、密码、Token、Storage 或 Profile 文件。
 
+## 1.1 先选择数据源路径
+
+打开 `http://127.0.0.1:43127/` 后，先根据需要选择路径：
+
+| 你要使用的能力 | 是否需要扩展/浏览器配对 | 需要的凭证 |
+|---|---:|---|
+| 知乎站内搜索、知乎热榜、知乎开放平台全网搜索 | 否 | 知乎开放平台 Access Secret，由 Gateway 使用 |
+| B站、小红书的浏览器能力 | 是 | 用户浏览器自身的登录态 + 一次扩展配对 |
+
+知乎官方 Provider 不需要打开知乎网页，也不需要把知乎 Cookie、网页登录 Token 或浏览器
+Profile 提供给 Collector。两条路径互不 fallback：知乎凭证缺失时不会改走浏览器，浏览器未
+配对时也不会影响知乎官方能力。
+
+### 配置知乎官方 Provider
+
+1. 在[知乎开放平台](https://developer.zhihu.com/)获取 Access Secret；
+2. 在 Gateway Console 的“知乎开放平台”卡片中输入 Access Secret；
+3. 点击“保存到当前 Gateway”；
+4. 确认状态变为“已配置”；
+5. 之后再为上层应用创建 `cst_...` 的 SourceRelay Local API Token。
+
+这里的两种凭证不能混用：
+
+- 知乎 Access Secret 只留在 Gateway 进程中，用于访问 `developer.zhihu.com`；
+- `cst_...` 只给上层 JS/Python/MCP 应用访问本地 Gateway。
+
+当前 MVP 通过 Console 配置的知乎凭证只在本次 Gateway 进程内有效。Gateway 重启后需要
+重新配置；它不会写入扩展、Artifact、审计、运行日志或 Git。若通过启动环境变量
+`ZHIHU_ACCESS_SECRET` 提供凭证，Console 会显示“启动环境变量”，移除凭证需要停止
+Gateway、清除该环境变量后重新启动。
+
+保存动作只做本地格式校验，不会自动消耗知乎额度；首次实际调用时才会验证凭证有效性和额度。
+如果只使用知乎官方 Provider，可以直接完成上面的配置，不需要安装扩展或创建浏览器绑定。
+如果还要使用 B站/小红书，再继续下面的扩展安装与配对步骤。
+
 大多数 direct work 都会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**。已完成真实 canary 的详情只导航一次到严格规范的视频 URL；单页搜索只导航一次到 Gateway 从关键词推导出的“综合 / 相关性 / 第 1 页”搜索页，既不点击搜索按钮，也不翻页、滚动、改排序或读取 Network response body。固定两页搜索是独立能力：Gateway 只接收同一个 `query`，签名第 1、2 页并按顺序导航，最多两次导航、零页面语义动作；第 1 页为空、风险、用户接管、未知导航或过期时不会进入第 2 页。UP 主公开资料与 UP 主视频首屏也只接受规范空间主页：Gateway 分别推导空间主页和固定 `/upload/video` 首屏，前者投影公开账号头信息，后者投影首屏可见视频卡片；两项均已通过 user-owned-browser real canary，均不翻页、不滚动、不筛选。`bilibili.discussion` 现在与其他 direct work 一致：Gateway 只签名规范视频 URL，扩展自动复用或创建受管 work-tab、导航一次、前台激活并执行一次固定 DOM 滚动，使评论宿主进入视口后投影最多 20 条公开根评论。它不要求用户打开 popup 选择页面，也不接受 selector、脚本或任意 tab；不会排序、展开回复、翻页或刷新。成功 work-tab 留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”；用户关闭、移动、激活接管或导航该工作页时，当前 run 停止，不会自动重开、刷新、换 tab 或重放平台动作。
 
 ## 2. 一次性准备稳定的扩展目录

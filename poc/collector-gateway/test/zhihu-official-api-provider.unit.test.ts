@@ -15,6 +15,53 @@ afterEach(async () => {
 });
 
 describe('Zhihu official API provider', () => {
+  test('supports Console session configuration without exposing the secret in status', async () => {
+    const directory = await stateDirectory();
+    const operations = await OfficialSourceOperationStore.create(directory);
+    const artifacts = await ZhihuOfficialArtifactStore.create(directory);
+    const provider = new ZhihuOfficialApiProvider({
+      accessSecret: null,
+      artifacts,
+      operations
+    });
+
+    expect(provider.credentialStatus()).toMatchObject({
+      runtimeState: 'credential_required',
+      configurationMode: 'none',
+      credentialLocation: 'gateway_only'
+    });
+    const configured = provider.configureForCurrentProcess('console-session-secret-123');
+    expect(configured).toMatchObject({
+      runtimeState: 'ready',
+      configurationMode: 'console_session',
+      restartPersistence: 'gateway_process_only'
+    });
+    expect(JSON.stringify(configured)).not.toContain('console-session-secret-123');
+    expect(provider.configured()).toBe(true);
+
+    const cleared = provider.clearCredential();
+    expect(cleared).toMatchObject({ runtimeState: 'credential_required', configurationMode: 'none' });
+    expect(provider.configured()).toBe(false);
+  });
+
+  test('rejects malformed Console session credentials before changing provider state', async () => {
+    const directory = await stateDirectory();
+    const operations = await OfficialSourceOperationStore.create(directory);
+    const artifacts = await ZhihuOfficialArtifactStore.create(directory);
+    const provider = new ZhihuOfficialApiProvider({
+      accessSecret: 'environment-secret-123456',
+      artifacts,
+      operations
+    });
+
+    expect(() => provider.configureForCurrentProcess(' short '))
+      .toThrow('zhihu_official_api_credential_invalid');
+    expect(provider.credentialStatus()).toMatchObject({
+      runtimeState: 'ready',
+      configurationMode: 'environment'
+    });
+  });
+
   test('builds the fixed global-search request and persists a restart-safe raw-first Artifact', async () => {
     const directory = await stateDirectory();
     const operations = await OfficialSourceOperationStore.create(directory);

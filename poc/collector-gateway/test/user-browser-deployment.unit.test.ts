@@ -10,14 +10,21 @@ describe('user-owned browser deployment surface', () => {
   test('exposes pairing, scoped-client and direct-only controls without isolated-browser controls', () => {
     expect(userBrowserConsoleHtml).toContain('id="create-browser-binding-pairing"');
     expect(userBrowserConsoleHtml).toContain('id="browser-binding-pairing-session"');
+    expect(userBrowserConsoleHtml).toContain('id="onboarding"');
+    expect(userBrowserConsoleHtml).toContain('id="zhihu-provider-form"');
+    expect(userBrowserConsoleHtml).toContain('知乎官方数据');
     expect(userBrowserConsoleHtml).toContain('id="create-service-client"');
     expect(userBrowserConsoleHtml).toContain('id="service-audit"');
     expect(userBrowserConsoleHtml).not.toContain('Collection Profile');
     expect(userBrowserConsoleScript).toContain('/v2/collector-service/clients');
     expect(userBrowserConsoleScript).toContain('/v2/collector-service/audit');
+    expect(userBrowserConsoleScript).toContain('/v2/official-providers');
+    expect(userBrowserConsoleScript).toContain('/v2/official-providers/zhihu/credential');
     expect(userBrowserConsoleScript).not.toContain('/v1/profiles');
     expect(userBrowserConsoleScript).not.toContain('/v1/browser-host');
     expect(userBrowserConsoleStyles).toContain('.pairing-ticket');
+    expect(userBrowserConsoleStyles).toContain('.path-grid');
+    expect(userBrowserConsoleStyles).toContain('.provider-state-grid');
     expect(() => new Function(userBrowserConsoleScript)).not.toThrow();
   });
 

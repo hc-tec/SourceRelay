@@ -22,8 +22,10 @@ export interface OfficialSourceCapabilityDescriptor {
   maximumItems: 10 | 20 | 30;
 }
 
-export function listOfficialSourceCapabilities(): OfficialSourceCapabilityDescriptor[] {
-  const runtimeState = zhihuOfficialApiCredentialConfigured() ? 'ready' as const : 'credential_required' as const;
+export function listOfficialSourceCapabilities(
+  credentialConfigured = zhihuOfficialApiCredentialConfigured()
+): OfficialSourceCapabilityDescriptor[] {
+  const runtimeState = credentialConfigured ? 'ready' as const : 'credential_required' as const;
   return [
     descriptor(
       ZHIHU_OFFICIAL_SEARCH_CAPABILITY,

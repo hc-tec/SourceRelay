@@ -71,7 +71,10 @@ export async function handleUserBrowserCollectorServiceRoute(
     sendJson(
       response,
       200,
-      userBrowserCapabilityCatalogContract(context.identity.publicIdentity.loopbackOrigin)
+      userBrowserCapabilityCatalogContract(
+        context.identity.publicIdentity.loopbackOrigin,
+        context.zhihuOfficialApiProvider.configured()
+      )
     );
     return true;
   }

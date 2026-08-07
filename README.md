@@ -26,6 +26,16 @@ SourceRelay Gateway (127.0.0.1)
 - 采集结果先作为异步 Operation 和本地 raw Artifact 返回；分析、汇总、知识库和
   DeepResearch 属于仓库外的上层应用。
 
+## 首次使用先选择数据源路径
+
+- 只使用知乎官方数据：不需要安装扩展或配对浏览器，在 Gateway Console 的“知乎开放平台”
+  卡片配置 Access Secret；
+- 使用 B站 / 小红书：安装扩展到日常 Chrome / Edge，启动 Gateway 并完成一次浏览器配对；
+- 两类都使用：先配置知乎官方 Provider，再按浏览器 runbook 完成扩展配对。
+
+知乎 Access Secret 与给上层应用使用的 `cst_...` Local API Token 不同。前者只属于 Gateway，
+后者只用于上层应用访问 SourceRelay。
+
 ## 当前发布面
 
 当前 release anchor 为 `0.7.17`，service schema 为 `3`。运行时唯一真相是
@@ -102,6 +112,18 @@ npm run collector-user-browser-client -- bindings
 请求只接受 `/v2/capabilities` 已登记的 capability；提交后得到 `operationId`，调用方再读取
 Operation 直到终态，最后按返回的 Artifact 引用读取结果。完整请求、权限 scope、幂等和
 错误处理见[本地 API 与扩展 runbook](docs/runbooks/user-owned-browser-extension.md)。
+
+### 知乎官方 Provider 的独立路径
+
+知乎官方站内搜索、热榜和开放平台全网搜索不需要浏览器扩展或知乎网页登录态。启动
+Gateway 后，在 Console 的“知乎开放平台”卡片中配置知乎开放平台 Access Secret；能力目录的
+`runtimeState` 变为 `ready` 后即可调用对应 capability。这个状态表示 Gateway 已配置凭证，
+首次实际调用仍可能收到官方鉴权或额度错误。该凭证只属于 Gateway，不会进入扩展、SDK、Artifact、
+审计或日志。
+
+知乎 Access Secret 与给上层应用使用的 `cst_...` Local API Token 不同：前者用于 Gateway
+访问 `developer.zhihu.com`，后者用于上层应用访问 SourceRelay。两条 Provider 路径互不
+fallback；只用知乎时不需要安装或配对扩展。
 
 ## 开发与验证
 

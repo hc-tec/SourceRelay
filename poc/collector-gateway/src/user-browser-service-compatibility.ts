@@ -45,7 +45,8 @@ export interface UserBrowserServiceCompatibility {
 }
 
 export function userBrowserCapabilityCatalogContract(
-  loopbackOrigin: string
+  loopbackOrigin: string,
+  officialCredentialConfigured?: boolean
 ): UserBrowserCapabilityCatalogContract {
   const document = userBrowserCollectorServiceOpenApiDocument(loopbackOrigin);
   const schemas = openApiSchemas(document);
@@ -64,7 +65,7 @@ export function userBrowserCapabilityCatalogContract(
       budgetPolicy: registry.budgetPolicy
     };
   });
-  const capabilities = listUserBrowserCapabilities();
+  const capabilities = listUserBrowserCapabilities(officialCredentialConfigured);
   return {
     schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
     catalogDigest: digest({

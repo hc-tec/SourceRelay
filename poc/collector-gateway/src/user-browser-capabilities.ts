@@ -20,10 +20,12 @@ export type UserBrowserCapabilityDescriptor =
  * Public capability truth for upper applications. A catalog entry describes
  * its readiness state; it does not automatically grant a work-dispatch path.
  */
-export function listUserBrowserCapabilities(): UserBrowserCapabilityDescriptor[] {
+export function listUserBrowserCapabilities(
+  officialCredentialConfigured?: boolean
+): UserBrowserCapabilityDescriptor[] {
   return [
     ...listUserBrowserBilibiliCapabilities(),
     ...listUserBrowserXiaohongshuCapabilities(),
-    ...listOfficialSourceCapabilities()
+    ...listOfficialSourceCapabilities(officialCredentialConfigured)
   ];
 }

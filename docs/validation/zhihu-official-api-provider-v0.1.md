@@ -132,6 +132,24 @@ Provider 单元覆盖：
 调用方，但不参与静态 catalog 身份。修复后的有凭证和无凭证进程使用同一稳定 digest；对应的
 AgentKit MCP L3 证据见其仓库的 `developer-readiness-zhihu-l3-matrix.md`。
 
+## Console 配置引导（2026-08-07）
+
+Gateway Console 现在提供独立的 Official Provider 配置卡片，首次使用时会把知乎官方数据
+与 B站/小红书浏览器数据分成两条路径。Console 配置只向当前 Gateway 进程注入凭证，不会
+启动浏览器、安装扩展或发出知乎上游请求；保存动作只做本地格式校验，真实有效性和额度
+仍在首次实际 capability 调用时由官方 API 判断。
+
+新增的本地管理入口：
+
+- `GET /v2/official-providers`：只返回 Gateway-only 配置状态和能力键，不返回凭证；
+- `POST /v2/official-providers/zhihu/credential`：通过 Console 同源请求配置当前进程凭证；
+- `POST /v2/official-providers/zhihu/credential/clear`：移除当前进程凭证，不影响浏览器绑定。
+
+Console session 凭证不会写入扩展、Artifact、审计、运行日志或 Git；Gateway 重启后需要
+重新配置。启动环境变量 `ZHIHU_ACCESS_SECRET` 仍然受支持，并在 Console 中显示为“启动
+环境变量”。本轮使用真实浏览器渲染检查了路径选择、知乎配置和本地应用 token 创建；没有
+访问知乎平台，也没有产生 live platform request。
+
 ## 验证中发现并修复的问题
 
 三项 capability 共用一个 `ZhihuOfficialArtifactStore`。初版全局 Artifact ID 搜索会对同一

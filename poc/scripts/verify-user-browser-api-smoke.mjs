@@ -38,6 +38,38 @@ try {
     throw new Error('user_browser_api_catalog_probe_failed');
   }
 
+  const officialProviderHeaders = {
+    origin,
+    'sec-fetch-site': 'same-origin',
+    'content-type': 'application/json'
+  };
+  const officialBefore = await fetchJson('/v2/official-providers', {
+    headers: { origin, 'sec-fetch-site': 'same-origin' }
+  }, 200);
+  if (officialBefore.providers?.[0]?.runtimeState !== 'credential_required') {
+    throw new Error('user_browser_api_official_provider_initial_state_failed');
+  }
+  const configuredOfficial = await fetchJson('/v2/official-providers/zhihu/credential', {
+    method: 'POST',
+    headers: officialProviderHeaders,
+    body: JSON.stringify({ accessSecret: 'api-smoke-official-secret-123456' })
+  }, 200);
+  if (configuredOfficial.provider?.runtimeState !== 'ready' ||
+      JSON.stringify(configuredOfficial).includes('api-smoke-official-secret-123456')) {
+    throw new Error('user_browser_api_official_provider_configure_failed');
+  }
+  const configuredCapabilities = await readJson('/v2/capabilities');
+  if (configuredCapabilities.capabilities
+    ?.filter((item) => item.executionProvider === 'zhihu_open_platform')
+    .some((item) => item.runtimeState !== 'ready')) {
+    throw new Error('user_browser_api_official_provider_catalog_state_failed');
+  }
+  await fetchJson('/v2/official-providers/zhihu/credential/clear', {
+    method: 'POST',
+    headers: officialProviderHeaders,
+    body: '{}'
+  }, 200);
+
   const issued = await fetchJson('/v2/collector-service/clients', {
     method: 'POST',
     headers: { origin, 'sec-fetch-site': 'same-origin', 'content-type': 'application/json' },
@@ -105,6 +137,7 @@ try {
     catalogCount: capabilities.capabilities.length,
     browserCapabilitiesRequireOnlineBinding: true,
     officialCapabilitiesRequireBrowserBinding: false,
+    officialProviderConsoleConfigurationChecked: true,
     catalogOnlyCapabilityRejected: true,
     artifactCapabilityBoundaryChecked: true,
     scopeIsolationChecked: true,

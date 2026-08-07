@@ -11,6 +11,11 @@ const operationalLogsElement = $('#operational-logs');
 const operationalLogsEmptyElement = $('#operational-logs-empty');
 const issuedTokenElement = $('#issued-service-token');
 const issuedTokenValueElement = $('#issued-service-token-value');
+const zhihuProviderBadgeElement = $('#zhihu-provider-badge');
+const zhihuProviderStatusElement = $('#zhihu-provider-status');
+const zhihuProviderForm = $('#zhihu-provider-form');
+const clearZhihuProviderButton = $('#clear-zhihu-provider');
+const onboardingStatusElement = $('#onboarding-status');
 const toastElement = $('#toast');
 let issuedToken = null;
 
@@ -83,24 +88,73 @@ function operationalLogCard(event) {
     (details ? '<p>' + details + '</p>' : '') + '</div><time>' + escapeHtml(event.occurredAt) + '</time></article>';
 }
 
+function providerStateLabel(state) {
+  return state === 'ready' ? '已配置' : '需要配置凭证';
+}
+
+function providerModeLabel(mode) {
+  if (mode === 'environment') return '启动环境变量';
+  if (mode === 'console_session') return '本次 Gateway 会话';
+  return '未配置';
+}
+
+function renderZhihuProvider(provider) {
+  const ready = provider?.runtimeState === 'ready';
+  const mode = provider?.configurationMode ?? 'none';
+  zhihuProviderBadgeElement.textContent = providerStateLabel(provider?.runtimeState);
+  zhihuProviderBadgeElement.className = 'badge ' + (ready ? 'good' : 'warn');
+  zhihuProviderStatusElement.innerHTML = '<div class="provider-state-grid">' +
+    '<div><span>状态</span><strong>' + escapeHtml(providerStateLabel(provider?.runtimeState)) + '</strong></div>' +
+    '<div><span>凭证位置</span><strong>Gateway only</strong></div>' +
+    '<div><span>配置来源</span><strong>' + escapeHtml(providerModeLabel(mode)) + '</strong></div>' +
+    '<div><span>浏览器绑定</span><strong>不需要</strong></div>' +
+    '</div>' +
+    '<p class="provider-capabilities">可用能力：知乎站内搜索 · 知乎热榜 · 知乎开放平台全网搜索</p>' +
+    (mode === 'environment'
+      ? '<p class="provider-warning">当前凭证来自 Gateway 启动环境变量。要移除它，请停止 Gateway、清除 <code>ZHIHU_ACCESS_SECRET</code> 后重新启动。</p>'
+      : mode === 'console_session'
+        ? '<p class="provider-warning">当前凭证只在本次 Gateway 进程内有效，重启后需要重新配置。</p>'
+        : '<p class="provider-help">还没有配置凭证。配置后不会安装扩展，也不会打开知乎页面。</p>');
+  clearZhihuProviderButton.disabled = !ready || mode === 'environment';
+}
+
+function renderOnboarding(status, provider) {
+  const browserReady = Number(status.onlineBrowserBindingCount ?? 0) > 0;
+  const officialReady = provider?.runtimeState === 'ready';
+  onboardingStatusElement.textContent = browserReady && officialReady
+    ? '两条数据源路径都已配置，可以创建给上层应用使用的本地 API token。'
+    : browserReady
+      ? '浏览器路径已配置；如果还需要知乎，请单独配置知乎官方凭证。'
+      : officialReady
+        ? '知乎官方路径已配置；如果需要 B 站或小红书，请继续配对日常浏览器。'
+        : '请选择上面的数据源路径开始配置。两条路径互不依赖。';
+}
+
 async function refresh() {
   const results = await Promise.all([
     api('/v1/status'),
     api('/v1/browser-bindings'),
     api('/v2/collector-service/clients'),
     api('/v2/collector-service/audit'),
-    api('/v2/observability/logs?limit=100')
+    api('/v2/observability/logs?limit=100'),
+    api('/v2/official-providers')
   ]);
   const status = results[0];
   const bindingPayload = results[1];
   const clientPayload = results[2];
   const auditPayload = results[3];
   const operationalLogPayload = results[4];
+  const officialProviderPayload = results[5];
+  const zhihuProvider = (officialProviderPayload.providers ?? []).find(
+    (provider) => provider.provider === 'zhihu_open_platform'
+  ) ?? { runtimeState: 'credential_required', configurationMode: 'none' };
   $('#gateway-mode').textContent = status.deploymentMode === 'user_owned_browser_extension' ? '日常浏览器模式就绪' : '模式异常';
   $('#gateway-mode').className = 'badge ' + (status.deploymentMode === 'user_owned_browser_extension' ? 'good' : 'bad');
   $('#gateway-origin').textContent = status.identity?.loopbackOrigin ?? location.origin;
   $('#binding-count').textContent = String(status.browserBindingCount ?? 0);
   $('#online-binding-count').textContent = String(status.onlineBrowserBindingCount ?? 0);
+  renderZhihuProvider(zhihuProvider);
+  renderOnboarding(status, zhihuProvider);
   const bindings = await Promise.all((bindingPayload.bindings ?? []).map(async (binding) => {
     try {
       const safety = await api('/v1/browser-bindings/' + encodeURIComponent(binding.browserBindingId) + '/safety');
@@ -123,6 +177,49 @@ async function refresh() {
 }
 
 $('#refresh').addEventListener('click', () => refresh().catch((error) => toast(error.message)));
+
+document.querySelectorAll('[data-onboarding-target]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const target = document.getElementById(button.dataset.onboardingTarget);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+
+zhihuProviderForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  const button = formElement.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const form = new FormData(formElement);
+    await api('/v2/official-providers/zhihu/credential', {
+      method: 'POST',
+      body: JSON.stringify({ accessSecret: String(form.get('accessSecret') ?? '') })
+    });
+    formElement.reset();
+    toast('知乎官方凭证已配置到当前 Gateway。');
+    await refresh();
+  } catch (error) {
+    toast(error.message === 'zhihu_official_api_credential_invalid'
+      ? '凭证格式无效，请确认没有前后空格。'
+      : error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+clearZhihuProviderButton.addEventListener('click', async () => {
+  if (clearZhihuProviderButton.disabled) return;
+  if (!confirm('这会移除当前 Gateway 进程中的知乎凭证，不会影响浏览器配对。继续？')) return;
+  clearZhihuProviderButton.disabled = true;
+  try {
+    await api('/v2/official-providers/zhihu/credential/clear', { method: 'POST', body: '{}' });
+    toast('知乎官方凭证已从当前 Gateway 移除。');
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+  }
+});
 
 $('#create-browser-binding-pairing').addEventListener('click', async (event) => {
   const button = event.currentTarget;
@@ -171,7 +268,8 @@ bindingsElement.addEventListener('click', async (event) => {
 
 $('#create-service-client').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
   try {
     const payload = await api('/v2/collector-service/clients', {
       method: 'POST',
@@ -180,7 +278,7 @@ $('#create-service-client').addEventListener('submit', async (event) => {
     issuedToken = payload.token;
     issuedTokenValueElement.textContent = issuedToken;
     issuedTokenElement.hidden = false;
-    event.currentTarget.reset();
+    formElement.reset();
     await refresh();
   } catch (error) {
     toast(error.message);
