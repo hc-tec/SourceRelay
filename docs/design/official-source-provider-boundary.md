@@ -47,7 +47,7 @@ Operation、Artifact、幂等和审计；跨平台研究流程仍属于仓库外
 | `executionTarget` | 已登记浏览器 target | 固定 `official_api` |
 | 执行进程 | MV3 扩展 | Gateway |
 | 浏览器/窗口 | 可能使用 | 永不使用 |
-| 平台凭证 | 用户浏览器自身登录态 | Gateway-only 环境变量 |
+| 平台凭证 | 用户浏览器自身登录态 | Gateway-only 启动环境变量或当前 Console session |
 | Artifact | 浏览器投影/归档 | 官方 JSON 语义原文归档 |
 
 Extension 能力矩阵只包含 15 项浏览器能力；Gateway/OpenAPI/JS/Python 的 direct 能力矩阵
@@ -87,8 +87,11 @@ Extension 能力矩阵只包含 15 项浏览器能力；Gateway/OpenAPI/JS/Pytho
   `capabilityCatalogDigest`，因此凭证配置变化不会改变静态兼容身份；
 - OpenAPI 明确声明 caller-supplied platform credential 被排除。
 
-缺少凭证时能力仍可发现，但 `runtimeState=credential_required`；提交返回稳定错误，不回退到
-浏览器登录路线。
+缺少凭证时能力仍可发现，但 `runtimeState=credential_required`。Core 保留精确的运行时错误；
+AgentKit MCP 会在 `POST /v2/collect` 前 fail-closed，返回
+`official_provider_credential_required`，并把处理动作指向 Gateway 配置，不回退到浏览器登录
+路线。配置状态可通过 Console 同源入口或 `/v2/capabilities` 的公开 readiness 字段核对；MCP
+和 SDK 都不能接收平台 Secret。
 
 ## 网络和失败语义
 

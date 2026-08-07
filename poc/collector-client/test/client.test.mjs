@@ -216,3 +216,27 @@ test('capability catalog and bounded Artifact resources use the released v3 rout
   assert.deepEqual(await client.readArtifactContentWindow(artifactId), window);
   assert.equal(seen.filter((url) => url.endsWith('/v2/capabilities')).length, 2);
 });
+
+test('capability catalog preserves Official Provider runtime readiness separately from its digest', async () => {
+  const capability = {
+    schemaVersion: 1,
+    capability: 'zhihu.search.public_content.v1',
+    platform: 'zhihu',
+    dispatchState: 'direct_ready',
+    runtimeState: 'credential_required',
+    credentialLocation: 'gateway_only'
+  };
+  const client = new CollectorClient({
+    fetchImpl: async (url) => {
+      if (url.endsWith('/v2/capabilities')) {
+        return response({ schemaVersion: 3, catalogDigest: digest, capabilities: [capability], directContracts: [] });
+      }
+      throw new Error(`unexpected_url:${url}`);
+    }
+  });
+  const catalog = await client.readCapabilityCatalog();
+  assert.equal(catalog.catalogDigest, digest);
+  assert.deepEqual(catalog.capabilities, [capability]);
+  assert.equal(catalog.capabilities[0].runtimeState, 'credential_required');
+  assert.equal(catalog.capabilities[0].credentialLocation, 'gateway_only');
+});

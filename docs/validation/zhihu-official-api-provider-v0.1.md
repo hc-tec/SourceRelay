@@ -102,10 +102,10 @@ OpenAPI 模块拆分、`Content-Type` 对齐或响应凭证反射防线引入的
 真实 E2E 之前已通过：
 
 - TypeScript typecheck；
-- JS SDK：14/14；
-- Python SDK：24/24；
+- JS SDK：15/15；
+- Python SDK：25/25；
 - 定向 Gateway Provider/route/Artifact/矩阵：25/25；
-- 全仓 unit：100 个 test files、354 个 tests；
+- 全仓 unit：101 个 test files、371 个 tests；
 - `verify:core-boundaries`；
 - provider-aware 18 项 `verify:core-capability-matrix`；
 - `build:user-browser-runtime`；
@@ -149,6 +149,13 @@ Console session 凭证不会写入扩展、Artifact、审计、运行日志或 G
 重新配置。启动环境变量 `ZHIHU_ACCESS_SECRET` 仍然受支持，并在 Console 中显示为“启动
 环境变量”。本轮使用真实浏览器渲染检查了路径选择、知乎配置和本地应用 token 创建；没有
 访问知乎平台，也没有产生 live platform request。
+
+AgentKit readiness follow-up（2026-08-07）：打包 MCP 现在会在读取能力 Resource 和 Official
+Provider Tool 提交前刷新 `runtimeState`。无凭证发布 Core 的 L2 路径在 Core POST 前返回
+`official_provider_credential_required`，没有创建 Official Provider Operation；有凭证的当前
+Gateway 进程完成了一次 `count=1` 的真实只读知乎搜索 canary，并通过 Operation、Artifact
+metadata 和完整 UTF-8 chunk SHA-256 校验。MCP 返回的配置提示只有
+`configure_gateway_official_provider` / `gateway_only`，不包含平台 Secret，也不回退到浏览器。
 
 ## 验证中发现并修复的问题
 

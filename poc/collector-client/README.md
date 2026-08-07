@@ -55,8 +55,10 @@ live canary，例如 `COLLECTOR_LIVE_CANARY_SCOPE=javascript_sdk`。
 ## 方法边界
 
 - `listDirectCapabilities()`：读取客户端当前允许提交的 direct capability 名称；它不能替代 Gateway 的 `dispatchState`、预算和绑定状态检查；
-- `listCapabilities()`：读取能力目录；上层应只提交 `dispatchState: direct_ready` 的能力；
-- `readCapabilityCatalog()`：读取带 SHA-256 身份和 18 项 direct contract 的完整能力目录；
+- `listCapabilities()`：读取能力目录；上层应只提交 `dispatchState: direct_ready` 的能力，并在
+  Official Provider 能力上先确认 `runtimeState=ready`；
+- `readCapabilityCatalog()`：读取带 SHA-256 身份、18 项 direct contract 和实时 readiness 字段的
+  完整能力目录；`runtimeState` 不改变静态 catalog digest；
 - `readRelease()`：读取 Core release manifest，确认本地扩展、Gateway、Browser Host 和服务 schema 的兼容性；
 - `readOpenApi()`：读取当前 `/v2` OpenAPI 3.1 机器契约，构造请求前应优先使用它核对输入边界；
 - `listBrowserBindings()`：读取已配对浏览器绑定的安全摘要；
@@ -109,8 +111,9 @@ const zhihuRequest = zhihuOfficialSearch({
 
 当前 builder 覆盖全部 18 项 `direct_ready` 能力：15 项浏览器扩展能力，以及知乎官方
 站内搜索、热榜、全网搜索 3 项官方 Provider 能力。官方 builder 不接受
-`browserBindingId` 或 Access Secret；凭证只存在于 Gateway 进程的
-`ZHIHU_ACCESS_SECRET`。小红书搜索/详情不接受调用方 URL；
+`browserBindingId` 或 Access Secret；凭证只存在于 Gateway 进程，可通过启动环境变量或
+Gateway Console 当前 session 配置。`runtimeState=credential_required` 时应先在 Gateway
+边界配置并重新读取能力目录，不应回退到浏览器。小红书搜索/详情不接受调用方 URL；
 短时主页链接只允许进入 `ephemeral_public_profile_url`，并保留签名 URL 原文。所有
 builder 都拒绝 selector、脚本、tab ID、CDP 和任意 Network 控制字段。
 

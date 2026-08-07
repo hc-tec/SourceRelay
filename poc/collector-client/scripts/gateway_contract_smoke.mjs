@@ -33,11 +33,19 @@ export async function runGatewayContractSmoke({
   const release = await client.readRelease();
   const bindings = await client.listBrowserBindings();
   const directReady = catalog.capabilities.filter((item) => item?.dispatchState === 'direct_ready');
+  const officialProvider = catalog.capabilities.filter((item) =>
+    item?.executionProvider === 'zhihu_open_platform'
+  );
   const onlineBinding = bindings.find((item) => item?.state === 'online');
 
   if (catalog.capabilities.length !== EXPECTED_CAPABILITY_COUNT ||
       directReady.length !== EXPECTED_DIRECT_READY_COUNT) {
     throw new Error('unexpected_capability_catalog_shape');
+  }
+  if (officialProvider.length !== 3 || officialProvider.some((item) =>
+      !['ready', 'credential_required'].includes(item.runtimeState) ||
+      item.credentialLocation !== 'gateway_only' || item.browserBindingRequired !== false)) {
+    throw new Error('javascript_official_provider_readiness_unexpected');
   }
   const directNames = listDirectCapabilities();
   const directSet = new Set(directReady.map((item) => item.capability));
@@ -94,6 +102,9 @@ export async function runGatewayContractSmoke({
     gatewayOrigin: origin,
     capabilityCount: catalog.capabilities.length,
     directReadyCount: directReady.length,
+    officialProviderReadiness: Object.fromEntries(officialProvider.map((item) => [
+      item.capability, item.runtimeState
+    ])),
     onlineBinding: true,
     openapiPathCount: Object.keys(openapiPaths).length,
     releaseVersion: release.releaseVersion,

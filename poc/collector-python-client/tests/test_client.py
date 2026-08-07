@@ -287,3 +287,39 @@ async def test_capability_catalog_and_bounded_artifact_resources_use_v3_routes()
     assert actual_metadata == metadata
     assert actual_window == window
     assert sum(request.url.path == "/v2/capabilities" for request in seen) == 2
+
+
+@pytest.mark.asyncio
+async def test_capability_catalog_preserves_official_provider_runtime_readiness() -> None:
+    capability = {
+        "schemaVersion": 1,
+        "capability": "zhihu.search.public_content.v1",
+        "platform": "zhihu",
+        "dispatchState": "direct_ready",
+        "runtimeState": "credential_required",
+        "credentialLocation": "gateway_only",
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v2/capabilities":
+            return httpx.Response(
+                200,
+                json={
+                    "schemaVersion": 3,
+                    "catalogDigest": DIGEST,
+                    "capabilities": [capability],
+                    "directContracts": [],
+                },
+            )
+        raise AssertionError(f"unexpected_url:{request.url}")
+
+    client, http_client = await with_client(handler)
+    try:
+        catalog = await client.read_capability_catalog()
+    finally:
+        await http_client.aclose()
+
+    assert catalog["catalogDigest"] == DIGEST
+    assert catalog["capabilities"] == [capability]
+    assert catalog["capabilities"][0]["runtimeState"] == "credential_required"
+    assert catalog["capabilities"][0]["credentialLocation"] == "gateway_only"

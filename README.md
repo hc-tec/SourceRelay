@@ -46,8 +46,8 @@ SourceRelay Gateway (127.0.0.1)
 | --- | ---: | --- | --- |
 | Bilibili Browser Provider | 10 | 必须使用已配对的浏览器 binding | 已完成真实 L3/L4 矩阵 |
 | Xiaohongshu Browser Provider | 5 | 必须使用已配对的浏览器 binding；遵守 no-refresh / no-new-tab 边界 | 已完成真实 L3 矩阵 |
-| Zhihu Official Provider | 2 | 不接受浏览器 binding；凭证只存在于 Gateway | Core 已验证，MCP L3 待单独验证 |
-| Global Web Search via Zhihu Provider | 1 | 不接受浏览器 binding；由官方 Provider 执行 | Core 已验证，MCP L3 待单独验证 |
+| Zhihu Official Provider | 2 | 不接受浏览器 binding；凭证只存在于 Gateway | Core + AgentKit MCP L3 已验证 |
+| Global Web Search via Zhihu Provider | 1 | 不接受浏览器 binding；由官方 Provider 执行 | Core + AgentKit MCP L3 已验证 |
 | Catalog-only / migration-required | 3 | 不可通过 `/v2/collect` 调用 | 保留在 catalog，不代表可执行 |
 
 当前 18 项 direct-ready capability 的完整机器可读清单，以 `/v2/capabilities` 和
@@ -124,6 +124,12 @@ Gateway 后，在 Console 的“知乎开放平台”卡片中配置知乎开放
 知乎 Access Secret 与给上层应用使用的 `cst_...` Local API Token 不同：前者用于 Gateway
 访问 `developer.zhihu.com`，后者用于上层应用访问 SourceRelay。两条 Provider 路径互不
 fallback；只用知乎时不需要安装或配对扩展。
+
+如果能力目录返回 `runtimeState=credential_required`，说明当前 Gateway 进程还没有配置知乎
+官方 Provider。AgentKit MCP 会在提交前 fail-closed，并返回
+`official_provider_credential_required`；上层应指导用户在 Gateway Console 或 Gateway 启动
+环境边界配置后重新读取 `/v2/capabilities`，不能索要聊天中的 Secret，也不能回退到知乎浏览器
+登录或 Cookie 路线。
 
 ## 开发与验证
 

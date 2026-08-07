@@ -85,8 +85,10 @@ poc/collector-client
 ```
 
 两个 SDK 不互相导入，不共享平台抓取代码，也不接触浏览器 Profile、Cookie、平台
-Token 或原始 Network body。知乎 Access Secret 只属于 Gateway 进程，不会进入 SDK
-请求。协议真源只有：
+Token 或原始 Network body。知乎 Access Secret 只属于 Gateway 进程（启动环境变量或
+Gateway Console 当前 session），不会进入 SDK 请求。`read_capability_catalog()` 返回的
+Official Provider 能力会保留实时 `runtimeState`；状态为 `credential_required` 时应先在
+Gateway 边界配置并重新读取目录，不要把 Secret 放进 SDK 请求，也不要回退到浏览器。协议真源只有：
 
 ```text
 GET /v2/capabilities
@@ -158,7 +160,8 @@ zhihu_request = zhihu_official_search(
 - B站：视频详情、站内搜索/固定两页搜索、账号资料、投稿首屏、动态、合集/系列概览与详情、弹幕、自动 work-tab 评论；
 - 小红书：公开搜索、公开博主笔记、公开笔记详情、评论和评论回复；
 - 知乎官方 Provider：站内搜索、热榜、全网搜索。三项 builder 不接受
-  `browser_binding_id` 或 Access Secret，也不要求浏览器在线。
+  `browser_binding_id` 或 Access Secret，也不要求浏览器在线；调用前应检查对应能力的
+  `runtimeState` 是否为 `ready`。
 
 小红书账号 builder 只有在 `execution_target="ephemeral_public_profile_url"` 时才
 接受短时 `profile_url`，并保留签名链接原文；搜索和详情 builder 不接受调用方 URL。

@@ -47,10 +47,23 @@ async def run_gateway_contract_smoke(
         bindings = await client.list_browser_bindings()
         capabilities = catalog["capabilities"]
         direct_ready = [item for item in capabilities if item.get("dispatchState") == "direct_ready"]
+        official_provider = [
+            item for item in capabilities if item.get("executionProvider") == "zhihu_open_platform"
+        ]
         online_binding = next((item for item in bindings if item.get("state") == "online"), None)
 
         if len(capabilities) != EXPECTED_CAPABILITY_COUNT or len(direct_ready) != EXPECTED_DIRECT_READY_COUNT:
             raise AssertionError("unexpected_capability_catalog_shape")
+        if (
+            len(official_provider) != 3
+            or any(
+                item.get("runtimeState") not in {"ready", "credential_required"}
+                or item.get("credentialLocation") != "gateway_only"
+                or item.get("browserBindingRequired") is not False
+                for item in official_provider
+            )
+        ):
+            raise AssertionError("python_official_provider_readiness_unexpected")
         direct_names = set(list_direct_capabilities())
         if len(direct_names) != EXPECTED_DIRECT_READY_COUNT or direct_names != {
             item.get("capability") for item in direct_ready
@@ -108,6 +121,9 @@ async def run_gateway_contract_smoke(
             "gatewayOrigin": gateway_origin,
             "capabilityCount": len(capabilities),
             "directReadyCount": len(direct_ready),
+            "officialProviderReadiness": {
+                item["capability"]: item["runtimeState"] for item in official_provider
+            },
             "onlineBinding": True,
             "openapiPathCount": len(openapi_paths),
             "releaseVersion": release["releaseVersion"],

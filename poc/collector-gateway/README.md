@@ -2,9 +2,18 @@
 
 这是浏览器 Collector Core 的本地控制面，不是旧 `intelligence-gateway` 爬虫连接器的延续。它只监听 `127.0.0.1`，负责固定 Gateway 身份、显式扩展配对和后续 Research Task / EvidencePlan 调度。
 
-> **重要的生产边界。** 正式 Browser Provider 部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。当前 `/v2` 目录共有 21 项能力：18 项 `direct_ready`，包括 B站 10 项、小红书 5 项 Browser Provider 和知乎 3 项 Official Provider；另有 3 项明确迁移/路由准入边界。Browser Provider 请求必须携带 `browserBindingId`，Official Provider 请求禁止携带该字段且凭证只属于 Gateway 进程。直接模式已真实验证：`/v2/collect` 的 scoped local API → 登记 Provider → capability-bound local artifact。它不会放宽到任意 URL、分页、筛选、滚动、脚本、selector 或 Browser Host fallback。`GET /v2/capabilities` 是运行时能力真相，`GET /v2/openapi.json` 是机器可读输入/响应契约；二者应由上层应用在启动或能力变更时读取。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
+> **重要的生产边界。** 正式 Browser Provider 部署在用户日常 Chrome/Edge 中的已配对扩展，使用浏览器原有、由用户维护的登录会话；Collector 不管理 Browser Profile，也不启动或关闭用户浏览器。当前 `/v2` 目录共有 21 项能力：18 项 `direct_ready`，包括 B站 10 项、小红书 5 项 Browser Provider 和知乎 3 项 Official Provider；另有 3 项明确迁移/路由准入边界。Browser Provider 请求必须携带 `browserBindingId`，Official Provider 请求禁止携带该字段且凭证只属于 Gateway 进程。知乎 Official Provider 的 `runtimeState` 为 `ready` 或 `credential_required`，不参与静态 catalog digest；配置入口是启动环境变量或 Gateway Console 的当前进程 session。直接模式已真实验证：`/v2/collect` 的 scoped local API → 登记 Provider → capability-bound local artifact。它不会放宽到任意 URL、分页、筛选、滚动、脚本、selector 或 Browser Host fallback。`GET /v2/capabilities` 是运行时能力真相，`GET /v2/openapi.json` 是机器可读输入/响应契约；二者应由上层应用在启动或能力变更时读取。**本 README 下方的 `profileId`、Browser Host、Collection Profile 和 `POST /v1/collect` 是明确隔离的 `test/isolated-account` 旧通道，不能作为 direct-mode fallback。** 安装和上层 API 的完整操作见[日常浏览器扩展模式 runbook](../../docs/runbooks/user-owned-browser-extension.md)，架构边界见[用户自有浏览器扩展模式](../../docs/design/user-owned-browser-extension-mode.md)。
 
 ## 日常浏览器 Direct API（当前生产 MVP）
+
+### 知乎 Official Provider readiness
+
+知乎三个 Official Provider capability 始终可以被发现，但 `runtimeState` 只有在 Gateway 拥有
+凭证时才是 `ready`；无凭证时为 `credential_required`。凭证只能通过
+`ZHIHU_ACCESS_SECRET` 启动环境变量或 Gateway Console 的当前进程配置进入 Gateway，不能进入
+`/v2/collect`、JS/Python SDK、扩展 work item、Artifact、审计或日志。AgentKit MCP 会在
+Official Provider Tool 提交前读取这个 readiness，并在 `credential_required` 时返回 Gateway
+配置错误，不创建平台 Operation，也不回退到浏览器路线。
 
 这条 API 的身份单位是 `browserBindingId`，不是 `profileId`。它只接受已经配对、最近在线、未被安全锁定的扩展实例；Gateway 仅投递已登记的 typed work item，不接收任意 URL、selector、脚本、坐标、CDP 或 Network body。
 

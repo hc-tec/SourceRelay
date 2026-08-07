@@ -73,6 +73,11 @@ Gateway、清除该环境变量后重新启动。
 如果只使用知乎官方 Provider，可以直接完成上面的配置，不需要安装扩展或创建浏览器绑定。
 如果还要使用 B站/小红书，再继续下面的扩展安装与配对步骤。
 
+上层 SDK 或 AgentKit 在提交前应重新读取 `/v2/capabilities`。`runtimeState=ready` 才表示可以
+进入知乎官方请求；`credential_required` 只表示 Gateway 配置缺口，不表示“知乎没有结果”。
+AgentKit MCP 会在 Tool 提交前再次 fail-closed，并返回 Gateway 配置动作；它不会向对话索要
+Access Secret，也不会把知乎请求改走浏览器或 Cookie。
+
 大多数 direct work 都会在同一浏览器会话中新建或复用**扩展自己创建的后台工作标签页**。已完成真实 canary 的详情只导航一次到严格规范的视频 URL；单页搜索只导航一次到 Gateway 从关键词推导出的“综合 / 相关性 / 第 1 页”搜索页，既不点击搜索按钮，也不翻页、滚动、改排序或读取 Network response body。固定两页搜索是独立能力：Gateway 只接收同一个 `query`，签名第 1、2 页并按顺序导航，最多两次导航、零页面语义动作；第 1 页为空、风险、用户接管、未知导航或过期时不会进入第 2 页。UP 主公开资料与 UP 主视频首屏也只接受规范空间主页：Gateway 分别推导空间主页和固定 `/upload/video` 首屏，前者投影公开账号头信息，后者投影首屏可见视频卡片；两项均已通过 user-owned-browser real canary，均不翻页、不滚动、不筛选。`bilibili.discussion` 现在与其他 direct work 一致：Gateway 只签名规范视频 URL，扩展自动复用或创建受管 work-tab、导航一次、前台激活并执行一次固定 DOM 滚动，使评论宿主进入视口后投影最多 20 条公开根评论。它不要求用户打开 popup 选择页面，也不接受 selector、脚本或任意 tab；不会排序、展开回复、翻页或刷新。成功 work-tab 留在浏览器中成为 `idle_reusable`，不会“刚打开就关闭”；用户关闭、移动、激活接管或导航该工作页时，当前 run 停止，不会自动重开、刷新、换 tab 或重放平台动作。
 
 ## 2. 一次性准备稳定的扩展目录
