@@ -7,6 +7,7 @@ import {
   getUserBrowserGatewayDirectCapabilityCatalog,
   getUserBrowserGatewayConnection,
   pairUserBrowserGateway,
+  requestLoopbackPermissionFromUserGesture,
   type UserBrowserGatewayConnection
 } from '../background/user-browser-gateway';
 import {
@@ -302,7 +303,16 @@ pairingForm.addEventListener('submit', (event) => {
   if (!submit) return;
   submit.disabled = true;
   controlError.hidden = true;
-  void pairingDraftWriteQueue.then(() => pairUserBrowserGateway(pairing)).then(async () => {
+  // Request the optional loopback origin while this submit event still owns a
+  // trusted user gesture. Waiting for the draft-write queue first would make
+  // Chrome reject the permission prompt as a background call, leaving the
+  // popup looking as if pairing had silently failed after a rebuild.
+  void requestLoopbackPermissionFromUserGesture().then((granted) => {
+    if (!granted) throw new Error('gateway_loopback_permission_required');
+    return pairingDraftWriteQueue;
+  }).then(() => pairUserBrowserGateway(pairing, {
+    loopbackPermissionAlreadyRequested: true
+  })).then(async () => {
     pairingCompleted = true;
     pairingForm.reset();
     pairingFormTouched = false;

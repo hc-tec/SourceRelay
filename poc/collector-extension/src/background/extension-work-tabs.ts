@@ -45,6 +45,7 @@ interface ManagedWorkTab {
   state: 'idle_reusable' | 'leased' | 'blocked';
   leaseId: string | null;
   expectedCanonicalUrl: string | null;
+  expectedXiaohongshuOverlayPath: string | null;
   expectedNavigationUntil: number | null;
   /**
    * The extension must distinguish its own one-time foreground transition
@@ -63,6 +64,7 @@ interface PersistedWorkTab {
   state: ManagedWorkTab['state'];
   leaseId: string | null;
   expectedCanonicalUrl: string | null;
+  expectedXiaohongshuOverlayPath?: string | null;
   initialBlankNavigationUntil: number;
   lastUsedAt: number;
 }
@@ -81,6 +83,8 @@ let persistenceChain: Promise<void> = Promise.resolve();
 let latestLossCause: WorkTabLossCause | null = null;
 const FOREGROUND_ACTIVATION_GRACE_MS = 2_000;
 const FOREGROUND_SETTLE_MS = 350;
+const XIAOHONGSHU_NOTE_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
+const XIAOHONGSHU_DETAIL_NAVIGATION_GRACE_MS = 10_000;
 const WORK_TAB_REGISTRY_KEY = 'collector.extension-work-tabs.v1';
 const WORK_TAB_REGISTRY_SCHEMA_VERSION = 1 as const;
 const MAX_LEASED_WORK_TABS = 1 as const;
@@ -139,6 +143,15 @@ export function initialiseExtensionWorkTabs(): void {
     if (!changeInfo.url) return;
     const record = managedTabs.get(tabId);
     if (!record) return;
+    if (record.expectedXiaohongshuOverlayPath !== null &&
+      record.expectedNavigationUntil !== null &&
+      Date.now() <= record.expectedNavigationUntil &&
+      xiaohongshuNoteOverlayPath(changeInfo.url) === record.expectedXiaohongshuOverlayPath) {
+      // A detail click is a Collector-owned same-document transition. Keep
+      // the tab in the pool while the platform exposes the note overlay route;
+      // the detail executor commits the observed, query-free path below.
+      return;
+    }
     // A source navigation can redirect the exact canonical URL during the
     // short extension-initiated navigation window.  Outside that window a
     // URL change is an external takeover; do not repurpose that page.
@@ -205,6 +218,7 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
     state: 'idle_reusable',
     leaseId: null,
     expectedCanonicalUrl: null,
+    expectedXiaohongshuOverlayPath: null,
     expectedNavigationUntil: null,
     expectedForegroundActivationUntil: null,
     initialBlankNavigationUntil: Date.now() + 2_000
@@ -330,6 +344,7 @@ export function abandonExtensionWorkTab(workTab: ExtensionWorkTabLease): WorkTab
   record.state = 'blocked';
   record.leaseId = null;
   record.expectedCanonicalUrl = null;
+  record.expectedXiaohongshuOverlayPath = null;
   record.expectedNavigationUntil = null;
   record.expectedForegroundActivationUntil = null;
   managedTabs.set(workTab.tabId, record);
@@ -416,6 +431,7 @@ function lease(record: ManagedWorkTab, acquisition: WorkTabAcquisition): Extensi
   record.state = 'leased';
   record.leaseId = leaseId;
   record.expectedCanonicalUrl = null;
+  record.expectedXiaohongshuOverlayPath = null;
   record.expectedNavigationUntil = null;
   record.expectedForegroundActivationUntil = null;
   return { leaseId, tabId: record.tabId, acquisition };
@@ -497,6 +513,7 @@ function forgetTab(
     record.state = 'blocked';
     record.leaseId = null;
     record.expectedCanonicalUrl = null;
+    record.expectedXiaohongshuOverlayPath = null;
     record.expectedNavigationUntil = null;
     record.expectedForegroundActivationUntil = null;
     managedTabs.set(tabId, record);
@@ -556,6 +573,7 @@ async function restoreWorkTabRegistry(): Promise<void> {
         state: candidate.state,
         leaseId: candidate.leaseId,
         expectedCanonicalUrl: candidate.expectedCanonicalUrl,
+        expectedXiaohongshuOverlayPath: candidate.expectedXiaohongshuOverlayPath ?? null,
         expectedNavigationUntil: null,
         expectedForegroundActivationUntil: null,
         initialBlankNavigationUntil: candidate.initialBlankNavigationUntil
@@ -593,6 +611,9 @@ function isPersistedWorkTab(value: unknown): value is PersistedWorkTab {
       ? candidate.leaseId === null
       : typeof candidate.leaseId === 'string') &&
     (candidate.expectedCanonicalUrl === null || typeof candidate.expectedCanonicalUrl === 'string') &&
+    (candidate.expectedXiaohongshuOverlayPath === undefined ||
+      candidate.expectedXiaohongshuOverlayPath === null ||
+      xiaohongshuNoteOverlayPath(candidate.expectedXiaohongshuOverlayPath) === candidate.expectedXiaohongshuOverlayPath) &&
     Number.isSafeInteger(candidate.initialBlankNavigationUntil) &&
     Number.isSafeInteger(candidate.lastUsedAt);
 }
@@ -621,6 +642,7 @@ function persistWorkTabRegistry(): Promise<void> {
       state: record.state,
       leaseId: record.leaseId,
       expectedCanonicalUrl: record.expectedCanonicalUrl,
+      expectedXiaohongshuOverlayPath: record.expectedXiaohongshuOverlayPath,
       initialBlankNavigationUntil: record.initialBlankNavigationUntil,
       lastUsedAt: Date.now()
     }))
@@ -629,6 +651,86 @@ function persistWorkTabRegistry(): Promise<void> {
     await storage.set({ [WORK_TAB_REGISTRY_KEY]: value });
   });
   return persistenceChain;
+}
+
+/**
+ * A note click on Xiaohongshu can move the same document from the search
+ * route to `/explore/<noteId>`. That transition is only trusted inside the
+ * short window opened immediately before the Collector's one semantic click;
+ * it is never a general URL or tab adoption rule.
+ */
+export function prepareXiaohongshuNoteOverlayNavigation(tabId: number, noteId: string): void {
+  const record = managedTabs.get(tabId);
+  const expectedPath = xiaohongshuNoteOverlayPathFromNoteId(noteId);
+  if (!record || expectedPath === null || record.state === 'blocked') return;
+  record.expectedXiaohongshuOverlayPath = expectedPath;
+  record.expectedNavigationUntil = Date.now() + XIAOHONGSHU_DETAIL_NAVIGATION_GRACE_MS;
+  void persistWorkTabRegistry();
+}
+
+/**
+ * Commit the observed detail route without retaining xsec/query material.
+ * A detail surface that stays on the search route remains governed by the
+ * normal Explore/search identity; a real `/explore/<noteId>` route gets a
+ * query-free expected identity so a later comments operation can reuse it.
+ */
+export function commitXiaohongshuNoteOverlayNavigation(
+  tabId: number,
+  noteId: string,
+  observedUrl: string
+): void {
+  const record = managedTabs.get(tabId);
+  const expectedPath = xiaohongshuNoteOverlayPathFromNoteId(noteId);
+  if (!record || expectedPath === null || record.state === 'blocked') return;
+  const observedPath = xiaohongshuNoteOverlayPath(observedUrl);
+  if (observedPath !== null && observedPath !== expectedPath) {
+    record.expectedXiaohongshuOverlayPath = null;
+    record.expectedNavigationUntil = null;
+    forgetTab(tabId, 'user_taken_over', 'unexpected_url_update');
+    throw new Error('xiaohongshu_note_overlay_identity_changed');
+  }
+  const surface = xiaohongshuCurrentPageNetworkPublicSurface(observedUrl);
+  if (observedPath === expectedPath) {
+    record.expectedCanonicalUrl = `https://www.xiaohongshu.com${expectedPath}`;
+  } else if (surface !== 'explore' && surface !== 'search') {
+    record.expectedXiaohongshuOverlayPath = null;
+    record.expectedNavigationUntil = null;
+    forgetTab(tabId, 'user_taken_over', 'unexpected_url_update');
+    throw new Error('xiaohongshu_note_overlay_identity_unavailable');
+  } else {
+    record.expectedCanonicalUrl = XIAOHONGSHU_EXPLORE_URL;
+  }
+  record.expectedXiaohongshuOverlayPath = null;
+  record.expectedNavigationUntil = null;
+  void persistWorkTabRegistry();
+}
+
+/** Restore the search identity before the Collector closes a detail overlay. */
+export function prepareXiaohongshuSearchSurfaceNavigation(tabId: number): void {
+  const record = managedTabs.get(tabId);
+  if (!record || record.state === 'blocked') return;
+  record.expectedCanonicalUrl = XIAOHONGSHU_EXPLORE_URL;
+  record.expectedXiaohongshuOverlayPath = null;
+  record.expectedNavigationUntil = null;
+  void persistWorkTabRegistry();
+}
+
+function xiaohongshuNoteOverlayPathFromNoteId(noteId: string): string | null {
+  return XIAOHONGSHU_NOTE_ID_PATTERN.test(noteId) ? `/explore/${noteId}` : null;
+}
+
+function xiaohongshuNoteOverlayPath(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' ||
+    url.port || url.username || url.password || url.hash) return null;
+  const match = url.pathname.match(/^\/explore\/([A-Za-z0-9_-]{1,80})\/?$/);
+  return match ? `/explore/${match[1]}` : null;
 }
 
 /**
@@ -645,6 +747,10 @@ export function isExpectedExtensionWorkNavigation(expectedCanonicalUrl: string, 
     // not.
     const surface = xiaohongshuCurrentPageNetworkPublicSurface(observedUrl);
     return surface === 'explore' || surface === 'search';
+  }
+  const expectedNotePath = xiaohongshuNoteOverlayPath(expectedCanonicalUrl);
+  if (expectedNotePath !== null) {
+    return xiaohongshuNoteOverlayPath(observedUrl) === expectedNotePath;
   }
   const video = canonicalBilibiliVideoWorkUrl(expectedCanonicalUrl);
   if (video && video === expectedCanonicalUrl) {

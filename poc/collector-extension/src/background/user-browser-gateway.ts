@@ -36,13 +36,16 @@ export type {
  * Pairing grants no platform access and never reads browser credential data.
  */
 export async function pairUserBrowserGateway(
-  rawInput: PairUserBrowserGatewayInput
+  rawInput: PairUserBrowserGatewayInput,
+  options: { loopbackPermissionAlreadyRequested?: boolean } = {}
 ): Promise<UserBrowserGatewayConnection> {
   const pairing = pairingInput(rawInput);
   // Persist before requesting optional host permission. Chrome may destroy the
   // popup while showing its native confirmation dialog.
   await requestSaveGatewayPairingDraft(pairing);
-  if (!await ensureLoopbackPermission()) throw new Error('gateway_loopback_permission_required');
+  if (!options.loopbackPermissionAlreadyRequested && !await ensureLoopbackPermission()) {
+    throw new Error('gateway_loopback_permission_required');
+  }
 
   const extensionId = chrome.runtime.id;
   if (!EXTENSION_ID.test(extensionId)) throw new Error('extension_id_invalid');
@@ -63,6 +66,15 @@ export async function pairUserBrowserGateway(
   await saveGatewayPairingRecord(record);
   await clearGatewayPairingDraft();
   return await connectionFor(record);
+}
+
+/**
+ * Chrome only permits an optional-permission prompt while a user gesture is
+ * still active. The control page calls this directly from its submit handler;
+ * the network claim and draft persistence may then continue asynchronously.
+ */
+export function requestLoopbackPermissionFromUserGesture(): Promise<boolean> {
+  return chrome.permissions.request({ origins: [LOOPBACK_PERMISSION] });
 }
 
 /**

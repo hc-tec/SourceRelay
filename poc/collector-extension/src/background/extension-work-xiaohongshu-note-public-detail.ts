@@ -25,6 +25,11 @@ import {
 } from './xiaohongshu-note-detail-click-ledger';
 import { executeXiaohongshuNotePublicCommentsExtensionWork } from './extension-work-xiaohongshu-note-public-comments';
 import { executeXiaohongshuNotePublicCommentRepliesExtensionWork } from './extension-work-xiaohongshu-note-public-comment-replies';
+import {
+  commitXiaohongshuNoteOverlayNavigation,
+  prepareXiaohongshuNoteOverlayNavigation,
+  prepareXiaohongshuSearchSurfaceNavigation
+} from './extension-work-tabs';
 
 interface DetailDocument { tabId: number; windowId: number; documentId: string }
 interface Target { x: number; y: number; noteId: string }
@@ -76,6 +81,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     assertRisk(baseline);
     const continuity = await readDocumentContinuity(pageDocument);
     const target = await findRankedDetailTarget(pageDocument, item.input.resultRank);
+    prepareXiaohongshuNoteOverlayNavigation(pageDocument.tabId, target.noteId);
     if (profileDocument) {
       await armXiaohongshuExistingPublicProfileWorkObserver(pageDocument.tabId, item.workId);
     } else {
@@ -101,6 +107,8 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
         !baselineChildTabIds.has(tab.id));
     if (opened) throw new Error('xiaohongshu_note_detail_new_tab_detected');
     await completeXiaohongshuNoteDetailClick(item.workId);
+    const detailTab = await chrome.tabs.get(pageDocument.tabId).catch(() => null);
+    commitXiaohongshuNoteOverlayNavigation(pageDocument.tabId, target.noteId, detailTab?.url ?? '');
     const network = await readXiaohongshuExistingSearchNoteDetailNetworkProjection(
       pageDocument.tabId, item.workId, item.input.resultRank
     );
@@ -164,6 +172,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
       };
     }
     if (options.closeOverlayAfterCapture || profileDocument) {
+      prepareXiaohongshuSearchSurfaceNavigation(pageDocument.tabId);
       await closeDetailOverlay(pageDocument, debuggee, continuity.timeOrigin, profileDocument ? 'profile' : 'search');
     }
     pageReady = true;

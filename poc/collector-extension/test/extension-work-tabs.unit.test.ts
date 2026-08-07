@@ -375,6 +375,68 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
   });
 
+  test('keeps a Collector-opened Xiaohongshu note overlay reusable without retaining query material', async () => {
+    const browser = installChromeTabsMock();
+    const tabs = await import('../src/background/extension-work-tabs.js');
+    const lease = await tabs.acquireExtensionWorkTab();
+    await tabs.navigateXiaohongshuExploreOnce(lease);
+    expect(tabs.releaseExtensionWorkTab(lease)).toBe('idle_reusable');
+
+    tabs.prepareXiaohongshuNoteOverlayNavigation(lease.tabId, 'note_123');
+    await browser.update(lease.tabId, {
+      url: 'https://www.xiaohongshu.com/explore/note_123?xsec_token=not-persisted'
+    });
+    tabs.commitXiaohongshuNoteOverlayNavigation(
+      lease.tabId,
+      'note_123',
+      browser.tabs.get(lease.tabId)?.url ?? ''
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const stored = JSON.stringify([...browser.sessionData.values()]);
+    expect(stored).not.toContain('xsec_token');
+    expect(stored).toContain('/explore/note_123');
+    const reused = await tabs.acquireExtensionWorkTab();
+    expect(reused.acquisition).toBe('reused');
+    expect(reused.tabId).toBe(lease.tabId);
+    expect(browser.tabs.size).toBe(2);
+  });
+
+  test('restores an expected Xiaohongshu note overlay after an MV3 worker restart', async () => {
+    const browser = installChromeTabsMock();
+    const first = await import('../src/background/extension-work-tabs.js');
+    const lease = await first.acquireExtensionWorkTab();
+    await first.navigateXiaohongshuExploreOnce(lease);
+    expect(first.releaseExtensionWorkTab(lease)).toBe('idle_reusable');
+    first.prepareXiaohongshuNoteOverlayNavigation(lease.tabId, 'note_restart');
+    await browser.update(lease.tabId, { url: 'https://www.xiaohongshu.com/explore/note_restart' });
+    first.commitXiaohongshuNoteOverlayNavigation(lease.tabId, 'note_restart',
+      browser.tabs.get(lease.tabId)?.url ?? '');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    vi.resetModules();
+    const second = await import('../src/background/extension-work-tabs.js');
+    const reused = await second.acquireExtensionWorkTab();
+
+    expect(reused.acquisition).toBe('reused');
+    expect(reused.tabId).toBe(lease.tabId);
+    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+  });
+
+  test('still quarantines an unannounced person navigation to a Xiaohongshu note route', async () => {
+    const browser = installChromeTabsMock();
+    const tabs = await import('../src/background/extension-work-tabs.js');
+    const lease = await tabs.acquireExtensionWorkTab();
+    await tabs.navigateXiaohongshuExploreOnce(lease);
+    expect(tabs.releaseExtensionWorkTab(lease)).toBe('idle_reusable');
+
+    await browser.update(lease.tabId, { url: 'https://www.xiaohongshu.com/explore/person_note' });
+
+    expect(tabs.currentExtensionWorkTabLossCause()).toBe('unexpected_url_update');
+    await expect(tabs.acquireExtensionWorkTab()).rejects.toThrow('work_tab_user_taken_over');
+    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+  });
+
   test('closes an interrupted pre-navigation blank tab instead of retaining an orphan', async () => {
     const browser = installChromeTabsMock();
     const first = await import('../src/background/extension-work-tabs.js');
