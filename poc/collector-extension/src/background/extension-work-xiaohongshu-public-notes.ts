@@ -1,5 +1,6 @@
 import {
   XIAOHONGSHU_NOTE_PUBLIC_DETAIL_BUDGET,
+  classifyXiaohongshuCurrentPageRisk,
   xiaohongshuCurrentPageNetworkPublicSurface,
   type XiaohongshuManagedSearchProjectionResult,
   type XiaohongshuNotePublicDetailWorkItem,
@@ -193,6 +194,7 @@ async function waitForXiaohongshuExploreReady(
   expiresAt: string
 ): Promise<void> {
   const deadline = Math.min(Date.parse(expiresAt), Date.now() + 30_000);
+  let prerequisiteRisk: { code: string } | null = null;
   while (Date.now() < deadline) {
     const tab = await chrome.tabs.get(workTab.tabId).catch(() => null);
     if (!tab) throw new Error('work_tab_closed');
@@ -200,9 +202,44 @@ async function waitForXiaohongshuExploreReady(
       const frame = await chrome.webNavigation.getFrame({ tabId: workTab.tabId, frameId: 0 }).catch(() => null);
       if (frame?.documentId && xiaohongshuCurrentPageNetworkPublicSurface(frame.url) === 'explore') return;
     }
+    if (tab.status === 'complete') {
+      prerequisiteRisk = await readXiaohongshuExplorePrerequisiteRisk(workTab.tabId);
+      if (prerequisiteRisk) throw new Error(prerequisiteRisk.code);
+    }
     await delay(300);
   }
-  throw new Error('xiaohongshu_explore_navigation_not_ready');
+  throw new Error(prerequisiteRisk?.code ?? 'xiaohongshu_explore_navigation_not_ready');
+}
+
+/**
+ * Read-only prerequisite classification for a managed Explore navigation that
+ * finished loading outside the Explore surface. Only public pathname/title are
+ * read; a security-verification document body is never captured. This lets the
+ * runner stop with the platform's real gate instead of waiting the full
+ * readiness budget and reporting a generic not-ready error.
+ */
+async function readXiaohongshuExplorePrerequisiteRisk(
+  tabId: number
+): Promise<{ code: string } | null> {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => ({
+      pathname: location.pathname,
+      title: document.title.slice(0, 300)
+    })
+  });
+  const probe = results[0]?.result;
+  if (!probe || typeof probe.pathname !== 'string' || typeof probe.title !== 'string') return null;
+  const risk = classifyXiaohongshuCurrentPageRisk({
+    pathname: probe.pathname,
+    title: probe.title,
+    visibleText: ''
+  });
+  if (risk.loginRequired) return { code: 'xiaohongshu_login_required' };
+  if (risk.verificationRequired) return { code: 'xiaohongshu_verification_required' };
+  if (risk.rateLimited) return { code: 'xiaohongshu_rate_limited' };
+  if (risk.sourceUnavailable) return { code: 'xiaohongshu_source_unavailable' };
+  return null;
 }
 
 function createDepthDetailWorkItem(
