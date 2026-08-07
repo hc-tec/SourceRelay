@@ -423,7 +423,7 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
   });
 
-  test('still quarantines an unannounced person navigation to a Xiaohongshu note route', async () => {
+  test('quarantines an unannounced person navigation but opens a fresh work tab', async () => {
     const browser = installChromeTabsMock();
     const tabs = await import('../src/background/extension-work-tabs.js');
     const lease = await tabs.acquireExtensionWorkTab();
@@ -433,8 +433,10 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     await browser.update(lease.tabId, { url: 'https://www.xiaohongshu.com/explore/person_note' });
 
     expect(tabs.currentExtensionWorkTabLossCause()).toBe('unexpected_url_update');
-    await expect(tabs.acquireExtensionWorkTab()).rejects.toThrow('work_tab_user_taken_over');
-    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    const replacement = await tabs.acquireExtensionWorkTab();
+    expect(replacement.acquisition).toBe('created');
+    expect(replacement.tabId).not.toBe(lease.tabId);
+    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
   });
 
   test('closes an interrupted pre-navigation blank tab instead of retaining an orphan', async () => {
@@ -470,14 +472,16 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     expect((globalThis.chrome.tabs.remove as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(firstLease.tabId);
   });
 
-  test('does not open a replacement after the user takes over a retained work tab', async () => {
+  test('opens a fresh work tab after a retained run is abandoned for review', async () => {
     const browser = installChromeTabsMock();
     const tabs = await import('../src/background/extension-work-tabs.js');
     const lease = await tabs.acquireExtensionWorkTab();
     expect(tabs.abandonExtensionWorkTab(lease)).toBe('retained_not_reusable');
 
-    await expect(tabs.acquireExtensionWorkTab()).rejects.toThrow('work_tab_user_taken_over');
-    expect(browser.tabs.size).toBe(2);
-    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    const replacement = await tabs.acquireExtensionWorkTab();
+    expect(replacement.acquisition).toBe('created');
+    expect(replacement.tabId).not.toBe(lease.tabId);
+    expect(browser.tabs.size).toBe(3);
+    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
   });
 });

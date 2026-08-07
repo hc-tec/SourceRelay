@@ -200,9 +200,6 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
   }
 
   await pruneClosedBlockedTabs();
-  if ([...managedTabs.values()].some((record) => record.state === 'blocked')) {
-    throw new Error('work_tab_user_taken_over');
-  }
   const leasedCount = [...managedTabs.values()].filter((record) => record.state === 'leased').length;
   if (leasedCount >= MAX_LEASED_WORK_TABS) {
     throw new Error('extension_work_tab_busy');
