@@ -80,6 +80,18 @@ failed:work_tab_user_taken_over:work_tab_user_taken_over
 因此在 release workflow 被手动触发并完成之前，AgentKit 继续下载公开包时仍会得到旧归档；源码
 修复本身不依赖这个待办，且不会影响当前本地 canary 结论。
 
+## Release asset refresh follow-up（2026-08-07）
+
+Core release workflow 已在 `ff816a5` 对同一 `core-v0.7.17` 发布锚点完成重新打包并成功发布。
+当前公开归档已不再是上面的历史旧包，最新归档 SHA-256 为：
+
+```text
+f71960011dfc82c082198437a2c9a214a06a2bb5a2c0e3b52ee299ce0322e774
+```
+
+该 hash 已同步到 AgentKit 的两个发布 workflow 和开发者 runbook；AgentKit L2 应使用这份
+公开归档重新验证 Core/MCP digest parity。
+
 ## 尚未声称的能力
 
 本记录证明的是“正常终态复用 + 用户接管停止 + 单 work-tab 数量边界”。它不把历史版本已经
