@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION } from '@intelligence/collector-contracts';
 import { BilibiliAccountProfileArtifactStore } from './bilibili-account-profile-artifacts';
 import { BilibiliAccountVideoInventoryArtifactStore } from './bilibili-account-video-inventory-artifacts';
@@ -30,9 +32,18 @@ import { OfficialSourceOperationStore } from './official-source-operation-store'
 import { ZhihuOfficialApiProvider } from './zhihu-official-api-provider';
 import { ZhihuOfficialArtifactStore } from './zhihu-official-artifacts';
 import { loadZhihuOfficialApiConfig } from './zhihu-official-config';
+import { readExtensionBuildFingerprint } from './extension-build-metadata';
 
 const config = loadUserBrowserGatewayConfig();
 await assertUserBrowserStateIsolation(config.stateDirectory);
+
+// The user-browser Gateway has no browser/Profile control, but it still needs
+// to reject stale workers before they consume work.  Resolve the checked-in
+// production artifact by default; deployments can point at another artifact
+// with COLLECTOR_EXTENSION_DIRECTORY.
+const extensionDirectory = process.env.COLLECTOR_EXTENSION_DIRECTORY?.trim() ||
+  resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'collector-extension', 'dist');
+const extensionBuildFingerprint = await readExtensionBuildFingerprint(extensionDirectory);
 
 const identity = await loadGatewayIdentity(config);
 const operationalLog = await OperationalLog.create(config.stateDirectory);
@@ -118,7 +129,8 @@ const server = createServer(async (request, response) => {
       xiaohongshuNotePublicDetailArtifacts,
       xiaohongshuNotePublicCommentsArtifacts,
       xiaohongshuReplyArtifacts,
-      zhihuOfficialArtifacts
+      zhihuOfficialArtifacts,
+      extensionBuildFingerprint
     });
     if (!handled) sendJson(response, 404, {
       schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,

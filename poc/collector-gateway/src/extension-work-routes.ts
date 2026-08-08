@@ -67,6 +67,7 @@ const EXTENSION_CORS_HEADERS = [
   'authorization',
   'x-collector-extension-id',
   'x-collector-extension-instance-id',
+  'x-collector-extension-build-fingerprint',
   'x-collector-timestamp',
   'x-collector-nonce',
   'x-collector-body-sha256'
@@ -90,6 +91,8 @@ export interface ExtensionWorkRouteContext {
   xiaohongshuNotePublicDetailArtifacts: XiaohongshuNotePublicDetailArtifactStore;
   xiaohongshuNotePublicCommentsArtifacts: XiaohongshuNotePublicCommentsArtifactStore;
   xiaohongshuReplyArtifacts: XiaohongshuReplyArtifactStore;
+  /** Current dist marker; stale user-owned workers are rejected before claim. */
+  extensionBuildFingerprint?: string;
 }
 
 /**
@@ -537,6 +540,11 @@ async function handleExtensionWorkNext(
   setExtensionCors(response, origin);
   try {
     const authorised = await authoriseExtensionRequest(request, context, WORK_NEXT_PATH, '');
+    if (context.extensionBuildFingerprint &&
+      request.headers['x-collector-extension-build-fingerprint'] !== context.extensionBuildFingerprint) {
+      sendJson(response, 409, { schemaVersion: 1, ok: false, error: 'extension_runtime_upgrade_required' });
+      return;
+    }
     await reconcileExpiredExtensionWork(context);
     const safetyRecords = [
       context.browserBindingSafety.get(authorised.browserBindingId, 'bilibili'),

@@ -41,7 +41,11 @@ node .\collector-gateway\dist\user-browser-server.js
 
 ## 升级扩展
 
-同一 fingerprint 重复准备时会返回 `already_prepared`。如果目标目录是旧版本，会返回：
+`start:user-browser` 会在启动 Gateway 前把当前生产构建同步到受管扩展目录；如果浏览器里的
+worker 仍是旧 fingerprint，Gateway 会在 claim 前拒绝任务，worker 随即自行执行
+`chrome.runtime.reload()`，不要求用户打开扩展管理页或手动点击 Reload。
+
+单独运行准备命令时，同一 fingerprint 重复准备仍会返回 `already_prepared`。如果目标目录是旧版本，会返回：
 
 ```json
 {
@@ -50,13 +54,13 @@ node .\collector-gateway\dist\user-browser-server.js
 }
 ```
 
-确认发布包和 Gateway 版本后显式执行：
+需要只更新制品而不启动 Gateway 时才显式执行：
 
 ```powershell
 npm run update:user-browser-deployment
 ```
 
-随后在浏览器扩展管理页点击“重新加载”。Gateway 不会替用户点击、关闭标签页或重启浏览器。
+随后由已载入的新 worker 自行 reload；Gateway 不会接管、关闭标签页或重启用户浏览器。
 
 ## 故障状态
 

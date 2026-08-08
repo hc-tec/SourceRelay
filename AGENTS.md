@@ -12,3 +12,5 @@
 - 自动重载后必须重新读取真实 worker 的 runtime marker（manifest version、`collectorVersion`、control-surface revision、build fingerprint），并与 `dist/runtime-build.json` 精确比对；若仍不一致只允许再执行一次受控 reload，不能依赖历史版本记录、可见窗口重启或重复导航来掩盖 mismatch。
 - DevTools/CDP 自动更新只允许作用于仓库管理的验证/研究 Profile；不得附着、接管或关闭用户日常浏览器。运行 `chrome-devtools` 时关闭 usage statistics/CrUX，Network 证据输出先去掉 query/hash，绝不输出 Cookie、Token、密码或其他认证材料。
 - B站字幕菜单属于 hover-owned UI：必须按“视频区域 → 字幕按钮 → 菜单路径 → `data-lan="ai-zh"` 父节点”分段发送真实 mouse move，每段等待并重新确认可见/`:hover`；禁止把鼠标瞬移、hover 和 click 合并成零停顿序列。唯一一次点击后必须同时核对 active 状态、可见字幕面板和去敏字幕 CDN 200 响应。
+- 用户自有浏览器 direct work 的 claim 也必须携带当前扩展 build fingerprint；Gateway 发现 worker 过期时要在 claim 前拒绝并让扩展自调用 `chrome.runtime.reload()`，不能让旧 worker 先消费任务，更不能要求用户手动 Reload。
+- 这条门禁必须接在实际运行的 `poc/collector-gateway/dist/user-browser-server.js`；更新时先把生产 `collector-extension/dist` 制品同步到受管扩展目录，再由新 worker 通过 `chrome.runtime.reload()` 载入，不能只重启 Gateway 或只更新 manifest。CDP 自动 Reload 仅限仓库管理的验证/研究 Profile，禁止附着日常浏览器。

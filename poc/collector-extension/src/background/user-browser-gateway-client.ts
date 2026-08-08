@@ -21,6 +21,7 @@ import {
   SAFE_ERROR,
   type PairUserBrowserGatewayInput
 } from './user-browser-gateway-types';
+import { COLLECTOR_EXTENSION_BUILD_FINGERPRINT } from '../shared/build-fingerprint';
 
 export async function claimGatewayPairing(input: {
   pairing: PairUserBrowserGatewayInput;
@@ -104,6 +105,7 @@ export async function authenticatedGatewayJson(
     authorization,
     'x-collector-extension-id': chrome.runtime.id,
     'x-collector-extension-instance-id': record.extensionInstanceId,
+    'x-collector-extension-build-fingerprint': COLLECTOR_EXTENSION_BUILD_FINGERPRINT,
     'x-collector-timestamp': timestamp,
     'x-collector-nonce': nonce,
     'x-collector-body-sha256': bodySha256

@@ -55,8 +55,10 @@ import { OfficialSourceOperationStore } from './official-source-operation-store'
 import { ZhihuOfficialApiProvider } from './zhihu-official-api-provider';
 import { ZhihuOfficialArtifactStore } from './zhihu-official-artifacts';
 import { loadZhihuOfficialApiConfig } from './zhihu-official-config';
+import { readExtensionBuildFingerprint } from './extension-build-metadata';
 
 const config = loadGatewayConfig();
+const extensionBuildFingerprint = await readExtensionBuildFingerprint(config.extensionDirectory);
 const identity = await loadGatewayIdentity(config);
 const operationalLog = await OperationalLog.create(config.stateDirectory);
 const pairingBroker = await PairingBroker.create(identity, config.stateDirectory);
@@ -266,7 +268,8 @@ const server = createServer(async (request, response) => {
       transcriptArtifacts,
       transcriptRunner,
       danmakuArtifacts,
-      danmakuRunner
+      danmakuRunner,
+      extensionBuildFingerprint
     });
     if (!handled) sendJson(response, 404, { schemaVersion: 1, ok: false, error: 'route_not_found' });
   } catch (error) {

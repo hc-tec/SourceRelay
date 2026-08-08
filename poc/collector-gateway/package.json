@@ -27,7 +27,7 @@
     "verify:build": "npm run typecheck && npm run verify:safety && npm run verify:account-video-page-two-contract && npm run verify:account-video-inventory-contract && npm run verify:native-search-contract && npm run verify:dynamic-contract && npm run verify:video-detail-contract && npm run build && npm run verify:artifacts",
     "prepare:user-browser-extension": "node scripts/prepare-user-browser-extension.mjs",
     "check:user-browser": "node scripts/check-user-browser.mjs",
-    "start:user-browser": "node dist/user-browser-server.js",
+    "start:user-browser": "node scripts/prepare-user-browser-extension.mjs --replace && node dist/user-browser-server.js",
     "start:isolated-browser": "node dist/isolated-browser-server.js",
     "start": "npm run start:user-browser"
   },
