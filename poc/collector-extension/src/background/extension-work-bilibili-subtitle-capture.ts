@@ -3,7 +3,9 @@ import {
   type NetworkCaptureObservation
 } from '../shared/network-capture';
 import {
+  BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
   BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID,
+  type BilibiliTranscriptDirectoryProjection,
   type BilibiliTranscriptDocumentProjection
 } from '../shared/transcript-capture';
 import type { BilibiliVideoDetailDomObservation, ExtensionWorkItem } from '@intelligence/collector-contracts';
@@ -87,7 +89,7 @@ export async function captureBilibiliSubtitle(
 ): Promise<BilibiliVideoDetailDomObservation> {
   const arm = await getActiveNetworkCaptureArm(workTab.tabId);
   if (!arm) return withSubtitle(base, { ...emptySubtitle(), available: base.subtitle.available });
-  let probe = await waitForPlayerProbe(workTab, Math.min(Date.parse(item.expiresAt), Date.now() + 8_000));
+  let probe = await waitForPlayerProbe(workTab, remainingProbeBudget(item.expiresAt, 8_000));
   if (!probe.playerAreaPresent || !probe.captionControlAttached) {
     return withSubtitle(base, { ...emptySubtitle(), available: probe.captionControlAttached || base.subtitle.available });
   }
@@ -100,6 +102,9 @@ export async function captureBilibiliSubtitle(
       probe = await waitForPlayerProbe(workTab, CONTROL_REVEAL_TIMEOUT_MS);
     }
     if (!probe.chineseOptionVisible && probe.captionControl) {
+      // Bilibili reveals the language menu from a trusted hover. Clicking the
+      // control here opens the login/settings path on anonymous pages and
+      // never proves that the language menu is ready.
       await mouseMove(debuggee, probe.captionControl);
       await delay(STEP_SETTLE_MS);
       probe = await waitForPlayerProbe(workTab, MENU_REVEAL_TIMEOUT_MS);
@@ -152,7 +157,7 @@ function emptySubtitle(): BilibiliVideoDetailDomObservation['subtitle'] {
 }
 
 async function waitForPlayerProbe(workTab: ExtensionWorkTabLease, deadlineMs: number): Promise<PlayerProbe> {
-  const deadline = Date.now() + deadlineMs;
+  const deadline = Date.now() + Math.max(0, deadlineMs);
   let latest: PlayerProbe | null = null;
   while (Date.now() < deadline) {
     latest = await readPlayerProbe(workTab.tabId);
@@ -201,13 +206,17 @@ async function readPlayerProbe(tabId: number): Promise<PlayerProbe> {
       const playerArea = document.querySelector<HTMLElement>('.bpx-player-video-area');
       const controlBar = document.querySelector<HTMLElement>('.bpx-player-control-bottom');
       const captionControl = document.querySelector<HTMLElement>('.bpx-player-ctrl-subtitle');
-      const chineseOption = Array.from(document.querySelectorAll<HTMLElement>(
-        '.bpx-player-ctrl-subtitle-item, .bpx-player-ctrl-subtitle-language [class*="subtitle-item"], [data-lan]'
-      )).find((element) => {
+      // Keep the target inside Bilibili's language-menu subtree. A global
+      // `[data-lan]`/subtitle-item query also matches style-setting controls
+      // and can turn a visible parent label into a false Chinese option.
+      const languageOptions = Array.from(document.querySelectorAll<HTMLElement>(
+        '.bpx-player-ctrl-subtitle-language-item, .bpx-player-ctrl-subtitle-language [data-lan]'
+      ));
+      const chineseOption = languageOptions.find((element) => {
         if (!visible(element)) return false;
         const lan = element.getAttribute('data-lan') ?? '';
-        const text = (element.textContent ?? '').replace(/\s+/g, ' ');
-        return lan === 'ai-zh' || /AI\s*字幕|中文字幕|智能字幕|中文/.test(text);
+        const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+        return lan === 'ai-zh' || /^(?:中文|汉语|AI\s*字幕)(?:[（(][^）)]{1,30}[）)])?$/.test(text);
       }) ?? null;
       const subtitlePanel = document.querySelector<HTMLElement>('.bili-subtitle-x-subtitle-panel');
       const controlBarVisible = visible(controlBar) &&
@@ -239,6 +248,12 @@ async function readPlayerProbe(tabId: number): Promise<PlayerProbe> {
   return value;
 }
 
+function remainingProbeBudget(expiresAt: string, maximumMs: number): number {
+  const deadline = Date.parse(expiresAt);
+  if (!Number.isFinite(deadline)) return 0;
+  return Math.max(0, Math.min(maximumMs, deadline - Date.now()));
+}
+
 async function readTranscriptSegments(
   workTab: ExtensionWorkTabLease,
   arm: NonNullable<Awaited<ReturnType<typeof getActiveNetworkCaptureArm>>>,
@@ -248,11 +263,26 @@ async function readTranscriptSegments(
   let latest: NetworkCaptureObservation[] = [];
   while (Date.now() < deadline) {
     latest = await readNetworkCaptures(workTab.tabId, arm);
+    const directory = latest.find((entry) =>
+      entry.status === 'captured' && entry.routeId === BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID
+    );
+    // Anonymous Bilibili pages return a valid player response with an empty
+    // subtitle directory (`need_login_subtitle=true`). Once that public
+    // response is observed there can be no document response to wait for;
+    // finish the accessory read immediately instead of burning the full
+    // response timeout.
+    if (directory?.body) {
+      const projection = directory.body as unknown as BilibiliTranscriptDirectoryProjection;
+      if (projection.artifactKind === 'bilibili_transcript_track_directory' &&
+        projection.sourceTrackCount === 0 && projection.storedTrackCount === 0) {
+        return [];
+      }
+    }
     const document = latest.find((entry) =>
       entry.status === 'captured' && entry.routeId === BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID
     );
     if (document?.body) {
-      const projection = document.body as BilibiliTranscriptDocumentProjection;
+      const projection = document.body as unknown as BilibiliTranscriptDocumentProjection;
       return projection.segments.map((segment) => ({
         from: segment.from,
         to: segment.to,
