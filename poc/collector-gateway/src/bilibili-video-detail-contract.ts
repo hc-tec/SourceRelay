@@ -36,6 +36,9 @@ export interface BilibiliVideoDetailDomSnapshot {
     available: boolean;
     language: string | null;
     panelVisible: boolean;
+    segmentCount: number;
+    partial: boolean;
+    segments: Array<{ from: number; to: number; text: string }>;
   };
   loginOverlayVisible: boolean;
   risk: {
@@ -61,6 +64,9 @@ export interface BilibiliVideoDetailDomDiagnostics {
     available: boolean | null;
     language: string | null;
     panelVisible: boolean | null;
+    segmentCount: number | null;
+    partial: boolean | null;
+    segments: Array<{ from: number; to: number; text: string }>;
   } | null;
   loginOverlayVisible: boolean | null;
   verificationRequired: boolean | null;
@@ -89,6 +95,9 @@ export interface BilibiliVideoDetailProjection {
     available: boolean;
     language: string | null;
     panelVisible: boolean;
+    segmentCount: number;
+    partial: boolean;
+    segments: Array<{ from: number; to: number; text: string }>;
   };
   loginOverlayVisible: boolean;
   risk: BilibiliVideoDetailDomSnapshot['risk'];
@@ -323,7 +332,7 @@ export function projectBilibiliVideoDetailDom(
     accessStatus: accessStatus(dom),
     subtitle: dom.subtitle
       ? { ...dom.subtitle }
-      : { available: false, language: null, panelVisible: false },
+      : { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
     loginOverlayVisible: dom.loginOverlayVisible,
     risk: { ...dom.risk },
     capturedAt

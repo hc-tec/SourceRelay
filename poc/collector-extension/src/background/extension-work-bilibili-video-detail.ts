@@ -6,6 +6,10 @@ import {
 } from '@intelligence/collector-contracts';
 import { captureBilibiliVideoDetailDom } from './strategies/bilibili-video-detail-dom-projection';
 import {
+  armBilibiliSubtitleCapture,
+  captureBilibiliSubtitle
+} from './extension-work-bilibili-subtitle-capture';
+import {
   acquireExtensionWorkTab,
   abandonExtensionWorkTab,
   currentExtensionWorkTabDisposition,
@@ -55,12 +59,20 @@ export async function executeBilibiliVideoDetailExtensionWork(
     workTab = await acquireExtensionWorkTab();
     acquisition = workTab.acquisition;
     await lifecycle.onWorkTabAcquired?.(acquisition);
+    await armBilibiliSubtitleCapture(workTab, item);
     await navigateExtensionWorkTabOnce(workTab, item, async () => {
       navigationAttempted = true;
       await lifecycle.onNavigationIntent?.();
     });
     const observed = await observeVideoDetail(workTab, item.input.bvid, item.expiresAt);
     observation = observed.observation;
+    if (observed.kind === 'ready' && observation) {
+      try {
+        observation = await captureBilibiliSubtitle(workTab, item, observation);
+      } catch {
+        // Subtitle capture is an accessory; a completed detail still returns.
+      }
+    }
     const disposition = observed.kind === 'ready' || observed.kind === 'incomplete' ||
       observed.terminalReason === 'source_unavailable'
       ? releaseExtensionWorkTab(workTab)

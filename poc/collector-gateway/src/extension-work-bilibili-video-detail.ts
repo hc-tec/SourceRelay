@@ -133,7 +133,14 @@ function diagnosticsFromObservation(observation: BilibiliVideoDetailDomObservati
     titleVisible: observation.titleVisible,
     playerVisible: observation.playerVisible,
     chargeExclusiveTrialVisible: observation.chargeExclusiveTrialVisible,
-    subtitle: { ...observation.subtitle },
+    subtitle: {
+      available: observation.subtitle.available,
+      language: observation.subtitle.language,
+      panelVisible: observation.subtitle.panelVisible,
+      segmentCount: observation.subtitle.segmentCount,
+      partial: observation.subtitle.partial,
+      segments: observation.subtitle.segments.map((segment) => ({ ...segment }))
+    },
     loginOverlayVisible: observation.loginOverlayVisible,
     verificationRequired: observation.risk.verificationRequired,
     rateLimited: observation.risk.rateLimited,

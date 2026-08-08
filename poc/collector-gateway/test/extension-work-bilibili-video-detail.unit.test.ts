@@ -29,9 +29,9 @@ const item: Extract<ExtensionWorkItem, { capability: 'bilibili.video_detail' }> 
   },
   budget: {
     maximumPlatformNavigations: 1,
-    maximumSemanticActions: 0,
-    maximumResponseObservations: 0,
-    maximumPayloadBytes: 98_304
+    maximumSemanticActions: 3,
+    maximumResponseObservations: 2,
+    maximumPayloadBytes: 200_000
   },
   gatewaySignature: 'a'.repeat(86)
 };
@@ -68,7 +68,7 @@ describe('user-browser video-detail failure artifact', () => {
         titleVisible: true,
         playerVisible: false,
         chargeExclusiveTrialVisible: false,
-        subtitle: { available: false, language: null, panelVisible: false },
+        subtitle: { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
         loginOverlayVisible: false,
         risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
       }
@@ -85,7 +85,7 @@ describe('user-browser video-detail failure artifact', () => {
       titleVisible: true,
       playerVisible: false,
       chargeExclusiveTrialVisible: false,
-      subtitle: { available: false, language: null, panelVisible: false },
+      subtitle: { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
       loginOverlayVisible: false,
       verificationRequired: false,
       rateLimited: false,

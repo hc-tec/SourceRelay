@@ -16,6 +16,9 @@ export interface BilibiliVideoDetailDomSnapshot {
     available: boolean;
     language: string | null;
     panelVisible: boolean;
+    segmentCount: number;
+    partial: boolean;
+    segments: Array<{ from: number; to: number; text: string }>;
   };
   loginOverlayVisible: boolean;
   risk: {
@@ -159,7 +162,10 @@ export async function captureBilibiliVideoDetailDom(
             language: chineseOption && rendered(chineseOption)
               ? chineseOption.getAttribute('data-lan')
               : null,
-            panelVisible: Boolean(subtitlePanel && rendered(subtitlePanel))
+            panelVisible: Boolean(subtitlePanel && rendered(subtitlePanel)),
+            segmentCount: 0,
+            partial: false,
+            segments: []
           },
           loginOverlayVisible,
           risk: {

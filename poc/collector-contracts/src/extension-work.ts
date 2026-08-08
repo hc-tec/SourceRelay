@@ -158,13 +158,14 @@ export interface BilibiliVideoDetailWorkInput {
 
 /**
  * These are ceilings, not caller-configurable knobs. The first direct-mode
- * detail capability has exactly one navigation and zero semantic page input.
+ * detail capability has exactly one navigation and up to three trusted
+ * player interactions plus two bounded transcript response observations.
  */
 export interface BilibiliVideoDetailWorkBudget {
   maximumPlatformNavigations: 1;
-  maximumSemanticActions: 0;
-  maximumResponseObservations: 0;
-  maximumPayloadBytes: 98_304;
+  maximumSemanticActions: 3;
+  maximumResponseObservations: 2;
+  maximumPayloadBytes: 200_000;
 }
 
 export interface BilibiliVideoDetailWorkItem extends CollectorWorkTabExtensionWorkEnvelope {
@@ -375,6 +376,9 @@ export interface BilibiliVideoDetailDomObservation {
     available: boolean;
     language: string | null;
     panelVisible: boolean;
+    segmentCount: number;
+    partial: boolean;
+    segments: Array<{ from: number; to: number; text: string }>;
   };
   loginOverlayVisible: boolean;
   risk: BilibiliWorkRisk;
@@ -829,12 +833,22 @@ export function isBilibiliVideoDetailDomObservation(value: unknown): value is Bi
     !isTextArray(value.tagTexts, 20, 100) || !isNullableCreator(value.creator) ||
     typeof value.titleVisible !== 'boolean' || typeof value.playerVisible !== 'boolean' ||
     typeof value.chargeExclusiveTrialVisible !== 'boolean' || typeof value.loginOverlayVisible !== 'boolean' ||
-    !isRecord(value.subtitle) || typeof value.subtitle.available !== 'boolean' ||
-    (value.subtitle.language !== null && typeof value.subtitle.language !== 'string') ||
-    typeof value.subtitle.panelVisible !== 'boolean' ||
+    !isBilibiliVideoDetailSubtitle(value.subtitle) ||
     !isBilibiliWorkRisk(value.risk)
   ) return false;
   return true;
+}
+
+function isBilibiliVideoDetailSubtitle(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return typeof value.available === 'boolean' &&
+    (value.language === null || typeof value.language === 'string') &&
+    typeof value.panelVisible === 'boolean' &&
+    Number.isSafeInteger(value.segmentCount) && Number(value.segmentCount) >= 0 &&
+    typeof value.partial === 'boolean' && Array.isArray(value.segments) &&
+    value.segments.every((segment) => isRecord(segment) &&
+      Number.isFinite(segment.from) && Number.isFinite(segment.to) &&
+      typeof segment.text === 'string' && segment.text.length <= 4_000);
 }
 
 export function isBilibiliNativeSearchDomObservation(value: unknown): value is BilibiliNativeSearchDomObservation {
@@ -955,7 +969,9 @@ function isBilibiliAccountInventoryWorkInput(value: unknown): value is BilibiliA
 }
 
 function isBilibiliVideoDetailWorkBudget(value: unknown): value is BilibiliVideoDetailWorkBudget {
-  return isFixedDirectWorkBudget(value);
+  return isRecord(value) && Object.keys(value).length === 4 &&
+    value.maximumPlatformNavigations === 1 && value.maximumSemanticActions === 3 &&
+    value.maximumResponseObservations === 2 && value.maximumPayloadBytes === 200_000;
 }
 
 function isBilibiliNativeSearchWorkBudget(value: unknown): value is BilibiliNativeSearchWorkBudget {

@@ -371,9 +371,9 @@ export class ExtensionWorkQueue {
       input: { canonicalVideoUrl, bvid },
       budget: {
         maximumPlatformNavigations: 1,
-        maximumSemanticActions: 0,
-        maximumResponseObservations: 0,
-        maximumPayloadBytes: 98_304
+        maximumSemanticActions: 3,
+        maximumResponseObservations: 2,
+        maximumPayloadBytes: 200_000
       }
     };
     const item: ExtensionWorkItem = {

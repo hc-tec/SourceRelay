@@ -89,8 +89,19 @@ function domSnapshot(value: unknown, expectedBvid: string): BilibiliVideoDetailD
           ? (candidate.subtitle as Record<string, unknown>).language as string
           : null,
         panelVisible: (candidate.subtitle as Record<string, unknown>).panelVisible === true
+        ,
+        segmentCount: Number.isSafeInteger((candidate.subtitle as Record<string, unknown>).segmentCount)
+          ? (candidate.subtitle as Record<string, unknown>).segmentCount as number
+          : 0,
+        partial: (candidate.subtitle as Record<string, unknown>).partial === true,
+        segments: Array.isArray((candidate.subtitle as Record<string, unknown>).segments)
+          ? ((candidate.subtitle as Record<string, unknown>).segments as Array<Record<string, unknown>>)
+            .filter((segment) => Number.isFinite(segment.from) && Number.isFinite(segment.to) &&
+              typeof segment.text === 'string')
+            .map((segment) => ({ from: Number(segment.from), to: Number(segment.to), text: segment.text as string }))
+          : []
       }
-      : { available: false, language: null, panelVisible: false },
+      : { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
     loginOverlayVisible: candidate.loginOverlayVisible,
     risk: {
       verificationRequired: risk.verificationRequired,

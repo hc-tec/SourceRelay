@@ -21,7 +21,7 @@ function dom(overrides: Partial<BilibiliVideoDetailDomSnapshot> = {}): BilibiliV
     titleVisible: true,
     playerVisible: true,
     chargeExclusiveTrialVisible: false,
-    subtitle: { available: false, language: null, panelVisible: false },
+    subtitle: { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
     loginOverlayVisible: false,
     risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false },
     ...overrides

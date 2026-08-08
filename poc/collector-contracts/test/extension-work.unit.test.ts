@@ -7,7 +7,7 @@ import {
   type ExtensionWorkResult
 } from '../src/index.js';
 
-const item: ExtensionWorkItem = {
+const item: Extract<ExtensionWorkItem, { capability: 'bilibili.video_detail' }> = {
   schemaVersion: 1,
   protocolVersion: 1,
   workId: '11111111-1111-4111-8111-111111111111',
@@ -24,9 +24,9 @@ const item: ExtensionWorkItem = {
   },
   budget: {
     maximumPlatformNavigations: 1,
-    maximumSemanticActions: 0,
-    maximumResponseObservations: 0,
-    maximumPayloadBytes: 98_304
+    maximumSemanticActions: 3,
+    maximumResponseObservations: 2,
+    maximumPayloadBytes: 200_000
   },
   gatewaySignature: 'a'.repeat(86)
 };
@@ -195,7 +195,7 @@ describe('direct extension work contract', () => {
         titleVisible: true,
         playerVisible: true,
         chargeExclusiveTrialVisible: false,
-        subtitle: { available: false, language: null, panelVisible: false },
+        subtitle: { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
         loginOverlayVisible: false,
         risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
       }
