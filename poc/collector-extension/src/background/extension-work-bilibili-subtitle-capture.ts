@@ -22,9 +22,10 @@ const SELECTION_SETTLE_TIMEOUT_MS = 4_000;
 const RESPONSE_TIMEOUT_MS = 10_000;
 const ARM_LIFETIME_MS = 60_000;
 const PROBE_INTERVAL_MS = 200;
-const MOUSE_MOVE_SETTLE_MS = 100;
-const CLICK_HOLD_MS = 100;
-const POST_CLICK_SETTLE_MS = 150;
+const MOUSE_MOVE_SETTLE_MS = 250;
+const CLICK_HOLD_MS = 180;
+const POST_CLICK_SETTLE_MS = 500;
+const STEP_SETTLE_MS = 700;
 
 export interface SubtitleCaptureResult {
   available: boolean;
@@ -95,14 +96,17 @@ export async function captureBilibiliSubtitle(
     await chrome.debugger.attach(debuggee, DEBUGGER_PROTOCOL_VERSION);
     if (!probe.captionControlVisuallyExposed && probe.videoArea) {
       await mouseMove(debuggee, probe.videoArea);
+      await delay(STEP_SETTLE_MS);
       probe = await waitForPlayerProbe(workTab, CONTROL_REVEAL_TIMEOUT_MS);
     }
     if (!probe.chineseOptionVisible && probe.captionControl) {
       await mouseMove(debuggee, probe.captionControl);
+      await delay(STEP_SETTLE_MS);
       probe = await waitForPlayerProbe(workTab, MENU_REVEAL_TIMEOUT_MS);
     }
     if ((!probe.chineseOptionActive || !probe.subtitlePanelVisible) && probe.chineseOption) {
       await mouseClick(debuggee, probe.chineseOption);
+      await delay(STEP_SETTLE_MS);
       probe = await waitForPlayerProbe(workTab, SELECTION_SETTLE_TIMEOUT_MS);
     }
     const language = probe.chineseOptionActive ? probe.chineseOptionLanguage ?? 'ai-zh' : null;
@@ -203,7 +207,7 @@ async function readPlayerProbe(tabId: number): Promise<PlayerProbe> {
         if (!visible(element)) return false;
         const lan = element.getAttribute('data-lan') ?? '';
         const text = (element.textContent ?? '').replace(/\s+/g, ' ');
-        return lan === 'ai-zh' || /AI 字幕|中文字幕|智能字幕|中文/.test(text);
+        return lan === 'ai-zh' || /AI\s*字幕|中文字幕|智能字幕|中文/.test(text);
       }) ?? null;
       const subtitlePanel = document.querySelector<HTMLElement>('.bili-subtitle-x-subtitle-panel');
       const controlBarVisible = visible(controlBar) &&
