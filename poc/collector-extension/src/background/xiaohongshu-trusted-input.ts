@@ -114,7 +114,9 @@ export async function executeXiaohongshuTrustedInputSearch(
   let result: XiaohongshuTrustedInputResult;
   try {
     const document = await findUniqueEligibleExploreDocument(lifecycle.expectedTabId);
-    await chrome.tabs.update(document.tabId, { active: true });
+    await chrome.tabs.update(document.tabId, { active: true }).catch(() => {
+      throw new Error('work_tab_foreground_unavailable');
+    });
     await requireSameDocument(document);
     await lifecycle.onEligibleDocument?.(document);
     await requireSameDocument(document);
@@ -222,6 +224,26 @@ export async function wasXiaohongshuTrustedInputAttempted(actionId: string): Pro
   return action?.semanticActionAttempted === true;
 }
 
+/**
+ * Finalize any non-terminal trusted-input action for an interrupted work item.
+ * A worker interruption can leave `semantic_action_intent_recorded` behind;
+ * without this, a later operation sees an unexpired in-progress action and
+ * fails before it can attempt anything. This preserves the at-most-once intent
+ * bit while unblocking a fresh operation that uses a different work item.
+ */
+export async function finalizeXiaohongshuTrustedInputAction(workId: string): Promise<void> {
+  if (!identifier(workId)) return;
+  const current = await loadPersistedActions();
+  let changed = false;
+  const next = current.map((entry) => {
+    if (entry.workId !== workId || entry.phase === 'terminal') return entry;
+    changed = true;
+    return { ...entry, phase: 'terminal' as const };
+  });
+  if (!changed) return;
+  await chrome.storage.local.set({ [ACTION_STORAGE_KEY]: next.slice(-100) });
+}
+
 export async function readXiaohongshuTrustedInputLedgerSummary(): Promise<{
   type: 'collector_xiaohongshu_trusted_input_ledger_summary';
   schemaVersion: 1;
@@ -296,6 +318,8 @@ async function discoverSearchTarget(eligibleDocument: EligibleDocument): Promise
       }
       return null;
     }
+  }).catch(() => {
+    throw new Error('xiaohongshu_trusted_input_search_target_unavailable');
   });
   const target = results[0]?.result as SearchTarget | null | undefined;
   if (!target || !finiteBounds(target)) throw new Error('xiaohongshu_trusted_input_search_target_unavailable');
@@ -318,6 +342,8 @@ async function readQueryEcho(eligibleDocument: EligibleDocument, query: string):
         )
       );
     })
+  }).catch(() => {
+    throw new Error('xiaohongshu_trusted_input_query_echo_unavailable');
   });
   return results[0]?.result === true;
 }
@@ -426,6 +452,8 @@ async function readPostcondition(eligibleDocument: EligibleDocument, query: stri
         visibleText: bodyText
       };
     }
+  }).catch(() => {
+    throw new Error('xiaohongshu_trusted_input_postcondition_unavailable');
   });
   const value = results[0]?.result as PagePostconditionProbe | undefined;
   if (!value || (value.publicSurface !== 'explore' && value.publicSurface !== 'search' && value.publicSurface !== null) ||

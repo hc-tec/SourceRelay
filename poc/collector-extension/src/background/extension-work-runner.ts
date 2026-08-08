@@ -21,7 +21,7 @@ import {
 import { executeXiaohongshuNotePublicDetailExtensionWork } from './extension-work-xiaohongshu-note-public-detail';
 import { executeXiaohongshuNotePublicCommentsExtensionWork } from './extension-work-xiaohongshu-note-public-comments';
 import { executeXiaohongshuNotePublicCommentRepliesExtensionWork } from './extension-work-xiaohongshu-note-public-comment-replies';
-import { wasXiaohongshuTrustedInputAttempted } from './xiaohongshu-trusted-input';
+import { finalizeXiaohongshuTrustedInputAction, wasXiaohongshuTrustedInputAttempted } from './xiaohongshu-trusted-input';
 import { xiaohongshuProfileScrollAttemptCount } from './xiaohongshu-profile-scroll-ledger';
 import { xiaohongshuProfileLinkDiscoveryAttempted } from './xiaohongshu-profile-link-discovery-ledger';
 import { xiaohongshuNoteDetailClickAttempted } from './xiaohongshu-note-detail-click-ledger';
@@ -84,6 +84,9 @@ export async function pollForExtensionWork(): Promise<void> {
 
     const interrupted = await loadActiveExtensionWork();
     if (interrupted) {
+      if (interrupted.item.capability === 'xiaohongshu.search.public_notes.v1') {
+        await finalizeXiaohongshuTrustedInputAction(interrupted.item.workId).catch(() => undefined);
+      }
       const recoveredWorkTabDisposition = (interrupted.item.platform === 'bilibili' &&
         interrupted.item.executionTarget === 'collector_work_tab') ||
         interrupted.item.capability === 'xiaohongshu.search.public_notes.v1'

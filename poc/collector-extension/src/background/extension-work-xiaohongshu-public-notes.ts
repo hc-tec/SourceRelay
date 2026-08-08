@@ -293,6 +293,24 @@ function terminalReason(errorCode: string | null): XiaohongshuPublicNotesSearchT
       return 'debugger_attach_failed';
     case 'debugger_input_failed':
       return 'debugger_input_failed';
+    case 'xiaohongshu_trusted_input_action_already_claimed':
+      return 'action_already_claimed';
+    case 'xiaohongshu_trusted_input_action_in_progress':
+      return 'action_in_progress';
+    case 'xiaohongshu_trusted_input_action_expired':
+      return 'action_expired';
+    case 'xiaohongshu_trusted_input_query_echo_unavailable':
+      return 'query_echo_unavailable';
+    case 'xiaohongshu_trusted_input_postcondition_unavailable':
+      return 'postcondition_unavailable';
+    case 'xiaohongshu_trusted_input_postcondition_unmet':
+      return 'postcondition_unmet';
+    case 'work_tab_foreground_unavailable':
+      return 'work_tab_foreground_unavailable';
+    case 'xiaohongshu_public_search_document_changed':
+      return 'document_context_changed';
+    case 'xiaohongshu_explore_navigation_not_ready':
+      return 'explore_navigation_not_ready';
     default:
       return 'postcondition_unmet';
   }

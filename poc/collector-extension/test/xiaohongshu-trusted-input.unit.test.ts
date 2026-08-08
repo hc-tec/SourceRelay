@@ -168,6 +168,25 @@ describe('Xiaohongshu extension trusted input boundary', () => {
     expect(chrome.sendCommand).not.toHaveBeenCalled();
   });
 
+  test('finalizes an interrupted action so a fresh operation is not blocked', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const chrome = installChromeMock({ persisted: {
+      schemaVersion: 1,
+      actionId: 'other-action',
+      workId: 'work-1',
+      runId: 'run-1',
+      browserBindingId: 'binding-1',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      phase: 'semantic_action_intent_recorded',
+      semanticActionAttempted: true
+    } });
+    const module = await import('../src/background/xiaohongshu-trusted-input.js');
+    await module.finalizeXiaohongshuTrustedInputAction('work-1');
+    const result = await module.executeXiaohongshuTrustedInputSearch(validAction());
+    expect(result.state).toBe('completed');
+    expect(chrome.sendCommand).toHaveBeenCalled();
+  });
+
   test('will not replay a terminal action after newer actions have entered the bounded ledger', async () => {
     const base = {
       schemaVersion: 1,
