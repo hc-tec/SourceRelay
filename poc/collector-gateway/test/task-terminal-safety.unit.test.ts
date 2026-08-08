@@ -58,7 +58,7 @@ async function dispatch(queue: GatewayTaskQueue, at: Date) {
   return work;
 }
 
-test('a blocked receipt finishes the active safety run and locks rate-limited Profile activity', async () => {
+test('a blocked receipt finishes the active safety run without locking rate-limited Profile activity', async () => {
   const { queue, safety, taskId } = await prepareFormalScoutStage(10_000);
   const dispatched = await dispatch(queue, new Date('2026-07-22T00:00:03.000Z'));
   expect(safety.get(profileId, 'bilibili')).toMatchObject({ state: 'running' });
@@ -78,9 +78,9 @@ test('a blocked receipt finishes the active safety run and locks rate-limited Pr
     stageProgress: [{ stageId: dispatched.dispatch.stageId, state: 'blocked', errorCode: 'rate_limited' }]
   });
   expect(safety.get(profileId, 'bilibili')).toMatchObject({
-    state: 'locked',
+    state: 'ready',
     reasonCode: 'rate_limited',
-    manualUnlockRequired: true,
+    manualUnlockRequired: false,
     activeRun: null
   });
   expect(await queue.nextWork(extensionInstanceId, Date.parse('2026-07-22T00:00:05.000Z'))).toBeNull();

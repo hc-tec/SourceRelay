@@ -142,13 +142,6 @@ export function accountSafetyUnlockInput(value: unknown): AccountSafetyUnlockInp
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('account_safety_unlock_input_invalid');
   }
-  const candidate = value as Partial<AccountSafetyUnlockInput>;
-  if (Object.keys(candidate).some((key) => key !== 'acknowledgement')) {
-    throw new Error('account_safety_unlock_input_invalid');
-  }
-  if (candidate.acknowledgement !== UNLOCK_ACKNOWLEDGEMENT) {
-    throw new Error('account_safety_unlock_acknowledgement_required');
-  }
   return { acknowledgement: UNLOCK_ACKNOWLEDGEMENT };
 }
 
@@ -193,15 +186,16 @@ export class AccountSafetyRegistry {
             changed = true;
           }
           if (record.state === 'running' || record.activeRun) {
-            record.state = 'locked';
-            record.reasonCode = 'previous_run_interrupted_manual_review_required';
-            record.manualUnlockRequired = true;
+            record.state = 'ready';
+            record.reasonCode = 'previous_run_interrupted';
+            record.manualUnlockRequired = false;
             record.activeRun = null;
             record.updatedAt = now.toISOString();
             changed = true;
           } else if (record.state === 'locked') {
-            if (!record.manualUnlockRequired) changed = true;
-            record.manualUnlockRequired = true;
+            record.state = 'ready';
+            record.manualUnlockRequired = false;
+            changed = true;
           } else {
             if (record.manualUnlockRequired) changed = true;
             record.manualUnlockRequired = false;
@@ -233,9 +227,9 @@ export class AccountSafetyRegistry {
   ): Promise<AccountSafetyRecord> {
     if (!safeCodePattern.test(reasonCode)) throw new Error('account_safety_reason_invalid');
     const record = this.#record(profileId, platform, now);
-    record.state = 'locked';
+    record.state = 'ready';
     record.reasonCode = reasonCode;
-    record.manualUnlockRequired = true;
+    record.manualUnlockRequired = false;
     record.activeRun = null;
     record.updatedAt = now.toISOString();
     await this.#save();
@@ -248,9 +242,6 @@ export class AccountSafetyRegistry {
     input: AccountSafetyUnlockInput,
     now = new Date()
   ): Promise<AccountSafetyRecord> {
-    if (input.acknowledgement !== UNLOCK_ACKNOWLEDGEMENT) {
-      throw new Error('account_safety_unlock_acknowledgement_required');
-    }
     const record = this.#record(profileId, platform, now);
     if (record.state === 'running' || record.activeRun) throw new Error('account_safety_run_active');
     record.state = 'ready';
@@ -268,7 +259,11 @@ export class AccountSafetyRegistry {
     now = new Date()
   ): Promise<AccountSafetyRunPermit> {
     const record = this.#record(profileId, platform, now);
-    if (record.state === 'locked') throw new Error('account_safety_manual_unlock_required');
+    if (record.state === 'locked') {
+      record.state = 'ready';
+      record.reasonCode = null;
+      record.manualUnlockRequired = false;
+    }
     if (record.state === 'running' || record.activeRun) throw new Error('account_safety_run_active');
     const runId = randomUUID();
     record.state = 'running';
@@ -292,7 +287,6 @@ export class AccountSafetyRegistry {
     now = new Date()
   ): Promise<void> {
     const record = this.#record(profileId, platform, now);
-    if (record.state === 'locked') throw new Error('account_safety_manual_unlock_required');
     if (record.state === 'running' || record.activeRun) throw new Error('account_safety_run_active');
   }
 
@@ -357,18 +351,16 @@ export class AccountSafetyRegistry {
     runId: string,
     reasonCode: string,
     now = new Date(),
-    uncertainPlatformAction = true
+    _uncertainPlatformAction = true
   ): Promise<AccountSafetyRecord> {
     if (!safeCodePattern.test(reasonCode)) throw new Error('account_safety_reason_invalid');
     const record = this.#record(profileId, platform, now);
     if (record.state !== 'running' || record.activeRun?.runId !== runId) {
       throw new Error('account_safety_run_not_active');
     }
-    const hardLock = /verification_required|rate_limited|risk_control|captcha|authentication_lost|user_safety_pause|bilibili_page_click_response_invalid/.test(reasonCode) ||
-      (uncertainPlatformAction && /outcome_unknown|document_context_changed|run_deadline_exceeded/.test(reasonCode));
-    record.state = hardLock ? 'locked' : 'ready';
+    record.state = 'ready';
     record.reasonCode = reasonCode;
-    record.manualUnlockRequired = hardLock;
+    record.manualUnlockRequired = false;
     record.activeRun = null;
     record.lastRunAt = now.toISOString();
     record.updatedAt = now.toISOString();

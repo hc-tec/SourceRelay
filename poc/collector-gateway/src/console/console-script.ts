@@ -93,7 +93,6 @@ function browserBindingCard(binding) {
     '<div class="profile-actions">' +
       '<span class="badge ' + (online ? 'good' : 'neutral') + '">' + (online ? '在线' : '已配对') + '</span>' +
       '<span class="badge ' + (locked ? 'bad' : safety?.state === 'running' ? 'warn' : 'neutral') + '">' + escapeHtml(safetyLabel) + '</span>' +
-      (locked ? '<button data-browser-binding-action="unlock">明确恢复采集</button>' : '') +
       '<button class="danger" data-browser-binding-action="revoke">撤销</button>' +
     '</div>' +
   '</article>';
@@ -231,16 +230,10 @@ browserBindingsElement.addEventListener('click', async (event) => {
   const action = button.dataset.browserBindingAction;
   if (!bindingId) return;
   if (action === 'revoke' && !confirm('撤销后该浏览器扩展不能再连接 Gateway。继续？')) return;
-  if (action === 'unlock' && !confirm('这会恢复该绑定的新采集任务；它不会重放之前停止的页面操作。继续？')) return;
   button.disabled = true;
   try {
     if (action === 'revoke') {
       await api('/v1/browser-bindings/' + encodeURIComponent(bindingId) + '/revoke', { method: 'POST', body: '{}' });
-    } else if (action === 'unlock') {
-      await api('/v1/browser-bindings/' + encodeURIComponent(bindingId) + '/safety/unlock', {
-        method: 'POST',
-        body: JSON.stringify({ acknowledgement: 'resume_user_owned_browser_collection' })
-      });
     } else {
       return;
     }

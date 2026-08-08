@@ -18,7 +18,7 @@ async function createRegistry(at: string): Promise<{ registry: AccountSafetyRegi
 }
 
 describe('Account safety state machine', () => {
-  test('persists an interrupted action as a manual-review lock across restart', async () => {
+  test('recovers an interrupted action to ready across restart', async () => {
     const { registry, directory } = await createRegistry('2026-07-21T00:00:00.000Z');
     const permit = await registry.beginAuthenticatedRun(
       profileId,
@@ -43,29 +43,32 @@ describe('Account safety state machine', () => {
 
     const restarted = await AccountSafetyRegistry.create(directory, new Date('2026-07-21T00:01:00.000Z'));
     expect(restarted.get(profileId, 'bilibili')).toMatchObject({
-      state: 'locked',
-      reasonCode: 'previous_run_interrupted_manual_review_required',
-      manualUnlockRequired: true,
+      state: 'ready',
+      reasonCode: 'previous_run_interrupted',
+      manualUnlockRequired: false,
       activeRun: null
     });
-    await expect(restarted.beginAuthenticatedRun(profileId, 'bilibili')).rejects.toThrow(
-      'account_safety_manual_unlock_required'
-    );
+    await expect(restarted.beginAuthenticatedRun(profileId, 'bilibili')).resolves.toMatchObject({
+      profileId,
+      platform: 'bilibili'
+    });
   });
 
-  test('requires the fixed acknowledgement before a locked profile becomes ready', async () => {
+  test('does not require an acknowledgement and keeps pause non-blocking', async () => {
     const { registry } = await createRegistry('2026-07-21T00:00:00.000Z');
     await registry.pause(profileId, 'bilibili', 'user_safety_pause', new Date('2026-07-21T00:00:01.000Z'));
 
-    expect(() => accountSafetyUnlockInput({ acknowledgement: 'anything_else' })).toThrow(
-      'account_safety_unlock_acknowledgement_required'
-    );
-    const acknowledgement = accountSafetyUnlockInput({ acknowledgement: 'resume_authenticated_platform_actions' });
+    expect(registry.get(profileId, 'bilibili')).toMatchObject({
+      state: 'ready',
+      reasonCode: 'user_safety_pause',
+      manualUnlockRequired: false
+    });
+    const acknowledgement = accountSafetyUnlockInput({});
     const unlocked = await registry.unlock(profileId, 'bilibili', acknowledgement, new Date('2026-07-21T00:00:02.000Z'));
     expect(unlocked).toMatchObject({ state: 'ready', manualUnlockRequired: false, reasonCode: null });
   });
 
-  test('locks hard platform failure but returns a normal completion directly to ready', async () => {
+  test('records hard platform failure without locking and returns completion to ready', async () => {
     const { registry } = await createRegistry('2026-07-21T00:00:00.000Z');
     const normal = await registry.beginAuthenticatedRun(profileId, 'bilibili', 'authenticated_interaction_reconnaissance');
     const completed = await registry.finishAuthenticatedRun(
@@ -78,17 +81,21 @@ describe('Account safety state machine', () => {
     expect(completed).toMatchObject({ state: 'ready', manualUnlockRequired: false, reasonCode: 'completed' });
 
     const risky = await registry.beginAuthenticatedRun(profileId, 'bilibili', 'authenticated_interaction_reconnaissance');
-    const locked = await registry.finishAuthenticatedRun(
+    const finished = await registry.finishAuthenticatedRun(
       profileId,
       'bilibili',
       risky.runId,
       'verification_required',
       new Date('2026-07-21T00:00:02.000Z')
     );
-    expect(locked).toMatchObject({ state: 'locked', manualUnlockRequired: true, reasonCode: 'verification_required' });
+    expect(finished).toMatchObject({
+      state: 'ready',
+      manualUnlockRequired: false,
+      reasonCode: 'verification_required'
+    });
   });
 
-  test('locks an account when a browser action response is invalid after the action may have been sent', async () => {
+  test('records an invalid browser action response without locking', async () => {
     const { registry } = await createRegistry('2026-07-22T00:00:00.000Z');
     const permit = await registry.beginAuthenticatedRun(
       profileId,
@@ -96,15 +103,15 @@ describe('Account safety state machine', () => {
       'authenticated_account_video_pagination_reconnaissance'
     );
     await registry.recordActionAttempt(profileId, 'bilibili', permit.runId, 'advance_account_video_page_2');
-    const locked = await registry.finishAuthenticatedRun(
+    const finished = await registry.finishAuthenticatedRun(
       profileId,
       'bilibili',
       permit.runId,
       'browser_host_bilibili_page_click_response_invalid'
     );
-    expect(locked).toMatchObject({
-      state: 'locked',
-      manualUnlockRequired: true,
+    expect(finished).toMatchObject({
+      state: 'ready',
+      manualUnlockRequired: false,
       reasonCode: 'browser_host_bilibili_page_click_response_invalid'
     });
   });
@@ -188,9 +195,7 @@ describe('Account safety state machine', () => {
       new Date('2026-07-21T00:01:01.000Z')
     );
     await registry.pause(profileId, 'bilibili', 'user_safety_pause', new Date('2026-07-21T00:01:02.000Z'));
-    await expect(registry.assertPlatformNavigationAllowed(profileId, 'bilibili')).rejects.toThrow(
-      'account_safety_manual_unlock_required'
-    );
+    await expect(registry.assertPlatformNavigationAllowed(profileId, 'bilibili')).resolves.toBeUndefined();
     await expect(registry.assertPlatformNavigationAllowed(profileId, 'zhihu')).resolves.toBeUndefined();
   });
 });
