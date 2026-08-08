@@ -59,7 +59,12 @@ export async function executeBilibiliVideoDetailExtensionWork(
     workTab = await acquireExtensionWorkTab();
     acquisition = workTab.acquisition;
     await lifecycle.onWorkTabAcquired?.(acquisition);
-    await armBilibiliSubtitleCapture(workTab, item);
+    try {
+      await armBilibiliSubtitleCapture(workTab, item);
+    } catch {
+      // Subtitle capture is an accessory; a subtitle arm failure must not
+      // prevent the bounded first-screen detail from being delivered.
+    }
     await navigateExtensionWorkTabOnce(workTab, item, async () => {
       navigationAttempted = true;
       await lifecycle.onNavigationIntent?.();

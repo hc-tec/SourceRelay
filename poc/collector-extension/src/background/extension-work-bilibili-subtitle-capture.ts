@@ -20,6 +20,7 @@ const CONTROL_REVEAL_TIMEOUT_MS = 2_500;
 const MENU_REVEAL_TIMEOUT_MS = 2_500;
 const SELECTION_SETTLE_TIMEOUT_MS = 4_000;
 const RESPONSE_TIMEOUT_MS = 10_000;
+const ARM_LIFETIME_MS = 60_000;
 const PROBE_INTERVAL_MS = 200;
 const MOUSE_MOVE_SETTLE_MS = 100;
 const CLICK_HOLD_MS = 100;
@@ -72,7 +73,7 @@ export async function armBilibiliSubtitleCapture(
     navigationUrl: item.input.canonicalVideoUrl,
     routeIds: bilibiliTranscriptResearchRouteIds(),
     maximumObservations: item.budget.maximumResponseObservations,
-    expiresAt: Date.parse(item.expiresAt),
+    expiresAt: Math.min(Date.parse(item.expiresAt), Date.now() + ARM_LIFETIME_MS),
     observerBindingId: item.workId,
     contentScriptId
   });
