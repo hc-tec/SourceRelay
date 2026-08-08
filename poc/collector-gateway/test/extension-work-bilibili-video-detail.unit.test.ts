@@ -68,6 +68,7 @@ describe('user-browser video-detail failure artifact', () => {
         titleVisible: true,
         playerVisible: false,
         chargeExclusiveTrialVisible: false,
+        subtitle: { available: false, language: null, panelVisible: false },
         loginOverlayVisible: false,
         risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
       }
@@ -84,6 +85,7 @@ describe('user-browser video-detail failure artifact', () => {
       titleVisible: true,
       playerVisible: false,
       chargeExclusiveTrialVisible: false,
+      subtitle: { available: false, language: null, panelVisible: false },
       loginOverlayVisible: false,
       verificationRequired: false,
       rateLimited: false,

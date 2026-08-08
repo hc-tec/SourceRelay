@@ -196,6 +196,7 @@ function toObservation(
     titleVisible: dom.titleVisible,
     playerVisible: dom.playerVisible,
     chargeExclusiveTrialVisible: dom.chargeExclusiveTrialVisible,
+    subtitle: { ...dom.subtitle },
     loginOverlayVisible: dom.loginOverlayVisible,
     risk: { ...dom.risk }
   };

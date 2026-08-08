@@ -52,6 +52,11 @@ export interface BilibiliVideoDetailDomDiagnostics {
   titleVisible: boolean | null;
   playerVisible: boolean | null;
   chargeExclusiveTrialVisible: boolean | null;
+  subtitle: {
+    available: boolean | null;
+    language: string | null;
+    panelVisible: boolean | null;
+  } | null;
   loginOverlayVisible: boolean | null;
   verificationRequired: boolean | null;
   rateLimited: boolean | null;

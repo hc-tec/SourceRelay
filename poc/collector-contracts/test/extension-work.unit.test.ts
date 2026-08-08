@@ -195,6 +195,7 @@ describe('direct extension work contract', () => {
         titleVisible: true,
         playerVisible: true,
         chargeExclusiveTrialVisible: false,
+        subtitle: { available: false, language: null, panelVisible: false },
         loginOverlayVisible: false,
         risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
       }

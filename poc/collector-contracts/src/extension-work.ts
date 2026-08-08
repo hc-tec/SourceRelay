@@ -371,6 +371,11 @@ export interface BilibiliVideoDetailDomObservation {
   titleVisible: boolean;
   playerVisible: boolean;
   chargeExclusiveTrialVisible: boolean;
+  subtitle: {
+    available: boolean;
+    language: string | null;
+    panelVisible: boolean;
+  };
   loginOverlayVisible: boolean;
   risk: BilibiliWorkRisk;
 }
@@ -817,13 +822,16 @@ export function isExtensionWorkResultForItem(
 export function isBilibiliVideoDetailDomObservation(value: unknown): value is BilibiliVideoDetailDomObservation {
   if (!isRecord(value) || !hasExactKeys(value, [
     'bvid', 'title', 'metadataVisibleText', 'description', 'creator', 'tagTexts', 'episodeSummaryText',
-    'titleVisible', 'playerVisible', 'chargeExclusiveTrialVisible', 'loginOverlayVisible', 'risk'
+    'titleVisible', 'playerVisible', 'chargeExclusiveTrialVisible', 'subtitle', 'loginOverlayVisible', 'risk'
   ]) || !isBvid(value.bvid) ||
     !isNullableText(value.title, 500) || !isNullableText(value.metadataVisibleText, 1_000) ||
     !isNullableText(value.description, 20_000) || !isNullableText(value.episodeSummaryText, 500) ||
     !isTextArray(value.tagTexts, 20, 100) || !isNullableCreator(value.creator) ||
     typeof value.titleVisible !== 'boolean' || typeof value.playerVisible !== 'boolean' ||
     typeof value.chargeExclusiveTrialVisible !== 'boolean' || typeof value.loginOverlayVisible !== 'boolean' ||
+    !isRecord(value.subtitle) || typeof value.subtitle.available !== 'boolean' ||
+    (value.subtitle.language !== null && typeof value.subtitle.language !== 'string') ||
+    typeof value.subtitle.panelVisible !== 'boolean' ||
     !isBilibiliWorkRisk(value.risk)
   ) return false;
   return true;

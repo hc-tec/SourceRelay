@@ -12,6 +12,11 @@ export interface BilibiliVideoDetailDomSnapshot {
   titleVisible: boolean;
   playerVisible: boolean;
   chargeExclusiveTrialVisible: boolean;
+  subtitle: {
+    available: boolean;
+    language: string | null;
+    panelVisible: boolean;
+  };
   loginOverlayVisible: boolean;
   risk: {
     verificationRequired: boolean;
@@ -131,6 +136,11 @@ export async function captureBilibiliVideoDetailDom(
           document.querySelectorAll<HTMLElement>('[role="dialog"], [class*="login" i], [class*="passport" i]')
         ).some((element) => rendered(element) &&
           element.getBoundingClientRect().width >= 160 && element.getBoundingClientRect().height >= 120);
+        const captionControl = document.querySelector<HTMLElement>('.bpx-player-ctrl-subtitle');
+        const chineseOption = document.querySelector<HTMLElement>(
+          '.bpx-player-ctrl-subtitle-language-item[data-lan="ai-zh"]'
+        );
+        const subtitlePanel = document.querySelector<HTMLElement>('.bili-subtitle-x-subtitle-panel');
         return {
           bvid: canonicalBvid,
           title: clean(titleElement?.innerText, 500),
@@ -142,6 +152,15 @@ export async function captureBilibiliVideoDetailDom(
           titleVisible: rendered(titleElement),
           playerVisible: rendered(player),
           chargeExclusiveTrialVisible,
+          subtitle: {
+            available: Boolean((captionControl && rendered(captionControl)) ||
+              (subtitlePanel && rendered(subtitlePanel)) ||
+              (chineseOption && rendered(chineseOption))),
+            language: chineseOption && rendered(chineseOption)
+              ? chineseOption.getAttribute('data-lan')
+              : null,
+            panelVisible: Boolean(subtitlePanel && rendered(subtitlePanel))
+          },
           loginOverlayVisible,
           risk: {
             verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(bodyText),
