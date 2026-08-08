@@ -197,9 +197,14 @@ async function readPlayerProbe(tabId: number): Promise<PlayerProbe> {
       const playerArea = document.querySelector<HTMLElement>('.bpx-player-video-area');
       const controlBar = document.querySelector<HTMLElement>('.bpx-player-control-bottom');
       const captionControl = document.querySelector<HTMLElement>('.bpx-player-ctrl-subtitle');
-      const chineseOption = document.querySelector<HTMLElement>(
-        '.bpx-player-ctrl-subtitle-language-item[data-lan="ai-zh"]'
-      );
+      const chineseOption = Array.from(document.querySelectorAll<HTMLElement>(
+        '.bpx-player-ctrl-subtitle-item, .bpx-player-ctrl-subtitle-language [class*="subtitle-item"], [data-lan]'
+      )).find((element) => {
+        if (!visible(element)) return false;
+        const lan = element.getAttribute('data-lan') ?? '';
+        const text = (element.textContent ?? '').replace(/\s+/g, ' ');
+        return lan === 'ai-zh' || /AI 字幕|中文字幕|智能字幕|中文/.test(text);
+      }) ?? null;
       const subtitlePanel = document.querySelector<HTMLElement>('.bili-subtitle-x-subtitle-panel');
       const controlBarVisible = visible(controlBar) &&
         Number.parseFloat(getComputedStyle(controlBar).opacity || '1') > 0.5;
@@ -213,8 +218,8 @@ async function readPlayerProbe(tabId: number): Promise<PlayerProbe> {
           chineseOption.getAttribute('aria-selected') === 'true' ||
           chineseOption.getAttribute('data-state') === 'active'
         )),
-        chineseOptionLanguage: chineseOption && visible(chineseOption)
-          ? chineseOption.getAttribute('data-lan')
+        chineseOptionLanguage: chineseOption
+          ? chineseOption.getAttribute('data-lan') ?? 'ai-zh'
           : null,
         subtitlePanelVisible: Boolean(subtitlePanel && visible(subtitlePanel)),
         videoArea: point(playerArea, true),
