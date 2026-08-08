@@ -144,7 +144,9 @@ export async function executeTrustedBilibiliTranscriptChineseSelection(input: {
     setAction(actions, 'select_chinese_caption', true, 'prerequisite_unmet');
     await withinDeadline(record.page.mouse.move(probe.chineseOption.pointer.x, probe.chineseOption.pointer.y), remaining(deadline));
     await withinDeadline(record.page.mouse.down({ button: 'left' }), remaining(deadline));
+    await withinDeadline(new Promise((resolve) => setTimeout(resolve, 100)), remaining(deadline));
     await withinDeadline(record.page.mouse.up({ button: 'left' }), remaining(deadline));
+    await withinDeadline(new Promise((resolve) => setTimeout(resolve, 150)), remaining(deadline));
     probe = await waitForProbe(
       record,
       request,

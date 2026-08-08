@@ -79,7 +79,9 @@ export async function performTrustedScroll(input: {
   const pointerX = Math.max(1, Math.floor(input.before.viewportWidth / 2));
   const pointerY = Math.max(1, Math.floor(input.before.viewportHeight / 2));
   await withinDeadline(input.page.mouse.move(pointerX, pointerY), input.timeoutMs);
+  await withinDeadline(new Promise((resolve) => setTimeout(resolve, 120)), input.timeoutMs);
   await withinDeadline(input.page.mouse.wheel(0, input.deltaY), input.timeoutMs);
+  await withinDeadline(new Promise((resolve) => setTimeout(resolve, 250)), input.timeoutMs);
   return await readTrustedScrollPosition(input.page, input.timeoutMs);
 }
 

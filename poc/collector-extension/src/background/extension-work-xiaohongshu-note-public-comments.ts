@@ -294,6 +294,7 @@ async function readDomProbe(page: NoteDocument): Promise<DomProbe> {
 
 async function dispatchWheel(debuggee: chrome.debugger.Debuggee, target: { x: number; y: number }): Promise<void> {
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: target.x, y: target.y });
+  await delay(100);
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseWheel', x: target.x, y: target.y, deltaX: 0, deltaY: 420
   });

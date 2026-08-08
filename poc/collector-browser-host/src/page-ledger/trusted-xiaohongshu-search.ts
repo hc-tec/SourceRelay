@@ -109,14 +109,14 @@ export async function executeTrustedXiaohongshuSearch(input: {
     const hovered = await readSearchProbe(record.page, remaining(deadline));
     assertSearchPrecondition(hovered);
     await withinDeadline(record.page.mouse.down({ button: 'left' }), remaining(deadline));
+    await delay(100);
     await withinDeadline(record.page.mouse.up({ button: 'left' }), remaining(deadline));
+    await delay(150);
     await withinDeadline(record.page.keyboard.press('Control+A'), remaining(deadline));
     await withinDeadline(record.page.keyboard.type(request.query, { delay: 55 }), remaining(deadline));
 
-    const populated = await readSearchProbe(record.page, remaining(deadline));
-    if (populated.input?.value !== request.query) {
-      throw new Error('xiaohongshu_trusted_search_query_echo_unmet');
-    }
+    const populated = await waitForQueryEcho(record.page, request.query, remaining(deadline));
+    await delay(250);
     await withinDeadline(record.page.keyboard.press('Enter'), remaining(deadline));
     const after = await waitForSearchPostcondition(record.page, request.query, responses, deadline);
     const responseShapes = (await Promise.all(responseShapePromises.map((promise) => withinDeadline(
@@ -286,6 +286,16 @@ async function waitForSearchPostcondition(
     await delay(Math.min(350, Math.max(1, deadline - Date.now())));
   }
   throw new Error('xiaohongshu_trusted_search_postcondition_timeout');
+}
+
+async function waitForQueryEcho(page: Page, query: string, timeoutMs: number): Promise<SearchProbe> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const probe = await readSearchProbe(page, remaining(deadline));
+    if (probe.input?.value === query) return probe;
+    await delay(120);
+  }
+  throw new Error('xiaohongshu_trusted_search_query_echo_unmet');
 }
 
 async function readSearchProbe(page: Page, timeoutMs: number): Promise<SearchProbe> {

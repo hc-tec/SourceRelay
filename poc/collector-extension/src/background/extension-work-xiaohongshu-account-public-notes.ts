@@ -138,10 +138,16 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
         await recordXiaohongshuProfileScrollIntent(item.workId, index as XiaohongshuProfileScrollCount);
         attemptedCount = index as XiaohongshuProfileScrollCount;
         const viewport = await readPageProbe(document, maximumItems);
+        const wheelX = Math.floor(viewport.viewportWidth / 2);
+        const wheelY = Math.floor(viewport.viewportHeight * 0.8);
+        await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+          type: 'mouseMoved', x: wheelX, y: wheelY
+        });
+        await delay(100);
         await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
           type: 'mouseWheel',
-          x: Math.floor(viewport.viewportWidth / 2),
-          y: Math.floor(viewport.viewportHeight * 0.8),
+          x: wheelX,
+          y: wheelY,
           deltaX: 0,
           deltaY: Math.max(320, Math.floor(viewport.viewportHeight * 0.75))
         }).catch(() => {
@@ -367,12 +373,15 @@ async function dispatchTrustedClick(
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseMoved', x, y
   });
+  await delay(100);
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1
   });
+  await delay(100);
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1
   });
+  await delay(150);
 }
 
 async function registerEphemeralProfileObserver(workId: string): Promise<string> {

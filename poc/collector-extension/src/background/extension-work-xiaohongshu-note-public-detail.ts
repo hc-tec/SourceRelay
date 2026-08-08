@@ -534,12 +534,15 @@ async function dispatchClick(debuggee: chrome.debugger.Debuggee, target: Target)
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseMoved', x: target.x, y: target.y
   });
+  await delay(100);
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mousePressed', x: target.x, y: target.y, button: 'left', buttons: 1, clickCount: 1
   });
+  await delay(100);
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseReleased', x: target.x, y: target.y, button: 'left', buttons: 0, clickCount: 1
   });
+  await delay(150);
 }
 
 async function waitForDomProjection(pageDocument: DetailDocument, timeoutMs: number): Promise<DomProjection> {

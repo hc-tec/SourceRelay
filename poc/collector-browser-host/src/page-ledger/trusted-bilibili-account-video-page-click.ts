@@ -207,7 +207,9 @@ export async function executeTrustedBilibiliAccountVideoPageClick(input: {
     record.page.on('response', onResponse);
     try {
       await withinDeadline(record.page.mouse.down({ button: 'left' }), remaining(deadline));
+      await withinDeadline(new Promise((resolve) => setTimeout(resolve, 100)), remaining(deadline));
       await withinDeadline(record.page.mouse.up({ button: 'left' }), remaining(deadline));
+      await withinDeadline(new Promise((resolve) => setTimeout(resolve, 150)), remaining(deadline));
       const neutral = await findNeutralPointerTarget(record.page, remaining(deadline));
       await withinDeadline(record.page.mouse.move(neutral.x, neutral.y), remaining(deadline));
       const after = await waitForPaginationPostcondition(record.page, request.targetPage, observations, deadline, routeMode);

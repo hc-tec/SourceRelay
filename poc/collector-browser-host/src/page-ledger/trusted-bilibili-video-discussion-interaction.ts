@@ -260,7 +260,9 @@ export async function executeTrustedBilibiliVideoDiscussionInteraction(input: {
     record.page.on('response', onResponse);
     try {
       await withinDeadline(record.page.mouse.down({ button: 'left' }), remaining(deadline));
+      await withinDeadline(new Promise((resolve) => setTimeout(resolve, 100)), remaining(deadline));
       await withinDeadline(record.page.mouse.up({ button: 'left' }), remaining(deadline));
+      await withinDeadline(new Promise((resolve) => setTimeout(resolve, 150)), remaining(deadline));
       const afterProbe = await waitForPostcondition(record.page, request, observations, beforeProbe, deadline);
       const afterVisualEvidence = await captureEvidence(
         record,

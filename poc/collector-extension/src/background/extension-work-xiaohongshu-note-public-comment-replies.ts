@@ -692,12 +692,15 @@ async function dispatchTrustedClick(
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseMoved', x: target.x, y: target.y
   });
+  await delay(100);
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mousePressed', x: target.x, y: target.y, button: 'left', buttons: 1, clickCount: 1
   });
+  await delay(100);
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseReleased', x: target.x, y: target.y, button: 'left', buttons: 0, clickCount: 1
   });
+  await delay(150);
 }
 
 function mergeReplyEvidence(
