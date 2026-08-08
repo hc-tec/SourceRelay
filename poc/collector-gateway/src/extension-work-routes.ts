@@ -288,7 +288,6 @@ export async function enqueueBilibiliVideoDetailWork(
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
   if (binding.state !== 'online') throw new Error('browser_binding_offline');
   const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
-  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliVideoDetail({
     operationId,
@@ -308,7 +307,6 @@ export async function enqueueBilibiliNativeSearchWork(
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
   if (binding.state !== 'online') throw new Error('browser_binding_offline');
   const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
-  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliNativeSearch({
     operationId,
@@ -328,7 +326,6 @@ export async function enqueueBilibiliNativeSearchBatchWork(
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
   if (binding.state !== 'online') throw new Error('browser_binding_offline');
   const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
-  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliNativeSearchBatch({
     operationId,
@@ -348,7 +345,6 @@ export async function enqueueBilibiliAccountProfileWork(
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
   if (binding.state !== 'online') throw new Error('browser_binding_offline');
   const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
-  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliAccountProfile({
     operationId,
@@ -368,7 +364,6 @@ export async function enqueueBilibiliAccountInventoryWork(
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
   if (binding.state !== 'online') throw new Error('browser_binding_offline');
   const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
-  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliAccountInventory({
     operationId,
@@ -392,7 +387,6 @@ export async function enqueueBilibiliAccountInventoryUserSelectedTabWork(
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
   if (binding.state !== 'online') throw new Error('browser_binding_offline');
   const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
-  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliAccountInventoryUserSelectedTab({
     operationId,
@@ -416,7 +410,6 @@ export async function enqueueBilibiliDiscussionUserSelectedTabWork(
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
   if (binding.state !== 'online') throw new Error('browser_binding_offline');
   const safety = context.browserBindingSafety.get(binding.browserBindingId, 'bilibili');
-  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
   return await context.workQueue.enqueueBilibiliDiscussionUserSelectedTab({
     operationId,
@@ -731,7 +724,6 @@ async function assertBindingCanAcceptWork(
   const binding = context.pairingBroker.getBrowserBinding(browserBindingId);
   if (binding.state !== 'online') throw new Error('browser_binding_offline');
   const safety = context.browserBindingSafety.get(binding.browserBindingId, platform);
-  if (safety.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
   if (safety.state === 'running') throw new Error('browser_binding_safety_operation_active');
 }
 

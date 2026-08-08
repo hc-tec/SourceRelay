@@ -104,16 +104,16 @@ try {
 async function waitForStableDocument(timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   let generation = null;
-  let stableSince = Date.now();
+  let stableSamples = 0;
   while (Date.now() < deadline) {
     const page = await leasedPage();
-    if (page.documentGeneration > 0 && page.documentGeneration === generation && Date.now() - stableSince >= 3_000) {
-      return page;
-    }
-    if (page.documentGeneration !== generation) {
+    if (page.documentGeneration > 0 && page.documentGeneration === generation) {
+      stableSamples += 1;
+    } else {
       generation = page.documentGeneration;
-      stableSince = Date.now();
+      stableSamples = 1;
     }
+    if (stableSamples >= 3) return page;
     await delay(250);
   }
   throw new Error('xiaohongshu_canary_document_stability_timeout');
