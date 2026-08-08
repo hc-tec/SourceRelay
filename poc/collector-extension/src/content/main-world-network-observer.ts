@@ -4,10 +4,10 @@ import {
   NETWORK_CAPTURE_OBSERVER_READY,
   NETWORK_CAPTURE_WINDOW_CHANNEL,
   NETWORK_CAPTURE_WINDOW_OBSERVED,
-  createNetworkCaptureFromText,
+  createNetworkCaptureFromBytes,
   createNetworkCaptureRejection,
   findNetworkCaptureRoute,
-  isJsonContentType,
+  isNetworkCaptureResponseContentType,
   type NetworkCaptureObservation
 } from '../shared/network-capture';
 import type { SupportedPlatform } from '../shared/collection-contracts';
@@ -37,16 +37,15 @@ function queryKeyNames(value: string): string[] {
 
 async function withBodyEvidence(
   observation: NetworkCaptureObservation | null,
-  responseText: string,
+  responseBytes: Uint8Array,
   responseUrl: string
 ): Promise<NetworkCaptureObservation | null> {
   if (!observation) return null;
-  const bytes = new TextEncoder().encode(responseText);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const digest = await crypto.subtle.digest('SHA-256', responseBytes.slice().buffer as ArrayBuffer);
   const bodySha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
   return {
     ...observation,
-    bodyBytes: bytes.byteLength,
+    bodyBytes: responseBytes.byteLength,
     bodySha256,
     queryKeyNames: queryKeyNames(responseUrl)
   };
@@ -104,7 +103,7 @@ function parseDeclaredLength(value: string | null): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
-async function readResponseTextWithinLimit(response: Response, maximumBodyBytes: number): Promise<string | null> {
+async function readResponseBytesWithinLimit(response: Response, maximumBodyBytes: number): Promise<Uint8Array | null> {
   const declaredLength = parseDeclaredLength(response.headers.get('content-length'));
   if (declaredLength !== null && declaredLength > maximumBodyBytes) return null;
 
@@ -136,7 +135,7 @@ async function readResponseTextWithinLimit(response: Response, maximumBodyBytes:
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  return bytes;
 }
 
 function installObserver(): void {
@@ -178,14 +177,14 @@ function installObserver(): void {
       emit(createNetworkCaptureRejection(input, 'response_status_not_allowed'));
       return;
     }
-    if (!isJsonContentType(input.contentType)) {
+    if (!isNetworkCaptureResponseContentType(route, input.contentType)) {
       emit(createNetworkCaptureRejection(input, 'mime_not_allowed'));
       return;
     }
-    const text = await readResponseTextWithinLimit(response, route.maximumBodyBytes);
-    emit(text === null
+    const bytes = await readResponseBytesWithinLimit(response, route.maximumBodyBytes);
+    emit(bytes === null
       ? createNetworkCaptureRejection(input, 'payload_too_large')
-      : await withBodyEvidence(createNetworkCaptureFromText(input, text), text, responseUrl));
+      : await withBodyEvidence(createNetworkCaptureFromBytes(input, bytes), bytes, responseUrl));
   }
 
   const originalFetch = window.fetch;
@@ -265,17 +264,19 @@ function installObserver(): void {
           emit(createNetworkCaptureRejection(input, 'response_status_not_allowed'));
           return;
         }
-        if (!isJsonContentType(input.contentType)) {
+        if (!isNetworkCaptureResponseContentType(route, input.contentType)) {
           emit(createNetworkCaptureRejection(input, 'mime_not_allowed'));
           return;
         }
         try {
-          const text = this.responseType === 'json' ? JSON.stringify(this.response) : this.responseText;
-          if (typeof text !== 'string' || new TextEncoder().encode(text).byteLength > route.maximumBodyBytes) {
+          const bytes = this.responseType === 'arraybuffer'
+            ? new Uint8Array(this.response as ArrayBuffer)
+            : new TextEncoder().encode(this.responseType === 'json' ? JSON.stringify(this.response) : this.responseText);
+          if (bytes.byteLength > route.maximumBodyBytes) {
             emit(createNetworkCaptureRejection(input, 'payload_too_large'));
             return;
           }
-          void withBodyEvidence(createNetworkCaptureFromText(input, text), text, responseUrl).then(emit);
+          void withBodyEvidence(createNetworkCaptureFromBytes(input, bytes), bytes, responseUrl).then(emit);
         } catch {
           emit(createNetworkCaptureRejection(input, 'unreadable_response'));
         }

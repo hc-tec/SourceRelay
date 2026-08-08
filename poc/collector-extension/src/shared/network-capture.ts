@@ -3,6 +3,7 @@ import {
   BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
   BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID,
   BILIBILI_TRANSCRIPT_RESEARCH_ROUTE_IDS,
+  projectBilibiliTranscriptDirectoryProtobuf,
   projectBilibiliTranscriptRouteBody
 } from './transcript-capture';
 
@@ -82,6 +83,7 @@ export interface NetworkCaptureRoute {
   pathnameMatch: 'exact' | 'opaque_suffix_prefix';
   maximumBodyBytes: number;
   projector: 'bounded_json' | 'bilibili_transcript';
+  responseEncoding: 'json' | 'protobuf';
   admission: 'production' | 'research_validation';
 }
 
@@ -132,6 +134,7 @@ const researchValidationRoutes: readonly NetworkCaptureRoute[] = [
     pathnameMatch: 'exact',
     maximumBodyBytes: 2 * 1024 * 1024,
     projector: 'bounded_json',
+    responseEncoding: 'json',
     admission: 'research_validation'
   },
   {
@@ -142,6 +145,7 @@ const researchValidationRoutes: readonly NetworkCaptureRoute[] = [
     pathnameMatch: 'exact',
     maximumBodyBytes: 2 * 1024 * 1024,
     projector: 'bounded_json',
+    responseEncoding: 'json',
     admission: 'research_validation'
   },
   {
@@ -152,6 +156,7 @@ const researchValidationRoutes: readonly NetworkCaptureRoute[] = [
     pathnameMatch: 'exact',
     maximumBodyBytes: 2 * 1024 * 1024,
     projector: 'bounded_json',
+    responseEncoding: 'json',
     admission: 'research_validation'
   },
   {
@@ -162,6 +167,20 @@ const researchValidationRoutes: readonly NetworkCaptureRoute[] = [
     pathnameMatch: 'exact',
     maximumBodyBytes: 128 * 1024,
     projector: 'bilibili_transcript',
+    responseEncoding: 'json',
+    admission: 'research_validation'
+  },
+  {
+    // Since August 2026 Bilibili serves the subtitle directory as a protobuf
+    // envelope instead of JSON from the legacy player response.
+    id: BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
+    platform: 'bilibili',
+    origin: 'https://api.bilibili.com',
+    pathname: '/x/v2/subtitle/web/view',
+    pathnameMatch: 'exact',
+    maximumBodyBytes: 128 * 1024,
+    projector: 'bilibili_transcript',
+    responseEncoding: 'protobuf',
     admission: 'research_validation'
   },
   {
@@ -172,8 +191,9 @@ const researchValidationRoutes: readonly NetworkCaptureRoute[] = [
     pathnameMatch: 'opaque_suffix_prefix',
     maximumBodyBytes: 512 * 1024,
     projector: 'bilibili_transcript',
+    responseEncoding: 'json',
     admission: 'research_validation'
-  }
+  },
 ];
 
 const allKnownRoutes: readonly NetworkCaptureRoute[] = [...productionRoutes, ...researchValidationRoutes];
@@ -323,6 +343,15 @@ export function routeMatchesNetworkCaptureUrl(route: NetworkCaptureRoute, respon
   }
 }
 
+export function isNetworkCaptureResponseContentType(
+  route: NetworkCaptureRoute,
+  value: string | null | undefined
+): boolean {
+  if (isJsonContentType(value)) return route.responseEncoding === 'json';
+  const mediaType = ((value ?? '').split(';', 1)[0] ?? '').trim().toLowerCase();
+  return route.responseEncoding === 'protobuf' && mediaType === 'application/octet-stream';
+}
+
 export function findNetworkCaptureRoute(
   platform: SupportedPlatform,
   responseUrl: string,
@@ -384,6 +413,28 @@ export function createNetworkCaptureFromText(
   const base = baseObservation(input);
   if (!base || body === undefined) return base ? { ...base, status: 'payload_rejected', rejectionReason: 'payload_rejected' } : null;
   return { ...base, status: 'captured', body };
+}
+
+export function createNetworkCaptureFromBytes(
+  input: ObservationInput,
+  responseBytes: Uint8Array
+): NetworkCaptureObservation | null {
+  if (responseBytes.byteLength > input.route.maximumBodyBytes) {
+    return createNetworkCaptureRejection(input, 'payload_too_large');
+  }
+  if (input.route.responseEncoding === 'protobuf') {
+    const body = input.route.id === BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID
+      ? projectBilibiliTranscriptDirectoryProtobuf(responseBytes)
+      : null;
+    const base = baseObservation(input);
+    return !base ? null : body === null
+      ? { ...base, status: 'payload_rejected', rejectionReason: 'payload_rejected' }
+      : { ...base, status: 'captured', body: body as unknown as JsonValue };
+  }
+  return createNetworkCaptureFromText(
+    input,
+    new TextDecoder('utf-8', { fatal: false }).decode(responseBytes)
+  );
 }
 
 function isRejectionReason(value: unknown): value is NetworkCaptureRejectionReason {

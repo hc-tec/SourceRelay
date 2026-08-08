@@ -255,8 +255,17 @@ export async function storeNetworkCapture(
       .filter((value): value is NetworkCaptureObservation => value !== null)
       .slice(0, arm.maximumObservations)
     : [];
-  if (captures.length >= arm.maximumObservations) return { stored: false };
-  captures.push(observation);
+  // Bilibili can expose the same logical transcript directory through both
+  // the legacy JSON player response and the current protobuf endpoint. Keep
+  // one observation per logical route so the duplicate directory response
+  // cannot consume the two-slot budget needed by the subtitle document.
+  const existingIndex = captures.findIndex((entry) => entry.routeId === observation.routeId);
+  if (existingIndex >= 0) {
+    captures[existingIndex] = observation;
+  } else {
+    if (captures.length >= arm.maximumObservations) return { stored: false };
+    captures.push(observation);
+  }
   await chrome.storage.session.set({ [key]: captures });
   return { stored: true };
 }

@@ -4,6 +4,8 @@ const MAX_TEXT_LENGTH = 20_000;
 const MAX_LABEL_LENGTH = 160;
 const APPROVED_SUBTITLE_ORIGIN = 'https://aisubtitle.hdslb.com';
 const APPROVED_SUBTITLE_PATH = /^\/bfs\/ai_subtitle\/prod\/[A-Za-z0-9_-]{20,200}$/;
+const APPROVED_SUBTITLE_BINARY_ORIGIN = 'https://subtitle.bilibili.com';
+const MAX_BINARY_SUBTITLE_PATH_LENGTH = 400;
 
 export const BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID =
   'bilibili.video.transcript.track-directory.response.v1' as const;
@@ -95,13 +97,27 @@ function publicSubtitleUrl(value: unknown): string | null {
     const url = new URL(value, 'https://www.bilibili.com');
     if (
       url.protocol !== 'https:' ||
-      url.origin !== APPROVED_SUBTITLE_ORIGIN ||
-      !APPROVED_SUBTITLE_PATH.test(url.pathname)
+      !approvedSubtitleLocation(url.origin, url.pathname)
     ) return null;
     return `${url.origin}${url.pathname}`;
   } catch {
     return null;
   }
+}
+
+function approvedSubtitleLocation(origin: string, pathname: string): boolean {
+  if (origin === APPROVED_SUBTITLE_ORIGIN) return APPROVED_SUBTITLE_PATH.test(pathname);
+  if (origin !== APPROVED_SUBTITLE_BINARY_ORIGIN ||
+    pathname.length < 2 || pathname.length > MAX_BINARY_SUBTITLE_PATH_LENGTH ||
+    /[\u0000-\u0020\u007f]/.test(pathname)) return false;
+  for (let index = 1; index < pathname.length; index += 1) {
+    if (pathname[index] !== '%') continue;
+    if (index + 2 >= pathname.length || !/^[0-9A-Fa-f]{2}$/.test(pathname.slice(index + 1, index + 3))) {
+      return false;
+    }
+    index += 2;
+  }
+  return true;
 }
 
 function projectTrack(value: unknown): BilibiliTranscriptTrackProjection | null {
@@ -198,6 +214,155 @@ export function projectBilibiliTranscriptDocument(value: unknown): BilibiliTrans
       fontSize: finiteNumber(value.font_size),
       stroke: boundedString(value.Stroke)
     }
+  };
+}
+
+interface ProtobufField {
+  number: number;
+  wireType: number;
+  value?: bigint;
+  bytes?: Uint8Array;
+}
+
+function readProtobufVarint(bytes: Uint8Array, offset: number): { offset: number; value: bigint } | null {
+  let value = 0n;
+  let shift = 0n;
+  while (offset < bytes.length && shift < 70n) {
+    const byte = bytes[offset++] ?? 0;
+    value |= BigInt(byte & 0x7f) << shift;
+    if ((byte & 0x80) === 0) return { offset, value };
+    shift += 7n;
+  }
+  return null;
+}
+
+function readProtobufFields(bytes: Uint8Array, depth = 0): ProtobufField[] {
+  if (depth > 6) return [];
+  const fields: ProtobufField[] = [];
+  let offset = 0;
+  while (offset < bytes.length && fields.length < 128) {
+    const key = readProtobufVarint(bytes, offset);
+    if (!key) break;
+    offset = key.offset;
+    const number = Number(key.value >> 3n);
+    const wireType = Number(key.value & 7n);
+    if (!Number.isSafeInteger(number) || number < 1) break;
+    if (wireType === 0) {
+      const value = readProtobufVarint(bytes, offset);
+      if (!value) break;
+      offset = value.offset;
+      fields.push({ number, wireType, value: value.value });
+      continue;
+    }
+    if (wireType === 2) {
+      const length = readProtobufVarint(bytes, offset);
+      if (!length || length.value > BigInt(bytes.length - length.offset)) break;
+      offset = length.offset;
+      const end = offset + Number(length.value);
+      fields.push({ number, wireType, bytes: bytes.slice(offset, end) });
+      offset = end;
+      continue;
+    }
+    if (wireType === 1) {
+      if (offset + 8 > bytes.length) break;
+      fields.push({ number, wireType });
+      offset += 8;
+      continue;
+    }
+    if (wireType === 5) {
+      if (offset + 4 > bytes.length) break;
+      fields.push({ number, wireType });
+      offset += 4;
+      continue;
+    }
+    break;
+  }
+  return fields;
+}
+
+function protobufText(field: ProtobufField | undefined, maximum = MAX_LABEL_LENGTH): string | null {
+  if (!field?.bytes || field.bytes.length > maximum) return null;
+  const text = new TextDecoder('utf-8', { fatal: false }).decode(field.bytes);
+  if (text.length === 0 || /[\u0000-\u001f\u007f]/.test(text)) return null;
+  return text;
+}
+
+function protobufSafeId(field: ProtobufField | undefined): number | string | null {
+  const text = protobufText(field);
+  if (text) return safeId(text);
+  if (field?.value !== undefined && field.value >= 0n && field.value <= BigInt(Number.MAX_SAFE_INTEGER)) {
+    return Number(field.value);
+  }
+  return null;
+}
+
+function protobufTrackCandidate(fields: ProtobufField[]): BilibiliTranscriptTrackProjection | null {
+  const languageField = fields.find((field) => field.number === 3 && field.wireType === 2);
+  const labelField = fields.find((field) => field.number === 4 && field.wireType === 2);
+  const language = protobufText(languageField);
+  const languageLabel = protobufText(labelField);
+  if (!language || !languageLabel || language.length > MAX_LABEL_LENGTH || languageLabel.length > MAX_LABEL_LENGTH) {
+    return null;
+  }
+  const urlField = fields.find((field) => field.number === 5 && field.wireType === 2);
+  const sourceUrl = publicSubtitleUrl(protobufText(urlField, 2_000));
+  const idString = fields.find((field) => field.number === 2 && field.wireType === 2);
+  const id = protobufSafeId(idString) ?? protobufSafeId(fields.find((field) => field.number === 1 && field.wireType === 0));
+  const aiStatus = fields.find((field) => field.number === 7 && field.wireType === 0)?.value;
+  const type = fields.find((field) => field.number === 10 && field.wireType === 0)?.value;
+  return {
+    id,
+    language,
+    languageLabel,
+    aiStatus: aiStatus !== undefined && aiStatus <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(aiStatus) : null,
+    aiType: null,
+    locked: null,
+    type: type !== undefined && type <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(type) : null,
+    sourceUrl,
+    sourceUrlV2: null,
+    sourceRouteApproved: sourceUrl !== null
+  };
+}
+
+function findProtobufTracks(bytes: Uint8Array, depth = 0): BilibiliTranscriptTrackProjection[] {
+  if (depth > 5) return [];
+  const fields = readProtobufFields(bytes, depth);
+  const direct = protobufTrackCandidate(fields);
+  const tracks: BilibiliTranscriptTrackProjection[] = direct ? [direct] : [];
+  for (const field of fields) {
+    if (field.wireType !== 2 || !field.bytes || field.bytes.length === bytes.length) continue;
+    tracks.push(...findProtobufTracks(field.bytes, depth + 1));
+  }
+  return tracks;
+}
+
+/**
+ * Bilibili's current subtitle directory endpoint is a bounded protobuf
+ * envelope (`/x/v2/subtitle/web/view`, application/octet-stream).  We do not
+ * retain the signed URL query; only the approved origin/path is projected.
+ */
+export function projectBilibiliTranscriptDirectoryProtobuf(
+  bytes: Uint8Array
+): BilibiliTranscriptDirectoryProjection | null {
+  if (bytes.length === 0 || bytes.length > 128 * 1024) return null;
+  const allTracks = findProtobufTracks(bytes)
+    .filter((track, index, all) => all.findIndex((candidate) =>
+      candidate.language === track.language && candidate.languageLabel === track.languageLabel &&
+      candidate.sourceUrl === track.sourceUrl
+    ) === index)
+  const tracks = allTracks.slice(0, MAX_TRACKS);
+  if (allTracks.length === 0) return null;
+  const droppedTrackCount = allTracks.length - tracks.length;
+  return {
+    artifactKind: 'bilibili_transcript_track_directory',
+    language: tracks[0]?.language ?? null,
+    languageLabel: tracks[0]?.languageLabel ?? null,
+    allowSubmit: null,
+    tracks,
+    sourceTrackCount: allTracks.length,
+    storedTrackCount: tracks.length,
+    droppedTrackCount,
+    partial: droppedTrackCount > 0
   };
 }
 

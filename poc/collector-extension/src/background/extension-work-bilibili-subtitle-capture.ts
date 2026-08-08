@@ -126,7 +126,7 @@ export async function captureBilibiliSubtitle(
       }
       await delay(MENU_POINTER_SETTLE_MS);
       probe = await readPlayerProbe(workTab.tabId);
-      if (!probe.chineseOptionVisible || !probe.chineseOptionHovered) {
+      if (!probe.chineseOptionVisible || !probe.chineseOptionHovered || !probe.chineseOption) {
         return withSubtitle(base, {
           ...emptySubtitle(),
           available: probe.captionControlAttached || base.subtitle.available,

@@ -3,8 +3,10 @@ import {
   BILIBILI_DYNAMIC_FEED_ROUTE_ID,
   approvedNetworkCaptureRouteIds,
   bilibiliTranscriptResearchRouteIds,
+  createNetworkCaptureFromBytes,
   createNetworkCaptureFromText,
   findNetworkCaptureRoute,
+  isNetworkCaptureResponseContentType,
   isJsonContentType,
   routeMatchesNetworkCaptureUrl,
   sanitiseCaptureUrl,
@@ -14,12 +16,35 @@ import {
 } from '../src/shared/network-capture.js';
 import {
   BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
-  BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID
+  BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID,
+  projectBilibiliTranscriptDirectoryProtobuf
 } from '../src/shared/transcript-capture.js';
 
 // These inputs exercise the local redaction and route gate only. They are not
 // synthetic platform/XHR evidence and do not claim that a live route works.
 const dynamicUrl = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space?offset=private-value#ignored';
+
+function varint(value: bigint): number[] {
+  const bytes: number[] = [];
+  let current = value;
+  while (current >= 0x80n) {
+    bytes.push(Number(current & 0x7fn) | 0x80);
+    current >>= 7n;
+  }
+  bytes.push(Number(current));
+  return bytes;
+}
+
+function field(number: number, wireType: 0 | 2, value: bigint | string | number[]): number[] {
+  const key = varint(BigInt(number << 3 | wireType));
+  if (wireType === 0) return [...key, ...varint(value as bigint)];
+  const bytes = typeof value === 'string' ? [...new TextEncoder().encode(value)] : value as number[];
+  return [...key, ...varint(BigInt(bytes.length)), ...bytes];
+}
+
+function concat(...parts: number[][]): number[] {
+  return parts.flat();
+}
 
 describe('Extension network observation safety contract', () => {
   test('redacts sensitive keys and text before any observation reaches an artifact boundary', () => {
@@ -111,5 +136,49 @@ describe('Extension network observation safety contract', () => {
       ...observed!,
       routeId: 'bilibili.other.response.v1'
     }, [BILIBILI_DYNAMIC_FEED_ROUTE_ID])).toBeNull();
+  });
+
+  test('projects the current protobuf subtitle directory and accepts its signed track route', () => {
+    const track = concat(
+      field(1, 0, 1897299281468062720n),
+      field(2, 2, '1897299281468062720'),
+      field(3, 2, 'ai-zh'),
+      field(4, 2, '中文'),
+      field(5, 2, '//subtitle.bilibili.com/%01%1Bopaque?auth_key=redacted'),
+      field(7, 0, 1n),
+      field(8, 2, '中文'),
+      field(10, 0, 2n)
+    );
+    const responseBytes = new Uint8Array(field(1, 2, field(3, 2, track)));
+    const directory = projectBilibiliTranscriptDirectoryProtobuf(responseBytes);
+    expect(directory).toMatchObject({
+      artifactKind: 'bilibili_transcript_track_directory',
+      sourceTrackCount: 1,
+      storedTrackCount: 1,
+      tracks: [{ language: 'ai-zh', languageLabel: '中文', sourceRouteApproved: true }]
+    });
+
+    const responseUrl = 'https://api.bilibili.com/x/v2/subtitle/web/view?public=1';
+    const route = findNetworkCaptureRoute('bilibili', responseUrl, [BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID]);
+    expect(route?.responseEncoding).toBe('protobuf');
+    expect(isNetworkCaptureResponseContentType(route!, 'application/octet-stream')).toBe(true);
+    const observed = createNetworkCaptureFromBytes({
+      platform: 'bilibili',
+      route: route!,
+      method: 'GET',
+      responseUrl,
+      contentType: 'application/octet-stream',
+      httpStatus: 200
+    }, responseBytes);
+    expect(observed).toMatchObject({
+      status: 'captured',
+      routeId: BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID,
+      body: { artifactKind: 'bilibili_transcript_track_directory', storedTrackCount: 1 }
+    });
+    expect(sanitiseNetworkCaptureObservation(observed, [BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID])).toMatchObject({
+      status: 'captured',
+      body: { artifactKind: 'bilibili_transcript_track_directory', storedTrackCount: 1 }
+    });
+
   });
 });
