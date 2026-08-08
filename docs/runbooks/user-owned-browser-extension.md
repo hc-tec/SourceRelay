@@ -295,7 +295,7 @@ URL、tab、selector、脚本、CDP 或 Network body。可直接复制的上层�
 
 - 扩展、浏览器、Gateway 或工作标签页消失：当前任务停止，不自动重开浏览器或重放导航；
 - 断网：最多重试三次**本地 Gateway 结果提交**，不重试平台导航；
-- 验证码、风控、限流或导航结果未知：binding 进入锁定状态，后续平台工作被拒绝，必须在 Console 进行明确人工恢复；
+- 验证码、风控、限流或导航结果未知：记录原因并停止当前任务，binding 保持 ready，不要求人工解锁，也不会自动重试同一任务；
 - 当前 MVP 不使用 `chrome.debugger`、CDP、任意 script、任意 selector、任意鼠标坐标或 Cookie 接口；
 - 当前 MVP 不读取字幕、播放器响应或任何 Network response body；这些仍是独立 capability。评论仅开放已完成 canary 的 `bilibili.discussion`：自动受管 work-tab 的一次规范导航、一次固定滚动和最多 20 条公开根评论 DOM 投影；它不是最新排序、回复树、分页或评论全量接口。
 

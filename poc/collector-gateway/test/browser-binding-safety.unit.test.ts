@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
@@ -10,7 +10,7 @@ const secondOperationId = '33333333-3333-4333-8333-333333333333';
 const base = new Date('2026-07-25T00:00:00.000Z');
 
 describe('browser binding safety state', () => {
-  test('locks an uncertain navigation and requires explicit recovery before another work item', async () => {
+  test('records an uncertain navigation without locking the binding', async () => {
     const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-binding-safety-'));
     try {
       const safety = await BrowserBindingSafetyRegistry.create(stateDirectory, base);
@@ -21,17 +21,19 @@ describe('browser binding safety state', () => {
         errorCode: 'navigation_outcome_unknown',
         navigation: { attempted: true, attemptCount: 1 }
       }, new Date(base.getTime() + 2));
-      expect(terminal).toMatchObject({ state: 'locked', manualUnlockRequired: true });
+      expect(terminal).toMatchObject({
+        state: 'ready',
+        reasonCode: 'navigation_outcome_unknown',
+        manualUnlockRequired: false
+      });
       await expect(safety.begin(bindingId, 'bilibili', operationId, new Date(base.getTime() + 3)))
-        .rejects.toThrow('browser_binding_safety_manual_unlock_required');
-      expect(await safety.unlock(bindingId, 'bilibili', new Date(base.getTime() + 4)))
-        .toMatchObject({ state: 'ready', manualUnlockRequired: false });
+        .resolves.toMatchObject({ state: 'running', manualUnlockRequired: false });
     } finally {
       await rm(stateDirectory, { recursive: true, force: true });
     }
   });
 
-  test('isolates Xiaohongshu semantic-action risk from Bilibili on the same browser binding', async () => {
+  test('does not lock Xiaohongshu semantic-action risk and keeps platforms isolated', async () => {
     const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-binding-safety-'));
     try {
       const safety = await BrowserBindingSafetyRegistry.create(stateDirectory, base);
@@ -48,9 +50,9 @@ describe('browser binding safety state', () => {
 
       expect(stopped).toMatchObject({
         platform: 'xiaohongshu',
-        state: 'locked',
+        state: 'ready',
         reasonCode: 'postcondition_unmet',
-        manualUnlockRequired: true
+        manualUnlockRequired: false
       });
       expect(safety.get(bindingId, 'bilibili', new Date(base.getTime() + 2))).toMatchObject({
         platform: 'bilibili',
@@ -58,7 +60,6 @@ describe('browser binding safety state', () => {
         manualUnlockRequired: false
       });
 
-      await safety.unlock(bindingId, 'xiaohongshu', new Date(base.getTime() + 3));
       await safety.begin(bindingId, 'xiaohongshu', secondOperationId, new Date(base.getTime() + 4));
       const completed = await safety.finish(bindingId, 'xiaohongshu', secondOperationId, {
         platform: 'xiaohongshu',
@@ -89,6 +90,35 @@ describe('browser binding safety state', () => {
         platform: 'xiaohongshu',
         state: 'ready',
         reasonCode: 'profile_notes_ready',
+        manualUnlockRequired: false
+      });
+    } finally {
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test('migrates a stale locked record back to ready on startup', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-binding-safety-'));
+    try {
+      const stale = [{
+        schemaVersion: 1,
+        browserBindingId: bindingId,
+        platform: 'bilibili',
+        state: 'locked',
+        reasonCode: 'bilibili_verification_required',
+        manualUnlockRequired: true,
+        activeOperation: null,
+        lastOperationAt: base.toISOString(),
+        updatedAt: base.toISOString()
+      }];
+      await writeFile(
+        join(stateDirectory, 'browser-binding-safety.json'),
+        JSON.stringify(stale),
+        'utf8'
+      );
+      const safety = await BrowserBindingSafetyRegistry.create(stateDirectory, new Date(base.getTime() + 1));
+      expect(safety.get(bindingId, 'bilibili')).toMatchObject({
+        state: 'ready',
         manualUnlockRequired: false
       });
     } finally {

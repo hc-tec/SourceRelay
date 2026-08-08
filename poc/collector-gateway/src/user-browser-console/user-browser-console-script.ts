@@ -51,7 +51,6 @@ function bindingCard(binding) {
       '<p>配对 ' + escapeHtml(binding.pairedAt) + ' · 最近连接 ' + escapeHtml(binding.lastSeenAt ?? '尚未连接') + '</p></div>' +
     '<div class="actions"><span class="badge ' + (online ? 'good' : 'neutral') + '">' + (online ? '在线' : '已配对') + '</span>' +
       '<span class="badge ' + tone + '">采集安全 ' + escapeHtml(safety?.state ?? 'ready') + '</span>' +
-      (safety?.state === 'locked' ? '<button data-binding-action="unlock" type="button">明确恢复</button>' : '') +
       '<button class="danger" data-binding-action="revoke" type="button">撤销</button></div></article>';
 }
 
@@ -247,16 +246,10 @@ bindingsElement.addEventListener('click', async (event) => {
   if (!bindingId) return;
   const action = button.dataset.bindingAction;
   if (action === 'revoke' && !confirm('撤销后该扩展不能再连接此 Gateway。继续？')) return;
-  if (action === 'unlock' && !confirm('这只恢复后续新任务，不会重放之前停止的页面操作。继续？')) return;
   button.disabled = true;
   try {
     if (action === 'revoke') {
       await api('/v1/browser-bindings/' + encodeURIComponent(bindingId) + '/revoke', { method: 'POST', body: '{}' });
-    } else if (action === 'unlock') {
-      await api('/v1/browser-bindings/' + encodeURIComponent(bindingId) + '/safety/unlock', {
-        method: 'POST',
-        body: JSON.stringify({ acknowledgement: 'resume_user_owned_browser_collection' })
-      });
     }
     await refresh();
   } catch (error) {

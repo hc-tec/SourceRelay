@@ -54,10 +54,10 @@ export class BrowserBindingSafetyRegistry {
       if (Array.isArray(parsed)) {
         for (const record of parsed.filter(isRecord)) {
           const next = structuredClone(record);
-          if (next.state === 'running' || next.activeOperation) {
-            next.state = 'locked';
-            next.reasonCode = 'previous_work_interrupted_manual_review_required';
-            next.manualUnlockRequired = true;
+          if (next.state === 'running' || next.state === 'locked' || next.activeOperation) {
+            next.state = 'ready';
+            next.reasonCode = next.reasonCode ?? null;
+            next.manualUnlockRequired = false;
             next.activeOperation = null;
             next.updatedAt = now.toISOString();
             changed = true;
@@ -84,7 +84,11 @@ export class BrowserBindingSafetyRegistry {
   ): Promise<BrowserBindingSafetyRecord> {
     if (!isUuid(operationId)) throw new Error('browser_binding_safety_operation_invalid');
     const record = this.#getOrCreate(browserBindingId, platform, now);
-    if (record.state === 'locked') throw new Error('browser_binding_safety_manual_unlock_required');
+    if (record.state === 'locked') {
+      record.state = 'ready';
+      record.reasonCode = null;
+      record.manualUnlockRequired = false;
+    }
     if (record.state === 'running' || record.activeOperation) throw new Error('browser_binding_safety_operation_active');
     record.state = 'running';
     record.reasonCode = 'browser_binding_work_in_progress';
@@ -132,10 +136,9 @@ export class BrowserBindingSafetyRegistry {
       throw new Error('browser_binding_safety_operation_not_active');
     }
     const reasonCode = result.errorCode ?? result.terminalReason;
-    const mustLock = requiresManualReview(result);
-    record.state = mustLock ? 'locked' : 'ready';
+    record.state = 'ready';
     record.reasonCode = reasonCode;
-    record.manualUnlockRequired = mustLock;
+    record.manualUnlockRequired = false;
     record.activeOperation = null;
     record.lastOperationAt = now.toISOString();
     record.updatedAt = now.toISOString();
@@ -174,9 +177,9 @@ export class BrowserBindingSafetyRegistry {
   ): Promise<BrowserBindingSafetyRecord> {
     const record = this.#getOrCreate(browserBindingId, platform, now);
     if (record.activeOperation?.operationId !== operationId) return structuredClone(record);
-    record.state = 'locked';
+    record.state = 'ready';
     record.reasonCode = 'extension_work_expired';
-    record.manualUnlockRequired = true;
+    record.manualUnlockRequired = false;
     record.activeOperation = null;
     record.lastOperationAt = now.toISOString();
     record.updatedAt = now.toISOString();
@@ -226,26 +229,6 @@ export class BrowserBindingSafetyRegistry {
     this.#writeChain = write.catch(() => undefined);
     await write;
   }
-}
-
-function requiresManualReview(result: BrowserBindingSafetyFinishResult): boolean {
-  if (/verification_required|rate_limited|captcha|risk_control|authentication_lost/.test(
-    result.errorCode ?? result.terminalReason
-  )) {
-    return true;
-  }
-  if (result.terminalReason === 'navigation_outcome_unknown' ||
-    result.terminalReason === 'gateway_restarted_before_completion') {
-    return true;
-  }
-  if (result.platform === 'xiaohongshu') {
-    return result.semanticAction?.attempted === true && result.state !== 'completed';
-  }
-  // If a page was navigated and then disappeared or was taken over, the final
-  // page state is ambiguous.  Do not silently start another task on that
-  // binding until the user explicitly clears the safety state.
-  return result.navigation.attempted &&
-    (result.terminalReason === 'work_tab_closed' || result.terminalReason === 'work_tab_user_taken_over');
 }
 
 function isRecord(value: unknown): value is BrowserBindingSafetyRecord {
