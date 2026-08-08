@@ -132,6 +132,10 @@ export async function executeXiaohongshuTrustedInputSearch(
     semanticActionAttempted = true;
     try {
       await dispatchMouseClick(debuggerTarget, target);
+      // Let the page focus settle before the first key event. The echo check
+      // below also polls, so a controlled input that commits asynchronously is
+      // not misreported as an input failure.
+      await delay(120);
       await dispatchSelectAll(debuggerTarget);
       for (const character of Array.from(action.query)) {
         await chrome.debugger.sendCommand(debuggerTarget, 'Input.insertText', { text: character });
@@ -140,7 +144,7 @@ export async function executeXiaohongshuTrustedInputSearch(
     } catch {
       throw new Error('debugger_input_failed');
     }
-    queryEchoed = await readQueryEcho(document, action.query);
+    queryEchoed = await waitForQueryEcho(document, action.query);
     if (!queryEchoed) throw new Error('xiaohongshu_trusted_input_query_not_echoed');
     await requireSameDocument(document);
     enterAttempted = true;
@@ -315,6 +319,22 @@ async function readQueryEcho(eligibleDocument: EligibleDocument, query: string):
     })
   });
   return results[0]?.result === true;
+}
+
+/**
+ * The page owns the search input state; React may commit the typed value a
+ * moment after the last insertText. Poll the echo for a short bounded window
+ * instead of declaring failure from one immediate read. This never replays
+ * the semantic action and never navigates the page.
+ */
+async function waitForQueryEcho(eligibleDocument: EligibleDocument, query: string): Promise<boolean> {
+  const deadline = Date.now() + 3_000;
+  while (Date.now() < deadline) {
+    if (await readQueryEcho(eligibleDocument, query)) return true;
+    await requireSameDocument(eligibleDocument);
+    await delay(120);
+  }
+  return false;
 }
 
 async function dispatchMouseClick(target: chrome.debugger.Debuggee, bounds: SearchTarget): Promise<void> {
