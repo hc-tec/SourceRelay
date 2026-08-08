@@ -11,3 +11,4 @@
 - 扩展源码或构建制品发生变化后，排查/验证必须使用项目专用隔离 Profile 通过 `chrome-devtools-mcp` CLI 的 CDP 扩展工具自动更新：首次用 `chrome-devtools install_extension <absolute-dist-path>`，后续用 `chrome-devtools reload_extension <extension-id>`；禁止把“请用户打开 `chrome://extensions` 再手动 Reload”当作处理方案。
 - 自动重载后必须重新读取真实 worker 的 runtime marker（manifest version、`collectorVersion`、control-surface revision、build fingerprint），并与 `dist/runtime-build.json` 精确比对；若仍不一致只允许再执行一次受控 reload，不能依赖历史版本记录、可见窗口重启或重复导航来掩盖 mismatch。
 - DevTools/CDP 自动更新只允许作用于仓库管理的验证/研究 Profile；不得附着、接管或关闭用户日常浏览器。运行 `chrome-devtools` 时关闭 usage statistics/CrUX，Network 证据输出先去掉 query/hash，绝不输出 Cookie、Token、密码或其他认证材料。
+- B站字幕菜单属于 hover-owned UI：必须按“视频区域 → 字幕按钮 → 菜单路径 → `data-lan="ai-zh"` 父节点”分段发送真实 mouse move，每段等待并重新确认可见/`:hover`；禁止把鼠标瞬移、hover 和 click 合并成零停顿序列。唯一一次点击后必须同时核对 active 状态、可见字幕面板和去敏字幕 CDN 200 响应。

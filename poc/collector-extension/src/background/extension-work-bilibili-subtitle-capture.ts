@@ -28,6 +28,9 @@ const MOUSE_MOVE_SETTLE_MS = 250;
 const CLICK_HOLD_MS = 180;
 const POST_CLICK_SETTLE_MS = 500;
 const STEP_SETTLE_MS = 700;
+const MENU_POINTER_SETTLE_MS = 900;
+const POINTER_TRAVEL_STEP_MS = 70;
+const POINTER_TRAVEL_MAX_STEPS = 10;
 
 export interface SubtitleCaptureResult {
   available: boolean;
@@ -43,6 +46,7 @@ interface PlayerProbe {
   captionControlAttached: boolean;
   captionControlVisuallyExposed: boolean;
   chineseOptionVisible: boolean;
+  chineseOptionHovered: boolean;
   chineseOptionActive: boolean;
   chineseOptionLanguage: string | null;
   subtitlePanelVisible: boolean;
@@ -110,7 +114,26 @@ export async function captureBilibiliSubtitle(
       probe = await waitForPlayerProbe(workTab, MENU_REVEAL_TIMEOUT_MS);
     }
     if ((!probe.chineseOptionActive || !probe.subtitlePanelVisible) && probe.chineseOption) {
-      await mouseClick(debuggee, probe.chineseOption);
+      // The language menu is hover-owned. A single CDP mouseMoved from the
+      // button straight to the item can cross the menu's hit-test gap, causing
+      // Bilibili to close the popup before the click arrives. Walk the pointer
+      // through the real path and require the final parent node to remain
+      // hovered before spending the one allowed click.
+      if (probe.captionControl) {
+        await mouseMoveAlongPath(debuggee, probe.captionControl, probe.chineseOption);
+      } else {
+        await mouseMove(debuggee, probe.chineseOption);
+      }
+      await delay(MENU_POINTER_SETTLE_MS);
+      probe = await readPlayerProbe(workTab.tabId);
+      if (!probe.chineseOptionVisible || !probe.chineseOptionHovered) {
+        return withSubtitle(base, {
+          ...emptySubtitle(),
+          available: probe.captionControlAttached || base.subtitle.available,
+          panelVisible: probe.subtitlePanelVisible
+        });
+      }
+      await mouseClick(debuggee, probe.chineseOption, true);
       await delay(STEP_SETTLE_MS);
       probe = await waitForPlayerProbe(workTab, SELECTION_SETTLE_TIMEOUT_MS);
     }
@@ -171,6 +194,7 @@ async function waitForPlayerProbe(workTab: ExtensionWorkTabLease, deadlineMs: nu
     captionControlAttached: false,
     captionControlVisuallyExposed: false,
     chineseOptionVisible: false,
+    chineseOptionHovered: false,
     chineseOptionActive: false,
     chineseOptionLanguage: null,
     subtitlePanelVisible: false,
@@ -226,6 +250,7 @@ async function readPlayerProbe(tabId: number): Promise<PlayerProbe> {
         captionControlAttached: Boolean(captionControl),
         captionControlVisuallyExposed: Boolean(captionControl && visible(captionControl) && controlBarVisible),
         chineseOptionVisible: Boolean(chineseOption && visible(chineseOption)),
+        chineseOptionHovered: Boolean(chineseOption && visible(chineseOption) && chineseOption.matches(':hover')),
         chineseOptionActive: Boolean(chineseOption && (
           chineseOption.classList.contains('bpx-state-active') ||
           chineseOption.getAttribute('aria-selected') === 'true' ||
@@ -301,8 +326,31 @@ async function mouseMove(debuggee: chrome.debugger.Debuggee, point: { x: number;
   await delay(MOUSE_MOVE_SETTLE_MS);
 }
 
-async function mouseClick(debuggee: chrome.debugger.Debuggee, point: { x: number; y: number }): Promise<void> {
-  await mouseMove(debuggee, point);
+async function mouseMoveAlongPath(
+  debuggee: chrome.debugger.Debuggee,
+  from: { x: number; y: number },
+  to: { x: number; y: number }
+): Promise<void> {
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  const steps = Math.max(4, Math.min(POINTER_TRAVEL_MAX_STEPS, Math.ceil(distance / 36)));
+  for (let index = 1; index <= steps; index += 1) {
+    const progress = index / steps;
+    await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: Math.round(from.x + (to.x - from.x) * progress),
+      y: Math.round(from.y + (to.y - from.y) * progress)
+    });
+    await delay(POINTER_TRAVEL_STEP_MS);
+  }
+  await delay(MOUSE_MOVE_SETTLE_MS);
+}
+
+async function mouseClick(
+  debuggee: chrome.debugger.Debuggee,
+  point: { x: number; y: number },
+  pointerAlreadyAtTarget = false
+): Promise<void> {
+  if (!pointerAlreadyAtTarget) await mouseMove(debuggee, point);
   await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1
   });
