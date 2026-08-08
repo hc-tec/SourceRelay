@@ -80,7 +80,7 @@ export function createBilibiliVideoDetailRunRecord(input: {
       cookiesAndTokens: 'not_read',
       networkQueryAndFragmentValues: 'not_read',
       responseBodies: 'not_read',
-      subtitle: 'excluded_separate_capability',
+      subtitle: 'included_indicator',
       multipart: 'summary_only_separate_catalog_capability',
       discussion: 'excluded_separate_capability',
       recommendations: 'excluded',

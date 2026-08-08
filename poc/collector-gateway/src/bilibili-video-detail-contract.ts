@@ -32,6 +32,11 @@ export interface BilibiliVideoDetailDomSnapshot {
   titleVisible: boolean;
   playerVisible: boolean;
   chargeExclusiveTrialVisible: boolean;
+  subtitle: {
+    available: boolean;
+    language: string | null;
+    panelVisible: boolean;
+  };
   loginOverlayVisible: boolean;
   risk: {
     verificationRequired: boolean;
@@ -80,6 +85,11 @@ export interface BilibiliVideoDetailProjection {
   titleVisible: true;
   playerVisible: true;
   accessStatus: BilibiliVideoDetailAccessStatus;
+  subtitle: {
+    available: boolean;
+    language: string | null;
+    panelVisible: boolean;
+  };
   loginOverlayVisible: boolean;
   risk: BilibiliVideoDetailDomSnapshot['risk'];
   capturedAt: string;
@@ -176,7 +186,7 @@ export interface BilibiliVideoDetailRunRecord {
     cookiesAndTokens: 'not_read';
     networkQueryAndFragmentValues: 'not_read';
     responseBodies: 'not_read';
-    subtitle: 'excluded_separate_capability';
+    subtitle: 'included_indicator';
     multipart: 'summary_only_separate_catalog_capability';
     discussion: 'excluded_separate_capability';
     recommendations: 'excluded';
@@ -311,6 +321,9 @@ export function projectBilibiliVideoDetailDom(
     titleVisible: true,
     playerVisible: true,
     accessStatus: accessStatus(dom),
+    subtitle: dom.subtitle
+      ? { ...dom.subtitle }
+      : { available: false, language: null, panelVisible: false },
     loginOverlayVisible: dom.loginOverlayVisible,
     risk: { ...dom.risk },
     capturedAt

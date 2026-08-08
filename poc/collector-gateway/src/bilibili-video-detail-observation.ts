@@ -81,6 +81,16 @@ function domSnapshot(value: unknown, expectedBvid: string): BilibiliVideoDetailD
     titleVisible: candidate.titleVisible,
     playerVisible: candidate.playerVisible,
     chargeExclusiveTrialVisible: candidate.chargeExclusiveTrialVisible,
+    subtitle: candidate.subtitle && typeof candidate.subtitle === 'object' &&
+      typeof (candidate.subtitle as Record<string, unknown>).available === 'boolean'
+      ? {
+        available: (candidate.subtitle as Record<string, unknown>).available as boolean,
+        language: typeof (candidate.subtitle as Record<string, unknown>).language === 'string'
+          ? (candidate.subtitle as Record<string, unknown>).language as string
+          : null,
+        panelVisible: (candidate.subtitle as Record<string, unknown>).panelVisible === true
+      }
+      : { available: false, language: null, panelVisible: false },
     loginOverlayVisible: candidate.loginOverlayVisible,
     risk: {
       verificationRequired: risk.verificationRequired,
