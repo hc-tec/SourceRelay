@@ -14,3 +14,5 @@
 - B站字幕菜单属于 hover-owned UI：必须按“视频区域 → 字幕按钮 → 菜单路径 → `data-lan="ai-zh"` 父节点”分段发送真实 mouse move，每段等待并重新确认可见/`:hover`；禁止把鼠标瞬移、hover 和 click 合并成零停顿序列。唯一一次点击后必须同时核对 active 状态、可见字幕面板和去敏字幕 CDN 200 响应。
 - 用户自有浏览器 direct work 的 claim 也必须携带当前扩展 build fingerprint；Gateway 发现 worker 过期时要在 claim 前拒绝并让扩展自调用 `chrome.runtime.reload()`，不能让旧 worker 先消费任务，更不能要求用户手动 Reload。
 - 这条门禁必须接在实际运行的 `poc/collector-gateway/dist/user-browser-server.js`；更新时先把生产 `collector-extension/dist` 制品同步到受管扩展目录，再由新 worker 通过 `chrome.runtime.reload()` 载入，不能只重启 Gateway 或只更新 manifest。CDP 自动 Reload 仅限仓库管理的验证/研究 Profile，禁止附着日常浏览器。
+- B站单视频采集默认只调用一次 `bilibili.video_detail`（MCP 工具 `collector_bilibili_video_detail`），输入只传规范 BV URL；该任务必须在一次导航和同一个受管 work tab 内依次返回公开详情、字幕全文和有界根评论，禁止再要求 selector、hover、click、scroll、action 等调用方字段，也不要为了补评论自动再调用独立 `bilibili.discussion`。
+- 组合详情必须保留组件级状态：字幕只有 `captured` 或 `confirmed_no_subtitle` 才算完成，评论只有 `captured` 或 `empty` 才算完成；任一组件 `partial`/失败时整体返回 `partial` 并保留另一组件已经取得的真实结果，禁止把采集失败伪装成“无字幕”“无评论”或整体成功。独立 `bilibili.discussion` 仅保留用于明确要求的兼容调用。

@@ -22,6 +22,10 @@ function dom(overrides: Partial<BilibiliVideoDetailDomSnapshot> = {}): BilibiliV
     playerVisible: true,
     chargeExclusiveTrialVisible: false,
     subtitle: { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
+    discussion: {
+      captureStatus: 'capture_incomplete', partial: true, commentContentState: 'unknown',
+      rootCommentCount: 0, rootComments: [], sort: 'unknown', loginGateVisible: false
+    },
     loginOverlayVisible: false,
     risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false },
     ...overrides
@@ -56,7 +60,13 @@ describe('Bilibili video-detail access-status contract', () => {
     expect(detail).toMatchObject({
       schemaVersion: 2,
       playerVisible: true,
-      accessStatus: 'indeterminate'
+      accessStatus: 'indeterminate',
+      discussion: {
+        captureStatus: 'capture_incomplete',
+        partial: true,
+        rootCommentCount: 0,
+        rootComments: []
+      }
     });
     expect(detail).not.toHaveProperty('playerControlsVisible');
   });

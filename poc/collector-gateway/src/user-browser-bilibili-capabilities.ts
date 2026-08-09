@@ -41,6 +41,7 @@ export type UserBrowserBilibiliCapabilityCaptureMode =
   | 'bounded_multi_page_dom_projection'
   | 'bounded_page_navigation'
   | 'subtitle_menu_and_text_track'
+  | 'subtitle_menu_and_text_track_plus_bounded_scroll_dom_projection'
   | 'scroll_sort_and_thread_expansion'
   | 'bounded_scroll_dom_projection'
   | 'dom_and_fixed_network_metadata';
@@ -63,7 +64,7 @@ export const USER_BROWSER_BILIBILI_CAPABILITIES = [
   descriptor('bilibili.account_profile', 'UP 主公开资料', 'canonical_profile_url', 'direct_ready', 'passive_dom_projection'),
   descriptor('bilibili.account_inventory', 'UP 主视频首屏', 'canonical_profile_url', 'direct_ready', 'passive_dom_projection'),
   descriptor('bilibili.account_inventory.pagination', 'UP 主视频有界翻页', 'canonical_profile_url_and_fixed_page_budget', 'direct_migration_required', 'bounded_page_navigation'),
-  descriptor('bilibili.video_detail', '视频公开详情', 'canonical_video_url', 'direct_ready', 'dom_only'),
+  descriptor('bilibili.video_detail', '视频公开详情（含字幕与评论）', 'canonical_video_url', 'direct_ready', 'subtitle_menu_and_text_track_plus_bounded_scroll_dom_projection'),
   descriptor('bilibili.transcript', '视频字幕', 'canonical_video_url', 'trusted_interaction_migration_required', 'subtitle_menu_and_text_track'),
   descriptor('bilibili.discussion', '视频评论区', 'canonical_video_url', 'direct_ready', 'bounded_scroll_dom_projection'),
   descriptor('bilibili.danmaku', '视频弹幕可见 DOM', 'canonical_video_url', 'direct_ready', 'passive_player_dom_projection'),

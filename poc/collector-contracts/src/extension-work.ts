@@ -163,9 +163,9 @@ export interface BilibiliVideoDetailWorkInput {
  */
 export interface BilibiliVideoDetailWorkBudget {
   maximumPlatformNavigations: 1;
-  maximumSemanticActions: 3;
+  maximumSemanticActions: 4;
   maximumResponseObservations: 2;
-  maximumPayloadBytes: 200_000;
+  maximumPayloadBytes: 300_000;
 }
 
 export interface BilibiliVideoDetailWorkItem extends CollectorWorkTabExtensionWorkEnvelope {
@@ -381,6 +381,17 @@ export interface BilibiliVideoDetailDomObservation {
     segmentCount: number;
     partial: boolean;
     segments: Array<{ from: number; to: number; text: string }>;
+  };
+  /** A bounded projection of the public root comments captured on the same work tab. */
+  discussion: {
+    captureStatus: 'captured' | 'empty' | 'capture_incomplete' | 'capture_failed' | 'login_required' |
+      'verification_required' | 'rate_limited' | 'source_unavailable' | 'document_context_changed';
+    partial: boolean;
+    commentContentState: 'ready' | 'empty' | 'loading' | 'unknown';
+    rootCommentCount: number;
+    rootComments: string[];
+    sort: 'hot' | 'latest' | 'unknown';
+    loginGateVisible: boolean;
   };
   loginOverlayVisible: boolean;
   risk: BilibiliWorkRisk;
@@ -770,6 +781,12 @@ export function isExtensionWorkResultForItem(
     if (value.state === 'completed') {
       return value.errorCode === null && value.terminalReason === 'detail_ready' && value.observation !== null &&
         value.observation.title !== null && value.observation.titleVisible && value.observation.playerVisible &&
+        value.observation.discussion.partial === false &&
+        (value.observation.discussion.captureStatus === 'captured' ||
+          value.observation.discussion.captureStatus === 'empty') &&
+        value.observation.subtitle.partial === false &&
+        (value.observation.subtitle.captureStatus === 'captured' ||
+          value.observation.subtitle.captureStatus === 'confirmed_no_subtitle') &&
         value.navigation.attemptCount === 1 && value.workTabDisposition === 'idle_reusable';
     }
     return true;
@@ -828,7 +845,7 @@ export function isExtensionWorkResultForItem(
 export function isBilibiliVideoDetailDomObservation(value: unknown): value is BilibiliVideoDetailDomObservation {
   if (!isRecord(value) || !hasExactKeys(value, [
     'bvid', 'title', 'metadataVisibleText', 'description', 'creator', 'tagTexts', 'episodeSummaryText',
-    'titleVisible', 'playerVisible', 'chargeExclusiveTrialVisible', 'subtitle', 'loginOverlayVisible', 'risk'
+    'titleVisible', 'playerVisible', 'chargeExclusiveTrialVisible', 'subtitle', 'discussion', 'loginOverlayVisible', 'risk'
   ]) || !isBvid(value.bvid) ||
     !isNullableText(value.title, 500) || !isNullableText(value.metadataVisibleText, 1_000) ||
     !isNullableText(value.description, 20_000) || !isNullableText(value.episodeSummaryText, 500) ||
@@ -836,9 +853,26 @@ export function isBilibiliVideoDetailDomObservation(value: unknown): value is Bi
     typeof value.titleVisible !== 'boolean' || typeof value.playerVisible !== 'boolean' ||
     typeof value.chargeExclusiveTrialVisible !== 'boolean' || typeof value.loginOverlayVisible !== 'boolean' ||
     !isBilibiliVideoDetailSubtitle(value.subtitle) ||
+    !isBilibiliVideoDetailDiscussion(value.discussion) ||
     !isBilibiliWorkRisk(value.risk)
   ) return false;
   return true;
+}
+
+function isBilibiliVideoDetailDiscussion(value: unknown): boolean {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'captureStatus', 'partial', 'commentContentState', 'rootCommentCount', 'rootComments', 'sort', 'loginGateVisible'
+  ])) return false;
+  return ['captured', 'empty', 'capture_incomplete', 'capture_failed', 'login_required',
+    'verification_required', 'rate_limited', 'source_unavailable', 'document_context_changed'].includes(
+      value.captureStatus as string
+    ) && typeof value.partial === 'boolean' &&
+    ['ready', 'empty', 'loading', 'unknown'].includes(value.commentContentState as string) &&
+    Number.isSafeInteger(value.rootCommentCount) && Number(value.rootCommentCount) >= 0 &&
+    Number(value.rootCommentCount) <= 20 && Array.isArray(value.rootComments) &&
+    value.rootComments.length <= 20 && value.rootCommentCount === value.rootComments.length &&
+    value.rootComments.every((entry) => isText(entry, 2_000)) &&
+    ['hot', 'latest', 'unknown'].includes(value.sort as string) && typeof value.loginGateVisible === 'boolean';
 }
 
 function isBilibiliVideoDetailSubtitle(value: unknown): boolean {
@@ -972,8 +1006,8 @@ function isBilibiliAccountInventoryWorkInput(value: unknown): value is BilibiliA
 
 function isBilibiliVideoDetailWorkBudget(value: unknown): value is BilibiliVideoDetailWorkBudget {
   return isRecord(value) && Object.keys(value).length === 4 &&
-    value.maximumPlatformNavigations === 1 && value.maximumSemanticActions === 3 &&
-    value.maximumResponseObservations === 2 && value.maximumPayloadBytes === 200_000;
+    value.maximumPlatformNavigations === 1 && value.maximumSemanticActions === 4 &&
+    value.maximumResponseObservations === 2 && value.maximumPayloadBytes === 300_000;
 }
 
 function isBilibiliNativeSearchWorkBudget(value: unknown): value is BilibiliNativeSearchWorkBudget {

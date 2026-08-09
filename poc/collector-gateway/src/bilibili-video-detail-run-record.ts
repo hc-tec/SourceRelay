@@ -82,10 +82,10 @@ export function createBilibiliVideoDetailRunRecord(input: {
       responseBodies: 'not_read',
       subtitle: 'included_indicator',
       multipart: 'summary_only_separate_catalog_capability',
-      discussion: 'excluded_separate_capability',
+      discussion: 'included_bounded_dom_projection',
       recommendations: 'excluded',
       semanticActionDelivery: 'at_most_once',
-      runDeadlineMs: 60_000,
+      runDeadlineMs: 120_000,
       targetTabSelection: input.targetTabSelection,
       targetPage: input.targetPage,
       admissionEligible: false

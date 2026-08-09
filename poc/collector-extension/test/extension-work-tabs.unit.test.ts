@@ -29,9 +29,9 @@ function videoDetailWork(): Extract<ExtensionWorkItem, { capability: 'bilibili.v
     },
     budget: {
       maximumPlatformNavigations: 1,
-    maximumSemanticActions: 3,
+    maximumSemanticActions: 4,
     maximumResponseObservations: 2,
-    maximumPayloadBytes: 200_000
+    maximumPayloadBytes: 300_000
     },
     gatewaySignature: 'a'.repeat(86)
   };

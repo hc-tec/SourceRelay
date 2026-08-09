@@ -11,6 +11,28 @@ export interface BilibiliVideoDetailCreator {
   publicAccountId: string | null;
 }
 
+export type BilibiliVideoDetailDiscussionCaptureStatus =
+  | 'captured'
+  | 'empty'
+  | 'capture_incomplete'
+  | 'capture_failed'
+  | 'login_required'
+  | 'verification_required'
+  | 'rate_limited'
+  | 'source_unavailable'
+  | 'document_context_changed';
+
+/** Bounded root-comment projection captured on the same managed work tab. */
+export interface BilibiliVideoDetailDiscussionProjection {
+  captureStatus: BilibiliVideoDetailDiscussionCaptureStatus;
+  partial: boolean;
+  commentContentState: 'ready' | 'empty' | 'loading' | 'unknown';
+  rootCommentCount: number;
+  rootComments: string[];
+  sort: 'hot' | 'latest' | 'unknown';
+  loginGateVisible: boolean;
+}
+
 /**
  * This is deliberately a positive-observation vocabulary. `indeterminate`
  * does not mean public or playable: it only says that this bounded first-screen
@@ -42,6 +64,7 @@ export interface BilibiliVideoDetailDomSnapshot {
     partial: boolean;
     segments: Array<{ from: number; to: number; text: string }>;
   };
+  discussion: BilibiliVideoDetailDiscussionProjection;
   loginOverlayVisible: boolean;
   risk: {
     verificationRequired: boolean;
@@ -72,6 +95,7 @@ export interface BilibiliVideoDetailDomDiagnostics {
     partial: boolean | null;
     segments: Array<{ from: number; to: number; text: string }>;
   } | null;
+  discussion: BilibiliVideoDetailDiscussionProjection | null;
   loginOverlayVisible: boolean | null;
   verificationRequired: boolean | null;
   rateLimited: boolean | null;
@@ -79,9 +103,10 @@ export interface BilibiliVideoDetailDomDiagnostics {
 }
 
 /**
- * One public, first-rendered video-detail projection.  There is deliberately
- * no player response, subtitle document, comment, recommendation, URL query,
- * or arbitrary page field in this contract.
+ * One public, first-rendered video-detail projection. There is deliberately
+ * no player response, subtitle document, recommendation, URL query, or
+ * arbitrary page field in this contract. Comments are limited to the bounded
+ * root-comment DOM projection captured by the same work tab.
  */
 export interface BilibiliVideoDetailProjection {
   schemaVersion: 2;
@@ -105,6 +130,7 @@ export interface BilibiliVideoDetailProjection {
     partial: boolean;
     segments: Array<{ from: number; to: number; text: string }>;
   };
+  discussion: BilibiliVideoDetailDiscussionProjection;
   loginOverlayVisible: boolean;
   risk: BilibiliVideoDetailDomSnapshot['risk'];
   capturedAt: string;
@@ -203,10 +229,10 @@ export interface BilibiliVideoDetailRunRecord {
     responseBodies: 'not_read';
     subtitle: 'included_indicator';
     multipart: 'summary_only_separate_catalog_capability';
-    discussion: 'excluded_separate_capability';
+    discussion: 'included_bounded_dom_projection';
     recommendations: 'excluded';
     semanticActionDelivery: 'at_most_once';
-    runDeadlineMs: 60_000;
+    runDeadlineMs: 120_000;
     targetTabSelection:
       | 'reused_matching_managed_tab'
       | 'reused_retained_managed_tab'
@@ -339,8 +365,26 @@ export function projectBilibiliVideoDetailDom(
     subtitle: dom.subtitle
       ? { ...dom.subtitle }
       : { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
+    discussion: projectDiscussion(dom.discussion),
     loginOverlayVisible: dom.loginOverlayVisible,
     risk: { ...dom.risk },
     capturedAt
+  };
+}
+
+function projectDiscussion(value: BilibiliVideoDetailDiscussionProjection): BilibiliVideoDetailDiscussionProjection {
+  const rootComments = value.rootComments
+    .filter((entry) => typeof entry === 'string')
+    .map((entry) => entry.replace(/\s+/g, ' ').trim().slice(0, 2_000))
+    .filter((entry) => entry.length > 0)
+    .slice(0, 20);
+  return {
+    captureStatus: value.captureStatus,
+    partial: value.partial,
+    commentContentState: value.commentContentState,
+    rootCommentCount: rootComments.length,
+    rootComments,
+    sort: value.sort,
+    loginGateVisible: value.loginGateVisible
   };
 }

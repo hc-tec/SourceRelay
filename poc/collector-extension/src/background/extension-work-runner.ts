@@ -5,6 +5,7 @@ import type {
   ExtensionWorkResult,
   GatewayPairingRecord
 } from '@intelligence/collector-contracts';
+import { isExtensionWorkResult } from '@intelligence/collector-contracts';
 import { executeBilibiliAccountInventoryExtensionWork } from './extension-work-bilibili-account-inventory';
 import { executeBilibiliAccountInventoryUserSelectedTabExtensionWork } from './extension-work-bilibili-account-inventory-user-selected-tab';
 import { executeBilibiliAccountProfileExtensionWork } from './extension-work-bilibili-account-profile';
@@ -142,12 +143,37 @@ export async function pollForExtensionWork(): Promise<void> {
         ...(workTabLossCause === null ? {} : { workTabLossCause })
       }
     );
-    await savePendingExtensionWorkResult({
-      schemaVersion: 1,
-      result,
-      deliveryAttempts: 0,
-      lastErrorCode: null
-    });
+    const resultValid = isExtensionWorkResult(result);
+    if (!resultValid) {
+      void emitExtensionDiagnostic(
+        pairing,
+        item,
+        'result_delivery_failed',
+        'failed',
+        'extension_work_result_invalid',
+        extensionWorkResultShape(result)
+      );
+      throw new Error('extension_work_result_invalid');
+    }
+    try {
+      await savePendingExtensionWorkResult({
+        schemaVersion: 1,
+        result,
+        deliveryAttempts: 0,
+        lastErrorCode: null
+      });
+    } catch (error) {
+      const errorCode = safeErrorCode(error);
+      void emitExtensionDiagnostic(
+        pairing,
+        item,
+        'result_delivery_failed',
+        'failed',
+        errorCode,
+        extensionWorkResultShape(result)
+      );
+      throw error;
+    }
     await clearActiveExtensionWork();
     const completed = await loadPendingExtensionWorkResult();
     if (completed) await deliverPendingResult(completed);
@@ -157,6 +183,32 @@ export async function pollForExtensionWork(): Promise<void> {
   } finally {
     pollInFlight = false;
   }
+}
+
+function extensionWorkResultShape(result: ExtensionWorkResult): Record<string, unknown> {
+  if (result.capability !== 'bilibili.video_detail' || !result.observation) {
+    return { state: result.state, terminalReason: result.terminalReason, observationPresent: result.observation !== null };
+  }
+  return {
+    state: result.state,
+    terminalReason: result.terminalReason,
+    observationKeys: Object.keys(result.observation).sort(),
+    subtitle: {
+      captureStatus: result.observation.subtitle.captureStatus ?? null,
+      segmentCount: result.observation.subtitle.segmentCount,
+      segmentsLength: result.observation.subtitle.segments.length,
+      partial: result.observation.subtitle.partial
+    },
+    discussion: {
+      captureStatus: result.observation.discussion.captureStatus,
+      commentContentState: result.observation.discussion.commentContentState,
+      rootCommentCount: result.observation.discussion.rootCommentCount,
+      rootCommentsLength: result.observation.discussion.rootComments.length,
+      partial: result.observation.discussion.partial,
+      sort: result.observation.discussion.sort,
+      loginGateVisible: result.observation.discussion.loginGateVisible
+    }
+  };
 }
 
 async function execute(item: ExtensionWorkItem, pairing: GatewayPairingRecord): Promise<ExtensionWorkResult> {

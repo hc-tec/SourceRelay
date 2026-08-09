@@ -71,10 +71,10 @@ export async function recordBilibiliVideoDetailExtensionWork(input: {
       responseBodies: 'not_read',
       subtitle: 'included_indicator',
       multipart: 'summary_only_separate_catalog_capability',
-      discussion: 'excluded_separate_capability',
+      discussion: 'included_bounded_dom_projection',
       recommendations: 'excluded',
       semanticActionDelivery: 'at_most_once',
-      runDeadlineMs: 60_000,
+      runDeadlineMs: 120_000,
       targetTabSelection,
       targetPage,
       admissionEligible: false
@@ -117,6 +117,7 @@ function domDiagnostics(
       playerVisible: null,
       chargeExclusiveTrialVisible: null,
       subtitle: null,
+      discussion: null,
       loginOverlayVisible: null,
       verificationRequired: null,
       rateLimited: null,
@@ -142,6 +143,7 @@ function diagnosticsFromObservation(observation: BilibiliVideoDetailDomObservati
       partial: observation.subtitle.partial,
       segments: observation.subtitle.segments.map((segment) => ({ ...segment }))
     },
+    discussion: structuredClone(observation.discussion),
     loginOverlayVisible: observation.loginOverlayVisible,
     verificationRequired: observation.risk.verificationRequired,
     rateLimited: observation.risk.rateLimited,

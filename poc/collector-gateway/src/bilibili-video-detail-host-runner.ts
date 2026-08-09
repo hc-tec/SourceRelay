@@ -273,6 +273,10 @@ export class BilibiliVideoDetailHostRunner {
           state = 'failed';
           terminalReason = 'dom_projection_failed';
           errorCode = 'video_detail_dom_projection_failed';
+        } else if (detail.discussion.partial) {
+          state = 'partial';
+          terminalReason = 'detail_ready';
+          errorCode = 'bilibili_video_discussion_capture_incomplete';
         } else {
           state = 'completed';
           terminalReason = 'detail_ready';

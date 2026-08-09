@@ -110,12 +110,47 @@ function domSnapshot(value: unknown, expectedBvid: string): BilibiliVideoDetailD
           : []
       }
       : { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
+    discussion: discussionSnapshot(candidate.discussion),
     loginOverlayVisible: candidate.loginOverlayVisible,
     risk: {
       verificationRequired: risk.verificationRequired,
       rateLimited: risk.rateLimited,
       sourceUnavailable: risk.sourceUnavailable
     }
+  };
+}
+
+function discussionSnapshot(value: unknown): BilibiliVideoDetailDomSnapshot['discussion'] {
+  const candidate = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+  const rootComments = Array.isArray(candidate?.rootComments)
+    ? candidate.rootComments
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.replace(/\s+/g, ' ').trim().slice(0, 2_000))
+      .filter((entry) => entry.length > 0)
+      .slice(0, 20)
+    : [];
+  const captureStatus = ['captured', 'empty', 'capture_incomplete', 'capture_failed', 'login_required',
+    'verification_required', 'rate_limited', 'source_unavailable', 'document_context_changed'].includes(
+      candidate?.captureStatus as string
+    )
+    ? candidate?.captureStatus as BilibiliVideoDetailDomSnapshot['discussion']['captureStatus']
+    : 'capture_incomplete';
+  const commentContentState = ['ready', 'empty', 'loading', 'unknown'].includes(candidate?.commentContentState as string)
+    ? candidate?.commentContentState as BilibiliVideoDetailDomSnapshot['discussion']['commentContentState']
+    : 'unknown';
+  const sort = ['hot', 'latest', 'unknown'].includes(candidate?.sort as string)
+    ? candidate?.sort as BilibiliVideoDetailDomSnapshot['discussion']['sort']
+    : 'unknown';
+  return {
+    captureStatus,
+    partial: candidate?.partial === true || captureStatus !== 'captured' && captureStatus !== 'empty',
+    commentContentState,
+    rootCommentCount: rootComments.length,
+    rootComments,
+    sort,
+    loginGateVisible: candidate?.loginGateVisible === true
   };
 }
 

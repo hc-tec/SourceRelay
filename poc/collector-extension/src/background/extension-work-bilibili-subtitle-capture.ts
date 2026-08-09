@@ -129,7 +129,7 @@ export async function captureBilibiliSubtitle(
   // visible player but no caption control within the old 8-second window,
   // producing a false `player_unavailable`.  Keep the wait bounded by the
   // signed work deadline while allowing the proven delayed-mount range.
-  let probe = await waitForPlayerProbe(workTab, remainingProbeBudget(item.expiresAt, 15_000));
+  let probe = await waitForPlayerProbe(workTab, remainingProbeBudget(item.expiresAt, 10_000));
   if (!probe.playerAreaPresent || !probe.captionControlAttached) {
     return withSubtitle(base, {
       ...emptySubtitle(),

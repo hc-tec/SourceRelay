@@ -64,7 +64,7 @@ export async function executeBilibiliDiscussionUserSelectedTabExtensionWork(
       navigationAttempted = true;
       await lifecycle.onNavigationIntent?.();
     });
-    const observed = await observeDiscussion(workTab, item.input.bvid, item.expiresAt);
+    const observed = await observeBilibiliDiscussionOnWorkTab(workTab, item.input.bvid, item.expiresAt);
     observation = observed.observation;
     const disposition = observed.kind === 'ready' || observed.kind === 'empty' ||
       observed.terminalReason === 'source_unavailable'
@@ -136,17 +136,25 @@ export function discussionObservationTerminal(
   return observation.loginGateVisible ? 'login_required' : null;
 }
 
-async function observeDiscussion(
-  workTab: ExtensionWorkTabLease,
-  expectedBvid: string,
-  expiresAt: string
-): Promise<
+export type BilibiliDiscussionObservationResult =
   | { kind: 'ready'; observation: BilibiliVideoDiscussionUserSelectedTabDomObservation; terminalReason: 'discussion_ready'; errorCode: null }
   | { kind: 'empty'; observation: BilibiliVideoDiscussionUserSelectedTabDomObservation; terminalReason: 'discussion_empty'; errorCode: null }
   | { kind: 'stopped'; observation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null; terminalReason: BilibiliVideoDiscussionUserSelectedTabWorkResult['terminalReason']; errorCode: string }
-  | { kind: 'partial'; observation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null; terminalReason: 'discussion_partial' | 'run_deadline_exceeded' | 'dom_projection_failed'; errorCode: string }
-> {
-  const deadline = Math.min(Date.parse(expiresAt), Date.now() + MAX_OBSERVATION_WINDOW_MS);
+  | { kind: 'partial'; observation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null; terminalReason: 'discussion_partial' | 'run_deadline_exceeded' | 'dom_projection_failed'; errorCode: string };
+
+/**
+ * Observe the comments on an already acquired and already navigated work tab.
+ * This is intentionally separate from the standalone capability wrapper so
+ * video_detail can compose detail, subtitle and discussion without a second
+ * tab lease or platform navigation.
+ */
+export async function observeBilibiliDiscussionOnWorkTab(
+  workTab: ExtensionWorkTabLease,
+  expectedBvid: string,
+  expiresAt: string,
+  maximumObservationWindowMs = MAX_OBSERVATION_WINDOW_MS
+): Promise<BilibiliDiscussionObservationResult> {
+  const deadline = Math.min(Date.parse(expiresAt), Date.now() + maximumObservationWindowMs);
   const expectedCanonicalUrl = `https://www.bilibili.com/video/${expectedBvid}`;
   let pageReadyAt: number | null = null;
   let lastObservation: BilibiliVideoDiscussionUserSelectedTabDomObservation | null = null;

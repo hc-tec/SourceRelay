@@ -24,9 +24,9 @@ const item: Extract<ExtensionWorkItem, { capability: 'bilibili.video_detail' }> 
   },
   budget: {
     maximumPlatformNavigations: 1,
-    maximumSemanticActions: 3,
+    maximumSemanticActions: 4,
     maximumResponseObservations: 2,
-    maximumPayloadBytes: 200_000
+    maximumPayloadBytes: 300_000
   },
   gatewaySignature: 'a'.repeat(86)
 };
@@ -195,7 +195,11 @@ describe('direct extension work contract', () => {
         titleVisible: true,
         playerVisible: true,
         chargeExclusiveTrialVisible: false,
-        subtitle: { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
+        subtitle: { captureStatus: 'confirmed_no_subtitle', available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
+        discussion: {
+          captureStatus: 'empty', partial: false, commentContentState: 'empty',
+          rootCommentCount: 0, rootComments: [], sort: 'unknown', loginGateVisible: false
+        },
         loginOverlayVisible: false,
         risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
       }
@@ -208,6 +212,32 @@ describe('direct extension work contract', () => {
     expect(isExtensionWorkResultForItem({
       ...result,
       observation: { ...result.observation!, bvid: 'BV1xx411c7mD' }
+    }, item)).toBe(false);
+    expect(isExtensionWorkResultForItem({
+      ...result,
+      state: 'partial',
+      errorCode: 'bilibili_video_discussion_dom_not_ready',
+      observation: {
+        ...result.observation!,
+        discussion: {
+          ...result.observation!.discussion,
+          captureStatus: 'capture_incomplete',
+          partial: true,
+          commentContentState: 'unknown'
+        }
+      }
+    }, item)).toBe(true);
+    expect(isExtensionWorkResultForItem({
+      ...result,
+      observation: {
+        ...result.observation!,
+        discussion: {
+          ...result.observation!.discussion,
+          captureStatus: 'capture_incomplete',
+          partial: true,
+          commentContentState: 'unknown'
+        }
+      }
     }, item)).toBe(false);
   });
 

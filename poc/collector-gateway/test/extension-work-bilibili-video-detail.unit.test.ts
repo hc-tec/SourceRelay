@@ -29,9 +29,9 @@ const item: Extract<ExtensionWorkItem, { capability: 'bilibili.video_detail' }> 
   },
   budget: {
     maximumPlatformNavigations: 1,
-    maximumSemanticActions: 3,
+    maximumSemanticActions: 4,
     maximumResponseObservations: 2,
-    maximumPayloadBytes: 200_000
+    maximumPayloadBytes: 300_000
   },
   gatewaySignature: 'a'.repeat(86)
 };
@@ -69,6 +69,10 @@ describe('user-browser video-detail failure artifact', () => {
         playerVisible: false,
         chargeExclusiveTrialVisible: false,
         subtitle: { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
+        discussion: {
+          captureStatus: 'capture_incomplete', partial: true, commentContentState: 'unknown',
+          rootCommentCount: 0, rootComments: [], sort: 'unknown', loginGateVisible: false
+        },
         loginOverlayVisible: false,
         risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
       }
@@ -86,11 +90,67 @@ describe('user-browser video-detail failure artifact', () => {
       playerVisible: false,
       chargeExclusiveTrialVisible: false,
       subtitle: { available: false, language: null, panelVisible: false, segmentCount: 0, partial: false, segments: [] },
+      discussion: {
+        captureStatus: 'capture_incomplete', partial: true, commentContentState: 'unknown',
+        rootCommentCount: 0, rootComments: [], sort: 'unknown', loginGateVisible: false
+      },
       loginOverlayVisible: false,
       verificationRequired: false,
       rateLimited: false,
       sourceUnavailable: false
     });
     expect(JSON.stringify(view?.manifest.domDiagnostics)).not.toContain('不应在失败诊断中持久化的标题');
+  });
+
+  test('keeps captured subtitles when the composed discussion component is partial', async () => {
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'collector-user-browser-video-detail-'));
+    temporaryDirectories.push(stateDirectory);
+    const artifacts = await BilibiliVideoDetailArtifactStore.create(stateDirectory);
+    const result: Extract<ExtensionWorkResult, { capability: 'bilibili.video_detail' }> = {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: item.workId,
+      operationId: item.operationId,
+      browserBindingId: item.browserBindingId,
+      platform: 'bilibili',
+      capability: 'bilibili.video_detail',
+      executionTarget: 'collector_work_tab',
+      state: 'partial',
+      errorCode: 'bilibili_video_discussion_dom_not_ready',
+      terminalReason: 'detail_ready',
+      completedAt: '2026-07-26T00:00:30.000Z',
+      navigation: { attempted: true, attemptCount: 1 },
+      workTabAcquisition: 'reused',
+      workTabDisposition: 'idle_reusable',
+      observation: {
+        bvid: item.input.bvid,
+        title: '详情、字幕成功但评论仍在加载',
+        metadataVisibleText: null,
+        description: null,
+        creator: null,
+        tagTexts: [],
+        episodeSummaryText: null,
+        titleVisible: true,
+        playerVisible: true,
+        chargeExclusiveTrialVisible: false,
+        subtitle: {
+          captureStatus: 'captured', available: true, language: 'ai-zh', panelVisible: true,
+          segmentCount: 1, partial: false, segments: [{ from: 0, to: 1, text: '保留的字幕' }]
+        },
+        discussion: {
+          captureStatus: 'capture_incomplete', partial: true, commentContentState: 'loading',
+          rootCommentCount: 0, rootComments: [], sort: 'unknown', loginGateVisible: false
+        },
+        loginOverlayVisible: false,
+        risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
+      }
+    };
+
+    const reference = await recordBilibiliVideoDetailExtensionWork({ item, result, artifacts });
+    const view = await artifacts.get(reference.artifactId);
+
+    expect(view?.summary.state).toBe('partial');
+    expect(view?.detail?.subtitle).toMatchObject({ captureStatus: 'captured', segmentCount: 1, partial: false });
+    expect(view?.detail?.discussion).toMatchObject({ captureStatus: 'capture_incomplete', partial: true });
   });
 });

@@ -10,6 +10,10 @@ import {
   captureBilibiliSubtitle
 } from './extension-work-bilibili-subtitle-capture';
 import {
+  observeBilibiliDiscussionOnWorkTab,
+  type BilibiliDiscussionObservationResult
+} from './extension-work-bilibili-discussion-user-selected-tab';
+import {
   acquireExtensionWorkTab,
   abandonExtensionWorkTab,
   currentExtensionWorkTabDisposition,
@@ -24,7 +28,11 @@ import {
 const PAGE_SETTLE_MS = 3_000;
 // Match the proven passive-player settle budget. This is still one navigation
 // and a bounded read-only observation; it is not a refresh or replay.
-const DOM_OBSERVATION_WINDOW_MS = 30_000;
+// Keep the composed run below the MV3 worker's practical long async-event
+// window: detail settling + subtitle probe + one bounded comments pass must
+// still have time to persist and deliver a partial result.
+const DOM_OBSERVATION_WINDOW_MS = 25_000;
+const DISCUSSION_OBSERVATION_WINDOW_MS = 10_000;
 const OBSERVATION_INTERVAL_MS = 350;
 
 /**
@@ -71,23 +79,64 @@ export async function executeBilibiliVideoDetailExtensionWork(
     });
     const observed = await observeVideoDetail(workTab, item.input.bvid, item.expiresAt);
     observation = observed.observation;
+    let discussionResult: BilibiliDiscussionObservationResult | null = null;
     if (observed.kind === 'ready' && observation) {
       try {
         observation = await captureBilibiliSubtitle(workTab, item, observation);
       } catch {
-        // Subtitle capture is an accessory; a completed detail still returns.
+        // Subtitle capture is component-scoped; the detail and discussion
+        // collectors must still be allowed to complete independently.
+        observation = {
+          ...observation,
+          subtitle: { ...observation.subtitle, captureStatus: 'capture_failed', partial: true }
+        };
+      }
+      try {
+        discussionResult = await observeBilibiliDiscussionOnWorkTab(
+          workTab,
+          item.input.bvid,
+          item.expiresAt,
+          DISCUSSION_OBSERVATION_WINDOW_MS
+        );
+        observation = withDiscussionObservation(observation, discussionResult);
+      } catch {
+        discussionResult = {
+          kind: 'partial',
+          observation: null,
+          errorCode: 'bilibili_video_discussion_capture_failed',
+          terminalReason: 'dom_projection_failed'
+        };
+        observation = withDiscussionFailure(observation, 'capture_failed');
       }
     }
+    const discussionPartial = discussionResult !== null && discussionResult.kind !== 'ready' && discussionResult.kind !== 'empty';
+    const subtitleComplete = observation !== null && observation.subtitle.partial === false &&
+      (observation.subtitle.captureStatus === 'captured' ||
+        observation.subtitle.captureStatus === 'confirmed_no_subtitle');
+    const componentPartial = discussionPartial || observed.kind === 'ready' && !subtitleComplete;
     const disposition = observed.kind === 'ready' || observed.kind === 'incomplete' ||
       observed.terminalReason === 'source_unavailable'
       ? releaseExtensionWorkTab(workTab)
       : abandonExtensionWorkTab(workTab);
     workTab = null;
-    if (observed.kind === 'ready') {
+    if (observed.kind === 'ready' && !componentPartial) {
       return result(item, {
         state: 'completed',
         errorCode: null,
         terminalReason: 'detail_ready',
+        navigationAttempted,
+        acquisition,
+        disposition,
+        observation
+      });
+    }
+    if (observed.kind === 'ready' && componentPartial) {
+      return result(item, {
+        state: 'partial',
+        errorCode: discussionPartial
+          ? discussionResult?.errorCode ?? 'bilibili_video_discussion_capture_incomplete'
+          : 'bilibili_video_subtitle_capture_incomplete',
+        terminalReason: observed.terminalReason,
         navigationAttempted,
         acquisition,
         disposition,
@@ -214,8 +263,66 @@ function toObservation(
     playerVisible: dom.playerVisible,
     chargeExclusiveTrialVisible: dom.chargeExclusiveTrialVisible,
     subtitle: { ...dom.subtitle },
+    discussion: emptyDiscussion(),
     loginOverlayVisible: dom.loginOverlayVisible,
     risk: { ...dom.risk }
+  };
+}
+
+function emptyDiscussion(): BilibiliVideoDetailDomObservation['discussion'] {
+  return {
+    captureStatus: 'capture_incomplete',
+    partial: true,
+    commentContentState: 'unknown',
+    rootCommentCount: 0,
+    rootComments: [],
+    sort: 'unknown',
+    loginGateVisible: false
+  };
+}
+
+function withDiscussionFailure(
+  base: BilibiliVideoDetailDomObservation,
+  captureStatus: BilibiliVideoDetailDomObservation['discussion']['captureStatus']
+): BilibiliVideoDetailDomObservation {
+  return { ...base, discussion: { ...emptyDiscussion(), captureStatus } };
+}
+
+function withDiscussionObservation(
+  base: BilibiliVideoDetailDomObservation,
+  result: BilibiliDiscussionObservationResult
+): BilibiliVideoDetailDomObservation {
+  const observation = result.observation;
+  const captureStatus = result.kind === 'ready'
+    ? 'captured' as const
+    : result.kind === 'empty'
+      ? 'empty' as const
+      : result.terminalReason === 'login_required'
+        ? 'login_required' as const
+        : result.terminalReason === 'verification_required'
+          ? 'verification_required' as const
+          : result.terminalReason === 'rate_limited'
+            ? 'rate_limited' as const
+            : result.terminalReason === 'source_unavailable'
+              ? 'source_unavailable' as const
+              : result.terminalReason === 'document_context_changed'
+                ? 'document_context_changed' as const
+                : 'capture_incomplete' as const;
+  return {
+    ...base,
+    discussion: {
+      captureStatus,
+      partial: result.kind !== 'ready' && result.kind !== 'empty',
+      commentContentState: observation?.commentContentState ?? 'unknown',
+      rootCommentCount: observation?.rootCommentTexts.length ?? 0,
+      rootComments: observation?.rootCommentTexts.slice(0, 20) ?? [],
+      sort: observation?.sortControls.latestState === 'active'
+        ? 'latest'
+        : observation?.sortControls.latestState === 'inactive'
+          ? 'hot'
+          : 'unknown',
+      loginGateVisible: observation?.loginGateVisible ?? false
+    }
   };
 }
 

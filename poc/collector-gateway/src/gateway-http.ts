@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-// A video-detail result may legitimately contain hundreds of bounded subtitle
-// segments. The extension work contract caps its payload at 200 KiB; keep the
-// HTTP parser above that contract so valid transcript results are not rejected
-// before signature/contract validation.
-const MAXIMUM_JSON_BODY_BYTES = 256 * 1024;
+// Composed Bilibili video_detail results carry a bounded subtitle transcript
+// plus a bounded root-comment projection in one signed result envelope. Keep
+// the transport ceiling above the capability payload budget while remaining
+// firmly bounded for loopback-only extension traffic.
+const MAXIMUM_JSON_BODY_BYTES = 512 * 1024;
 
 export function send(
   response: ServerResponse,
