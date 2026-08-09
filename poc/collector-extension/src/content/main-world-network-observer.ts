@@ -144,6 +144,12 @@ function installObserver(): void {
 
   const postMessage = window.postMessage.bind(window);
   let emittedCount = 0;
+  // The transcript directory is exposed through both the legacy player JSON
+  // response and the current protobuf response, and can be requested more
+  // than once while the player settles. Count logical routes, not duplicate
+  // responses, so a repeated directory response cannot consume the slot for
+  // the subtitle document.
+  const emittedRouteIds = new Set<string>();
 
   function emit(observation: NetworkCaptureObservation | null): void {
     if (!observation) return;
@@ -160,10 +166,14 @@ function installObserver(): void {
   async function observeResponse(response: Response, metadata: RequestMetadata): Promise<void> {
     const platform = platformForCurrentPage();
     const responseUrl = response.url || metadata.url;
-    if (!isCaptureWindowActive() || !platform || !responseUrl || emittedCount >= NETWORK_CAPTURE_MAX_PER_PAGE) return;
+    if (!isCaptureWindowActive() || !platform || !responseUrl) return;
     const route = findNetworkCaptureRoute(platform, responseUrl, activeRouteIds());
     if (!route) return;
-    emittedCount += 1;
+    if (!emittedRouteIds.has(route.id)) {
+      if (emittedCount >= NETWORK_CAPTURE_MAX_PER_PAGE) return;
+      emittedRouteIds.add(route.id);
+      emittedCount += 1;
+    }
 
     const input = {
       platform,
@@ -247,10 +257,14 @@ function installObserver(): void {
         if (!isCaptureWindowActive()) return;
         const platform = platformForCurrentPage();
         const responseUrl = this.responseURL || metadata.url;
-        if (!platform || emittedCount >= NETWORK_CAPTURE_MAX_PER_PAGE) return;
+        if (!platform) return;
         const route = findNetworkCaptureRoute(platform, responseUrl, activeRouteIds());
         if (!route) return;
-        emittedCount += 1;
+        if (!emittedRouteIds.has(route.id)) {
+          if (emittedCount >= NETWORK_CAPTURE_MAX_PER_PAGE) return;
+          emittedRouteIds.add(route.id);
+          emittedCount += 1;
+        }
 
         const input = {
           platform,

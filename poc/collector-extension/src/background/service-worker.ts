@@ -8,7 +8,7 @@ import { COLLECTOR_EXTENSION_BUILD_FINGERPRINT } from '../shared/build-fingerpri
 import { initialiseNativeBridge } from './native-bridge';
 import { initialiseNetworkObserverController } from './network-observer-controller';
 import { initialiseXiaohongshuCurrentPageNetworkObserver } from './xiaohongshu-current-page-network';
-import { initialiseExtensionWorkRunner } from './extension-work-runner';
+import { initialiseExtensionWorkRunner, pollForExtensionWork } from './extension-work-runner';
 import { cleanupStrategyScriptRegistrations } from './strategy-script-lifecycle';
 import { initialiseGatewayPairingDraftPersistence } from './user-browser-gateway-storage';
 import { initialiseBilibiliAccountProfileDocumentBridge } from './strategies/bilibili-account-profile-strategy';
@@ -37,4 +37,11 @@ void cleanupExpiredBilibiliCollectionSeriesObserverBindings();
 void cleanupExpiredBilibiliCollectionSeriesDetailObserverBindings();
 void initialiseNativeBridge();
 initialiseExtensionWorkRunner();
+chrome.runtime.onMessage.addListener((message: unknown) => {
+  if (message && typeof message === 'object' &&
+    (message as { type?: unknown }).type === 'collector.extensionWorkWake') {
+    void pollForExtensionWork();
+  }
+  return false;
+});
 void cleanupStrategyScriptRegistrations();

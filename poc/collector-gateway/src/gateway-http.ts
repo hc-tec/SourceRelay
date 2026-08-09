@@ -1,6 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-const MAXIMUM_JSON_BODY_BYTES = 64 * 1024;
+// A video-detail result may legitimately contain hundreds of bounded subtitle
+// segments. The extension work contract caps its payload at 200 KiB; keep the
+// HTTP parser above that contract so valid transcript results are not rejected
+// before signature/contract validation.
+const MAXIMUM_JSON_BODY_BYTES = 256 * 1024;
 
 export function send(
   response: ServerResponse,

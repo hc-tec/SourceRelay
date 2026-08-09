@@ -373,6 +373,8 @@ export interface BilibiliVideoDetailDomObservation {
   playerVisible: boolean;
   chargeExclusiveTrialVisible: boolean;
   subtitle: {
+    captureStatus?: 'captured' | 'confirmed_no_subtitle' | 'capture_incomplete' | 'capture_failed' |
+      'no_arm' | 'player_unavailable' | 'menu_unavailable' | 'transcript_timeout';
     available: boolean;
     language: string | null;
     panelVisible: boolean;

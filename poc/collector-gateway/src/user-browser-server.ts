@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,8 +42,7 @@ await assertUserBrowserStateIsolation(config.stateDirectory);
 // to reject stale workers before they consume work.  Resolve the checked-in
 // production artifact by default; deployments can point at another artifact
 // with COLLECTOR_EXTENSION_DIRECTORY.
-const extensionDirectory = process.env.COLLECTOR_EXTENSION_DIRECTORY?.trim() ||
-  resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'collector-extension', 'dist');
+const extensionDirectory = resolveUserBrowserExtensionDirectory();
 const extensionBuildFingerprint = await readExtensionBuildFingerprint(extensionDirectory);
 
 const identity = await loadGatewayIdentity(config);
@@ -75,6 +75,24 @@ const xiaohongshuNotePublicCommentsArtifacts =
   await XiaohongshuNotePublicCommentsArtifactStore.create(config.stateDirectory);
 const xiaohongshuReplyArtifacts=await XiaohongshuReplyArtifactStore.create(config.stateDirectory);
 const expectedHost = config.host + ':' + config.port;
+
+function resolveUserBrowserExtensionDirectory(): string {
+  const configured = process.env.COLLECTOR_EXTENSION_DIRECTORY?.trim();
+  if (configured) return resolve(configured);
+  const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    // Monorepo source/build layout.
+    resolve(moduleDirectory, '..', '..', 'collector-extension', 'dist'),
+    // Packaged core release layout: gateway/dist beside extension/.
+    resolve(moduleDirectory, '..', '..', 'extension')
+  ];
+  const discovered = candidates.find((candidate) =>
+    existsSync(resolve(candidate, 'runtime-build.json'))
+  );
+  if (discovered) return discovered;
+  // Preserve the existing error contract when neither layout is complete.
+  return candidates[0]!;
+}
 
 const server = createServer(async (request, response) => {
   const requestId = randomUUID();

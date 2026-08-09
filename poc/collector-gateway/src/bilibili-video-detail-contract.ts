@@ -33,6 +33,8 @@ export interface BilibiliVideoDetailDomSnapshot {
   playerVisible: boolean;
   chargeExclusiveTrialVisible: boolean;
   subtitle: {
+    captureStatus?: 'captured' | 'confirmed_no_subtitle' | 'capture_incomplete' | 'capture_failed' |
+      'no_arm' | 'player_unavailable' | 'menu_unavailable' | 'transcript_timeout';
     available: boolean;
     language: string | null;
     panelVisible: boolean;
@@ -61,6 +63,8 @@ export interface BilibiliVideoDetailDomDiagnostics {
   playerVisible: boolean | null;
   chargeExclusiveTrialVisible: boolean | null;
   subtitle: {
+    captureStatus?: 'captured' | 'confirmed_no_subtitle' | 'capture_incomplete' | 'capture_failed' |
+      'no_arm' | 'player_unavailable' | 'menu_unavailable' | 'transcript_timeout';
     available: boolean | null;
     language: string | null;
     panelVisible: boolean | null;
@@ -92,6 +96,8 @@ export interface BilibiliVideoDetailProjection {
   playerVisible: true;
   accessStatus: BilibiliVideoDetailAccessStatus;
   subtitle: {
+    captureStatus?: 'captured' | 'confirmed_no_subtitle' | 'capture_incomplete' | 'capture_failed' |
+      'no_arm' | 'player_unavailable' | 'menu_unavailable' | 'transcript_timeout';
     available: boolean;
     language: string | null;
     panelVisible: boolean;

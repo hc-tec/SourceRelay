@@ -79,7 +79,10 @@ export async function pollForExtensionWork(): Promise<void> {
     const pending = await loadPendingExtensionWorkResult();
     if (pending) {
       await deliverPendingResult(pending);
-      return;
+      // A terminal pending result may have been cleared above. Continue the
+      // same local heartbeat so a fresh queued item is not held until another
+      // browser alarm happens to wake the worker.
+      if (await loadPendingExtensionWorkResult()) return;
     }
 
     const interrupted = await loadActiveExtensionWork();
@@ -234,7 +237,13 @@ async function updateActivePhase(
 }
 
 async function deliverPendingResult(pending: PendingExtensionWorkResult): Promise<void> {
-  if (pending.deliveryAttempts >= MAX_RESULT_DELIVERY_ATTEMPTS) return;
+  if (pending.deliveryAttempts >= MAX_RESULT_DELIVERY_ATTEMPTS) {
+    // A terminal local-delivery failure must not permanently block every
+    // future work item. The platform action is never replayed; the Gateway
+    // already owns the original operation's stopped/expired state.
+    await clearPendingExtensionWorkResult();
+    return;
+  }
   const pairing = await loadGatewayPairingRecord();
   if (!pairing) return;
   try {

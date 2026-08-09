@@ -22,14 +22,21 @@ const CONTROL_REVEAL_TIMEOUT_MS = 2_500;
 const MENU_REVEAL_TIMEOUT_MS = 2_500;
 const SELECTION_SETTLE_TIMEOUT_MS = 4_000;
 const RESPONSE_TIMEOUT_MS = 10_000;
+// The player can publish an empty legacy directory before the language-menu
+// click causes the current protobuf directory and CDN document to arrive.
+// Never turn that first response into a final "no subtitles" answer.
+const EMPTY_DIRECTORY_CONFIRMATION_GRACE_MS = 4_000;
 const ARM_LIFETIME_MS = 60_000;
 const PROBE_INTERVAL_MS = 200;
 const MOUSE_MOVE_SETTLE_MS = 250;
 const CLICK_HOLD_MS = 180;
 const POST_CLICK_SETTLE_MS = 500;
 const STEP_SETTLE_MS = 700;
-const MENU_POINTER_SETTLE_MS = 900;
-const POINTER_TRAVEL_STEP_MS = 70;
+const MENU_POINTER_SETTLE_MS = 350;
+// A hover-owned menu closes if the pointer pauses in the hit-test gap between
+// the trigger and the floating language list. Keep the path browser-level but
+// continuous; only settle after the final target is reached.
+const POINTER_TRAVEL_STEP_MS = 12;
 const POINTER_TRAVEL_MAX_STEPS = 10;
 
 export interface SubtitleCaptureResult {
@@ -40,6 +47,23 @@ export interface SubtitleCaptureResult {
   partial: boolean;
   segments: Array<{ from: number; to: number; text: string }>;
 }
+
+type TranscriptReadResult =
+  | {
+      state: 'confirmed_no_subtitle';
+      segments: [];
+      partial: false;
+    }
+  | {
+      state: 'captured';
+      segments: Array<{ from: number; to: number; text: string }>;
+      partial: boolean;
+    }
+  | {
+      state: 'unknown';
+      segments: [];
+      partial: true;
+    };
 
 interface PlayerProbe {
   playerAreaPresent: boolean;
@@ -92,10 +116,27 @@ export async function captureBilibiliSubtitle(
   base: BilibiliVideoDetailDomObservation
 ): Promise<BilibiliVideoDetailDomObservation> {
   const arm = await getActiveNetworkCaptureArm(workTab.tabId);
-  if (!arm) return withSubtitle(base, { ...emptySubtitle(), available: base.subtitle.available });
-  let probe = await waitForPlayerProbe(workTab, remainingProbeBudget(item.expiresAt, 8_000));
+  if (!arm) {
+    return withSubtitle(base, {
+      ...emptySubtitle(),
+      captureStatus: 'no_arm',
+      available: base.subtitle.available,
+      partial: true
+    });
+  }
+  // Real Bilibili pages can expose the title/video shell several seconds
+  // before the player control tree is attached.  The live canary observed a
+  // visible player but no caption control within the old 8-second window,
+  // producing a false `player_unavailable`.  Keep the wait bounded by the
+  // signed work deadline while allowing the proven delayed-mount range.
+  let probe = await waitForPlayerProbe(workTab, remainingProbeBudget(item.expiresAt, 15_000));
   if (!probe.playerAreaPresent || !probe.captionControlAttached) {
-    return withSubtitle(base, { ...emptySubtitle(), available: probe.captionControlAttached || base.subtitle.available });
+    return withSubtitle(base, {
+      ...emptySubtitle(),
+      captureStatus: 'player_unavailable',
+      available: probe.captionControlAttached || base.subtitle.available,
+      partial: true
+    });
   }
   let debuggee: chrome.debugger.Debuggee | null = { tabId: workTab.tabId };
   try {
@@ -107,11 +148,24 @@ export async function captureBilibiliSubtitle(
     }
     if (!probe.chineseOptionVisible && probe.captionControl) {
       // Bilibili reveals the language menu from a trusted hover. Clicking the
-      // control here opens the login/settings path on anonymous pages and
-      // never proves that the language menu is ready.
+      // control is the bounded fallback for the logged-in desktop player:
+      // current builds can flash the hover menu and immediately close it until
+      // the subtitle control itself has been enabled once.
       await mouseMove(debuggee, probe.captionControl);
       await delay(STEP_SETTLE_MS);
-      probe = await waitForPlayerProbe(workTab, MENU_REVEAL_TIMEOUT_MS);
+      probe = await waitForMenuProbe(workTab, MENU_REVEAL_TIMEOUT_MS);
+      if (!probe.chineseOptionVisible && !probe.subtitlePanelVisible && probe.captionControl) {
+        await mouseClick(debuggee, probe.captionControl, true);
+        probe = await waitForMenuProbe(workTab, MENU_REVEAL_TIMEOUT_MS);
+      }
+    }
+    if (!probe.chineseOption && !probe.subtitlePanelVisible) {
+      return withSubtitle(base, {
+        ...emptySubtitle(),
+        captureStatus: 'menu_unavailable',
+        available: probe.captionControlAttached || base.subtitle.available,
+        panelVisible: probe.subtitlePanelVisible
+      });
     }
     if ((!probe.chineseOptionActive || !probe.subtitlePanelVisible) && probe.chineseOption) {
       // The language menu is hover-owned. A single CDP mouseMoved from the
@@ -129,29 +183,52 @@ export async function captureBilibiliSubtitle(
       if (!probe.chineseOptionVisible || !probe.chineseOptionHovered || !probe.chineseOption) {
         return withSubtitle(base, {
           ...emptySubtitle(),
+          captureStatus: 'menu_unavailable',
           available: probe.captionControlAttached || base.subtitle.available,
-          panelVisible: probe.subtitlePanelVisible
+          panelVisible: probe.subtitlePanelVisible,
+          partial: true
         });
       }
       await mouseClick(debuggee, probe.chineseOption, true);
       await delay(STEP_SETTLE_MS);
-      probe = await waitForPlayerProbe(workTab, SELECTION_SETTLE_TIMEOUT_MS);
+      probe = await waitForSelectionProbe(workTab, SELECTION_SETTLE_TIMEOUT_MS);
+      if (!probe.chineseOptionActive || !probe.subtitlePanelVisible) {
+        return withSubtitle(base, {
+          ...emptySubtitle(),
+          captureStatus: 'menu_unavailable',
+          available: probe.captionControlAttached || base.subtitle.available,
+          panelVisible: probe.subtitlePanelVisible,
+          language: probe.chineseOptionLanguage
+        });
+      }
     }
     const language = probe.chineseOptionActive ? probe.chineseOptionLanguage ?? 'ai-zh' : null;
-    const segments = await readTranscriptSegments(workTab, arm, item);
+    const transcript = await readTranscriptSegments(workTab, arm, item);
+    if (transcript.state === 'confirmed_no_subtitle') {
+      return withSubtitle(base, {
+        ...emptySubtitle(),
+        captureStatus: 'confirmed_no_subtitle',
+        available: false,
+        language,
+        panelVisible: probe.subtitlePanelVisible
+      });
+    }
     return withSubtitle(base, {
-      available: probe.captionControlAttached || segments.length > 0 || base.subtitle.available,
+      captureStatus: transcript.state === 'captured' ? 'captured' : 'transcript_timeout',
+      available: probe.captionControlAttached || transcript.segments.length > 0 || base.subtitle.available,
       language,
       panelVisible: probe.subtitlePanelVisible,
-      segmentCount: segments.length,
-      partial: segments.length > 0 && probe.subtitlePanelVisible !== true,
-      segments
+      segmentCount: transcript.segments.length,
+      partial: transcript.partial,
+      segments: transcript.segments
     });
   } catch {
     return withSubtitle(base, {
       ...emptySubtitle(),
+      captureStatus: 'capture_failed',
       available: probe.captionControlAttached || base.subtitle.available,
-      panelVisible: probe.subtitlePanelVisible
+      panelVisible: probe.subtitlePanelVisible,
+      partial: true
     });
   } finally {
     if (debuggee) {
@@ -190,6 +267,44 @@ async function waitForPlayerProbe(workTab: ExtensionWorkTabLease, deadlineMs: nu
     await delay(PROBE_INTERVAL_MS);
   }
   return latest ?? {
+    playerAreaPresent: false,
+    captionControlAttached: false,
+    captionControlVisuallyExposed: false,
+    chineseOptionVisible: false,
+    chineseOptionHovered: false,
+    chineseOptionActive: false,
+    chineseOptionLanguage: null,
+    subtitlePanelVisible: false,
+    videoArea: null,
+    captionControl: null,
+    chineseOption: null
+  };
+}
+
+async function waitForMenuProbe(workTab: ExtensionWorkTabLease, deadlineMs: number): Promise<PlayerProbe> {
+  const deadline = Date.now() + Math.max(0, deadlineMs);
+  let latest: PlayerProbe | null = null;
+  while (Date.now() < deadline) {
+    latest = await readPlayerProbe(workTab.tabId);
+    if (latest.chineseOptionVisible || latest.subtitlePanelVisible) return latest;
+    await delay(PROBE_INTERVAL_MS);
+  }
+  return latest ?? waitProbeFallback();
+}
+
+async function waitForSelectionProbe(workTab: ExtensionWorkTabLease, deadlineMs: number): Promise<PlayerProbe> {
+  const deadline = Date.now() + Math.max(0, deadlineMs);
+  let latest: PlayerProbe | null = null;
+  while (Date.now() < deadline) {
+    latest = await readPlayerProbe(workTab.tabId);
+    if (latest.chineseOptionActive && latest.subtitlePanelVisible) return latest;
+    await delay(PROBE_INTERVAL_MS);
+  }
+  return latest ?? waitProbeFallback();
+}
+
+function waitProbeFallback(): PlayerProbe {
+  return {
     playerAreaPresent: false,
     captionControlAttached: false,
     captionControlVisuallyExposed: false,
@@ -283,24 +398,23 @@ async function readTranscriptSegments(
   workTab: ExtensionWorkTabLease,
   arm: NonNullable<Awaited<ReturnType<typeof getActiveNetworkCaptureArm>>>,
   item: DetailItem
-): Promise<Array<{ from: number; to: number; text: string }>> {
+): Promise<TranscriptReadResult> {
   const deadline = Math.min(Date.parse(item.expiresAt), Date.now() + RESPONSE_TIMEOUT_MS);
   let latest: NetworkCaptureObservation[] = [];
+  let emptyDirectorySeenAt: number | null = null;
   while (Date.now() < deadline) {
     latest = await readNetworkCaptures(workTab.tabId, arm);
     const directory = latest.find((entry) =>
       entry.status === 'captured' && entry.routeId === BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID
     );
-    // Anonymous Bilibili pages return a valid player response with an empty
-    // subtitle directory (`need_login_subtitle=true`). Once that public
-    // response is observed there can be no document response to wait for;
-    // finish the accessory read immediately instead of burning the full
-    // response timeout.
     if (directory?.body) {
       const projection = directory.body as unknown as BilibiliTranscriptDirectoryProjection;
       if (projection.artifactKind === 'bilibili_transcript_track_directory' &&
         projection.sourceTrackCount === 0 && projection.storedTrackCount === 0) {
-        return [];
+        emptyDirectorySeenAt ??= Date.now();
+      } else if (projection.artifactKind === 'bilibili_transcript_track_directory' &&
+        projection.sourceTrackCount > 0) {
+        emptyDirectorySeenAt = null;
       }
     }
     const document = latest.find((entry) =>
@@ -308,15 +422,29 @@ async function readTranscriptSegments(
     );
     if (document?.body) {
       const projection = document.body as unknown as BilibiliTranscriptDocumentProjection;
-      return projection.segments.map((segment) => ({
-        from: segment.from,
-        to: segment.to,
-        text: segment.content
-      }));
+      return {
+        state: 'captured',
+        partial: projection.partial,
+        segments: projection.segments.map((segment) => ({
+          from: segment.from,
+          to: segment.to,
+          text: segment.content
+        }))
+      };
+    }
+    if (emptyDirectorySeenAt !== null && Date.now() - emptyDirectorySeenAt >= EMPTY_DIRECTORY_CONFIRMATION_GRACE_MS) {
+      return { state: 'confirmed_no_subtitle', segments: [], partial: false };
     }
     await delay(250);
   }
-  return [];
+  const directory = latest.find((entry) =>
+    entry.status === 'captured' && entry.routeId === BILIBILI_TRANSCRIPT_DIRECTORY_ROUTE_ID
+  )?.body as unknown as BilibiliTranscriptDirectoryProjection | undefined;
+  if (directory?.artifactKind === 'bilibili_transcript_track_directory' &&
+    directory.sourceTrackCount === 0 && directory.storedTrackCount === 0) {
+    return { state: 'confirmed_no_subtitle', segments: [], partial: false };
+  }
+  return { state: 'unknown', segments: [], partial: true };
 }
 
 async function mouseMove(debuggee: chrome.debugger.Debuggee, point: { x: number; y: number }): Promise<void> {

@@ -80,7 +80,7 @@ export interface NetworkCaptureRoute {
   platform: SupportedPlatform;
   origin: string;
   pathname: string;
-  pathnameMatch: 'exact' | 'opaque_suffix_prefix';
+  pathnameMatch: 'exact' | 'opaque_suffix_prefix' | 'opaque_binary';
   maximumBodyBytes: number;
   projector: 'bounded_json' | 'bilibili_transcript';
   responseEncoding: 'json' | 'protobuf';
@@ -189,6 +189,20 @@ const researchValidationRoutes: readonly NetworkCaptureRoute[] = [
     origin: 'https://aisubtitle.hdslb.com',
     pathname: '/bfs/ai_subtitle/prod/',
     pathnameMatch: 'opaque_suffix_prefix',
+    maximumBodyBytes: 512 * 1024,
+    projector: 'bilibili_transcript',
+    responseEncoding: 'json',
+    admission: 'research_validation'
+  },
+  {
+    // The current subtitle directory can return `subtitle_url_v2` on this
+    // CDN. Its path is an opaque, percent-encoded public identifier; query
+    // values remain stripped before an observation crosses the page boundary.
+    id: BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID,
+    platform: 'bilibili',
+    origin: 'https://subtitle.bilibili.com',
+    pathname: '/',
+    pathnameMatch: 'opaque_binary',
     maximumBodyBytes: 512 * 1024,
     projector: 'bilibili_transcript',
     responseEncoding: 'json',
@@ -335,6 +349,16 @@ export function routeMatchesNetworkCaptureUrl(route: NetworkCaptureRoute, respon
     const url = new URL(responseUrl);
     if (route.origin !== url.origin) return false;
     if (route.pathnameMatch === 'exact') return route.pathname === url.pathname;
+    if (route.pathnameMatch === 'opaque_binary') {
+      if (route.pathname !== '/' || url.pathname.length < 2 || url.pathname.length > 400 ||
+        /[\u0000-\u0020\u007f]/.test(url.pathname)) return false;
+      for (let index = 1; index < url.pathname.length; index += 1) {
+        if (url.pathname[index] !== '%') continue;
+        if (index + 2 >= url.pathname.length || !/^[0-9A-Fa-f]{2}$/.test(url.pathname.slice(index + 1, index + 3))) return false;
+        index += 2;
+      }
+      return true;
+    }
     if (!url.pathname.startsWith(route.pathname)) return false;
     const suffix = url.pathname.slice(route.pathname.length);
     return /^[A-Za-z0-9_-]{20,200}$/.test(suffix);
@@ -349,6 +373,8 @@ export function isNetworkCaptureResponseContentType(
 ): boolean {
   if (isJsonContentType(value)) return route.responseEncoding === 'json';
   const mediaType = ((value ?? '').split(';', 1)[0] ?? '').trim().toLowerCase();
+  if (route.id === BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID &&
+    route.origin === 'https://subtitle.bilibili.com' && mediaType === 'application/octet-stream') return true;
   return route.responseEncoding === 'protobuf' && mediaType === 'application/octet-stream';
 }
 
@@ -431,8 +457,13 @@ export function createNetworkCaptureFromBytes(
       ? { ...base, status: 'payload_rejected', rejectionReason: 'payload_rejected' }
       : { ...base, status: 'captured', body: body as unknown as JsonValue };
   }
+  const textInput = input.route.id === BILIBILI_TRANSCRIPT_DOCUMENT_ROUTE_ID &&
+    input.route.origin === 'https://subtitle.bilibili.com' &&
+    ((input.contentType ?? '').split(';', 1)[0] ?? '').trim().toLowerCase() === 'application/octet-stream'
+    ? { ...input, contentType: 'application/json' }
+    : input;
   return createNetworkCaptureFromText(
-    input,
+    textInput,
     new TextDecoder('utf-8', { fatal: false }).decode(responseBytes)
   );
 }

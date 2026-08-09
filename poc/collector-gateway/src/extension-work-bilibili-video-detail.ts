@@ -134,6 +134,7 @@ function diagnosticsFromObservation(observation: BilibiliVideoDetailDomObservati
     playerVisible: observation.playerVisible,
     chargeExclusiveTrialVisible: observation.chargeExclusiveTrialVisible,
     subtitle: {
+      captureStatus: observation.subtitle.captureStatus,
       available: observation.subtitle.available,
       language: observation.subtitle.language,
       panelVisible: observation.subtitle.panelVisible,

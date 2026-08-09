@@ -84,6 +84,14 @@ function domSnapshot(value: unknown, expectedBvid: string): BilibiliVideoDetailD
     subtitle: candidate.subtitle && typeof candidate.subtitle === 'object' &&
       typeof (candidate.subtitle as Record<string, unknown>).available === 'boolean'
       ? {
+        captureStatus: ['captured', 'confirmed_no_subtitle', 'capture_incomplete', 'capture_failed', 'no_arm',
+          'player_unavailable', 'menu_unavailable', 'transcript_timeout'].includes(
+          (candidate.subtitle as Record<string, unknown>).captureStatus as string
+        )
+          ? (candidate.subtitle as Record<string, unknown>).captureStatus as
+            'captured' | 'confirmed_no_subtitle' | 'capture_incomplete' | 'capture_failed' | 'no_arm' |
+            'player_unavailable' | 'menu_unavailable' | 'transcript_timeout'
+          : undefined,
         available: (candidate.subtitle as Record<string, unknown>).available as boolean,
         language: typeof (candidate.subtitle as Record<string, unknown>).language === 'string'
           ? (candidate.subtitle as Record<string, unknown>).language as string
