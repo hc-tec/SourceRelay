@@ -11,7 +11,7 @@ import {
   type PageVisualEvidence
 } from '@intelligence/collector-contracts';
 import { hostError } from '../host-errors.js';
-import { digestUrl, touchRecord, transitionRecord, type ManagedPageRecord } from './page-record.js';
+import { touchRecord, transitionRecord, type ManagedPageRecord } from './page-record.js';
 import { captureManagedPageVisualEvidence } from './page-visual-evidence.js';
 import {
   readBilibiliTranscriptDomProbe,
@@ -192,9 +192,14 @@ function assertTranscriptPage(record: ManagedPageRecord, request: BilibiliTransc
       retryClass: 'local_query_only'
     });
   }
+  // Bilibili adds a short-lived `vd_source` query parameter during a normal
+  // document load.  The generic page identity digest intentionally includes
+  // query values, so comparing it literally here would reject this legitimate
+  // same-video redirect before the trusted caption click can run.  The
+  // source-specific canonicalizer is stricter for this flow: it accepts only
+  // the exact BVID path and the single audited 32-hex `vd_source` parameter.
   if (record.page.isClosed() ||
-    digestUrl(record.page.url()) !== record.expectedIdentity.targetUrlDigest ||
-    canonicalBilibiliTranscriptVideoUrl(record.page.url(), 'observed_document') !== request.canonicalVideoUrl) {
+    !matchesTrustedBilibiliTranscriptPageIdentity(record.page.url(), request.canonicalVideoUrl)) {
     throw hostError({
       code: 'bilibili_transcript_selection_page_identity_unverified',
       category: 'page_identity',
@@ -202,6 +207,13 @@ function assertTranscriptPage(record: ManagedPageRecord, request: BilibiliTransc
       retryClass: 'new_run_required'
     });
   }
+}
+
+export function matchesTrustedBilibiliTranscriptPageIdentity(
+  observedUrl: string,
+  canonicalVideoUrl: string
+): boolean {
+  return canonicalBilibiliTranscriptVideoUrl(observedUrl, 'observed_document') === canonicalVideoUrl;
 }
 
 function defaultActions(): BilibiliTranscriptInteractionStepResult[] {

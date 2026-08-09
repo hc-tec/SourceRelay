@@ -3,7 +3,10 @@ import {
   type BilibiliTranscriptChineseSelectionRequest
 } from '@intelligence/collector-contracts';
 import { describe, expect, test } from 'vitest';
-import { validateTrustedBilibiliTranscriptChineseSelectionRequest } from '../src/page-ledger/trusted-bilibili-transcript-chinese-selection.js';
+import {
+  matchesTrustedBilibiliTranscriptPageIdentity,
+  validateTrustedBilibiliTranscriptChineseSelectionRequest
+} from '../src/page-ledger/trusted-bilibili-transcript-chinese-selection.js';
 
 function request(
   overrides: Partial<BilibiliTranscriptChineseSelectionRequest> = {}
@@ -35,5 +38,19 @@ describe('Trusted Bilibili Chinese-caption selection', () => {
     expect(() => validateTrustedBilibiliTranscriptChineseSelectionRequest(request({
       canonicalVideoUrl: 'https://www.bilibili.com/video/BV1qZSLBYEpa/?unexpected=1'
     }))).toThrow('bilibili_transcript_selection_schema_invalid');
+  });
+
+  test('keeps the same BVID trusted after Bilibili adds its audited vd_source query', () => {
+    const canonical = 'https://www.bilibili.com/video/BV1qZSLBYEpa';
+    expect(matchesTrustedBilibiliTranscriptPageIdentity(canonical, canonical)).toBe(true);
+    expect(matchesTrustedBilibiliTranscriptPageIdentity(
+      `${canonical}?vd_source=0123456789abcdef0123456789abcdef`,
+      canonical
+    )).toBe(true);
+    expect(matchesTrustedBilibiliTranscriptPageIdentity(`${canonical}?spm_id_from=333.788`, canonical)).toBe(false);
+    expect(matchesTrustedBilibiliTranscriptPageIdentity(
+      'https://www.bilibili.com/video/BV1BoKD6ZEir',
+      canonical
+    )).toBe(false);
   });
 });
