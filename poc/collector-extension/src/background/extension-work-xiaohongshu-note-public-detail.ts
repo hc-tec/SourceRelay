@@ -281,6 +281,11 @@ async function closeDetailOverlay(
   timeOriginBefore: number,
   expectedSurface: 'search' | 'profile'
 ): Promise<void> {
+  // Keep the completed detail (and any requested comments/replies) visibly
+  // settled for one second before issuing the close click. This prevents the
+  // automated detail flow from appearing as an open-and-immediately-disappear
+  // interaction and gives the page one final paint opportunity.
+  await delay(1_000);
   const closeTarget = await findDetailCloseTarget(pageDocument);
   if (!closeTarget) throw new Error('xiaohongshu_note_detail_close_target_unavailable');
   await dispatchClick(debuggee, closeTarget);
