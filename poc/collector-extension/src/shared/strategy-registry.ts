@@ -69,6 +69,7 @@ export interface StaticPlatformStrategy {
     partialByDefault: boolean;
   };
   browser: {
+    requiredHostPermissions?: readonly string[];
     optionalHostPermissions: readonly string[];
     domContentMatches: readonly string[];
     responseBridgeMatches: readonly string[];
@@ -119,7 +120,8 @@ function nativeSearchDomStrategy(platform: SupportedPlatform): StaticPlatformStr
       responseBridgeMatches: ['https://s.weibo.com/weibo*']
     },
     xiaohongshu: {
-      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      requiredHostPermissions: ['https://www.xiaohongshu.com/*'],
+      optionalHostPermissions: [],
       domContentMatches: ['https://www.xiaohongshu.com/*'],
       responseBridgeMatches: ['https://www.xiaohongshu.com/search_result_ai*']
     }
@@ -191,7 +193,8 @@ function xiaohongshuSearchStrategy(): StaticPlatformStrategy {
     },
     output: { kind: 'search_card', partialByDefault: true },
     browser: {
-      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      requiredHostPermissions: ['https://www.xiaohongshu.com/*'],
+      optionalHostPermissions: [],
       domContentMatches: ['https://www.xiaohongshu.com/*'],
       responseBridgeMatches: ['https://www.xiaohongshu.com/search_result_ai*']
     },
@@ -226,7 +229,8 @@ function xiaohongshuAccountPublicNotesStrategy(): StaticPlatformStrategy {
     },
     output: { kind: 'collection_state', partialByDefault: true },
     browser: {
-      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      requiredHostPermissions: ['https://www.xiaohongshu.com/*'],
+      optionalHostPermissions: [],
       domContentMatches: ['https://www.xiaohongshu.com/user/profile/*'],
       responseBridgeMatches: ['https://www.xiaohongshu.com/user/profile/*']
     },
@@ -259,7 +263,8 @@ function xiaohongshuNoteDetailStrategy(): StaticPlatformStrategy {
     },
     output: { kind: 'content_detail', partialByDefault: true },
     browser: {
-      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      requiredHostPermissions: ['https://www.xiaohongshu.com/*'],
+      optionalHostPermissions: [],
       domContentMatches: ['https://www.xiaohongshu.com/search_result*'],
       responseBridgeMatches: ['https://www.xiaohongshu.com/search_result*']
     },
@@ -292,7 +297,8 @@ function xiaohongshuCommentsStrategy(): StaticPlatformStrategy {
     },
     output: { kind: 'comment', partialByDefault: true },
     browser: {
-      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      requiredHostPermissions: ['https://www.xiaohongshu.com/*'],
+      optionalHostPermissions: [],
       domContentMatches: ['https://www.xiaohongshu.com/explore/*'],
       responseBridgeMatches: ['https://www.xiaohongshu.com/explore/*']
     },
@@ -325,7 +331,8 @@ function xiaohongshuCommentRepliesStrategy(): StaticPlatformStrategy {
     },
     output: { kind: 'comment', partialByDefault: true },
     browser: {
-      optionalHostPermissions: ['https://www.xiaohongshu.com/*'],
+      requiredHostPermissions: ['https://www.xiaohongshu.com/*'],
+      optionalHostPermissions: [],
       domContentMatches: ['https://www.xiaohongshu.com/explore/*'],
       responseBridgeMatches: ['https://www.xiaohongshu.com/explore/*']
     },

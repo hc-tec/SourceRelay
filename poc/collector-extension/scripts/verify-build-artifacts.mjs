@@ -21,7 +21,8 @@ const approved = {
     'https://space.bilibili.com/*',
     'https://api.bilibili.com/*',
     'https://search.bilibili.com/*',
-    'https://www.bilibili.com/*'
+    'https://www.bilibili.com/*',
+    'https://www.xiaohongshu.com/*'
   ],
   optionalHostPermissions: [
     'http://127.0.0.1/*',
@@ -29,8 +30,7 @@ const approved = {
     'https://zhuanlan.zhihu.com/*',
     'https://s.weibo.com/*',
     'https://weibo.com/*',
-    'https://m.weibo.cn/*',
-    'https://www.xiaohongshu.com/*'
+    'https://m.weibo.cn/*'
   ],
   optionalPermissions: ['webRequest']
 };

@@ -348,7 +348,10 @@ export async function buildEvidencePlan(
         const strategy = strategiesFor(platform, evidenceObjective)[0] ?? null;
         const budget = task.budget.perPlatform[platform] ?? null;
         const budgetValid = isValidBudgetLimits(budget) && isValidBudgetLimits(task.budget.total);
-        const requiredHostPermissions = strategy?.browser.optionalHostPermissions ?? [];
+        const requiredHostPermissions = [
+          ...(strategy?.browser.requiredHostPermissions ?? []),
+          ...(strategy?.browser.optionalHostPermissions ?? [])
+        ];
         const hasHostPermissions = requiredHostPermissions.length === 0
           ? true
           : await containsHostPermissions(requiredHostPermissions);

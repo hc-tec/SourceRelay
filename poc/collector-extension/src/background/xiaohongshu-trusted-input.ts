@@ -263,7 +263,7 @@ export async function readXiaohongshuTrustedInputLedgerSummary(): Promise<{
 
 async function findUniqueEligibleExploreDocument(expectedTabId?: number): Promise<EligibleDocument> {
   const tabs = expectedTabId === undefined
-    ? await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/explore', 'https://www.xiaohongshu.com/explore/'] })
+    ? await chrome.tabs.query({ url: ['https://www.xiaohongshu.com/explore*'] })
     : [await chrome.tabs.get(expectedTabId).catch(() => null)].filter((tab): tab is chrome.tabs.Tab => tab !== null);
   const eligible = tabs.filter((tab) => Number.isSafeInteger(tab.id) && Number.isSafeInteger(tab.windowId) &&
     !tab.incognito && tab.status === 'complete' && xiaohongshuCurrentPageNetworkPublicSurface(tab.url ?? '') === 'explore');
@@ -291,18 +291,29 @@ async function discoverSearchTarget(eligibleDocument: EligibleDocument): Promise
   const results = await chrome.scripting.executeScript({
     target: { tabId: eligibleDocument.tabId, documentIds: [eligibleDocument.documentId] },
     func: () => {
-      const candidates = [
-        document.querySelector('#search-input-in-feeds'),
-        document.querySelector('#search-input'),
-        ...document.querySelectorAll('input, textarea, [contenteditable="true"], [role="textbox"]')
-      ].filter((value, index, all): value is HTMLElement =>
+      const roots: Array<Document | ShadowRoot> = [document];
+      for (let index = 0; index < roots.length; index += 1) {
+        for (const element of roots[index]!.querySelectorAll('*')) {
+          if (element.shadowRoot) roots.push(element.shadowRoot);
+        }
+      }
+      const candidates = roots.flatMap((root) => [
+        root.querySelector('#search-input-in-feeds'),
+        root.querySelector('#search-input'),
+        ...root.querySelectorAll(
+          'input, textarea, input[type="search"], [contenteditable="true"], [role="textbox"], [data-testid*="search"], [data-qa*="search"]'
+        )
+      ]).filter((value, index, all): value is HTMLElement =>
         value instanceof HTMLElement && all.indexOf(value) === index
       );
       for (const input of candidates) {
         const rect = input.getBoundingClientRect();
         const style = getComputedStyle(input);
-        const label = `${input.getAttribute('placeholder') ?? ''} ${input.getAttribute('aria-label') ?? ''} ${input.getAttribute('role') ?? ''}`;
-        const knownSearchIdentity = input.id === 'search-input-in-feeds' || input.id === 'search-input';
+        const label = `${input.getAttribute('placeholder') ?? ''} ${input.getAttribute('aria-label') ?? ''} ${input.getAttribute('role') ?? ''} ${input.getAttribute('name') ?? ''} ${input.getAttribute('data-testid') ?? ''} ${input.getAttribute('data-qa') ?? ''}`;
+        const knownSearchIdentity = input.id === 'search-input-in-feeds' || input.id === 'search-input' ||
+          input.getAttribute('type') === 'search' || /search|搜索/i.test(
+            `${input.getAttribute('data-testid') ?? ''} ${input.getAttribute('data-qa') ?? ''}`
+          );
         const disabled = (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)
           ? input.disabled : input.getAttribute('aria-disabled') === 'true';
         const readOnly = (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)
@@ -313,7 +324,9 @@ async function discoverSearchTarget(eligibleDocument: EligibleDocument): Promise
         const x = rect.left + rect.width / 2;
         const y = rect.top + rect.height / 2;
         const hit = document.elementFromPoint(x, y);
-        if (hit !== input && !input.contains(hit)) continue;
+        const root = input.getRootNode();
+        const host = root instanceof ShadowRoot ? root.host : null;
+        if (hit !== input && !input.contains(hit) && hit !== host && !(host && host.contains(hit))) continue;
         return { x, y, width: rect.width, height: rect.height };
       }
       return null;
@@ -330,18 +343,26 @@ async function readQueryEcho(eligibleDocument: EligibleDocument, query: string):
   const results = await chrome.scripting.executeScript({
     target: { tabId: eligibleDocument.tabId, documentIds: [eligibleDocument.documentId] },
     args: [query],
-    func: (expected) => [...document.querySelectorAll<HTMLElement>(
-      'input, textarea, [contenteditable="true"], [role="textbox"]'
-    )].some((input) => {
-      const text = input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement
-        ? input.value : input.innerText || input.textContent || '';
-      return text.trim() === expected && (
-        input.id === 'search-input-in-feeds' || input.id === 'search-input' ||
-        /搜索|search|textbox/i.test(
-          `${input.getAttribute('placeholder') ?? ''} ${input.getAttribute('aria-label') ?? ''} ${input.getAttribute('role') ?? ''}`
-        )
-      );
-    })
+    func: (expected) => {
+      const roots: Array<Document | ShadowRoot> = [document];
+      for (let index = 0; index < roots.length; index += 1) {
+        for (const element of roots[index]!.querySelectorAll('*')) {
+          if (element.shadowRoot) roots.push(element.shadowRoot);
+        }
+      }
+      return roots.flatMap((root) => [...root.querySelectorAll<HTMLElement>(
+        'input, textarea, input[type="search"], [contenteditable="true"], [role="textbox"], [data-testid*="search"], [data-qa*="search"]'
+      )]).some((input) => {
+        const text = input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement
+          ? input.value : input.innerText || input.textContent || '';
+        return text.trim() === expected && (
+          input.id === 'search-input-in-feeds' || input.id === 'search-input' ||
+          /搜索|search|textbox/i.test(
+            `${input.getAttribute('placeholder') ?? ''} ${input.getAttribute('aria-label') ?? ''} ${input.getAttribute('role') ?? ''} ${input.getAttribute('name') ?? ''} ${input.getAttribute('data-testid') ?? ''} ${input.getAttribute('data-qa') ?? ''}`
+          )
+        );
+      });
+    }
   }).catch(() => {
     throw new Error('xiaohongshu_trusted_input_query_echo_unavailable');
   });
@@ -524,8 +545,18 @@ function parseAction(value: unknown): XiaohongshuTrustedInputAction {
 }
 
 function safeErrorCode(error: unknown): string {
-  const code = error instanceof Error ? error.message : '';
+  const code = errorMessage(error);
   return /^[a-z0-9_]{1,100}$/.test(code) ? code : 'xiaohongshu_trusted_input_failed';
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' &&
+    typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return '';
 }
 
 function finiteBounds(value: SearchTarget): boolean {

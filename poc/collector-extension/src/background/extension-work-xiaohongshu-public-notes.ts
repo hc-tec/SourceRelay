@@ -221,13 +221,21 @@ async function waitForXiaohongshuExploreReady(
 async function readXiaohongshuExplorePrerequisiteRisk(
   tabId: number
 ): Promise<{ code: string } | null> {
-  const results = await chrome.scripting.executeScript({
-    target: { tabId },
-    func: () => ({
-      pathname: location.pathname,
-      title: document.title.slice(0, 300)
-    })
-  });
+  let results: chrome.scripting.InjectionResult<{
+    pathname: string;
+    title: string;
+  }>[];
+  try {
+    results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => ({
+        pathname: location.pathname,
+        title: document.title.slice(0, 300)
+      })
+    });
+  } catch {
+    throw new Error('xiaohongshu_explore_prerequisite_probe_unavailable');
+  }
   const probe = results[0]?.result;
   if (!probe || typeof probe.pathname !== 'string' || typeof probe.title !== 'string') return null;
   const risk = classifyXiaohongshuCurrentPageRisk({
@@ -311,6 +319,10 @@ function terminalReason(errorCode: string | null): XiaohongshuPublicNotesSearchT
       return 'document_context_changed';
     case 'xiaohongshu_explore_navigation_not_ready':
       return 'explore_navigation_not_ready';
+    case 'xiaohongshu_host_permission_required':
+      return 'permission_required';
+    case 'xiaohongshu_explore_prerequisite_probe_unavailable':
+      return 'postcondition_unmet';
     default:
       return 'postcondition_unmet';
   }
@@ -321,8 +333,18 @@ function delay(milliseconds: number): Promise<void> {
 }
 
 function safeErrorCode(error: unknown): string {
-  const code = error instanceof Error ? error.message : '';
+  const code = errorMessage(error);
   return /^[a-z0-9_]{1,100}$/.test(code) ? code : 'xiaohongshu_search_execution_failed';
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' &&
+    typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return '';
 }
 
 async function waitForSearchDocumentStability(tabId: number, expiresAt: string): Promise<void> {

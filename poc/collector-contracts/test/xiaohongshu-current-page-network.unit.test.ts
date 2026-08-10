@@ -142,6 +142,8 @@ describe('Xiaohongshu current-page network policy contract', () => {
 
   test('recognises only the initial public Explore or search surface without retaining URL data', () => {
     expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/explore')).toBe('explore');
+    expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/explore?channel_id=homefeed_recommend'))
+      .toBe('explore');
     expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/search_result?keyword=%E6%B5%8B%E8%AF%95'))
       .toBe('search');
     expect(xiaohongshuCurrentPageNetworkPublicSurface('https://www.xiaohongshu.com/search_result_ai?keyword=%E6%B5%8B%E8%AF%95'))

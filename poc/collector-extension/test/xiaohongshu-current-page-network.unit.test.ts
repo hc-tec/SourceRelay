@@ -35,7 +35,7 @@ function installChromeMock() {
     })
   };
   const request = vi.fn(async () => true);
-  const contains = vi.fn(async () => true);
+  const contains = vi.fn(async (_request?: { permissions?: string[]; origins?: string[] }) => true);
   const removeNetworkListener = vi.fn();
   const executeScript = vi.fn(async (): Promise<Array<{ frameId: number; result: unknown }>> => [{
     frameId: 0,
@@ -421,6 +421,21 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
     expect(chrome.unregisterContentScripts).toHaveBeenCalledWith({
       ids: ['collector-xhs-search-11111111111141118111111111111111']
     });
+  });
+
+  test('direct public-note projection needs only the Xiaohongshu host grant, not webRequest metadata permission', async () => {
+    const chrome = installChromeMock();
+    chrome.contains.mockImplementation(async (request?: { permissions?: string[]; origins?: string[] }) =>
+      request?.origins?.includes('https://www.xiaohongshu.com/*') === true && request.permissions === undefined
+    );
+    const subject = await import('../src/background/xiaohongshu-current-page-network.js');
+
+    await expect(subject.armXiaohongshuExistingExploreWorkObserver(
+      11,
+      '11111111-1111-4111-8111-111111111111'
+    )).resolves.toBeUndefined();
+    expect(chrome.contains).toHaveBeenCalledWith({ origins: ['https://www.xiaohongshu.com/*'] });
+    expect(chrome.request).not.toHaveBeenCalled();
   });
 
   test('does not overwrite or consume a popup-created active selection', async () => {

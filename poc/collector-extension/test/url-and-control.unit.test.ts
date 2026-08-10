@@ -64,6 +64,10 @@ describe('Static strategy registry boundary', () => {
         maturity: 'build_ready',
         surface: 'native_search',
         acquisition: ['native_navigation', 'visible_dom', 'bounded_interaction'],
+        browser: expect.objectContaining({
+          requiredHostPermissions: ['https://www.xiaohongshu.com/*'],
+          optionalHostPermissions: []
+        }),
         approvedResponseRouteIds: []
       })
     ]);

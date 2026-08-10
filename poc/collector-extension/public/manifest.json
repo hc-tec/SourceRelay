@@ -23,7 +23,8 @@
     "https://space.bilibili.com/*",
     "https://api.bilibili.com/*",
     "https://search.bilibili.com/*",
-    "https://www.bilibili.com/*"
+    "https://www.bilibili.com/*",
+    "https://www.xiaohongshu.com/*"
   ],
   "optional_host_permissions": [
     "http://127.0.0.1/*",
@@ -31,8 +32,7 @@
     "https://zhuanlan.zhihu.com/*",
     "https://s.weibo.com/*",
     "https://weibo.com/*",
-    "https://m.weibo.cn/*",
-    "https://www.xiaohongshu.com/*"
+    "https://m.weibo.cn/*"
   ],
   "optional_permissions": [
     "webRequest"

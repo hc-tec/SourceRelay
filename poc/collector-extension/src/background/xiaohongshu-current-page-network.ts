@@ -172,10 +172,7 @@ export async function armXiaohongshuExistingExploreWorkObserver(
   tabId: number,
   workId: string
 ): Promise<void> {
-  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
-  if (permissionState !== 'permission_granted') {
-    throw new Error('xiaohongshu_current_page_network_permission_required');
-  }
+  await requireXiaohongshuHostPermission();
   const current = await loadActiveRecord();
   if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
     throw new Error('xiaohongshu_current_page_network_selection_active');
@@ -192,10 +189,7 @@ export async function armXiaohongshuExistingPublicProfileWorkObserver(
   tabId: number,
   workId: string
 ): Promise<void> {
-  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
-  if (permissionState !== 'permission_granted') {
-    throw new Error('xiaohongshu_current_page_network_permission_required');
-  }
+  await requireXiaohongshuHostPermission();
   const current = await loadActiveRecord();
   if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
     throw new Error('xiaohongshu_current_page_network_selection_active');
@@ -209,10 +203,7 @@ export async function armXiaohongshuExistingSearchWorkObserver(
   tabId: number,
   workId: string
 ): Promise<void> {
-  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
-  if (permissionState !== 'permission_granted') {
-    throw new Error('xiaohongshu_current_page_network_permission_required');
-  }
+  await requireXiaohongshuHostPermission();
   const current = await loadActiveRecord();
   if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
     throw new Error('xiaohongshu_current_page_network_selection_active');
@@ -246,10 +237,7 @@ export async function armXiaohongshuExistingNoteOverlayWorkObserver(
   tabId: number,
   workId: string
 ): Promise<void> {
-  const permissionState = await xiaohongshuCurrentPageNetworkPermissionState();
-  if (permissionState !== 'permission_granted') {
-    throw new Error('xiaohongshu_current_page_network_permission_required');
-  }
+  await requireXiaohongshuHostPermission();
   const current = await loadActiveRecord();
   if (current && !recordMatchesManagedPageRun(current, tabId, workId)) {
     throw new Error('xiaohongshu_current_page_network_selection_active');
@@ -857,6 +845,21 @@ function unregisterNetworkMetadataListener(): void {
   networkMetadataListenerRegistered = false;
 }
 
+async function requireXiaohongshuHostPermission(): Promise<void> {
+  const granted = await chrome.permissions.contains({
+    origins: [XIAOHONGSHU_ORIGIN]
+  }).catch(() => false);
+  if (!granted) throw new Error('xiaohongshu_host_permission_required');
+}
+
+async function registerNetworkMetadataListenerIfPermitted(): Promise<void> {
+  const granted = await chrome.permissions.contains({
+    permissions: ['webRequest'],
+    origins: [XIAOHONGSHU_ORIGIN]
+  }).catch(() => false);
+  if (granted) registerNetworkMetadataListener();
+}
+
 async function markNextNavigationStarted(tabId: number, url: string): Promise<void> {
   const record = await loadActiveRecord();
   if (!record || record.tabId !== tabId) return;
@@ -873,7 +876,7 @@ async function markNextNavigationStarted(tabId: number, url: string): Promise<vo
         documentId: null,
         navigationStarted: true
       });
-      registerNetworkMetadataListener();
+      await registerNetworkMetadataListenerIfPermitted();
       return;
     }
     await store({ ...record, state: 'stopped', stopReason: 'document_changed' });
@@ -890,7 +893,7 @@ async function markNextNavigationStarted(tabId: number, url: string): Promise<vo
   // Do not subscribe while merely armed on an existing document. The listener
   // begins only after the person has actually initiated the allowed next
   // navigation in the selected tab.
-  registerNetworkMetadataListener();
+  await registerNetworkMetadataListenerIfPermitted();
 }
 
 async function bindSelectedDocument(tabId: number, documentId: string, url: string): Promise<void> {

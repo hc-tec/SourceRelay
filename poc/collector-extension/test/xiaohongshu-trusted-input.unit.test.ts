@@ -134,7 +134,7 @@ describe('Xiaohongshu extension trusted input boundary', () => {
       debuggerDetached: true
     });
     expect(chrome.query).toHaveBeenCalledWith({
-      url: ['https://www.xiaohongshu.com/explore', 'https://www.xiaohongshu.com/explore/']
+      url: ['https://www.xiaohongshu.com/explore*']
     });
     expect(chrome.update).toHaveBeenCalledTimes(1);
     expect(chrome.attach).toHaveBeenCalledTimes(1);

@@ -507,7 +507,10 @@ export function xiaohongshuCurrentPageNetworkPublicSurface(
   }
   if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' ||
     url.port || url.username || url.password || url.hash) return null;
-  if ((url.pathname === '/explore' || url.pathname === '/explore/') && !url.search) return 'explore';
+  // Xiaohongshu may add a channel/source query while keeping the person on
+  // the same public Explore surface.  This classifier returns only an enum,
+  // so admitting that normal URL shape neither retains nor exposes the query.
+  if (url.pathname === '/explore' || url.pathname === '/explore/') return 'explore';
   if (/^\/user\/profile\/[^/]+\/?$/.test(url.pathname)) return 'public_profile';
   return url.pathname === '/search_result' || url.pathname === '/search_result/' ||
     url.pathname === '/search_result_ai' || url.pathname === '/search_result_ai/' ? 'search' : null;
