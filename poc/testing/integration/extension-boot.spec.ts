@@ -38,7 +38,8 @@ const runtimeBuild = JSON.parse(await readFile(resolve(extensionPath, 'runtime-b
       'https://api.bilibili.com/*',
       'https://search.bilibili.com/*',
       'https://space.bilibili.com/*',
-      'https://www.bilibili.com/*'
+      'https://www.bilibili.com/*',
+      'https://www.xiaohongshu.com/*'
     ]);
     expect(runtime.registeredContentScripts).toEqual([]);
     expect(runtime.runtimeBootstrap).toEqual({
