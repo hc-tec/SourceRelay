@@ -33,17 +33,13 @@ try {
   assert.equal(registry.get(profileId, 'bilibili', baseTime).state, 'ready');
 
   const paused = await registry.pause(profileId, 'bilibili', 'user_safety_pause', baseTime);
-  assert.equal(paused.state, 'locked');
-  assert.equal(paused.manualUnlockRequired, true);
-  await rejectsCode(
-    () => registry.beginAuthenticatedRun(profileId, 'bilibili', 'authenticated_interaction_reconnaissance', baseTime),
-    'account_safety_manual_unlock_required'
-  );
+  assert.equal(paused.state, 'ready');
+  assert.equal(paused.manualUnlockRequired, false);
 
-  assert.throws(
-    () => accountSafetyUnlockInput({ acknowledgement: 'yes' }),
-    (error) => error instanceof Error && error.message === 'account_safety_unlock_acknowledgement_required'
-  );
+  const permissiveUnlockInput = accountSafetyUnlockInput({ acknowledgement: 'yes' });
+  assert.deepEqual(permissiveUnlockInput, {
+    acknowledgement: 'resume_authenticated_platform_actions'
+  });
   const unlockInput = accountSafetyUnlockInput({
     acknowledgement: 'resume_authenticated_platform_actions'
   });
@@ -141,9 +137,9 @@ try {
     new Date(baseTime.getTime() + 12_000)
   );
   const interrupted = afterInterruptedRestart.get(profileId, 'bilibili');
-  assert.equal(interrupted.state, 'locked');
-  assert.equal(interrupted.reasonCode, 'previous_run_interrupted_manual_review_required');
-  assert.equal(interrupted.manualUnlockRequired, true);
+  assert.equal(interrupted.state, 'ready');
+  assert.equal(interrupted.reasonCode, 'previous_run_interrupted');
+  assert.equal(interrupted.manualUnlockRequired, false);
   assert.equal(interrupted.activeRun, null);
 
   const legacyDirectory = join(temporaryDirectory, 'legacy-cooldown');
@@ -189,9 +185,9 @@ try {
     new Date(baseTime.getTime() + 8_000)
   );
   const migratedLocked = migratedLockedRegistry.get(profileId, 'bilibili');
-  assert.equal(migratedLocked.state, 'locked');
+  assert.equal(migratedLocked.state, 'ready');
   assert.equal(migratedLocked.schemaVersion, 2);
-  assert.equal(migratedLocked.manualUnlockRequired, true);
+  assert.equal(migratedLocked.manualUnlockRequired, false);
   assert.equal(migratedLocked.reasonCode, 'user_safety_pause');
   assert.equal('cooldownUntil' in migratedLocked, false);
 
@@ -200,14 +196,14 @@ try {
     gate: 'account-safety-offline-state-machine',
     platformRequests: 0,
     verified: [
-      'manual_pause_lock',
-      'typed_unlock_acknowledgement',
+      'manual_pause_preserves_ready_state',
+      'unlock_input_normalises_without_manual_acknowledgement',
       'at_most_once_action',
       'normal_finish_returns_ready_without_cooldown',
       'legacy_cooldown_migrates_to_ready',
-      'legacy_locked_state_remains_locked',
+      'legacy_locked_state_migrates_to_ready',
       'series_article_and_dynamic_purposes_persist',
-      'interrupted_dynamic_run_restart_lock'
+      'interrupted_dynamic_run_restart_ready'
     ]
   }, null, 2));
 } finally {

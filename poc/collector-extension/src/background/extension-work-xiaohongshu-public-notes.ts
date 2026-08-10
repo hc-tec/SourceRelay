@@ -194,7 +194,6 @@ async function waitForXiaohongshuExploreReady(
   expiresAt: string
 ): Promise<void> {
   const deadline = Math.min(Date.parse(expiresAt), Date.now() + 30_000);
-  let prerequisiteRisk: { code: string } | null = null;
   while (Date.now() < deadline) {
     const tab = await chrome.tabs.get(workTab.tabId).catch(() => null);
     if (!tab) throw new Error('work_tab_closed');
@@ -203,12 +202,12 @@ async function waitForXiaohongshuExploreReady(
       if (frame?.documentId && xiaohongshuCurrentPageNetworkPublicSurface(frame.url) === 'explore') return;
     }
     if (tab.status === 'complete') {
-      prerequisiteRisk = await readXiaohongshuExplorePrerequisiteRisk(workTab.tabId);
+      const prerequisiteRisk = await readXiaohongshuExplorePrerequisiteRisk(workTab.tabId);
       if (prerequisiteRisk) throw new Error(prerequisiteRisk.code);
     }
     await delay(300);
   }
-  throw new Error(prerequisiteRisk?.code ?? 'xiaohongshu_explore_navigation_not_ready');
+  throw new Error('xiaohongshu_explore_navigation_not_ready');
 }
 
 /**

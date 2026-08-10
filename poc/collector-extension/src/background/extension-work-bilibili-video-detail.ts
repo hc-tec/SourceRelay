@@ -119,24 +119,24 @@ export async function executeBilibiliVideoDetailExtensionWork(
       ? releaseExtensionWorkTab(workTab)
       : abandonExtensionWorkTab(workTab);
     workTab = null;
-    if (observed.kind === 'ready' && !componentPartial) {
-      return result(item, {
-        state: 'completed',
-        errorCode: null,
-        terminalReason: 'detail_ready',
-        navigationAttempted,
-        acquisition,
-        disposition,
-        observation
-      });
-    }
-    if (observed.kind === 'ready' && componentPartial) {
+    if (observed.kind === 'ready') {
+      if (!componentPartial) {
+        return result(item, {
+          state: 'completed',
+          errorCode: null,
+          terminalReason: 'detail_ready',
+          navigationAttempted,
+          acquisition,
+          disposition,
+          observation
+        });
+      }
       return result(item, {
         state: 'partial',
         errorCode: discussionPartial
           ? discussionResult?.errorCode ?? 'bilibili_video_discussion_capture_incomplete'
           : 'bilibili_video_subtitle_capture_incomplete',
-        terminalReason: observed.terminalReason,
+        terminalReason: 'detail_ready',
         navigationAttempted,
         acquisition,
         disposition,

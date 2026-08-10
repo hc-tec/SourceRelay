@@ -60,6 +60,13 @@ export type XiaohongshuPublicNotesSearchTerminalReason =
   | 'debugger_attach_failed'
   | 'debugger_input_failed'
   | 'debugger_detach_failed'
+  | 'action_already_claimed'
+  | 'action_in_progress'
+  | 'action_expired'
+  | 'query_echo_unavailable'
+  | 'postcondition_unavailable'
+  | 'work_tab_foreground_unavailable'
+  | 'explore_navigation_not_ready'
   | 'extension_worker_interrupted';
 
 export interface XiaohongshuPublicNotesSearchWorkResult {
@@ -208,7 +215,9 @@ function terminalReason(value: unknown): value is XiaohongshuPublicNotesSearchTe
     'search_ready', 'search_depth_ready', 'search_depth_stopped', 'existing_public_explore_tab_required', 'existing_public_explore_tab_ambiguous',
     'document_context_changed', 'search_target_unavailable', 'query_not_echoed', 'postcondition_unmet', 'permission_required',
     'login_required', 'verification_required', 'rate_limited', 'source_unavailable', 'debugger_attach_failed',
-    'debugger_input_failed', 'debugger_detach_failed', 'extension_worker_interrupted'
+    'debugger_input_failed', 'debugger_detach_failed', 'action_already_claimed', 'action_in_progress',
+    'action_expired', 'query_echo_unavailable', 'postcondition_unavailable', 'work_tab_foreground_unavailable',
+    'explore_navigation_not_ready', 'extension_worker_interrupted'
   ].includes(value);
 }
 

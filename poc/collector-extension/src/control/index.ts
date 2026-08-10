@@ -286,7 +286,7 @@ async function ensureFreshWorkerRuntime(): Promise<void> {
     await chrome.storage.local.remove(guardKey).catch(() => undefined);
     return;
   }
-  const stored = await chrome.storage.local.get(guardKey).catch(() => ({}));
+  const stored = await chrome.storage.local.get(guardKey).catch(() => ({})) as Record<string, unknown>;
   if (stored[guardKey] === true) return;
   await chrome.storage.local.set({ [guardKey]: true }).catch(() => undefined);
   chrome.runtime.reload();

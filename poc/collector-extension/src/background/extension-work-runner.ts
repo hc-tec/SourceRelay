@@ -186,8 +186,11 @@ export async function pollForExtensionWork(): Promise<void> {
 }
 
 function extensionWorkResultShape(result: ExtensionWorkResult): Record<string, unknown> {
-  if (result.capability !== 'bilibili.video_detail' || !result.observation) {
-    return { state: result.state, terminalReason: result.terminalReason, observationPresent: result.observation !== null };
+  if (result.capability !== 'bilibili.video_detail') {
+    return { state: result.state, terminalReason: result.terminalReason, observationPresent: false };
+  }
+  if (!result.observation) {
+    return { state: result.state, terminalReason: result.terminalReason, observationPresent: false };
   }
   return {
     state: result.state,

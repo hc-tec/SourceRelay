@@ -36,8 +36,14 @@ try {
   assert.equal(runtime.extensionName, 'Personal Intelligence Collector');
   assert.deepEqual(
     [...(runtime.permissions.origins ?? [])].sort(),
-    ['https://api.bilibili.com/*', 'https://search.bilibili.com/*', 'https://space.bilibili.com/*', 'https://www.bilibili.com/*'],
-    'fresh Profile must grant only the required Bilibili Strategy origins'
+    [
+      'https://api.bilibili.com/*',
+      'https://search.bilibili.com/*',
+      'https://space.bilibili.com/*',
+      'https://www.bilibili.com/*',
+      'https://www.xiaohongshu.com/*'
+    ],
+    'fresh Profile must grant only the required direct-work origins'
   );
   assert.deepEqual(runtime.registeredContentScripts, [], 'fresh Profile must not register a platform observer');
   assert.deepEqual(runtime.runtimeBootstrap, {

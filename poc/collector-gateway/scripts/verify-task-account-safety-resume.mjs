@@ -299,14 +299,11 @@ try {
 
   await accountSafety.pause(profileId, 'bilibili', 'user_safety_pause', at(8_000));
   const second = await createApprovedTask(queue, at(9_000));
-  assert.equal(second.approved.state, 'waiting_for_user_resume');
+  assert.equal(second.approved.state, 'approved');
   assert.equal(second.approved.plan.approval.status, 'approved');
-  assert.match(second.approved.statusMessage, /^account_safety_locked:/);
-  await assert.rejects(
-    () => queue.resumeAfterUserConfirmation(second.taskId, at(10_000)),
-    (error) => error instanceof Error && error.message === 'account_safety_manual_unlock_required'
-  );
-  assert.equal((await queue.nextWork(extensionInstanceId, at(11_000).getTime())), null);
+  assert.equal(second.approved.statusMessage, undefined);
+  const secondDispatch = await queue.nextWork(extensionInstanceId, at(11_000).getTime());
+  assert.equal(secondDispatch?.kind, 'approved_dispatch');
 
   assert.equal(batches.length, 2);
   console.log(JSON.stringify({
@@ -322,8 +319,8 @@ try {
       'exact_next_stage_dispatch',
       'repeated_resume_rejected',
       'completed_task_resume_rejected',
-      'approval_preserved_while_locked',
-      'locked_profile_resume_rejected'
+      'approval_remains_dispatchable_after_pause',
+      'paused_profile_does_not_require_manual_resume'
     ]
   }, null, 2));
 } finally {

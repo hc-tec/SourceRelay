@@ -1315,6 +1315,9 @@ function isTerminalReason(value: unknown): value is ExtensionWorkTerminalReason 
     value === 'search_depth_stopped' || value === 'existing_public_explore_tab_required' ||
     value === 'existing_public_explore_tab_ambiguous' || value === 'search_target_unavailable' ||
     value === 'query_not_echoed' || value === 'postcondition_unmet' || value === 'permission_required' ||
+    value === 'action_already_claimed' || value === 'action_in_progress' || value === 'action_expired' ||
+    value === 'query_echo_unavailable' || value === 'postcondition_unavailable' ||
+    value === 'explore_navigation_not_ready' ||
     value === 'profile_notes_ready' || value === 'profile_notes_budget_exhausted' ||
     value === 'existing_public_profile_tab_required' ||
     value === 'existing_public_profile_tab_ambiguous' ||
