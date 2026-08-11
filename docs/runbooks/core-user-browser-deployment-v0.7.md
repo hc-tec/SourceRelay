@@ -40,10 +40,9 @@ node .\collector-gateway\dist\user-browser-server.js
 打开、关闭或导航用户浏览器。
 
 ## 升级扩展
-
-`start:user-browser` 会在启动 Gateway 前把当前生产构建同步到受管扩展目录；如果浏览器里的
-worker 仍是旧 fingerprint，Gateway 会在 claim 前拒绝任务，worker 随即自行执行
-`chrome.runtime.reload()`，不要求用户打开扩展管理页或手动点击 Reload。
+`start:user-browser` 会在启动 Gateway 前把当前生产构建同步到受管扩展目录。用户端扩展不会自动
+reload：更新在用户手动重载扩展或重启浏览器后生效；旧 worker 在更新前仍可正常 claim 任务。仓库管理的
+验证/研究 Profile 使用 chrome-devtools CLI 的 CDP 自动更新。
 
 单独运行准备命令时，同一 fingerprint 重复准备仍会返回 `already_prepared`。如果目标目录是旧版本，会返回：
 

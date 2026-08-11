@@ -35,6 +35,7 @@ SourceRelay Gateway (127.0.0.1)
 
 知乎 Access Secret 与给上层应用使用的 `cst_...` Local API Token 不同。前者只属于 Gateway，
 后者只用于上层应用访问 SourceRelay。
+Console 配置会持久化到本机 Gateway 状态目录，重启后仍然有效；也可用启动环境变量 `ZHIHU_ACCESS_SECRET`（优先级更高）。
 
 ## 当前发布面
 
@@ -121,6 +122,7 @@ Gateway 后，在 Console 的“知乎开放平台”卡片中配置知乎开放
 首次实际调用仍可能收到官方鉴权或额度错误。该凭证只属于 Gateway，不会进入扩展、SDK、Artifact、
 审计或日志。
 
+Console 配置会持久化到本机 Gateway 状态目录（`zhihu-credential.json`，0600），重启后仍然有效。
 知乎 Access Secret 与给上层应用使用的 `cst_...` Local API Token 不同：前者用于 Gateway
 访问 `developer.zhihu.com`，后者用于上层应用访问 SourceRelay。两条 Provider 路径互不
 fallback；只用知乎时不需要安装或配对扩展。

@@ -75,13 +75,13 @@ Extension 能力矩阵只包含 15 项浏览器能力；Gateway/OpenAPI/JS/Pytho
 
 ## 凭证边界
 
-知乎 Access Secret 只能进入 Gateway 进程。当前支持两种等价的注入入口：启动时的
-`ZHIHU_ACCESS_SECRET` 环境变量，或 Gateway Console 的一次性本地配置入口：
+知乎 Access Secret 只能进入 Gateway 进程。支持两种注入入口：启动时的
+`ZHIHU_ACCESS_SECRET` 环境变量（优先级最高），或 Gateway Console 的本地配置入口：
 
 - 不从 `/v2/collect` 调用方接收；
 - 不进入 JS/Python builder；
 - 不进入 Extension work item；
-- Console 配置默认只在当前 Gateway 进程内有效；环境变量配置的生命周期由启动进程决定；
+- Console 配置默认持久化到本机 Gateway 状态目录（`zhihu-credential.json`，0600），重启后仍有效；环境变量配置的生命周期由启动进程决定；
 - 不写 `.env`、普通配置、Git、Artifact、审计或 operational log；
 - capability catalog 只公开 `runtimeState: ready | credential_required`；该运行时字段不参与
   `capabilityCatalogDigest`，因此凭证配置变化不会改变静态兼容身份；

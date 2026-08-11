@@ -144,9 +144,8 @@ Gateway Console 现在提供独立的 Official Provider 配置卡片，首次使
 - `GET /v2/official-providers`：只返回 Gateway-only 配置状态和能力键，不返回凭证；
 - `POST /v2/official-providers/zhihu/credential`：通过 Console 同源请求配置当前进程凭证；
 - `POST /v2/official-providers/zhihu/credential/clear`：移除当前进程凭证，不影响浏览器绑定。
-
-Console session 凭证不会写入扩展、Artifact、审计、运行日志或 Git；Gateway 重启后需要
-重新配置。启动环境变量 `ZHIHU_ACCESS_SECRET` 仍然受支持，并在 Console 中显示为“启动
+Console 凭证不会写入扩展、Artifact、审计、运行日志或 Git，但会持久化到本机 Gateway 状态目录（`zhihu-credential.json`，0600），Gateway 重启后
+仍然有效。启动环境变量 `ZHIHU_ACCESS_SECRET` 仍然受支持，并在 Console 中显示为“启动
 环境变量”。本轮使用真实浏览器渲染检查了路径选择、知乎配置和本地应用 token 创建；没有
 访问知乎平台，也没有产生 live platform request。
 

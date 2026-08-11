@@ -64,8 +64,8 @@ Profile 提供给 Collector。两条路径互不 fallback：知乎凭证缺失�
 - 知乎 Access Secret 只留在 Gateway 进程中，用于访问 `developer.zhihu.com`；
 - `cst_...` 只给上层 JS/Python/MCP 应用访问本地 Gateway。
 
-当前 MVP 通过 Console 配置的知乎凭证只在本次 Gateway 进程内有效。Gateway 重启后需要
-重新配置；它不会写入扩展、Artifact、审计、运行日志或 Git。若通过启动环境变量
+通过 Console 配置的知乎凭证会持久化到本机 Gateway 状态目录（`zhihu-credential.json`，0600），Gateway 重启后
+仍然有效；它不会写入扩展、Artifact、审计、运行日志或 Git。若通过启动环境变量
 `ZHIHU_ACCESS_SECRET` 提供凭证，Console 会显示“启动环境变量”，移除凭证需要停止
 Gateway、清除该环境变量后重新启动。
 
