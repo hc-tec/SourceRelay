@@ -16,6 +16,7 @@ import {
   prepareXiaohongshuCommentRepliesClick,
   recordXiaohongshuCommentRepliesClickIntent
 } from './xiaohongshu-comment-replies-click-ledger';
+import { attachDebuggerBounded, detachDebuggerBounded, sendDebuggerCommandBounded } from './bounded-debugger';
 
 interface BoundPage {
   tabId: number;
@@ -104,7 +105,7 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
         break;
       }
       if (!options.debuggee && !debuggerAttached) {
-        await chrome.debugger.attach(debuggee, '1.3').catch(() => {
+        await attachDebuggerBounded(debuggee, '1.3').catch(() => {
           throw new Error('debugger_attach_failed');
         });
         debuggerAttached = true;
@@ -148,7 +149,7 @@ export async function executeXiaohongshuNotePublicCommentRepliesExtensionWork(
   } finally {
     if (debuggerAttached && page) {
       try {
-        await chrome.debugger.detach({ tabId: page.tabId });
+        await detachDebuggerBounded({ tabId: page.tabId });
         debuggerDetached = true;
       } catch {
         debuggerDetached = false;
@@ -689,15 +690,15 @@ async function dispatchTrustedClick(
   debuggee: chrome.debugger.Debuggee,
   target: ReplyExpansionTarget
 ): Promise<void> {
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseMoved', x: target.x, y: target.y
   });
   await delay(100);
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mousePressed', x: target.x, y: target.y, button: 'left', buttons: 1, clickCount: 1
   });
   await delay(100);
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseReleased', x: target.x, y: target.y, button: 'left', buttons: 0, clickCount: 1
   });
   await delay(150);

@@ -17,6 +17,7 @@ import {
   prepareXiaohongshuNoteCommentsScroll,
   recordXiaohongshuNoteCommentsScrollIntent
 } from './xiaohongshu-note-comments-scroll-ledger';
+import { attachDebuggerBounded, detachDebuggerBounded, sendDebuggerCommandBounded } from './bounded-debugger';
 
 interface NoteDocument { tabId: number; windowId: number; documentId: string }
 interface DomProbe {
@@ -89,7 +90,7 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
       if (dom.scrollTarget) {
         const debuggee: chrome.debugger.Debuggee = options.debuggee ?? { tabId: page.tabId };
         if (!options.debuggee) {
-          await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
+          await attachDebuggerBounded(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
           attached = true;
           debuggerDetached = false;
         }
@@ -144,7 +145,7 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
   } finally {
     if (attached && page) {
       try {
-        await chrome.debugger.detach({ tabId: page.tabId });
+        await detachDebuggerBounded({ tabId: page.tabId });
         debuggerDetached = true;
       } catch {
         debuggerDetached = false;
@@ -293,9 +294,9 @@ async function readDomProbe(page: NoteDocument): Promise<DomProbe> {
 }
 
 async function dispatchWheel(debuggee: chrome.debugger.Debuggee, target: { x: number; y: number }): Promise<void> {
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: target.x, y: target.y });
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: target.x, y: target.y });
   await delay(100);
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseWheel', x: target.x, y: target.y, deltaX: 0, deltaY: 420
   });
 }

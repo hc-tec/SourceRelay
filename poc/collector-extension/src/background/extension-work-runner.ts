@@ -129,7 +129,7 @@ export async function pollForExtensionWork(): Promise<void> {
       executionTarget: item.executionTarget
     });
     resetExtensionWorkTabLossCause();
-    const result = await execute(item, pairing);
+    const result = await executeWithinSignedDeadline(item, pairing);
     const workTabLossCause = currentExtensionWorkTabLossCause();
     void emitExtensionDiagnostic(
       pairing,
@@ -212,6 +212,51 @@ function extensionWorkResultShape(result: ExtensionWorkResult): Record<string, u
       loginGateVisible: result.observation.discussion.loginGateVisible
     }
   };
+}
+
+
+/**
+ * Runs one executor inside the signed item deadline. Every real Chrome API in
+ * the executor paths is already bounded (see bounded-debugger), but this is
+ * the final choke point: if any future call ever hangs, the run is recovered
+ * in place — the work-tab lease is released and a terminal interrupted result
+ * is delivered — without reloading the extension in the user's browser.
+ */
+export async function executeWithinSignedDeadline(
+  item: ExtensionWorkItem,
+  pairing: GatewayPairingRecord,
+  runner: (item: ExtensionWorkItem, pairing: GatewayPairingRecord) => Promise<ExtensionWorkResult> = execute
+): Promise<ExtensionWorkResult> {
+  const deadline = Date.parse(item.expiresAt);
+  if (!Number.isFinite(deadline) || deadline <= Date.now()) return await runner(item, pairing);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      runner(item, pairing),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('extension_work_execution_timeout')), deadline - Date.now());
+      })
+    ]);
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'extension_work_execution_timeout') throw error;
+    const active = await loadActiveExtensionWork();
+    if (!active || active.item.workId !== item.workId) throw new Error('extension_work_execution_timeout');
+    void emitExtensionDiagnostic(
+      pairing,
+      item,
+      'execution_finished',
+      'stopped',
+      'extension_work_execution_timeout',
+      { terminalReason: 'run_deadline_exceeded' }
+    );
+    const recoveredWorkTabDisposition = await recoverInterruptedExtensionWorkTab({
+      workTabAcquisition: active.workTabAcquisition,
+      navigationIntentCount: active.navigationIntentCount
+    });
+    return await interruptedResult(active, recoveredWorkTabDisposition);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
 }
 
 async function execute(item: ExtensionWorkItem, pairing: GatewayPairingRecord): Promise<ExtensionWorkResult> {

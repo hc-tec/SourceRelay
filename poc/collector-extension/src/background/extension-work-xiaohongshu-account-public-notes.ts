@@ -28,6 +28,7 @@ import {
   readXiaohongshuPublicAuthorTarget,
   xiaohongshuProfileEntryPublicSurface
 } from './xiaohongshu-public-author-target';
+import { attachDebuggerBounded, detachDebuggerBounded, sendDebuggerCommandBounded } from './bounded-debugger';
 
 interface ProfileDocument {
   tabId: number;
@@ -124,7 +125,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
     if ((ephemeralProfileLink || projection.items.length === 0) && projection.items.length < maximumItems) {
       assertWorkDeadline(item);
       const debuggee: chrome.debugger.Debuggee = { tabId: document.tabId };
-      await chrome.debugger.attach(debuggee, '1.3').catch(() => {
+      await attachDebuggerBounded(debuggee, '1.3').catch(() => {
         throw new Error('debugger_attach_failed');
       });
       attached = true;
@@ -140,11 +141,11 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
         const viewport = await readPageProbe(document, maximumItems);
         const wheelX = Math.floor(viewport.viewportWidth / 2);
         const wheelY = Math.floor(viewport.viewportHeight * 0.8);
-        await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+        await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
           type: 'mouseMoved', x: wheelX, y: wheelY
         });
         await delay(100);
-        await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+        await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
           type: 'mouseWheel',
           x: wheelX,
           y: wheelY,
@@ -197,7 +198,7 @@ export async function executeXiaohongshuAccountPublicNotesExtensionWork(
   } finally {
     if (attached && document) {
       try {
-        await chrome.debugger.detach({ tabId: document.tabId });
+        await detachDebuggerBounded({ tabId: document.tabId });
         debuggerDetached = true;
       } catch {
         debuggerDetached = false;
@@ -297,7 +298,7 @@ async function discoverProfileFromAuthorAvatar(
   let keepObserver = false;
   try {
     await recordXiaohongshuProfileLinkDiscoveryIntent(item.workId);
-    await chrome.debugger.attach(debuggee, '1.3').catch(() => {
+    await attachDebuggerBounded(debuggee, '1.3').catch(() => {
       throw new Error('debugger_attach_failed');
     });
     attached = true;
@@ -307,7 +308,7 @@ async function discoverProfileFromAuthorAvatar(
     keepObserver = true;
     return { ...discovered, observerScriptId: profileObserverScriptId };
   } finally {
-    if (attached) await chrome.debugger.detach(debuggee).catch(() => undefined);
+    if (attached) await detachDebuggerBounded(debuggee).catch(() => undefined);
     if (!keepObserver) {
       await chrome.scripting.unregisterContentScripts({ ids: [profileObserverScriptId] }).catch(() => undefined);
     }
@@ -370,15 +371,15 @@ async function dispatchTrustedClick(
   x: number,
   y: number
 ): Promise<void> {
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseMoved', x, y
   });
   await delay(100);
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1
   });
   await delay(100);
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1
   });
   await delay(150);

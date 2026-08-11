@@ -2,6 +2,7 @@ import {
   classifyXiaohongshuCurrentPageRisk,
   xiaohongshuCurrentPageNetworkPublicSurface
 } from '@intelligence/collector-contracts';
+import { attachDebuggerBounded, detachDebuggerBounded, sendDebuggerCommandBounded, withTimeout } from './bounded-debugger';
 
 const ACTION_STORAGE_KEY = 'collector.xiaohongshu.trusted-input-action.v1';
 const DEBUGGER_PROTOCOL_VERSION = '1.3';
@@ -10,6 +11,7 @@ const MOUSE_MOVE_SETTLE_MS = 100;
 const CLICK_HOLD_MS = 100;
 const POST_CLICK_SETTLE_MS = 150;
 const POST_TYPE_SETTLE_MS = 200;
+const XIAOHONGSHU_TRUSTED_INPUT_PROBE_TIMEOUT_MS = 10_000;
 
 export interface XiaohongshuTrustedInputAction {
   schemaVersion: 1;
@@ -124,7 +126,7 @@ export async function executeXiaohongshuTrustedInputSearch(
 
     debuggerTarget = { tabId: document.tabId };
     try {
-      await chrome.debugger.attach(debuggerTarget, DEBUGGER_PROTOCOL_VERSION);
+      await attachDebuggerBounded(debuggerTarget, DEBUGGER_PROTOCOL_VERSION);
     } catch {
       debuggerTarget = null;
       throw new Error('debugger_attach_failed');
@@ -140,7 +142,7 @@ export async function executeXiaohongshuTrustedInputSearch(
       await dispatchMouseClick(debuggerTarget, target);
       await dispatchSelectAll(debuggerTarget);
       for (const character of Array.from(action.query)) {
-        await chrome.debugger.sendCommand(debuggerTarget, 'Input.insertText', { text: character });
+        await sendDebuggerCommandBounded(debuggerTarget, 'Input.insertText', { text: character });
         await delay(INPUT_DELAY_MS);
       }
     } catch {
@@ -196,7 +198,7 @@ export async function executeXiaohongshuTrustedInputSearch(
   } finally {
     if (debuggerTarget) {
       try {
-        await chrome.debugger.detach(debuggerTarget);
+        await detachDebuggerBounded(debuggerTarget);
         result!.debuggerDetached = true;
       } catch {
         result!.state = 'stopped';
@@ -288,7 +290,7 @@ async function requireSameDocument(document: EligibleDocument): Promise<void> {
 }
 
 async function discoverSearchTarget(eligibleDocument: EligibleDocument): Promise<SearchTarget> {
-  const results = await chrome.scripting.executeScript({
+  const results = await withTimeout(chrome.scripting.executeScript({
     target: { tabId: eligibleDocument.tabId, documentIds: [eligibleDocument.documentId] },
     func: () => {
       const roots: Array<Document | ShadowRoot> = [document];
@@ -331,7 +333,9 @@ async function discoverSearchTarget(eligibleDocument: EligibleDocument): Promise
       }
       return null;
     }
-  }).catch(() => {
+  }), XIAOHONGSHU_TRUSTED_INPUT_PROBE_TIMEOUT_MS, 'xiaohongshu_trusted_input_probe_timeout').catch((error) => {
+    const code = error instanceof Error ? error.message : '';
+    if (code === 'xiaohongshu_trusted_input_probe_timeout') throw error;
     throw new Error('xiaohongshu_trusted_input_search_target_unavailable');
   });
   const target = results[0]?.result as SearchTarget | null | undefined;
@@ -340,7 +344,7 @@ async function discoverSearchTarget(eligibleDocument: EligibleDocument): Promise
 }
 
 async function readQueryEcho(eligibleDocument: EligibleDocument, query: string): Promise<boolean> {
-  const results = await chrome.scripting.executeScript({
+  const results = await withTimeout(chrome.scripting.executeScript({
     target: { tabId: eligibleDocument.tabId, documentIds: [eligibleDocument.documentId] },
     args: [query],
     func: (expected) => {
@@ -363,7 +367,9 @@ async function readQueryEcho(eligibleDocument: EligibleDocument, query: string):
         );
       });
     }
-  }).catch(() => {
+  }), XIAOHONGSHU_TRUSTED_INPUT_PROBE_TIMEOUT_MS, 'xiaohongshu_trusted_input_probe_timeout').catch((error) => {
+    const code = error instanceof Error ? error.message : '';
+    if (code === 'xiaohongshu_trusted_input_probe_timeout') throw error;
     throw new Error('xiaohongshu_trusted_input_query_echo_unavailable');
   });
   return results[0]?.result === true;
@@ -388,38 +394,38 @@ async function waitForQueryEcho(eligibleDocument: EligibleDocument, query: strin
 async function dispatchMouseClick(target: chrome.debugger.Debuggee, bounds: SearchTarget): Promise<void> {
   const x = bounds.x;
   const y = bounds.y;
-  await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  await sendDebuggerCommandBounded(target, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
   await delay(MOUSE_MOVE_SETTLE_MS);
-  await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(target, 'Input.dispatchMouseEvent', {
     type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1
   });
   await delay(CLICK_HOLD_MS);
-  await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(target, 'Input.dispatchMouseEvent', {
     type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1
   });
   await delay(POST_CLICK_SETTLE_MS);
 }
 
 async function dispatchSelectAll(target: chrome.debugger.Debuggee): Promise<void> {
-  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+  await sendDebuggerCommandBounded(target, 'Input.dispatchKeyEvent', {
     type: 'rawKeyDown', key: 'Control', code: 'ControlLeft', windowsVirtualKeyCode: 17, nativeVirtualKeyCode: 17
   });
-  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+  await sendDebuggerCommandBounded(target, 'Input.dispatchKeyEvent', {
     type: 'rawKeyDown', key: 'a', code: 'KeyA', modifiers: 2, windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65
   });
-  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+  await sendDebuggerCommandBounded(target, 'Input.dispatchKeyEvent', {
     type: 'keyUp', key: 'a', code: 'KeyA', modifiers: 2, windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65
   });
-  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+  await sendDebuggerCommandBounded(target, 'Input.dispatchKeyEvent', {
     type: 'keyUp', key: 'Control', code: 'ControlLeft', windowsVirtualKeyCode: 17, nativeVirtualKeyCode: 17
   });
 }
 
 async function dispatchEnter(target: chrome.debugger.Debuggee): Promise<void> {
-  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+  await sendDebuggerCommandBounded(target, 'Input.dispatchKeyEvent', {
     type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
   });
-  await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
+  await sendDebuggerCommandBounded(target, 'Input.dispatchKeyEvent', {
     type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
   });
 }
@@ -449,7 +455,7 @@ async function waitForPostcondition(
 }
 
 async function readPostcondition(eligibleDocument: EligibleDocument, query: string): Promise<PagePostcondition> {
-  const results = await chrome.scripting.executeScript({
+  const results = await withTimeout(chrome.scripting.executeScript({
     target: { tabId: eligibleDocument.tabId, documentIds: [eligibleDocument.documentId] },
     args: [query],
     func: (expected) => {
@@ -473,7 +479,9 @@ async function readPostcondition(eligibleDocument: EligibleDocument, query: stri
         visibleText: bodyText
       };
     }
-  }).catch(() => {
+  }), XIAOHONGSHU_TRUSTED_INPUT_PROBE_TIMEOUT_MS, 'xiaohongshu_trusted_input_probe_timeout').catch((error) => {
+    const code = error instanceof Error ? error.message : '';
+    if (code === 'xiaohongshu_trusted_input_probe_timeout') throw error;
     throw new Error('xiaohongshu_trusted_input_postcondition_unavailable');
   });
   const value = results[0]?.result as PagePostconditionProbe | undefined;

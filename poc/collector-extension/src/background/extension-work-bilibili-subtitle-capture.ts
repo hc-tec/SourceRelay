@@ -16,6 +16,7 @@ import {
   getActiveNetworkCaptureArm,
   readNetworkCaptures
 } from './network-capture-runtime';
+import { attachDebuggerBounded, detachDebuggerBounded, sendDebuggerCommandBounded } from './bounded-debugger';
 
 const DEBUGGER_PROTOCOL_VERSION = '1.3';
 const CONTROL_REVEAL_TIMEOUT_MS = 2_500;
@@ -140,7 +141,7 @@ export async function captureBilibiliSubtitle(
   }
   let debuggee: chrome.debugger.Debuggee | null = { tabId: workTab.tabId };
   try {
-    await chrome.debugger.attach(debuggee, DEBUGGER_PROTOCOL_VERSION);
+    await attachDebuggerBounded(debuggee, DEBUGGER_PROTOCOL_VERSION);
     if (!probe.captionControlVisuallyExposed && probe.videoArea) {
       await mouseMove(debuggee, probe.videoArea);
       await delay(STEP_SETTLE_MS);
@@ -232,7 +233,7 @@ export async function captureBilibiliSubtitle(
     });
   } finally {
     if (debuggee) {
-      try { await chrome.debugger.detach(debuggee); } catch { /* already detached */ }
+      try { await detachDebuggerBounded(debuggee); } catch { /* already detached */ }
     }
     await clearNetworkCaptureObservations(workTab.tabId).catch(() => undefined);
   }
@@ -448,7 +449,7 @@ async function readTranscriptSegments(
 }
 
 async function mouseMove(debuggee: chrome.debugger.Debuggee, point: { x: number; y: number }): Promise<void> {
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseMoved', x: point.x, y: point.y
   });
   await delay(MOUSE_MOVE_SETTLE_MS);
@@ -463,7 +464,7 @@ async function mouseMoveAlongPath(
   const steps = Math.max(4, Math.min(POINTER_TRAVEL_MAX_STEPS, Math.ceil(distance / 36)));
   for (let index = 1; index <= steps; index += 1) {
     const progress = index / steps;
-    await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+    await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: Math.round(from.x + (to.x - from.x) * progress),
       y: Math.round(from.y + (to.y - from.y) * progress)
@@ -479,11 +480,11 @@ async function mouseClick(
   pointerAlreadyAtTarget = false
 ): Promise<void> {
   if (!pointerAlreadyAtTarget) await mouseMove(debuggee, point);
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1
   });
   await delay(CLICK_HOLD_MS);
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1
   });
   await delay(POST_CLICK_SETTLE_MS);

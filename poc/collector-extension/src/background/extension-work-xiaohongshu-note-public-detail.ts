@@ -30,6 +30,7 @@ import {
   prepareXiaohongshuNoteOverlayNavigation,
   prepareXiaohongshuSearchSurfaceNavigation
 } from './extension-work-tabs';
+import { attachDebuggerBounded, detachDebuggerBounded, sendDebuggerCommandBounded } from './bounded-debugger';
 
 interface DetailDocument { tabId: number; windowId: number; documentId: string }
 interface Target { x: number; y: number; noteId: string }
@@ -91,7 +92,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     await prepareXiaohongshuNoteDetailClick(item.workId);
     const debuggee: chrome.debugger.Debuggee = options.debuggee ?? { tabId: pageDocument.tabId };
     if (!options.debuggee) {
-      await chrome.debugger.attach(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
+      await attachDebuggerBounded(debuggee, '1.3').catch(() => { throw new Error('debugger_attach_failed'); });
       attached = true;
       debuggerDetached = false;
     }
@@ -181,7 +182,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
   } finally {
     if (attached && pageDocument) {
       try {
-        await chrome.debugger.detach({ tabId: pageDocument.tabId });
+        await detachDebuggerBounded({ tabId: pageDocument.tabId });
         debuggerDetached = true;
       } catch {
         debuggerDetached = false;
@@ -536,15 +537,15 @@ async function findRankedDetailTarget(pageDocument: DetailDocument, rank: number
 }
 
 async function dispatchClick(debuggee: chrome.debugger.Debuggee, target: Target): Promise<void> {
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseMoved', x: target.x, y: target.y
   });
   await delay(100);
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mousePressed', x: target.x, y: target.y, button: 'left', buttons: 1, clickCount: 1
   });
   await delay(100);
-  await chrome.debugger.sendCommand(debuggee, 'Input.dispatchMouseEvent', {
+  await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
     type: 'mouseReleased', x: target.x, y: target.y, button: 'left', buttons: 0, clickCount: 1
   });
   await delay(150);
