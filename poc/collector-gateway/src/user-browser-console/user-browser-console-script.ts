@@ -94,6 +94,7 @@ function providerStateLabel(state) {
 function providerModeLabel(mode) {
   if (mode === 'environment') return '启动环境变量';
   if (mode === 'console_session') return '本次 Gateway 会话';
+  if (mode === 'persisted_file') return '本机持久化文件';
   return '未配置';
 }
 
@@ -111,9 +112,11 @@ function renderZhihuProvider(provider) {
     '<p class="provider-capabilities">可用能力：知乎站内搜索 · 知乎热榜 · 知乎开放平台全网搜索</p>' +
     (mode === 'environment'
       ? '<p class="provider-warning">当前凭证来自 Gateway 启动环境变量。要移除它，请停止 Gateway、清除 <code>ZHIHU_ACCESS_SECRET</code> 后重新启动。</p>'
-      : mode === 'console_session'
-        ? '<p class="provider-warning">当前凭证只在本次 Gateway 进程内有效，重启后需要重新配置。</p>'
-        : '<p class="provider-help">还没有配置凭证。配置后不会安装扩展，也不会打开知乎页面。</p>');
+      : mode === 'persisted_file'
+        ? '<p class="provider-note">凭证已持久化到本机 Gateway 状态目录，重启后仍然有效；可在下方移除。</p>'
+        : mode === 'console_session'
+          ? '<p class="provider-warning">当前凭证只在本次 Gateway 进程内有效，重启后需要重新配置。</p>'
+          : '<p class="provider-help">还没有配置凭证。配置后不会安装扩展，也不会打开知乎页面。</p>');
   clearZhihuProviderButton.disabled = !ready || mode === 'environment';
 }
 

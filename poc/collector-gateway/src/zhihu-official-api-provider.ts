@@ -8,7 +8,11 @@ import {
   parseZhihuOfficialResponse,
   type ZhihuOfficialCollectorServiceRequest
 } from './zhihu-official-contract';
-import { validateZhihuOfficialAccessSecret } from './zhihu-official-config';
+import {
+  clearPersistedZhihuOfficialAccessSecret,
+  persistZhihuOfficialAccessSecret,
+  validateZhihuOfficialAccessSecret
+} from './zhihu-official-config';
 
 const PROVIDER_ORIGIN = 'https://developer.zhihu.com';
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -16,20 +20,23 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 
 type FetchImplementation = typeof globalThis.fetch;
 
-export type ZhihuOfficialCredentialSource = 'none' | 'environment' | 'console_session';
+export type ZhihuOfficialCredentialSource = 'none' | 'environment' | 'console_session' | 'persisted_file';
 
 export interface ZhihuOfficialCredentialStatus {
   provider: 'zhihu_open_platform';
   runtimeState: 'ready' | 'credential_required';
   credentialLocation: 'gateway_only';
   configurationMode: ZhihuOfficialCredentialSource;
-  restartPersistence: 'environment_only' | 'gateway_process_only';
+  restartPersistence: 'environment_only' | 'gateway_process_only' | 'persisted_file';
 }
 
 export interface ZhihuOfficialApiProviderOptions {
   accessSecret: string | null;
   artifacts: ZhihuOfficialArtifactStore;
   operations: OfficialSourceOperationStore;
+  credentialSource?: ZhihuOfficialCredentialSource;
+  /** When set, Console-configured secrets are persisted under this state directory. */
+  persistence?: { stateDirectory: string };
   fetchImpl?: FetchImplementation;
   now?: () => Date;
   timeoutMs?: number;
@@ -44,10 +51,12 @@ export class ZhihuOfficialApiProvider {
   readonly #fetch: FetchImplementation;
   readonly #now: () => Date;
   readonly #timeoutMs: number;
+  readonly #persistence: { stateDirectory: string } | null;
 
   constructor(options: ZhihuOfficialApiProviderOptions) {
     this.#accessSecret = options.accessSecret;
-    this.#credentialSource = options.accessSecret === null ? 'none' : 'environment';
+    this.#credentialSource = options.credentialSource ?? (options.accessSecret === null ? 'none' : 'environment');
+    this.#persistence = options.persistence ?? null;
     this.#artifacts = options.artifacts;
     this.#operations = options.operations;
     this.#fetch = options.fetchImpl ?? globalThis.fetch;
@@ -70,19 +79,33 @@ export class ZhihuOfficialApiProvider {
       configurationMode: this.#credentialSource,
       restartPersistence: this.#credentialSource === 'environment'
         ? 'environment_only'
-        : 'gateway_process_only'
+        : this.#credentialSource === 'persisted_file'
+          ? 'persisted_file'
+          : 'gateway_process_only'
     };
   }
 
-  /** Configure the provider for the current Gateway process only. */
-  configureForCurrentProcess(accessSecret: unknown): ZhihuOfficialCredentialStatus {
-    this.#accessSecret = validateZhihuOfficialAccessSecret(accessSecret);
-    this.#credentialSource = 'console_session';
+  /**
+   * Configure the provider from the Gateway Console. When a persistence
+   * directory is configured the secret is written to a private local file
+   * first, so a Gateway restart keeps the credential (environment variables
+   * are never read or written here).
+   */
+  async configureForCurrentProcess(accessSecret: unknown): Promise<ZhihuOfficialCredentialStatus> {
+    const secret = validateZhihuOfficialAccessSecret(accessSecret);
+    if (this.#persistence) {
+      await persistZhihuOfficialAccessSecret(this.#persistence.stateDirectory, secret);
+    }
+    this.#accessSecret = secret;
+    this.#credentialSource = this.#persistence ? 'persisted_file' : 'console_session';
     return this.credentialStatus();
   }
 
-  /** Clear the active in-process credential without touching browser state. */
-  clearCredential(): ZhihuOfficialCredentialStatus {
+  /** Clear the active credential and any locally persisted copy. */
+  async clearCredential(): Promise<ZhihuOfficialCredentialStatus> {
+    if (this.#persistence) {
+      await clearPersistedZhihuOfficialAccessSecret(this.#persistence.stateDirectory);
+    }
     this.#accessSecret = null;
     this.#credentialSource = 'none';
     return this.credentialStatus();

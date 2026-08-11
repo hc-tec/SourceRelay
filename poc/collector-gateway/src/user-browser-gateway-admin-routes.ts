@@ -83,7 +83,7 @@ export async function handleUserBrowserGatewayAdminRoute(
     if (!sameOrigin(request, response, context)) return true;
     const body = await readJsonBody(request);
     const accessSecret = officialCredentialInput(body);
-    const status = context.zhihuOfficialApiProvider.configureForCurrentProcess(accessSecret);
+    const status = await context.zhihuOfficialApiProvider.configureForCurrentProcess(accessSecret);
     await context.operationalLog.record({
       eventType: 'official_provider.credential_configured',
       outcome: 'completed',
@@ -99,7 +99,7 @@ export async function handleUserBrowserGatewayAdminRoute(
   if (request.method === 'POST' && url.pathname === '/v2/official-providers/zhihu/credential/clear') {
     if (!sameOrigin(request, response, context)) return true;
     await readJsonBody(request);
-    const status = context.zhihuOfficialApiProvider.clearCredential();
+    const status = await context.zhihuOfficialApiProvider.clearCredential();
     await context.operationalLog.record({
       eventType: 'official_provider.credential_cleared',
       outcome: 'completed',

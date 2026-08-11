@@ -32,7 +32,10 @@ import { OperationalLog } from './operational-log';
 import { OfficialSourceOperationStore } from './official-source-operation-store';
 import { ZhihuOfficialApiProvider } from './zhihu-official-api-provider';
 import { ZhihuOfficialArtifactStore } from './zhihu-official-artifacts';
-import { loadZhihuOfficialApiConfig } from './zhihu-official-config';
+import {
+  loadPersistedZhihuOfficialAccessSecret,
+  loadZhihuOfficialApiConfig
+} from './zhihu-official-config';
 
 const config = loadUserBrowserGatewayConfig();
 await assertUserBrowserStateIsolation(config.stateDirectory);
@@ -53,8 +56,18 @@ const collectorServiceAudit = await CollectorServiceAuditLog.create(config.state
 const collectorServiceIdempotency = await CollectorServiceIdempotencyLedger.create(config.stateDirectory);
 const officialSourceOperations = await OfficialSourceOperationStore.create(config.stateDirectory);
 const zhihuOfficialArtifacts = await ZhihuOfficialArtifactStore.create(config.stateDirectory);
+const zhihuEnvironmentConfig = loadZhihuOfficialApiConfig();
+const zhihuPersistedSecret = zhihuEnvironmentConfig.accessSecret === null
+  ? await loadPersistedZhihuOfficialAccessSecret(config.stateDirectory)
+  : null;
 const zhihuOfficialApiProvider = new ZhihuOfficialApiProvider({
-  ...loadZhihuOfficialApiConfig(),
+  accessSecret: zhihuEnvironmentConfig.accessSecret ?? zhihuPersistedSecret,
+  credentialSource: zhihuEnvironmentConfig.accessSecret !== null
+    ? 'environment'
+    : zhihuPersistedSecret !== null
+      ? 'persisted_file'
+      : 'none',
+  persistence: { stateDirectory: config.stateDirectory },
   artifacts: zhihuOfficialArtifacts,
   operations: officialSourceOperations
 });

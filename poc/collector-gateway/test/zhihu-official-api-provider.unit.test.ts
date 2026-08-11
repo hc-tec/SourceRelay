@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { OfficialSourceOperationStore } from '../src/official-source-operation-store.js';
+import { loadPersistedZhihuOfficialAccessSecret } from '../src/zhihu-official-config.js';
 import { ZhihuOfficialApiProvider } from '../src/zhihu-official-api-provider.js';
 import { ZhihuOfficialArtifactStore } from '../src/zhihu-official-artifacts.js';
 import type { ZhihuOfficialGlobalSearchCollectorServiceRequest } from '../src/zhihu-official-contract.js';
@@ -30,7 +31,7 @@ describe('Zhihu official API provider', () => {
       configurationMode: 'none',
       credentialLocation: 'gateway_only'
     });
-    const configured = provider.configureForCurrentProcess('console-session-secret-123');
+    const configured = await provider.configureForCurrentProcess('console-session-secret-123');
     expect(configured).toMatchObject({
       runtimeState: 'ready',
       configurationMode: 'console_session',
@@ -39,11 +40,52 @@ describe('Zhihu official API provider', () => {
     expect(JSON.stringify(configured)).not.toContain('console-session-secret-123');
     expect(provider.configured()).toBe(true);
 
-    const cleared = provider.clearCredential();
+    const cleared = await provider.clearCredential();
     expect(cleared).toMatchObject({ runtimeState: 'credential_required', configurationMode: 'none' });
     expect(provider.configured()).toBe(false);
   });
 
+  test('persists Console credentials across a simulated Gateway restart', async () => {
+    const directory = await stateDirectory();
+    const operations = await OfficialSourceOperationStore.create(directory);
+    const artifacts = await ZhihuOfficialArtifactStore.create(directory);
+    const secret = 'persisted-console-secret-123456';
+    const provider = new ZhihuOfficialApiProvider({
+      accessSecret: null,
+      artifacts,
+      operations,
+      persistence: { stateDirectory: directory }
+    });
+
+    const configured = await provider.configureForCurrentProcess(secret);
+    expect(configured).toMatchObject({
+      runtimeState: 'ready',
+      configurationMode: 'persisted_file',
+      restartPersistence: 'persisted_file'
+    });
+    expect(JSON.stringify(configured)).not.toContain(secret);
+    expect(await loadPersistedZhihuOfficialAccessSecret(directory)).toBe(secret);
+
+    // A fresh provider (simulated restart) reloads the persisted secret.
+    const restarted = new ZhihuOfficialApiProvider({
+      accessSecret: await loadPersistedZhihuOfficialAccessSecret(directory),
+      credentialSource: 'persisted_file',
+      artifacts,
+      operations,
+      persistence: { stateDirectory: directory }
+    });
+    expect(restarted.configured()).toBe(true);
+    expect(restarted.credentialStatus()).toMatchObject({
+      runtimeState: 'ready',
+      configurationMode: 'persisted_file',
+      restartPersistence: 'persisted_file'
+    });
+    expect(JSON.stringify(restarted.credentialStatus())).not.toContain(secret);
+
+    await restarted.clearCredential();
+    expect(restarted.configured()).toBe(false);
+    expect(await loadPersistedZhihuOfficialAccessSecret(directory)).toBeNull();
+  });
   test('rejects malformed Console session credentials before changing provider state', async () => {
     const directory = await stateDirectory();
     const operations = await OfficialSourceOperationStore.create(directory);
@@ -54,8 +96,8 @@ describe('Zhihu official API provider', () => {
       operations
     });
 
-    expect(() => provider.configureForCurrentProcess(' short '))
-      .toThrow('zhihu_official_api_credential_invalid');
+    await expect(provider.configureForCurrentProcess(' short '))
+      .rejects.toThrow('zhihu_official_api_credential_invalid');
     expect(provider.credentialStatus()).toMatchObject({
       runtimeState: 'ready',
       configurationMode: 'environment'
