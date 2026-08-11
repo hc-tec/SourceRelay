@@ -54,8 +54,9 @@ describe('loopback gateway transport timeout', () => {
     await vi.advanceTimersByTimeAsync(8_000);
     await assertion;
     const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-    const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
-    expect(signal.aborted).toBe(true);
+    const call = fetchMock.mock.calls[0];
+    const signal = call?.[1]?.signal as AbortSignal | undefined;
+    expect(signal?.aborted).toBe(true);
   });
 
   test('maps a network rejection to gateway_unreachable', async () => {
