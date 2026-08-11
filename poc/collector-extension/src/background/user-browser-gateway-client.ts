@@ -23,13 +23,15 @@ import {
 } from './user-browser-gateway-types';
 import { COLLECTOR_EXTENSION_BUILD_FINGERPRINT } from '../shared/build-fingerprint';
 
+const GATEWAY_REQUEST_TIMEOUT_MS = 8_000;
+
 export async function claimGatewayPairing(input: {
   pairing: PairUserBrowserGatewayInput;
   extensionId: string;
   extensionInstanceId: string;
 }): Promise<GatewayPairingClaimResponse> {
   const extensionChallenge = randomBase64Url(32);
-  const response = await fetchJson(`${input.pairing.loopbackOrigin}/v1/extension/pairing/claim`, {
+  const response = await fetchGatewayJson(`${input.pairing.loopbackOrigin}/v1/extension/pairing/claim`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -69,7 +71,7 @@ export async function readGatewayBinding(record: GatewayPairingRecord): Promise<
 export async function readGatewayDirectCapabilityCatalog(
   record: GatewayPairingRecord
 ): Promise<readonly UserBrowserGatewayCapabilityDescriptor[]> {
-  const payload = await fetchJson(`${record.loopbackOrigin}/v2/capabilities`, {
+  const payload = await fetchGatewayJson(`${record.loopbackOrigin}/v2/capabilities`, {
     method: 'GET',
     headers: { accept: 'application/json' }
   });
@@ -111,7 +113,7 @@ export async function authenticatedGatewayJson(
     'x-collector-body-sha256': bodySha256
   };
   if (body) headers['content-type'] = 'application/json';
-  const payload = await fetchJson(`${record.loopbackOrigin}${pathname}`, {
+  const payload = await fetchGatewayJson(`${record.loopbackOrigin}${pathname}`, {
     method,
     headers,
     ...(body ? { body } : {})
@@ -162,24 +164,41 @@ async function verifyPairingClaim(input: {
   if (!validSignature) throw new Error('gateway_pairing_signature_invalid');
 }
 
-async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
-  let response: Response;
+/**
+ * Loopback Gateway transport with a hard local timeout.
+ *
+ * This is the single resource that gates the whole work poll: pollInFlight
+ * stays true until every poll step settles, and a fetch to a restarting or
+ * half-open Gateway can otherwise hang forever, leaving the binding busy with
+ * no recovery except a manual extension reload. Aborting also tears down the
+ * underlying connection instead of leaking a pending request.
+ */
+export async function fetchGatewayJson(url: string, init: RequestInit): Promise<unknown> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GATEWAY_REQUEST_TIMEOUT_MS);
   try {
-    response = await fetch(url, {
-      ...init,
-      cache: 'no-store',
-      credentials: 'omit'
-    });
-  } catch {
-    throw new Error('gateway_unreachable');
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...init,
+        cache: 'no-store',
+        credentials: 'omit',
+        signal: controller.signal
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw new Error('gateway_request_timeout');
+      throw new Error('gateway_unreachable');
+    }
+    const payload = await response.json().catch(() => null) as { error?: unknown } | null;
+    if (!response.ok) {
+      const error = typeof payload?.error === 'string' && SAFE_ERROR.test(payload.error)
+        ? payload.error
+        : 'gateway_request_rejected';
+      throw new Error(error);
+    }
+    if (payload === null) throw new Error('gateway_response_invalid');
+    return payload;
+  } finally {
+    clearTimeout(timer);
   }
-  const payload = await response.json().catch(() => null) as { error?: unknown } | null;
-  if (!response.ok) {
-    const error = typeof payload?.error === 'string' && SAFE_ERROR.test(payload.error)
-      ? payload.error
-      : 'gateway_request_rejected';
-    throw new Error(error);
-  }
-  if (payload === null) throw new Error('gateway_response_invalid');
-  return payload;
 }
