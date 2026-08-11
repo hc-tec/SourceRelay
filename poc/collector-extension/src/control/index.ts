@@ -4,7 +4,6 @@ import {
   COLLECTOR_RUNTIME_BOOTSTRAP_KEY,
   type CollectorRuntimeBootstrap
 } from '@intelligence/collector-contracts';
-import { COLLECTOR_EXTENSION_BUILD_FINGERPRINT } from '../shared/build-fingerprint';
 import {
   clearUserBrowserGatewayPairing,
   getUserBrowserGatewayDirectCapabilityCatalog,
@@ -261,37 +260,6 @@ async function readRuntimeBootstrap(): Promise<CollectorRuntimeBootstrap | null>
   return candidate as CollectorRuntimeBootstrap;
 }
 
-/**
- * An unpacked MV3 extension can have a fresh control page while Chromium is
- * still executing an older cached service worker.  That poisoned state is
- * especially harmful here: the old worker never reaches the Gateway freshness
- * check and therefore cannot reload itself before claiming work.  The control
- * page is an extension-owned surface, so it can perform one bounded runtime
- * reload without opening chrome://extensions or asking the user to click
- * Reload.  A local guard prevents an infinite loop if the browser refuses the
- * reload; it is cleared as soon as the new worker publishes a matching marker.
- */
-async function ensureFreshWorkerRuntime(): Promise<void> {
-  const expectedFingerprint = COLLECTOR_EXTENSION_BUILD_FINGERPRINT;
-  if (!/^[a-f0-9]{64}$/i.test(expectedFingerprint)) return;
-  const guardKey = `collector.runtimeReloadAttempted.${expectedFingerprint}`;
-  const runtime = await readRuntimeBootstrap();
-  const manifestVersion = chrome.runtime.getManifest().version;
-  const matches = runtime !== null &&
-    manifestVersion === COLLECTOR_EXTENSION_VERSION &&
-    runtime.collectorVersion === COLLECTOR_EXTENSION_VERSION &&
-    runtime.controlSurfaceRevision === COLLECTOR_CONTROL_SURFACE_REVISION &&
-    runtime.buildFingerprint === expectedFingerprint;
-  if (matches) {
-    await chrome.storage.local.remove(guardKey).catch(() => undefined);
-    return;
-  }
-  const stored = await chrome.storage.local.get(guardKey).catch(() => ({})) as Record<string, unknown>;
-  if (stored[guardKey] === true) return;
-  await chrome.storage.local.set({ [guardKey]: true }).catch(() => undefined);
-  chrome.runtime.reload();
-}
-
 function safeErrorCode(error: unknown): string {
   const code = error instanceof Error ? error.message : '';
   return /^[a-z0-9_.-]{1,120}$/i.test(code) ? code : 'gateway_capability_catalog_unavailable';
@@ -386,12 +354,9 @@ armNextXiaohongshuCurrentPageNetwork.addEventListener('click', () => {
   });
 });
 
-// Opening the local Control page is also the bounded recovery signal for an
-// MV3 worker that was suspended while Gateway or unpacked files were updated.
-// The page first repairs a poisoned old-worker/new-files state, then wakes the
-// runner. Neither action carries a URL, selector, credentials, or platform
-// action.
-void ensureFreshWorkerRuntime().catch(() => undefined);
+// Opening the local Control page wakes the work runner. It never reloads the
+// extension in the user's browser and carries no URL, selector, credentials,
+// or platform action.
 void chrome.runtime.sendMessage({ type: 'collector.extensionWorkWake' }).catch(() => undefined);
 
 void render().catch((error) => {

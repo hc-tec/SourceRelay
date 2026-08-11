@@ -91,8 +91,6 @@ export interface ExtensionWorkRouteContext {
   xiaohongshuNotePublicDetailArtifacts: XiaohongshuNotePublicDetailArtifactStore;
   xiaohongshuNotePublicCommentsArtifacts: XiaohongshuNotePublicCommentsArtifactStore;
   xiaohongshuReplyArtifacts: XiaohongshuReplyArtifactStore;
-  /** Current dist marker; stale user-owned workers are rejected before claim. */
-  extensionBuildFingerprint?: string;
 }
 
 /**
@@ -540,11 +538,9 @@ async function handleExtensionWorkNext(
   setExtensionCors(response, origin);
   try {
     const authorised = await authoriseExtensionRequest(request, context, WORK_NEXT_PATH, '');
-    if (context.extensionBuildFingerprint &&
-      request.headers['x-collector-extension-build-fingerprint'] !== context.extensionBuildFingerprint) {
-      sendJson(response, 409, { schemaVersion: 1, ok: false, error: 'extension_runtime_upgrade_required' });
-      return;
-    }
+    // The Gateway never forces an extension reload in the user's browser.
+    // Updates take effect when the user reloads or restarts; a running worker
+    // keeps claiming work until then.
     await reconcileExpiredExtensionWork(context);
     const safetyRecords = [
       context.browserBindingSafety.get(authorised.browserBindingId, 'bilibili'),

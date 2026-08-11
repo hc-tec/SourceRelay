@@ -33,7 +33,6 @@ import { OfficialSourceOperationStore } from './official-source-operation-store'
 import { ZhihuOfficialApiProvider } from './zhihu-official-api-provider';
 import { ZhihuOfficialArtifactStore } from './zhihu-official-artifacts';
 import { loadZhihuOfficialApiConfig } from './zhihu-official-config';
-import { readExtensionBuildFingerprint } from './extension-build-metadata';
 
 const config = loadUserBrowserGatewayConfig();
 await assertUserBrowserStateIsolation(config.stateDirectory);
@@ -43,7 +42,6 @@ await assertUserBrowserStateIsolation(config.stateDirectory);
 // production artifact by default; deployments can point at another artifact
 // with COLLECTOR_EXTENSION_DIRECTORY.
 const extensionDirectory = resolveUserBrowserExtensionDirectory();
-const extensionBuildFingerprint = await readExtensionBuildFingerprint(extensionDirectory);
 
 const identity = await loadGatewayIdentity(config);
 const operationalLog = await OperationalLog.create(config.stateDirectory);
@@ -148,7 +146,6 @@ const server = createServer(async (request, response) => {
       xiaohongshuNotePublicCommentsArtifacts,
       xiaohongshuReplyArtifacts,
       zhihuOfficialArtifacts,
-      extensionBuildFingerprint
     });
     if (!handled) sendJson(response, 404, {
       schemaVersion: USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,

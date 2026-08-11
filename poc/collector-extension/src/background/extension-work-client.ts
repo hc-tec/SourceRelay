@@ -16,23 +16,14 @@ import { USER_BROWSER_DIRECT_WORK_CAPABILITIES } from './user-browser-gateway-ty
 
 /** Fixed, paired Gateway work read.  It does not expose arbitrary fetch. */
 export async function claimNextExtensionWork(record: GatewayPairingRecord): Promise<ExtensionWorkItem | null> {
-  let payload: unknown;
-  try {
-    payload = await authenticatedGatewayJson(record, {
-      method: 'POST',
-      pathname: '/v1/extension/work-items/next',
-      body: ''
-    });
-  } catch (error) {
-    // A stale unpacked worker is rejected before Gateway claims any work.
-    // Reloading here picks up the already-built files from the same extension
-    // directory; the next alarm can then claim the item with the new marker.
-    if (error instanceof Error && error.message === 'extension_runtime_upgrade_required') {
-      chrome.runtime.reload();
-      return null;
-    }
-    throw error;
-  }
+  // No automatic worker reload in the user's browser. A rejected claim simply
+  // fails this poll; the next 30s alarm retries with the current worker, and
+  // extension updates take effect when the user reloads or restarts.
+  const payload = await authenticatedGatewayJson(record, {
+    method: 'POST',
+    pathname: '/v1/extension/work-items/next',
+    body: ''
+  });
   const item = workItemFromPayload(payload);
   if (item === null) return null;
   if (!USER_BROWSER_DIRECT_WORK_CAPABILITIES.includes(item.capability as never)) {
