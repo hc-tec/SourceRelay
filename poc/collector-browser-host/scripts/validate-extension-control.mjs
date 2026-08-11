@@ -13,6 +13,7 @@ const defaultOrigin = process.env.COLLECTOR_SERVICE_ORIGIN ?? 'http://127.0.0.1:
 
 export async function runValidationExtensionControl(options = {}) {
   const origin = loopbackOrigin(options.origin ?? defaultOrigin);
+  const selection = options.selection ?? 'bilibili_discussion_current_active_tab';
   let client = null;
   let approval = null;
   try {
@@ -43,7 +44,7 @@ export async function runValidationExtensionControl(options = {}) {
         identityFingerprint: pairing.identityFingerprint,
         pairingSessionId: pairing.pairingSessionId,
         pairingCode: pairing.pairingCode,
-        selection: 'bilibili_discussion_current_active_tab'
+        selection
       }
     }, { timeoutMs: 35_000 });
     const permission = await approval;
@@ -110,7 +111,8 @@ function isPairing(value) {
 function isControlResult(value) {
   return value && typeof value === 'object' && value.schemaVersion === 1 &&
     value.profileId === validationProfileId && value.connectionState === 'online' &&
-    value.discussionSelection === 'available' && value.controlTargetDisposed === true &&
+    (value.discussionSelection === 'available' || value.discussionSelection === 'not_requested') &&
+    value.controlTargetDisposed === true &&
     typeof value.browserBindingId === 'string' && /^[0-9a-f-]{36}$/i.test(value.browserBindingId);
 }
 
