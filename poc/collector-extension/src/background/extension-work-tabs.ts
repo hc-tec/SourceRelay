@@ -55,6 +55,8 @@ interface ManagedWorkTab {
    */
   expectedForegroundActivationUntil: number | null;
   initialBlankNavigationUntil: number;
+  /** 最近一次使用时间，用于运行期池上限的最旧优先清理。 */
+  lastUsedAt: number;
 }
 
 interface PersistedWorkTab {
@@ -143,6 +145,10 @@ export function initialiseExtensionWorkTabs(): void {
     if (!changeInfo.url) return;
     const record = managedTabs.get(tabId);
     if (!record) return;
+    // 扩展自有 work tab 只会导航到受管平台域。同域 URL 变化（包括平台
+    // 自己把详情路由切到 /explore/<id> 等）不是用户接管：直接放行，
+    // 避免把 Collector 自己的页面流转误判为接管后永久保留该 tab。
+    if (record.state !== 'blocked' && isManagedPlatformUrl(changeInfo.url)) return;
     if (record.expectedXiaohongshuOverlayPath !== null &&
       record.expectedNavigationUntil !== null &&
       Date.now() <= record.expectedNavigationUntil &&
@@ -175,6 +181,7 @@ export function initialiseExtensionWorkTabs(): void {
 export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> {
   initialiseExtensionWorkTabs();
   await ensureWorkTabRegistryLoaded();
+  await pruneIdleExtensionWorkTabs();
   for (const record of managedTabs.values()) {
     if (record.state !== 'idle_reusable') continue;
     try {
@@ -218,7 +225,8 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
     expectedXiaohongshuOverlayPath: null,
     expectedNavigationUntil: null,
     expectedForegroundActivationUntil: null,
-    initialBlankNavigationUntil: Date.now() + 2_000
+    initialBlankNavigationUntil: Date.now() + 2_000,
+    lastUsedAt: Date.now()
   };
   managedTabs.set(record.tabId, record);
   const result = lease(record, 'created');
@@ -330,8 +338,9 @@ export function releaseExtensionWorkTab(workTab: ExtensionWorkTabLease): WorkTab
 
 /**
  * Retain a page for the user to inspect, but permanently remove it from the
- * extension pool after an uncertain or risk-stopped run.  It is never closed
- * or refreshed as part of this safety transition.
+ * extension pool after an uncertain or risk-stopped run. The tab itself is
+ * closed in the background (unless the user is actively viewing it) so failed
+ * runs cannot accumulate unbounded tabs in the browser.
  */
 export function abandonExtensionWorkTab(workTab: ExtensionWorkTabLease): WorkTabDisposition {
   const record = managedTabs.get(workTab.tabId);
@@ -347,7 +356,58 @@ export function abandonExtensionWorkTab(workTab: ExtensionWorkTabLease): WorkTab
   managedTabs.set(workTab.tabId, record);
   leaseLosses.set(workTab.leaseId, 'retained_not_reusable');
   void persistWorkTabRegistry();
+  void closeBlockedExtensionWorkTabAfterGrace(record.tabId);
   return 'retained_not_reusable';
+}
+
+/** 扩展 work tab 唯一会导航到的平台域（同域变化不是用户接管）。 */
+function isManagedPlatformUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === 'https:' &&
+      ['www.xiaohongshu.com', 'xiaohongshu.com', 'www.bilibili.com', 'bilibili.com'].includes(url.hostname);
+  } catch { return false; }
+}
+
+/** Keep the reusable idle pool bounded at runtime: beyond the first idle tab,
+ * close extra background idle tabs so repeated operations never accumulate
+ * windows of xiaohongshu/bilibili tabs in the browser. */
+async function pruneIdleExtensionWorkTabs(): Promise<void> {
+  const idle = [...managedTabs.values()]
+    .filter((record) => record.state === 'idle_reusable')
+    .sort((left, right) => (right.lastUsedAt ?? 0) - (left.lastUsedAt ?? 0));
+  let kept = 0;
+  for (const record of idle) {
+    kept += 1;
+    if (kept <= MAX_REUSABLE_WORK_TABS) continue;
+    try {
+      const tab = await chrome.tabs.get(record.tabId);
+      if (tab.active === true) continue;
+      await chrome.tabs.remove(record.tabId).catch(() => undefined);
+    } catch {
+      // already closed
+    }
+    managedTabs.delete(record.tabId);
+  }
+  if (idle.length > MAX_REUSABLE_WORK_TABS) await persistWorkTabRegistry();
+}
+
+const BLOCKED_TAB_CLOSE_GRACE_MS = 2_500;
+
+/** Close an abandoned work tab unless the person is actively viewing it (or
+ * navigated it to a non-managed page they want to keep). */
+async function closeBlockedExtensionWorkTabAfterGrace(tabId: number): Promise<void> {
+  await delay(BLOCKED_TAB_CLOSE_GRACE_MS);
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const record = managedTabs.get(tabId);
+    // Active tab or a page the user repurposed: keep it.
+    if (tab.active === true || (record?.state !== 'blocked' && record !== undefined)) return;
+    if (tab.url && !isManagedPlatformUrl(tab.url)) return;
+    await chrome.tabs.remove(tabId).catch(() => undefined);
+  } catch {
+    // Tab already gone; prune will drop the record.
+  }
 }
 
 /**
@@ -372,6 +432,11 @@ export async function recoverInterruptedExtensionWorkTab(input: {
     const safeBlankClose = input.navigationIntentCount === 0 && tab !== null &&
       tab.url === 'about:blank' && tab.active !== true;
     if (safeBlankClose) {
+      managedTabs.delete(record.tabId);
+      await chrome.tabs.remove(record.tabId).catch(() => undefined);
+      disposition = 'closed_or_missing';
+    } else if (tab !== null && tab.active !== true && tab.url && isManagedPlatformUrl(tab.url)) {
+      // 中断遗留的受管平台页：自动关闭，避免残留累积。
       managedTabs.delete(record.tabId);
       await chrome.tabs.remove(record.tabId).catch(() => undefined);
       disposition = 'closed_or_missing';
@@ -406,6 +471,9 @@ export async function recoverOrphanedExtensionWorkTabs(): Promise<void> {
     if (safeBlankClose) {
       managedTabs.delete(record.tabId);
       await chrome.tabs.remove(record.tabId).catch(() => undefined);
+    } else if (tab !== null && tab.active !== true && tab.url && isManagedPlatformUrl(tab.url)) {
+      managedTabs.delete(record.tabId);
+      await chrome.tabs.remove(record.tabId).catch(() => undefined);
     } else {
       record.state = 'blocked';
       record.leaseId = null;
@@ -431,6 +499,7 @@ function lease(record: ManagedWorkTab, acquisition: WorkTabAcquisition): Extensi
   record.expectedXiaohongshuOverlayPath = null;
   record.expectedNavigationUntil = null;
   record.expectedForegroundActivationUntil = null;
+  record.lastUsedAt = Date.now();
   return { leaseId, tabId: record.tabId, acquisition };
 }
 
@@ -563,6 +632,14 @@ async function restoreWorkTabRegistry(): Promise<void> {
         if (!tab.active) await chrome.tabs.remove(candidate.tabId).catch(() => undefined);
         continue;
       }
+      if (candidate.state === 'blocked') {
+        // Abandoned work tabs from a previous session are closed after restart
+        // (unless actively viewed or repurposed), so failures cannot pile up.
+        if (!tab.active && tab.url && isManagedPlatformUrl(tab.url)) {
+          await chrome.tabs.remove(candidate.tabId).catch(() => undefined);
+        }
+        continue;
+      }
       seen.add(candidate.tabId);
       managedTabs.set(candidate.tabId, {
         tabId: candidate.tabId,
@@ -573,7 +650,8 @@ async function restoreWorkTabRegistry(): Promise<void> {
         expectedXiaohongshuOverlayPath: candidate.expectedXiaohongshuOverlayPath ?? null,
         expectedNavigationUntil: null,
         expectedForegroundActivationUntil: null,
-        initialBlankNavigationUntil: candidate.initialBlankNavigationUntil
+        initialBlankNavigationUntil: candidate.initialBlankNavigationUntil,
+        lastUsedAt: candidate.lastUsedAt
       });
       if (candidate.state === 'idle_reusable') restoredIdleTabs += 1;
     }
@@ -585,7 +663,9 @@ async function restoreWorkTabRegistry(): Promise<void> {
 }
 
 function extensionStorageArea(): chrome.storage.StorageArea | null {
-  return globalThis.chrome?.storage?.session ?? null;
+  // 持久化到 local：扩展重载 / 浏览器重启后 registry 依然存在，恢复逻辑
+  // 才能清理被放弃的 work tab；session 存储会让所有遗留 tab 变孤儿。
+  return globalThis.chrome?.storage?.local ?? null;
 }
 
 function parsePersistedWorkTabRegistry(value: unknown): PersistedWorkTabRegistry | null {
