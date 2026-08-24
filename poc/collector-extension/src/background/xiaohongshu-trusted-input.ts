@@ -468,7 +468,15 @@ async function readPostcondition(eligibleDocument: EligibleDocument, query: stri
           ? input.value : input.innerText || input.textContent || '';
         return text.trim() === expected;
       });
-      const cards = document.querySelectorAll('[data-v-a264b01a], section.note-item, .note-item, .feeds-page .note-item').length;
+      // 语义化卡片计数：不依赖 class / scoped-hash / 框架属性，只需
+      // 结果页卡片存在指向笔记详情（/explore/<id> 或 /discovery/item/<id>）
+      // 的链接；并发版后路由变化仍能以语义兜住。
+      const cards = Array.from(document.querySelectorAll('a[href]')).filter((link) => {
+        if (!(link instanceof HTMLAnchorElement)) return false;
+        try {
+          return /^\/(?:explore|discovery\/item)\/[A-Za-z0-9_-]+(?:\/|$)/.test(new URL(link.href).pathname);
+        } catch { return false; }
+      }).length;
       return {
         publicSurface: pathname === '/explore' || pathname === '/explore/' ? 'explore' :
           /^\/search_result(?:_ai)?\/?$/.test(pathname) ? 'search' : null,

@@ -58,6 +58,11 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     expectedTabId?: number;
     /** The enclosing managed search already foregrounded this tab. */
     skipForeground?: boolean;
+    /** Rank-target hints from the enclosing search projection (internal only):
+     * cached DOM semantics are avoided, so when the platform changes card link
+     * paths the enclosing search's known title/noteId can identify the card. */
+    expectedTitle?: string;
+    expectedNoteId?: string;
   } = {}
 ): Promise<XiaohongshuNotePublicDetailWorkResult> {
   let pageDocument: DetailDocument | null = null;
@@ -81,7 +86,10 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
     const baseline = await readRisk(pageDocument);
     assertRisk(baseline);
     const continuity = await readDocumentContinuity(pageDocument);
-    const target = await findRankedDetailTarget(pageDocument, item.input.resultRank);
+    const target = await findRankedDetailTarget(pageDocument, item.input.resultRank, {
+      expectedTitle: options.expectedTitle,
+      expectedNoteId: options.expectedNoteId
+    });
     prepareXiaohongshuNoteOverlayNavigation(pageDocument.tabId, target.noteId);
     if (profileDocument) {
       await armXiaohongshuExistingPublicProfileWorkObserver(pageDocument.tabId, item.workId);
@@ -394,7 +402,12 @@ async function readCloseContinuity(tabId: number): Promise<{
           : /^\/user\/profile\/[A-Za-z0-9_-]+\/?$/.test(location.pathname) ? 'profile' as const
           : 'other' as const,
         overlayVisible: roots.some((element) => (element.textContent ?? '').trim().length > 0),
-        renderedCardCount: Array.from(document.querySelectorAll('section.note-item')).filter(visible).length
+        renderedCardCount: Array.from(document.querySelectorAll('a[href]')).filter((link) => {
+          if (!(link instanceof HTMLAnchorElement)) return false;
+          try {
+            return /^\/(?:explore|discovery\/item)\/[A-Za-z0-9_-]+(?:\/|$)/.test(new URL(link.href).pathname);
+          } catch { return false; }
+        }).filter(visible).length
       };
     }
   });
@@ -479,52 +492,88 @@ function assertRisk(risk: ReturnType<typeof classifyXiaohongshuCurrentPageRisk>)
   if (risk.loginRequired) throw new Error('xiaohongshu_login_required');
 }
 
-async function findRankedDetailTarget(pageDocument: DetailDocument, rank: number): Promise<Target> {
+async function findRankedDetailTarget(
+  pageDocument: DetailDocument,
+  rank: number,
+  hints: { expectedTitle?: string; expectedNoteId?: string } = {}
+): Promise<Target> {
   const results = await chrome.scripting.executeScript({
     target: { tabId: pageDocument.tabId, documentIds: [pageDocument.documentId] },
-    args: [rank],
-    func: (requestedRank) => {
+    args: [rank, hints.expectedTitle ?? '', hints.expectedNoteId ?? ''],
+    // 语义定位，刻意不依赖任何 class / scoped-hash / 框架属性：
+    // 小红书卡片必须包含指向笔记详情页的链接（/explore/<id> 或
+    // /discovery/item/<id>）。按链接的视觉位置排序，取第 rank 个作为点击
+    // 目标；仅在链接语义失效时，用已知标题文本匹配卡片图片做回退。
+    func: (requestedRank: number, expectedTitle: string, expectedNoteId: string) => {
       const visible = (element: Element): boolean => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
         return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
           style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
       };
-      const sections = Array.from(document.querySelectorAll('section.note-item')).filter(visible)
-        .sort((left, right) => left.getBoundingClientRect().y - right.getBoundingClientRect().y ||
-          left.getBoundingClientRect().x - right.getBoundingClientRect().x);
-      const section = sections[requestedRank - 1] ?? null;
-      if (!section) return null;
-      const image = Array.from(section.querySelectorAll('img')).filter(visible).sort((left, right) => {
-        const l = left.getBoundingClientRect();
-        const r = right.getBoundingClientRect();
-        return (r.width * r.height) - (l.width * l.height);
-      })[0] ?? null;
-      const target = image ?? section;
-      const rect = target.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
-      const hit = document.elementFromPoint(x, y);
-      const anchor = hit?.closest('a[href]');
-      const noteAnchor = Array.from(section.querySelectorAll('a[href]')).find((element) => {
-        if (!(element instanceof HTMLAnchorElement)) return false;
+      const noteIdOf = (href: string): string => {
         try {
-          return /^\/(?:explore|discovery\/item)\/[A-Za-z0-9_-]+\/?$/.test(new URL(element.href).pathname);
-        } catch { return false; }
-      }) as HTMLAnchorElement | undefined;
-      let noteId = '';
-      if (noteAnchor) {
-        try {
-          noteId = new URL(noteAnchor.href).pathname
-            .match(/^\/(?:explore|discovery\/item)\/([A-Za-z0-9_-]+)\/?$/)?.[1] ?? '';
-        }
-        catch { noteId = ''; }
+          return new URL(href).pathname
+            .match(/^\/(?:explore|discovery\/item)\/([A-Za-z0-9_-]+)(?:\/|$)/)?.[1] ?? '';
+        } catch { return ''; }
+      };
+      const isNoteLink = (element: Element): boolean =>
+        element instanceof HTMLAnchorElement && noteIdOf(element.href) !== '';
+      const candidates = Array.from(document.querySelectorAll('a[href]')).filter(isNoteLink)
+        .map((link) => {
+          const anchor = link as HTMLAnchorElement;
+          const image = Array.from(anchor.querySelectorAll('img')).filter(visible)
+            .sort((left, right) => {
+              const l = left.getBoundingClientRect();
+              const r = right.getBoundingClientRect();
+              return (r.width * r.height) - (l.width * l.height);
+            })[0] ?? null;
+          const targetEl = image ?? anchor;
+          const rect = targetEl.getBoundingClientRect();
+          return {
+            el: targetEl,
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+            top: rect.top,
+            left: rect.left,
+            noteId: noteIdOf(anchor.href),
+            newTab: anchor.target !== '' && anchor.target !== '_self'
+          };
+        })
+        .filter((target) => visible(target.el) &&
+          target.x >= 0 && target.y >= 0 &&
+          target.x <= window.innerWidth && target.y <= window.innerHeight)
+        .sort((left, right) => (left.top - right.top) || (left.left - right.left));
+      let targets = candidates;
+      // 回退：卡片链接路径也变了时，按标题文本（来自网络投影）匹配卡片。
+      if (targets.length === 0 && expectedTitle) {
+        const needle = expectedTitle.replace(/\s+/g, ' ').trim().slice(0, 30);
+        const textMatches = Array.from(document.querySelectorAll('img')).filter(visible)
+          .map((image) => {
+            const card = image.closest('a[href]') ?? image.parentElement;
+            if (!card) return null;
+            const text = (card.textContent ?? '').replace(/\s+/g, ' ').trim();
+            if (needle === '' || !text.includes(needle)) return null;
+            const rect = image.getBoundingClientRect();
+            return {
+              el: image,
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2,
+              top: rect.top,
+              left: rect.left,
+              noteId: expectedNoteId,
+              newTab: false
+            };
+          })
+          .filter((target): target is NonNullable<typeof target> => target !== null && visible(target.el))
+          .sort((left, right) => (left.top - right.top) || (left.left - right.left));
+        if (textMatches.length > 0) targets = textMatches;
       }
-      if (!hit || !section.contains(hit)) return null;
-      if (anchor instanceof HTMLAnchorElement && anchor.target && anchor.target !== '_self') {
-        return { newTab: true, x, y, noteId };
-      }
-      return { newTab: false, x, y, noteId };
+      const target = targets[requestedRank - 1];
+      if (!target) return null;
+      const hit = document.elementFromPoint(target.x, target.y);
+      if (!hit || !(hit === target.el || target.el.contains(hit) || hit.contains(target.el))) return null;
+      return { newTab: target.newTab, x: target.x, y: target.y, noteId: target.noteId };
     }
   });
   const value = results[0]?.result;

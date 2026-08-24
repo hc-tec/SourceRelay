@@ -96,7 +96,9 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
             collectReplies: commentsPlan?.replies,
             debuggee: { tabId: document.tabId },
             expectedTabId: document.tabId,
-            skipForeground: true
+            skipForeground: true,
+            expectedTitle: projectionBox.value.items[rank - 1]?.title,
+            expectedNoteId: projectionBox.value.items[rank - 1]?.noteId
           });
           if (detailResult.state !== 'completed' || !detailResult.projection) {
             detailActions.stoppedReason = detailResult.errorCode ?? 'xiaohongshu_note_detail_postcondition_unmet';
