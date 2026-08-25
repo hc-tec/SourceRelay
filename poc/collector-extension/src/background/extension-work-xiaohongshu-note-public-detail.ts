@@ -305,7 +305,11 @@ async function closeDetailOverlay(
   const closeTarget = await findDetailCloseTarget(pageDocument);
   if (!closeTarget) throw new Error('xiaohongshu_note_detail_close_target_unavailable');
   await dispatchClick(debuggee, closeTarget);
-  const deadline = Date.now() + 4_000;
+  // The platform may keep the overlay mounted through a multi-second close
+  // sequence (fade plus a search-page settle) that can exceed a tight poll
+  // window even though the close click already landed. Poll longer before
+  // declaring the run failed.
+  const deadline = Date.now() + 12_000;
   while (Date.now() < deadline) {
     const state = await readCloseContinuity(pageDocument.tabId).catch(() => null);
     if (state && state.timeOrigin !== timeOriginBefore) {
