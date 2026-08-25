@@ -417,18 +417,37 @@ async function readCloseContinuity(tabId: number): Promise<{
         const rect = element.getBoundingClientRect();
         return rect.width >= window.innerWidth * 0.5 && rect.height >= window.innerHeight * 0.5;
       });
+      // The platform wraps note links in zero-size anchors, so "visible note
+      // anchors" is always zero; count the visible CARDS instead (a card is an
+      // ancestor of a note link that holds a large visible image), matching
+      // the rank locator's click-surface semantics.
+      const areaDesc = (left: Element, right: Element): number => {
+        const l = left.getBoundingClientRect(); const r = right.getBoundingClientRect();
+        return (r.width * r.height) - (l.width * l.height);
+      };
+      const cardHolders = new Set<Element>();
+      for (const link of Array.from(document.querySelectorAll('a[href]'))) {
+        if (!(link instanceof HTMLAnchorElement)) continue;
+        try {
+          if (!/^\/(?:explore|discovery\/item)\/[A-Za-z0-9_-]+(?:\/|$)/.test(new URL(link.href).pathname)) continue;
+        } catch { continue; }
+        let pointer: Element | null = link.parentElement;
+        for (let depth = 0; pointer && depth < 8; depth += 1, pointer = pointer.parentElement) {
+          const image = Array.from(pointer.querySelectorAll('img')).filter(visible).sort(areaDesc)[0];
+          const rect = pointer.getBoundingClientRect();
+          if (image && rect.width >= 160 && rect.height >= 120) {
+            cardHolders.add(pointer);
+            break;
+          }
+        }
+      }
       return {
         timeOrigin: performance.timeOrigin,
         surface: /^\/search_result(?:_ai)?\/?$/.test(location.pathname) ? 'search' as const
           : /^\/user\/profile\/[A-Za-z0-9_-]+\/?$/.test(location.pathname) ? 'profile' as const
           : 'other' as const,
         overlayVisible: [...roots, ...classModals].some((element) => (element.textContent ?? '').trim().length > 0),
-        renderedCardCount: Array.from(document.querySelectorAll('a[href]')).filter((link) => {
-          if (!(link instanceof HTMLAnchorElement)) return false;
-          try {
-            return /^\/(?:explore|discovery\/item)\/[A-Za-z0-9_-]+(?:\/|$)/.test(new URL(link.href).pathname);
-          } catch { return false; }
-        }).filter(visible).length
+        renderedCardCount: cardHolders.size
       };
     }
   });
