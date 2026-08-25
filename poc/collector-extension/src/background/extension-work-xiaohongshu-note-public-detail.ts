@@ -32,6 +32,13 @@ import {
 } from './extension-work-tabs';
 import { attachDebuggerBounded, detachDebuggerBounded, sendDebuggerCommandBounded } from './bounded-debugger';
 
+// The platform renders the result feed lazily and currently wraps note links
+// in zero-size anchors; the click surface materializes on the card a beat
+// after the search postcondition. Poll for a measurable card during a bounded
+// window before declaring the rank unavailable.
+const RANK_DETAIL_TARGET_READY_WINDOW_MS = 8_000;
+const RANK_DETAIL_TARGET_RETRY_MS = 500;
+
 interface DetailDocument { tabId: number; windowId: number; documentId: string }
 interface Target { x: number; y: number; noteId: string }
 interface DocumentContinuity {
@@ -497,19 +504,46 @@ async function findRankedDetailTarget(
   rank: number,
   hints: { expectedTitle?: string; expectedNoteId?: string } = {}
 ): Promise<Target> {
+  // The platform renders cards lazily and currently wraps the note link in a
+  // zero-size anchor (0x0 href carrier) whose visible part lives on a card
+  // container. Poll for a usable target during a bounded window instead of
+  // failing from one immediate measurement, then click the visible card, not
+  // the anchor.
+  const deadline = Date.now() + RANK_DETAIL_TARGET_READY_WINDOW_MS;
+  let value: Target | null = null;
+  while (Date.now() < deadline && value === null) {
+    value = await probeRankedDetailTarget(pageDocument, rank, hints);
+    if (value === null) await delay(RANK_DETAIL_TARGET_RETRY_MS);
+  }
+  if (!value) {
+    throw new Error('xiaohongshu_search_result_rank_unavailable');
+  }
+  return value;
+}
+
+async function probeRankedDetailTarget(
+  pageDocument: DetailDocument,
+  rank: number,
+  hints: { expectedTitle?: string; expectedNoteId?: string }
+): Promise<Target | null> {
   const results = await chrome.scripting.executeScript({
     target: { tabId: pageDocument.tabId, documentIds: [pageDocument.documentId] },
     args: [rank, hints.expectedTitle ?? '', hints.expectedNoteId ?? ''],
     // 语义定位，刻意不依赖任何 class / scoped-hash / 框架属性：
     // 小红书卡片必须包含指向笔记详情页的链接（/explore/<id> 或
-    // /discovery/item/<id>）。按链接的视觉位置排序，取第 rank 个作为点击
-    // 目标；仅在链接语义失效时，用已知标题文本匹配卡片图片做回退。
+    // /discovery/item/<id>）。点击点定在「该链接所在卡片最近的可见大图」
+    // 中心（平台可能把链接做成 0x0 载体）；仅在链接语义失效时，用已知
+    // 标题文本匹配卡片图片做回退。
     func: (requestedRank: number, expectedTitle: string, expectedNoteId: string) => {
       const visible = (element: Element): boolean => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
         return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
           style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+      };
+      const areaDesc = (left: Element, right: Element): number => {
+        const l = left.getBoundingClientRect(); const r = right.getBoundingClientRect();
+        return (r.width * r.height) - (l.width * l.height);
       };
       const noteIdOf = (href: string): string => {
         try {
@@ -519,16 +553,30 @@ async function findRankedDetailTarget(
       };
       const isNoteLink = (element: Element): boolean =>
         element instanceof HTMLAnchorElement && noteIdOf(element.href) !== '';
+      // The click surface is the innermost ancestor of the note link that
+      // holds a large visible image (the card). The anchor itself can be a
+      // 0x0 href carrier and therefore not clickable at its own rect.
+      const cardHolderOf = (anchor: HTMLAnchorElement): Element => {
+        let holder: Element = anchor;
+        let pointer: Element | null = anchor.parentElement;
+        for (let depth = 0; pointer && depth < 8; depth += 1, pointer = pointer.parentElement) {
+          const image = Array.from(pointer.querySelectorAll('img')).filter(visible)
+            .sort(areaDesc)[0];
+          const rect = pointer.getBoundingClientRect();
+          if (image && rect.width >= 160 && rect.height >= 120) {
+            holder = pointer;
+            break;
+          }
+        }
+        return holder;
+      };
       const candidates = Array.from(document.querySelectorAll('a[href]')).filter(isNoteLink)
         .map((link) => {
           const anchor = link as HTMLAnchorElement;
-          const image = Array.from(anchor.querySelectorAll('img')).filter(visible)
-            .sort((left, right) => {
-              const l = left.getBoundingClientRect();
-              const r = right.getBoundingClientRect();
-              return (r.width * r.height) - (l.width * l.height);
-            })[0] ?? null;
-          const targetEl = image ?? anchor;
+          const holder = cardHolderOf(anchor);
+          const image = Array.from(holder.querySelectorAll('img')).filter(visible)
+            .sort(areaDesc)[0] ?? null;
+          const targetEl = image ?? (holder === anchor ? anchor : holder);
           const rect = targetEl.getBoundingClientRect();
           return {
             el: targetEl,
@@ -579,7 +627,7 @@ async function findRankedDetailTarget(
   const value = results[0]?.result;
   if (!value || !Number.isFinite(value.x) || !Number.isFinite(value.y) ||
     typeof value.noteId !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(value.noteId)) {
-    throw new Error('xiaohongshu_search_result_rank_unavailable');
+    return null;
   }
   if (value.newTab) throw new Error('xiaohongshu_note_detail_target_new_tab');
   return { x: value.x, y: value.y, noteId: value.noteId };
