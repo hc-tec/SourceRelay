@@ -12,6 +12,15 @@ const CLICK_HOLD_MS = 100;
 const POST_CLICK_SETTLE_MS = 150;
 const POST_TYPE_SETTLE_MS = 200;
 const XIAOHONGSHU_TRUSTED_INPUT_PROBE_TIMEOUT_MS = 10_000;
+// The page owns the search input state. React may commit the typed value a
+// beat after insertText, and a freshly created work tab can render slower than
+// a warmed one. A 5s echo window plus one bounded re-type retry absorbs that
+// variance without ever replaying the semantic action (Enter is pressed only
+// after a successful echo, and the at-most-once ledger is written before the
+// first input command).
+const XIAOHONGSHU_TRUSTED_INPUT_ECHO_WINDOW_MS = 5_000;
+const XIAOHONGSHU_TRUSTED_INPUT_ECHO_ATTEMPTS = 2;
+const XIAOHONGSHU_TRUSTED_INPUT_ECHO_RETRY_SETTLE_MS = 800;
 
 export interface XiaohongshuTrustedInputAction {
   schemaVersion: 1;
@@ -138,17 +147,18 @@ export async function executeXiaohongshuTrustedInputSearch(
     // reason to replay the semantic action.
     await storeAction(action, 'semantic_action_intent_recorded');
     semanticActionAttempted = true;
-    try {
-      await dispatchMouseClick(debuggerTarget, target);
-      await dispatchSelectAll(debuggerTarget);
-      for (const character of Array.from(action.query)) {
-        await sendDebuggerCommandBounded(debuggerTarget, 'Input.insertText', { text: character });
-        await delay(INPUT_DELAY_MS);
+    // One bounded retry re-types the query (the re-type starts with a
+    // Ctrl+A wipe via dispatchSelectAll). Enter is dispatched only after a
+    // successful echo, so the retry can never double-submit a search.
+    queryEchoed = false;
+    for (let attempt = 1; attempt <= XIAOHONGSHU_TRUSTED_INPUT_ECHO_ATTEMPTS; attempt += 1) {
+      await typeQueryIntoSearchInput(debuggerTarget, target, action.query);
+      queryEchoed = await waitForQueryEcho(document, action.query);
+      if (queryEchoed) break;
+      if (attempt < XIAOHONGSHU_TRUSTED_INPUT_ECHO_ATTEMPTS) {
+        await delay(XIAOHONGSHU_TRUSTED_INPUT_ECHO_RETRY_SETTLE_MS);
       }
-    } catch {
-      throw new Error('debugger_input_failed');
     }
-    queryEchoed = await waitForQueryEcho(document, action.query);
     if (!queryEchoed) throw new Error('xiaohongshu_trusted_input_query_not_echoed');
     await requireSameDocument(document);
     await delay(POST_TYPE_SETTLE_MS);
@@ -377,12 +387,12 @@ async function readQueryEcho(eligibleDocument: EligibleDocument, query: string):
 
 /**
  * The page owns the search input state; React may commit the typed value a
- * moment after the last insertText. Poll the echo for a short bounded window
+ * moment after the last insertText. Poll the echo for a bounded window
  * instead of declaring failure from one immediate read. This never replays
  * the semantic action and never navigates the page.
  */
 async function waitForQueryEcho(eligibleDocument: EligibleDocument, query: string): Promise<boolean> {
-  const deadline = Date.now() + 3_000;
+  const deadline = Date.now() + XIAOHONGSHU_TRUSTED_INPUT_ECHO_WINDOW_MS;
   while (Date.now() < deadline) {
     if (await readQueryEcho(eligibleDocument, query)) return true;
     await requireSameDocument(eligibleDocument);
@@ -419,6 +429,26 @@ async function dispatchSelectAll(target: chrome.debugger.Debuggee): Promise<void
   await sendDebuggerCommandBounded(target, 'Input.dispatchKeyEvent', {
     type: 'keyUp', key: 'Control', code: 'ControlLeft', windowsVirtualKeyCode: 17, nativeVirtualKeyCode: 17
   });
+}
+
+/** Focuses the search target, wipes its current value (Ctrl+A) and types the
+ * query one character at a time. Used by the echo retry as well as the first
+ * attempt; CDP failures surface as debugger_input_failed. */
+async function typeQueryIntoSearchInput(
+  debuggee: chrome.debugger.Debuggee,
+  target: SearchTarget,
+  query: string
+): Promise<void> {
+  try {
+    await dispatchMouseClick(debuggee, target);
+    await dispatchSelectAll(debuggee);
+    for (const character of Array.from(query)) {
+      await sendDebuggerCommandBounded(debuggee, 'Input.insertText', { text: character });
+      await delay(INPUT_DELAY_MS);
+    }
+  } catch {
+    throw new Error('debugger_input_failed');
+  }
 }
 
 async function dispatchEnter(target: chrome.debugger.Debuggee): Promise<void> {
