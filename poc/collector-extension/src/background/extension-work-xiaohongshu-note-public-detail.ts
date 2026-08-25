@@ -401,14 +401,24 @@ async function readCloseContinuity(tabId: number): Promise<{
           style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
       };
       const roots = Array.from(document.querySelectorAll(
-        '[role="dialog"], [aria-modal="true"], [class*="note-detail"], [class*="note-container"], [class*="modal"]'
+        '[role="dialog"], [aria-modal="true"]'
       )).filter(visible);
+      // The note overlay is a centered, modal-sized container. Broad class
+      // matches (e.g. [class*="modal"]) also hit persistent side panels on
+      // the search page, which would keep the close postcondition false after
+      // the overlay was actually closed; require modal proportions instead.
+      const classModals = Array.from(document.querySelectorAll(
+        '[class*="note-detail"], [class*="note-container"]'
+      )).filter(visible).filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width >= window.innerWidth * 0.5 && rect.height >= window.innerHeight * 0.5;
+      });
       return {
         timeOrigin: performance.timeOrigin,
         surface: /^\/search_result(?:_ai)?\/?$/.test(location.pathname) ? 'search' as const
           : /^\/user\/profile\/[A-Za-z0-9_-]+\/?$/.test(location.pathname) ? 'profile' as const
           : 'other' as const,
-        overlayVisible: roots.some((element) => (element.textContent ?? '').trim().length > 0),
+        overlayVisible: [...roots, ...classModals].some((element) => (element.textContent ?? '').trim().length > 0),
         renderedCardCount: Array.from(document.querySelectorAll('a[href]')).filter((link) => {
           if (!(link instanceof HTMLAnchorElement)) return false;
           try {
