@@ -23,6 +23,9 @@ interface NoteDocument { tabId: number; windowId: number; documentId: string }
 interface DomProbe {
   scrollTarget: { x: number; y: number } | null;
   renderedCommentCount: number;
+  /** Authoritative comment count from the overlay heading ("共 N 条评论");
+   * null when the heading is absent or not parseable. */
+  commentCount: number | null;
   comments: Omit<XiaohongshuPublicCommentProjection, 'rank' | 'source'>[];
 }
 function noteSurface(value: string): boolean {
@@ -63,6 +66,29 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
     await delay(4_500);
     let dom = await readDomProbe(page);
     let network = await readXiaohongshuExistingNoteCommentsNetworkProjection(page.tabId, observerWorkId);
+    // A note whose overlay heading is authoritatively "共 0 条评论" has an
+    // empty discussion by design: it is a valid zero-comment result, never a
+    // container failure. Deterministic empty notes must not stop a depth run.
+    // Both surfaces must agree — a transient placeholder heading must not
+    // trump real payload evidence (matchedPayloadCount > 0 means the comment
+    // list was observed, so the normal evidence path decides).
+    if (dom.commentCount === 0 && network.matchedPayloadCount === 0 && network.comments.length === 0) {
+      projection = {
+        schemaVersion: 1,
+        captureMode: 'network_projection',
+        network: {
+          matchedPayloadCount: network.matchedPayloadCount,
+          bodyBytesRead: network.bodyBytesRead,
+          hasMore: network.hasMore,
+          cursorObserved: network.cursorObserved
+        },
+        renderedCommentCount: 0,
+        comments: [],
+        rawPayloadStored: false,
+        responseUrlsStored: false
+      };
+      pageReady = true;
+    } else {
     // Keep the Network-first fast path: a complete archive needs no page
     // action.  If the page only exposed a partial DOM sample, however, the
     // platform may defer the remaining comments until the panel is scrolled.
@@ -140,6 +166,7 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
       responseUrlsStored: false
     };
     pageReady = true;
+    }
   } catch (error) {
     errorCode = safeErrorCode(error);
   } finally {
@@ -250,6 +277,12 @@ async function readDomProbe(page: NoteDocument): Promise<DomProbe> {
         const l = left.getBoundingClientRect(); const r = right.getBoundingClientRect();
         return l.width * l.height - r.width * r.height;
       })[0] ?? null;
+      const headingOwn = heading
+        ? Array.from(heading.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE)
+          .map((node) => node.textContent ?? '').join(' ').replace(/\s+/g, ' ').trim()
+        : '';
+      const countMatch = headingOwn.match(/(?:共\s*)?(\d+)\s*条评论/);
+      const commentCount = countMatch ? Number(countMatch[1]) : null;
       const headingBottom = heading?.getBoundingClientRect().bottom ?? overlay.getBoundingClientRect().top + 240;
       const classCandidates = Array.from(overlay.querySelectorAll(
         '[class*="comment-item"], [class*="comment-inner"], [data-comment-id]'
@@ -285,7 +318,7 @@ async function readDomProbe(page: NoteDocument): Promise<DomProbe> {
       }).filter((comment) => comment.publicText);
       const rect = scroll?.getBoundingClientRect() ?? null;
       return { scrollTarget: rect ? { x: rect.x + rect.width * 0.72, y: rect.y + rect.height * 0.68 } : null,
-        renderedCommentCount: nodes.length, comments };
+        renderedCommentCount: nodes.length, commentCount, comments };
     }
   });
   const value = result[0]?.result;

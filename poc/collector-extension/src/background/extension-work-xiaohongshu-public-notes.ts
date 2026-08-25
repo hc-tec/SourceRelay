@@ -87,42 +87,57 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
         // the same managed tab and same document; it never opens a new tab.
         await clearXiaohongshuWorkObserver(document.tabId, item.workId);
         const details = [...(projectionBox.value.details ?? [])];
+        // Depth is resilient per rank: one note's detail/comments failure
+        // (a platform flake, a zero-comment oddity, an overlay hiccup) must
+        // not discard the successful notes around it. The first failure is
+        // surfaced in detailActions.stoppedReason and the operation converges
+        // to `search_depth_stopped` with the captured partial depth intact;
+        // only a run that captures zero details stops as a total failure.
+        let firstDetailFailure: string | null = null;
         for (let rank = 1; rank <= requestedCount; rank += 1) {
           detailActions.attemptedCount = rank;
           const detailItem = createDepthDetailWorkItem(item, rank);
-          const detailResult = await executeXiaohongshuNotePublicDetailExtensionWork(detailItem, {
-            closeOverlayAfterCapture: true,
-            collectComments: commentsPlan ? { maximumScrolls: commentsPlan.maximumScrolls } : undefined,
-            collectReplies: commentsPlan?.replies,
-            debuggee: { tabId: document.tabId },
-            expectedTabId: document.tabId,
-            skipForeground: true,
-            expectedTitle: projectionBox.value.items[rank - 1]?.title,
-            expectedNoteId: projectionBox.value.items[rank - 1]?.noteId
-          });
-          if (detailResult.state !== 'completed' || !detailResult.projection) {
-            detailActions.stoppedReason = detailResult.errorCode ?? 'xiaohongshu_note_detail_postcondition_unmet';
-            throw new Error(detailActions.stoppedReason);
+          try {
+            const detailResult = await executeXiaohongshuNotePublicDetailExtensionWork(detailItem, {
+              closeOverlayAfterCapture: true,
+              collectComments: commentsPlan ? { maximumScrolls: commentsPlan.maximumScrolls } : undefined,
+              collectReplies: commentsPlan?.replies,
+              debuggee: { tabId: document.tabId },
+              expectedTabId: document.tabId,
+              skipForeground: true,
+              expectedTitle: projectionBox.value.items[rank - 1]?.title,
+              expectedNoteId: projectionBox.value.items[rank - 1]?.noteId
+            });
+            if (detailResult.state !== 'completed' || !detailResult.projection) {
+              firstDetailFailure ??= detailResult.errorCode ?? 'xiaohongshu_note_detail_postcondition_unmet';
+            } else {
+              const noteId = projectionBox.value.items[rank - 1]?.noteId;
+              if (noteId) {
+                const enriched = {
+                  noteId,
+                  publicText: detailResult.projection.publicText,
+                  authorNickname: detailResult.projection.authorNickname,
+                  interactionText: detailResult.projection.interactionText
+                } as (typeof details)[number];
+                if (detailResult.projection.comments) enriched.comments = detailResult.projection.comments;
+                if (detailResult.projection.replyThread) enriched.replyThread = detailResult.projection.replyThread;
+                if (detailResult.projection.replyThreads) enriched.replyThreads = detailResult.projection.replyThreads;
+                const existingIndex = details.findIndex((detail) => detail.noteId === noteId);
+                if (existingIndex >= 0) details[existingIndex] = { ...details[existingIndex], ...enriched };
+                else details.push(enriched);
+              }
+              detailActions.completedCount = rank;
+            }
+          } catch (error) {
+            firstDetailFailure ??= safeErrorCode(error);
           }
-          const noteId = projectionBox.value.items[rank - 1]?.noteId;
-          if (noteId) {
-            const enriched = {
-              noteId,
-              publicText: detailResult.projection.publicText,
-              authorNickname: detailResult.projection.authorNickname,
-              interactionText: detailResult.projection.interactionText
-            } as (typeof details)[number];
-            if (detailResult.projection.comments) enriched.comments = detailResult.projection.comments;
-            if (detailResult.projection.replyThread) enriched.replyThread = detailResult.projection.replyThread;
-            if (detailResult.projection.replyThreads) enriched.replyThreads = detailResult.projection.replyThreads;
-            const existingIndex = details.findIndex((detail) => detail.noteId === noteId);
-            if (existingIndex >= 0) details[existingIndex] = { ...details[existingIndex], ...enriched };
-            else details.push(enriched);
-          }
-          detailActions.completedCount = rank;
+          detailActions.stoppedReason = firstDetailFailure;
           if (rank < requestedCount) await delay(1_500);
         }
         projectionBox.value = { ...projectionBox.value, details: details.slice(0, 40) };
+        if (detailActions.completedCount === 0 && firstDetailFailure !== null) {
+          throw new Error(firstDetailFailure);
+        }
       }
     });
     if (workTab) {
