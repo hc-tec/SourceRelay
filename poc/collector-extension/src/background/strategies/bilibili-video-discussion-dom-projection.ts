@@ -1,3 +1,5 @@
+import { collectBilibiliGateText, evaluateBilibiliGateRisk } from './bilibili-gate-risk';
+
 export interface BilibiliVideoDiscussionDomSnapshot {
   bvid: string | null;
   commentHostPresent: boolean;
@@ -318,11 +320,10 @@ export async function captureBilibiliVideoDiscussionDom(
             replyHasMore,
             replyCoverage,
             loginReadPromptVisible: commentText.includes(blockingLoginText),
-            risk: {
-              verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(commentText),
-              rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(commentText),
-              sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(commentText)
-            }
+            // Platform gate phrases inside comment text (“这风控做得好”,
+            // “加载失败的进不来”) are discussion content, never a capture
+            // gate; the wrapper classifies risk from gate surfaces only.
+            risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
           };
         },
         args: [BILIBILI_DISCUSSION_BLOCKING_LOGIN_TEXT]
@@ -336,8 +337,18 @@ export async function captureBilibiliVideoDiscussionDom(
   const result = results[0]?.result;
   if (!result) throw new Error('video_discussion_strategy_document_context_changed');
   const { loginReadPromptVisible, ...projection } = result;
+  const gateResults = await chrome.scripting.executeScript({
+    target: { tabId, documentIds: [documentId] },
+    world: 'ISOLATED',
+    func: collectBilibiliGateText
+  }).catch(() => []);
+  const risk = evaluateBilibiliGateRisk({
+    gateText: typeof gateResults[0]?.result === 'string' ? gateResults[0]!.result as string : '',
+    hasPrimaryContent: result.commentContentState === 'ready' || result.rootCommentTexts.length > 0
+  });
   return {
     ...projection,
+    risk,
     // A login phrase in a composer, nested thread or secondary control is
     // not a global read gate once the requested public root-comment outcome
     // is already ready or empty.

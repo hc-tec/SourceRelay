@@ -425,6 +425,9 @@ function xiaohongshuCurrentPageSurface(value: string): 'search' | 'public_note_d
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.hostname !== 'www.xiaohongshu.com' || url.port ||
       url.username || url.password || url.hash) return null;
+    // 搜索页 overlay 打开时平台会把文档路由到 /search_result/<noteId>；
+    // 它仍是搜索结果页，只是带着打开中的笔记。
+    if (/^\/search_result(?:_ai)?\/[A-Za-z0-9_-]{1,80}\/?$/.test(url.pathname)) return 'search';
     if (/^\/search_result(?:_ai)?\/?$/.test(url.pathname)) return 'search';
     if (/^\/explore\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)) return 'public_note_detail';
     return null;
@@ -434,11 +437,31 @@ function xiaohongshuCurrentPageSurface(value: string): 'search' | 'public_note_d
 async function readPageRisk(page: BoundPage) {
   const result = await chrome.scripting.executeScript({
     target: { tabId: page.tabId, documentIds: [page.documentId] },
-    func: () => ({
-      pathname: location.pathname,
-      title: document.title.slice(0, 300),
-      visibleText: (document.body?.innerText ?? '').slice(0, 12_000)
-    })
+    // 门面元素 only：笔记正文/评论里的“风控/加载失败”是内容，不是平台风控。
+    func: () => {
+      const visible = (element: Element): boolean => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+          style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+      };
+      const parts: string[] = [];
+      const gateSelector = [
+        '[role="dialog"]', '[aria-modal="true"]', '[class*="login" i]',
+        '[class*="modal" i]', '[class*="mask" i]', '[class*="verify" i]',
+        '[class*="captcha" i]', '[class*="forbidden" i]'
+      ].join(', ');
+      for (const element of Array.from(document.querySelectorAll(gateSelector))) {
+        if (!visible(element)) continue;
+        const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+        if (text.length >= 2 && text.length <= 600) parts.push(text);
+      }
+      return {
+        pathname: location.pathname,
+        title: document.title.slice(0, 300),
+        visibleText: parts.join('\n').slice(0, 2_000)
+      };
+    }
   });
   if (!result[0]?.result) throw new Error('xiaohongshu_public_note_probe_unavailable');
   return classifyXiaohongshuCurrentPageRisk(result[0].result);

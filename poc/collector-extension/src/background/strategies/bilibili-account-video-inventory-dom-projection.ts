@@ -1,3 +1,5 @@
+import { collectBilibiliGateText, evaluateBilibiliGateRisk } from './bilibili-gate-risk';
+
 export interface BilibiliAccountVideoInventoryDomCard {
   bvid: string | null;
   title: string | null;
@@ -96,7 +98,6 @@ export async function captureBilibiliAccountVideoInventoryDom(
               };
             })
           : [];
-        const bodyText = clean(document.body?.innerText, 100_000) ?? '';
         const loginOverlayVisible = Array.from(
           document.querySelectorAll<HTMLElement>('[role="dialog"], [class*="login" i], [class*="passport" i]')
         ).some((element) => rendered(element) &&
@@ -107,11 +108,9 @@ export async function captureBilibiliAccountVideoInventoryDom(
           activePage,
           cards,
           loginOverlayVisible,
-          risk: {
-            verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(bodyText),
-            rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(bodyText),
-            sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(bodyText)
-          }
+          // Gate-surface classification in the wrapper; video titles about
+          // “风控” must never stop an inventory capture.
+          risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
         };
       }
     });
@@ -120,5 +119,14 @@ export async function captureBilibiliAccountVideoInventoryDom(
   }
   const result = results[0]?.result;
   if (!result) throw new Error('account_video_inventory_strategy_document_context_changed');
-  return result;
+  const gateResults = await chrome.scripting.executeScript({
+    target: documentId ? { tabId, documentIds: [documentId] } : { tabId },
+    world: 'ISOLATED',
+    func: collectBilibiliGateText
+  }).catch(() => []);
+  const risk = evaluateBilibiliGateRisk({
+    gateText: typeof gateResults[0]?.result === 'string' ? gateResults[0]!.result as string : '',
+    hasPrimaryContent: result.cards.length > 0
+  });
+  return { ...result, risk };
 }

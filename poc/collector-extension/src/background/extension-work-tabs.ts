@@ -102,7 +102,11 @@ export function initialiseExtensionWorkTabs(): void {
   if (listenersInitialised) return;
   listenersInitialised = true;
   chrome.tabs.onRemoved.addListener((tabId) => forgetTab(tabId, 'closed_or_missing', 'managed_tab_removed'));
-  chrome.tabs.onMoved.addListener((tabId) => forgetTab(tabId, 'user_taken_over', 'managed_tab_moved'));
+  // 无人值守委托运行：URL 变化、窗口内移动都不再淘汰工作标签页。
+  // 标签页只在真正关闭时离开复用池——这是消灭"每个操作新建一个标签页"的
+  // 关键。MV3 worker 重启后经由 chrome.storage.local 恢复同一份注册表。
+  // 保留激活监听仅用于租用中的数据质量保护（观察器不轮询被切走的后台页），
+  // 它不会造成标签页新建。
   chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
     const activated = managedTabs.get(tabId);
     const foregroundActivationExpected = activated?.expectedForegroundActivationUntil !== null &&
@@ -120,10 +124,6 @@ export function initialiseExtensionWorkTabs(): void {
       return;
     }
 
-    // A leased work tab must stay foreground while its page settles. If a
-    // person activates any other tab in that browser window, do not try to
-    // steal focus back: lose the lease so observers stop rather than polling
-    // a throttled/background platform page indefinitely.
     for (const record of [...managedTabs.values()]) {
       if (record.state === 'leased' && record.windowId === windowId) {
         forgetTab(
@@ -134,40 +134,7 @@ export function initialiseExtensionWorkTabs(): void {
             : 'another_tab_activated'
         );
       }
-      // An idle managed tab may remain in the background while the person uses
-      // another tab. Its exact URL/document identity is checked again at the
-      // next acquisition; activation alone is not proof of takeover. This is
-      // what lets the pool reuse one visible work tab instead of accumulating
-      // a new tab for every operation.
     }
-  });
-  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-    if (!changeInfo.url) return;
-    const record = managedTabs.get(tabId);
-    if (!record) return;
-    // 扩展自有 work tab 只会导航到受管平台域。同域 URL 变化（包括平台
-    // 自己把详情路由切到 /explore/<id> 等）不是用户接管：直接放行，
-    // 避免把 Collector 自己的页面流转误判为接管后永久保留该 tab。
-    if (record.state !== 'blocked' && isManagedPlatformUrl(changeInfo.url)) return;
-    if (record.expectedXiaohongshuOverlayPath !== null &&
-      record.expectedNavigationUntil !== null &&
-      Date.now() <= record.expectedNavigationUntil &&
-      xiaohongshuNoteOverlayPath(changeInfo.url) === record.expectedXiaohongshuOverlayPath) {
-      // A detail click is a Collector-owned same-document transition. Keep
-      // the tab in the pool while the platform exposes the note overlay route;
-      // the detail executor commits the observed, query-free path below.
-      return;
-    }
-    // A source navigation can redirect the exact canonical URL during the
-    // short extension-initiated navigation window.  Outside that window a
-    // URL change is an external takeover; do not repurpose that page.
-    if (record.expectedCanonicalUrl !== null &&
-      isExpectedExtensionWorkNavigation(record.expectedCanonicalUrl, changeInfo.url)) return;
-    if (record.state === 'leased' && record.expectedNavigationUntil !== null &&
-      Date.now() <= record.expectedNavigationUntil) return;
-    if (record.expectedNavigationUntil === null && changeInfo.url === 'about:blank' &&
-      Date.now() <= record.initialBlankNavigationUntil) return;
-    forgetTab(tabId, 'user_taken_over', 'unexpected_url_update');
   });
   if ('onReplaced' in chrome.tabs && chrome.tabs.onReplaced) {
     chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
@@ -187,17 +154,10 @@ export async function acquireExtensionWorkTab(): Promise<ExtensionWorkTabLease> 
     try {
       const tab = await chrome.tabs.get(record.tabId);
       if (tab.windowId !== record.windowId) {
-        forgetTab(record.tabId, 'user_taken_over', 'idle_tab_active_before_reuse');
-        continue;
+        // 窗口被移动不是新建标签页的理由：跟随实际窗口继续复用。
+        record.windowId = tab.windowId;
       }
-      if (record.expectedCanonicalUrl !== null &&
-        !isExpectedExtensionWorkNavigation(record.expectedCanonicalUrl, tab.url ?? '')) {
-        forgetTab(record.tabId, 'user_taken_over', 'unexpected_url_update');
-        continue;
-      }
-      // The normal release path leaves the owned page visible for review. It
-      // remains reusable while its exact managed identity is intact; a URL
-      // change, move, or close proves that the user took it over.
+      // 无人值守运行：不做 URL/前台身份复检，直接复用并导航到新目标。
       const result = lease(record, 'reused');
       await persistWorkTabRegistry();
       return result;
@@ -539,6 +499,33 @@ export async function ensureExtensionWorkTabForeground(workTab: ExtensionWorkTab
   }
 }
 
+/**
+ * Re-activate the extension's own leased work tab when a delegated run finds
+ * it in the background: Chromium degrades lazy image loading for background
+ * documents, which previously stranded depth runs (no clickable card surface
+ * at any rank). No-op for tabs this module does not currently lease — a
+ * person's own tab is never re-foregrounded here.
+ */
+export async function activateManagedWorkTabIfInactive(tabId: number): Promise<void> {
+  const record = managedTabs.get(tabId);
+  if (!record || record.state !== 'leased') return;
+  let tab: chrome.tabs.Tab | null = null;
+  try {
+    tab = await chrome.tabs.get(tabId);
+  } catch {
+    return;
+  }
+  if (!tab || tab.active) return;
+  record.expectedForegroundActivationUntil = Date.now() + FOREGROUND_ACTIVATION_GRACE_MS;
+  try {
+    await chrome.windows.update(record.windowId, { focused: true }).catch(() => undefined);
+    await chrome.tabs.update(tabId, { active: true });
+    await delay(FOREGROUND_SETTLE_MS);
+  } catch {
+    // Best effort: the next probe tick reports the truth either way.
+  }
+}
+
 function requireLease(workTab: ExtensionWorkTabLease): ManagedWorkTab {
   const record = managedTabs.get(workTab.tabId);
   if (record?.state === 'leased' && record.leaseId === workTab.leaseId) return record;
@@ -617,19 +604,29 @@ async function restoreWorkTabRegistry(): Promise<void> {
       if (seen.has(candidate.tabId)) continue;
       const tab = await chrome.tabs.get(candidate.tabId).catch(() => null);
       if (!tab || tab.windowId !== candidate.windowId) continue;
-      // A normal release may intentionally leave the owned page in the
-      // foreground.  Restore that exact tab only when the persisted target
-      // identity still matches the observed URL.  Older records without a
-      // target identity remain conservatively non-restorable while active.
-      if (candidate.state === 'idle_reusable' && candidate.expectedCanonicalUrl === null && tab.active) {
-        continue;
-      }
-      if (candidate.state === 'idle_reusable' && candidate.expectedCanonicalUrl !== null &&
-        !isExpectedExtensionWorkNavigation(candidate.expectedCanonicalUrl, tab.url ?? '')) {
-        continue;
-      }
-      if (candidate.state === 'idle_reusable' && restoredIdleTabs >= MAX_REUSABLE_WORK_TABS) {
-        if (!tab.active) await chrome.tabs.remove(candidate.tabId).catch(() => undefined);
+      if (candidate.state === 'idle_reusable') {
+        // 无人值守：idle 标签只要还存在就无条件恢复进池。发布后工作标签页
+        // 通常保持前台，且 B站/小红书页面会自行改写 URL——任何"身份/前台"
+        // 复检都会在真实环境放弃恢复，导致每个操作新建一个标签页。导航
+        // 本身会把页面带到下一次的目标，无需在这里校验身份。
+        if (restoredIdleTabs >= MAX_REUSABLE_WORK_TABS) {
+          if (!tab.active) await chrome.tabs.remove(candidate.tabId).catch(() => undefined);
+          continue;
+        }
+        seen.add(candidate.tabId);
+        managedTabs.set(candidate.tabId, {
+          tabId: candidate.tabId,
+          windowId: candidate.windowId,
+          state: candidate.state,
+          leaseId: candidate.leaseId,
+          expectedCanonicalUrl: candidate.expectedCanonicalUrl,
+          expectedXiaohongshuOverlayPath: candidate.expectedXiaohongshuOverlayPath ?? null,
+          expectedNavigationUntil: null,
+          expectedForegroundActivationUntil: null,
+          initialBlankNavigationUntil: candidate.initialBlankNavigationUntil,
+          lastUsedAt: candidate.lastUsedAt
+        });
+        restoredIdleTabs += 1;
         continue;
       }
       if (candidate.state === 'blocked') {
@@ -653,7 +650,6 @@ async function restoreWorkTabRegistry(): Promise<void> {
         initialBlankNavigationUntil: candidate.initialBlankNavigationUntil,
         lastUsedAt: candidate.lastUsedAt
       });
-      if (candidate.state === 'idle_reusable') restoredIdleTabs += 1;
     }
   } finally {
     registryLoaded = true;
@@ -816,12 +812,25 @@ function xiaohongshuNoteOverlayPath(value: string | null | undefined): string | 
  * signed target; an arbitrary URL, user activation, move, or close remains a
  * hard takeover signal.
  */
-export function isExpectedExtensionWorkNavigation(expectedCanonicalUrl: string, observedUrl: string): boolean {
+export function isExpectedExtensionWorkNavigation(
+  expectedCanonicalUrl: string,
+  observedUrl: string,
+  options: { strictSurface?: boolean } = {}
+): boolean {
   if (expectedCanonicalUrl === XIAOHONGSHU_EXPLORE_URL) {
-    // The trusted in-page Enter transitions the same managed document from
-    // Explore to the public search-result route. Both surfaces belong to this
-    // one registered search lease; a profile, note URL, or arbitrary route does
-    // not.
+    // A parked (idle) explore tab is only itself. The explore→search-route
+    // transition belongs to an active search lease running its trusted input;
+    // a parked tab that moved to a note route was navigated by a person.
+    if (options.strictSurface === true) {
+      try {
+        const url = new URL(observedUrl);
+        return url.protocol === 'https:' && url.hostname === 'www.xiaohongshu.com' &&
+          !url.port && !url.username && !url.password && !url.hash &&
+          (url.pathname === '/explore' || url.pathname === '/explore/');
+      } catch {
+        return false;
+      }
+    }
     const surface = xiaohongshuCurrentPageNetworkPublicSurface(observedUrl);
     return surface === 'explore' || surface === 'search';
   }

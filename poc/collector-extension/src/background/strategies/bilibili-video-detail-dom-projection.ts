@@ -1,3 +1,5 @@
+import { collectBilibiliGateText, evaluateBilibiliGateRisk } from './bilibili-gate-risk';
+
 export interface BilibiliVideoDetailDomSnapshot {
   bvid: string | null;
   title: string | null;
@@ -134,7 +136,6 @@ export async function captureBilibiliVideoDetailDom(
           rendered(element) && element.children.length === 0 && clean(element.textContent, 40) === '视频选集'
         ) ?? null;
         const episodeSummaryText = clean(episodeHeading?.parentElement?.textContent, 500);
-        const bodyText = clean(document.body?.innerText, 100_000) ?? '';
         const loginOverlayVisible = Array.from(
           document.querySelectorAll<HTMLElement>('[role="dialog"], [class*="login" i], [class*="passport" i]')
         ).some((element) => rendered(element) &&
@@ -168,11 +169,10 @@ export async function captureBilibiliVideoDetailDom(
             segments: []
           },
           loginOverlayVisible,
-          risk: {
-            verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(bodyText),
-            rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(bodyText),
-            sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(bodyText)
-          }
+          // Risk is classified from gate surfaces by the wrapper (see
+          // evaluateBilibiliGateRisk): a description, tag, comment or
+          // recommendation containing “风控”/“稍后再试” is page content.
+          risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
         };
       }
     });
@@ -181,5 +181,14 @@ export async function captureBilibiliVideoDetailDom(
   }
   const result = results[0]?.result;
   if (!result) throw new Error('video_detail_strategy_document_context_changed');
-  return result;
+  const gateResults = await chrome.scripting.executeScript({
+    target: documentId ? { tabId, documentIds: [documentId] } : { tabId },
+    world: 'ISOLATED',
+    func: collectBilibiliGateText
+  }).catch(() => []);
+  const risk = evaluateBilibiliGateRisk({
+    gateText: typeof gateResults[0]?.result === 'string' ? gateResults[0]!.result as string : '',
+    hasPrimaryContent: result.playerVisible || result.titleVisible
+  });
+  return { ...result, risk };
 }

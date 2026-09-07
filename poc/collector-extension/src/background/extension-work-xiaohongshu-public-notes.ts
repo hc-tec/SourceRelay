@@ -14,10 +14,14 @@ import {
   readXiaohongshuExistingExploreWorkProjection
 } from './xiaohongshu-current-page-network';
 import { executeXiaohongshuTrustedInputSearch } from './xiaohongshu-trusted-input';
-import { executeXiaohongshuNotePublicDetailExtensionWork } from './extension-work-xiaohongshu-note-public-detail';
+import {
+  executeXiaohongshuNotePublicDetailExtensionWork,
+  XIAOHONGSHU_DEPTH_GATE_ERROR_CODES
+} from './extension-work-xiaohongshu-note-public-detail';
 import {
   abandonExtensionWorkTab,
   acquireExtensionWorkTab,
+  activateManagedWorkTabIfInactive,
   navigateXiaohongshuExploreOnce,
   releaseExtensionWorkTab,
   type ExtensionWorkTabLease,
@@ -28,6 +32,9 @@ import {
 export interface XiaohongshuPublicNotesSearchExtensionLifecycle {
   onWorkTabAcquired?(acquisition: WorkTabAcquisition): Promise<void>;
   onNavigationIntent?(): Promise<void>;
+  /** Metadata-only per-rank probe diagnostics sink (runner forwards to the
+   * gateway operational log). */
+  onDiagnostic?(errorCode: string, details: Record<string, unknown>): void;
 }
 
 export async function executeXiaohongshuPublicNotesSearchExtensionWork(
@@ -36,8 +43,22 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
   lifecycle: XiaohongshuPublicNotesSearchExtensionLifecycle = {}
 ): Promise<XiaohongshuPublicNotesSearchWorkResult> {
   const projectionBox: { value: XiaohongshuManagedSearchProjectionResult | null } = { value: null };
-  const detailActions = { requestedCount: 0, attemptedCount: 0, completedCount: 0, stoppedReason: null as string | null };
+  type DepthRankEntry = NonNullable<
+    NonNullable<XiaohongshuPublicNotesSearchWorkResult['detailActions']>['ranks']
+  >[number];
+  const detailActions = {
+    requestedCount: 0,
+    attemptedCount: 0,
+    completedCount: 0,
+    skippedCount: 0,
+    stoppedReason: null as string | null,
+    ranks: [] as DepthRankEntry[],
+    abortReason: undefined as 'overlay_persisting' | 'platform_gate' | 'internal_error' | undefined
+  };
   const commentsPlan = item.input.comments;
+  // Cross-operation deduplication: ranks whose noteId is already collected
+  // skip the overlay work entirely (cheap) and are reported as skipped.
+  const skipKnown = new Set(item.input.dedupe?.skipKnown ?? []);
   let observedTabId: number | null = null;
   let workTab: ExtensionWorkTabLease | null = null;
   let acquisition: WorkTabAcquisition | 'not_acquired' = 'not_acquired';
@@ -75,6 +96,16 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
       onSearchPostcondition: async (document) => {
         projectionBox.value = await readXiaohongshuExistingExploreWorkProjection(document.tabId, item.workId);
         if (projectionBox.value.items.length < 1) throw new Error('xiaohongshu_trusted_input_postcondition_unmet');
+        // Mark already-collected cards so callers see exactly what was skipped.
+        if (skipKnown.size > 0) {
+          projectionBox.value = {
+            ...projectionBox.value,
+            items: projectionBox.value.items.map((entry) => ({
+              ...entry,
+              ...(skipKnown.has(entry.noteId) ? { known: true } : {})
+            }))
+          };
+        }
         const requestedCount = Math.min(
           Math.max(0, Math.floor(item.input.maximumDetails ?? 0)),
           projectionBox.value.items.length
@@ -93,10 +124,28 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
         // surfaced in detailActions.stoppedReason and the operation converges
         // to `search_depth_stopped` with the captured partial depth intact;
         // only a run that captures zero details stops as a total failure.
+        // Two failures are NOT per-rank noise and abort the remaining ranks
+        // immediately (detailActions.abortReason): an overlay left open
+        // (every further card hit-test would hit the mask) and platform /
+        // document gates (every further rank would fail identically).
         let firstDetailFailure: string | null = null;
+        let completedUnits = 0;
         for (let rank = 1; rank <= requestedCount; rank += 1) {
           detailActions.attemptedCount = rank;
+          const noteId = projectionBox.value.items[rank - 1]?.noteId ?? null;
+          if (noteId && skipKnown.has(noteId)) {
+            // Already collected by this caller: skip the overlay work entirely.
+            detailActions.skippedCount += 1;
+            detailActions.ranks.push({ rank, noteId, outcome: 'skipped', errorCode: null });
+            if (rank < requestedCount) await delay(1_500);
+            continue;
+          }
           const detailItem = createDepthDetailWorkItem(item, rank);
+          // A delegated depth run often outlives the operator's attention:
+          // one activation of the leased work tab per rank keeps lazy card
+          // covers rendering (background documents never finish them), which
+          // previously stranded every rank with `rank_unavailable`.
+          await activateManagedWorkTabIfInactive(document.tabId);
           try {
             const detailResult = await executeXiaohongshuNotePublicDetailExtensionWork(detailItem, {
               closeOverlayAfterCapture: true,
@@ -106,36 +155,54 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
               expectedTabId: document.tabId,
               skipForeground: true,
               expectedTitle: projectionBox.value.items[rank - 1]?.title,
-              expectedNoteId: projectionBox.value.items[rank - 1]?.noteId
+              expectedNoteId: projectionBox.value.items[rank - 1]?.noteId,
+              onDiagnostic: (errorCode, probeDetails) => {
+                void lifecycle.onDiagnostic?.(errorCode, { rank, ...probeDetails });
+              }
             });
             if (detailResult.state !== 'completed' || !detailResult.projection) {
-              firstDetailFailure ??= detailResult.errorCode ?? 'xiaohongshu_note_detail_postcondition_unmet';
-            } else {
-              const noteId = projectionBox.value.items[rank - 1]?.noteId;
-              if (noteId) {
-                const enriched = {
-                  noteId,
-                  publicText: detailResult.projection.publicText,
-                  authorNickname: detailResult.projection.authorNickname,
-                  interactionText: detailResult.projection.interactionText
-                } as (typeof details)[number];
-                if (detailResult.projection.comments) enriched.comments = detailResult.projection.comments;
-                if (detailResult.projection.replyThread) enriched.replyThread = detailResult.projection.replyThread;
-                if (detailResult.projection.replyThreads) enriched.replyThreads = detailResult.projection.replyThreads;
-                const existingIndex = details.findIndex((detail) => detail.noteId === noteId);
-                if (existingIndex >= 0) details[existingIndex] = { ...details[existingIndex], ...enriched };
-                else details.push(enriched);
+              const failureCode = detailResult.errorCode ?? 'xiaohongshu_note_detail_postcondition_unmet';
+              firstDetailFailure ??= failureCode;
+              detailActions.ranks.push({ rank, noteId, outcome: 'failed', errorCode: failureCode });
+              if (detailResult.overlayCleanup === 'unclosed') {
+                detailActions.abortReason = 'overlay_persisting';
+              } else if (failureCode === 'extension_work_expired' ||
+                XIAOHONGSHU_DEPTH_GATE_ERROR_CODES.has(failureCode)) {
+                detailActions.abortReason = 'platform_gate';
               }
-              detailActions.completedCount = rank;
+            } else {
+              const enriched = {
+                noteId,
+                publicText: detailResult.projection.publicText,
+                authorNickname: detailResult.projection.authorNickname,
+                interactionText: detailResult.projection.interactionText
+              } as (typeof details)[number];
+              if (detailResult.projection.comments) enriched.comments = detailResult.projection.comments;
+              if (detailResult.projection.replyThread) enriched.replyThread = detailResult.projection.replyThread;
+              if (detailResult.projection.replyThreads) enriched.replyThreads = detailResult.projection.replyThreads;
+              if (detailResult.projection.commentsCapture) enriched.commentsCapture = detailResult.projection.commentsCapture;
+              if (detailResult.projection.repliesCapture) enriched.repliesCapture = detailResult.projection.repliesCapture;
+              const existingIndex = details.findIndex((detail) => detail.noteId === noteId);
+              if (existingIndex >= 0) details[existingIndex] = { ...details[existingIndex], ...enriched };
+              else details.push(enriched);
+              completedUnits += 1;
+              detailActions.ranks.push({ rank, noteId, outcome: 'completed', errorCode: null });
             }
           } catch (error) {
-            firstDetailFailure ??= safeErrorCode(error);
+            // executeXiaohongshuNotePublicDetailExtensionWork catches its own
+            // failures; a throw here means the composed run itself is broken.
+            const code = safeErrorCode(error);
+            firstDetailFailure ??= code;
+            detailActions.ranks.push({ rank, noteId, outcome: 'failed', errorCode: code });
+            detailActions.abortReason = 'internal_error';
           }
           detailActions.stoppedReason = firstDetailFailure;
+          if (detailActions.abortReason) break;
           if (rank < requestedCount) await delay(1_500);
         }
+        detailActions.completedCount = completedUnits;
         projectionBox.value = { ...projectionBox.value, details: details.slice(0, 40) };
-        if (detailActions.completedCount === 0 && firstDetailFailure !== null) {
+        if (completedUnits === 0 && firstDetailFailure !== null) {
           throw new Error(firstDetailFailure);
         }
       }
@@ -167,7 +234,8 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
   }
   const projection = projectionBox.value;
   const depthRequested = detailActions.requestedCount > 0;
-  const depthCompleted = !depthRequested || detailActions.completedCount === detailActions.requestedCount;
+  const depthCompleted = !depthRequested ||
+    detailActions.completedCount + detailActions.skippedCount === detailActions.requestedCount;
   const completed = action.state === 'completed' && projection !== null && projection.items.length > 0 && depthCompleted;
   const depthStopped = depthRequested && !depthCompleted;
   const result: XiaohongshuPublicNotesSearchWorkResult = {

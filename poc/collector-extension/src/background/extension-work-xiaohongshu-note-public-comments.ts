@@ -184,6 +184,18 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
     }
   }
   const completed = errorCode === null && pageReady && projection !== null && debuggerDetached;
+  // Tri-state comment evidence: a completed empty list is only honest when
+  // the overlay itself authoritatively said "共 0 条评论" (the dedicated
+  // early-return path); any other completed capture has real comments; the
+  // two no-evidence failures below are recorded as unconfirmed so callers
+  // never mistake "did not load in budget" for "zero comments". Platform and
+  // infra gates leave evidence unset — comments were never evaluated.
+  const evidence: XiaohongshuNotePublicCommentsWorkResult['evidence'] = completed
+    ? projection!.comments.length === 0 ? 'confirmed_empty' : 'captured'
+    : errorCode === 'xiaohongshu_comment_scroll_container_unavailable' ||
+        errorCode === 'xiaohongshu_note_comments_postcondition_unmet'
+      ? 'unconfirmed'
+      : undefined;
   return {
     schemaVersion: 1, protocolVersion: 1, workId: item.workId, operationId: item.operationId,
     browserBindingId: item.browserBindingId, platform: 'xiaohongshu',
@@ -195,7 +207,9 @@ export async function executeXiaohongshuNotePublicCommentsExtensionWork(
     semanticAction: { attempted: attemptedCount > 0, attemptCount: attemptedCount },
     scroll: { requestedCount: item.input.maximumScrolls, completedCount },
     page: pageReady ? { publicSurface: 'note_detail_overlay', sameDocument: true } : null,
-    projection, rawPayloadStored: false, responseUrlsStored: false, debuggerDetached
+    projection,
+    ...(evidence === undefined ? {} : { evidence }),
+    rawPayloadStored: false, responseUrlsStored: false, debuggerDetached
   };
 }
 
@@ -228,8 +242,28 @@ async function requireSameDocument(page: NoteDocument, allowSearchOverlay = fals
 async function readRisk(page: NoteDocument): Promise<ReturnType<typeof classifyXiaohongshuCurrentPageRisk>> {
   const result = await chrome.scripting.executeScript({
     target: { tabId: page.tabId, documentIds: [page.documentId] },
-    func: () => ({ pathname: location.pathname, title: document.title.slice(0, 300),
-      visibleText: (document.body?.innerText ?? '').slice(0, 12_000) })
+    // 门面元素 only：评论正文里的“风控/加载失败”是内容，不是平台风控。
+    func: () => {
+      const visible = (element: Element): boolean => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+          style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+      };
+      const parts: string[] = [];
+      const gateSelector = [
+        '[role="dialog"]', '[aria-modal="true"]', '[class*="login" i]',
+        '[class*="modal" i]', '[class*="mask" i]', '[class*="verify" i]',
+        '[class*="captcha" i]', '[class*="forbidden" i]'
+      ].join(', ');
+      for (const element of Array.from(document.querySelectorAll(gateSelector))) {
+        if (!visible(element)) continue;
+        const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+        if (text.length >= 2 && text.length <= 600) parts.push(text);
+      }
+      return { pathname: location.pathname, title: document.title.slice(0, 300),
+        visibleText: parts.join('\n').slice(0, 2_000) };
+    }
   });
   if (!result[0]?.result) throw new Error('xiaohongshu_public_note_probe_unavailable');
   return classifyXiaohongshuCurrentPageRisk(result[0].result);

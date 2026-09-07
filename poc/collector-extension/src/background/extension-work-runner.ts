@@ -275,13 +275,22 @@ async function execute(item: ExtensionWorkItem, pairing: GatewayPairingRecord): 
     }
   };
   if (item.capability === 'xiaohongshu.search.public_notes.v1') {
-    return await executeXiaohongshuPublicNotesSearchExtensionWork(item, {}, lifecycle);
+    return await executeXiaohongshuPublicNotesSearchExtensionWork(item, {}, {
+      ...lifecycle,
+      onDiagnostic: (errorCode, details) => {
+        void emitExtensionDiagnostic(pairing, item, 'execution_finished', 'stopped', errorCode, details);
+      }
+    });
   }
   if (item.capability === 'xiaohongshu.account.public_notes.v1') {
     return await executeXiaohongshuAccountPublicNotesExtensionWork(item);
   }
   if (item.capability === 'xiaohongshu.note.public_detail.v1') {
-    return await executeXiaohongshuNotePublicDetailExtensionWork(item);
+    return await executeXiaohongshuNotePublicDetailExtensionWork(item, {
+      onDiagnostic: (errorCode, details) => {
+        void emitExtensionDiagnostic(pairing, item, 'execution_finished', 'stopped', errorCode, details);
+      }
+    });
   }
   if (item.capability === 'xiaohongshu.note.public_comments.v1') {
     return await executeXiaohongshuNotePublicCommentsExtensionWork(item);

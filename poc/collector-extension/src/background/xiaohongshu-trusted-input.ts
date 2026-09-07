@@ -490,7 +490,6 @@ async function readPostcondition(eligibleDocument: EligibleDocument, query: stri
     args: [query],
     func: (expected) => {
       const pathname = location.pathname;
-      const bodyText = (document.body?.innerText ?? '').slice(0, 12_000);
       const queryEchoed = [...document.querySelectorAll<HTMLElement>(
         'input, textarea, [contenteditable="true"], [role="textbox"]'
       )].some((input) => {
@@ -499,14 +498,32 @@ async function readPostcondition(eligibleDocument: EligibleDocument, query: stri
         return text.trim() === expected;
       });
       // 语义化卡片计数：不依赖 class / scoped-hash / 框架属性，只需
-      // 结果页卡片存在指向笔记详情（/explore/<id> 或 /discovery/item/<id>）
-      // 的链接；并发版后路由变化仍能以语义兜住。
+      // 结果页卡片存在指向笔记详情（/explore/<id>、/discovery/item/<id>
+      // 或搜索页 overlay 路由 /search_result/<id>）的链接；并发版后路由
+      // 变化仍能以语义兜住。
       const cards = Array.from(document.querySelectorAll('a[href]')).filter((link) => {
         if (!(link instanceof HTMLAnchorElement)) return false;
         try {
-          return /^\/(?:explore|discovery\/item)\/[A-Za-z0-9_-]+(?:\/|$)/.test(new URL(link.href).pathname);
+          return /^\/(?:explore|discovery\/item|search_result)\/[A-Za-z0-9_-]+(?:\/|$)/.test(new URL(link.href).pathname);
         } catch { return false; }
       }).length;
+      // 风险判定只读门面元素：搜索结果里大量笔记标题本身含“风控”“验证
+      // 码”“加载失败”等普通词汇，全文扫描会把健康页面误判成平台风控。
+      const gateParts: string[] = [];
+      const gateSelector = [
+        '[role="dialog"]', '[aria-modal="true"]', '[class*="login" i]',
+        '[class*="modal" i]', '[class*="mask" i]', '[class*="verify" i]',
+        '[class*="captcha" i]', '[class*="forbidden" i]'
+      ].join(', ');
+      for (const element of Array.from(document.querySelectorAll(gateSelector))) {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        const visible = rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+          style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+        if (!visible) continue;
+        const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+        if (text.length >= 2 && text.length <= 600) gateParts.push(text);
+      }
       return {
         publicSurface: pathname === '/explore' || pathname === '/explore/' ? 'explore' :
           /^\/search_result(?:_ai)?\/?$/.test(pathname) ? 'search' : null,
@@ -514,7 +531,7 @@ async function readPostcondition(eligibleDocument: EligibleDocument, query: stri
         renderedCardCount: Math.min(40, cards),
         pathname,
         title: document.title.slice(0, 300),
-        visibleText: bodyText
+        visibleText: gateParts.join('\n').slice(0, 2_000)
       };
     }
   }), XIAOHONGSHU_TRUSTED_INPUT_PROBE_TIMEOUT_MS, 'xiaohongshu_trusted_input_probe_timeout').catch((error) => {

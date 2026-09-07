@@ -1,3 +1,5 @@
+import { collectBilibiliGateText, evaluateBilibiliGateRisk } from './bilibili-gate-risk';
+
 export interface BilibiliCollectionSeriesDomSnapshot {
   stableAccountId: string | null;
   listVisible: boolean;
@@ -26,8 +28,7 @@ export interface BilibiliCollectionSeriesDomSnapshot {
 export async function captureBilibiliCollectionSeriesDom(
   tabId: number,
   documentId?: string
-): Promise<BilibiliCollectionSeriesDomSnapshot> {
-  const results = await chrome.scripting.executeScript({
+): Promise<BilibiliCollectionSeriesDomSnapshot> {  const results = await chrome.scripting.executeScript({
     target: documentId ? { tabId, documentIds: [documentId] } : { tabId },
     world: 'ISOLATED',
     func: () => {
@@ -69,7 +70,6 @@ export async function captureBilibiliCollectionSeriesDom(
       const pathMatch = location.hostname === 'space.bilibili.com'
         ? location.pathname.match(/^\/(\d{1,20})\/lists\/?$/)
         : null;
-      const bodyText = clean(document.body?.innerText, 120_000);
       const listRoot = document.querySelector<HTMLElement>('.space-lists');
       const items = Array.from(document.querySelectorAll<HTMLElement>('.space-lists .video-list'))
         .filter(rendered)
@@ -131,15 +131,23 @@ export async function captureBilibiliCollectionSeriesDom(
         )).some(rendered),
         declaredNavigationCount: null,
         items,
-        risk: {
-          verificationRequired: /验证码|安全验证|完成验证|请进行验证|异常访问/.test(bodyText),
-          rateLimited: /请求过于频繁|访问频繁|操作频繁|稍后再试|风控/.test(bodyText),
-          sourceUnavailable: /页面不存在|加载失败|网络错误|服务不可用|系统繁忙/.test(bodyText)
-        }
+        // Gate-surface classification in the wrapper; series/season titles
+        // mentioning “风控” are content, not a platform gate.
+        risk: { verificationRequired: false, rateLimited: false, sourceUnavailable: false }
       };
     }
   });
   const result = results[0]?.result;
   if (!result) throw new Error('collection_series_strategy_dom_projection_missing');
-  return result as BilibiliCollectionSeriesDomSnapshot;
+  const snapshot = result as BilibiliCollectionSeriesDomSnapshot;
+  const gateResults = await chrome.scripting.executeScript({
+    target: documentId ? { tabId, documentIds: [documentId] } : { tabId },
+    world: 'ISOLATED',
+    func: collectBilibiliGateText
+  }).catch(() => []);
+  const risk = evaluateBilibiliGateRisk({
+    gateText: typeof gateResults[0]?.result === 'string' ? gateResults[0]!.result as string : '',
+    hasPrimaryContent: snapshot.items.length > 0
+  });
+  return { ...snapshot, risk };
 }
