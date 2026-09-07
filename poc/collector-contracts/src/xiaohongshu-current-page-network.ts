@@ -19,19 +19,62 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY =
   'xiaohongshu.search.public_notes.v1' as const;
 export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_CAPABILITY =
   'xiaohongshu.account.public_notes.v1' as const;
-export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET = Object.freeze({
-  // Enter the official Explore surface at most once through a Collector-
-  // managed work tab. Reloads and page-initiated documents remain forbidden.
-  maximumPlatformNavigations: 1,
-  maximumPageReloads: 0,
-  maximumPageInitiatedNewDocuments: 0,
-  maximumSemanticActions: 1,
-  maximumNetworkResponseBodies: 8,
-  maximumProjectedItems: 40,
-  maximumRawPayloadBytesStored: 0
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS = 300 as const;
+/**
+ * One composed search operation executes its whole depth loop inside a single
+ * MV3 service-worker event: click + detail + comments + replies + overlay
+ * close per rank. Empirically ~25–70s per rank, and a worker killed mid-run
+ * loses the whole remaining depth, so the per-operation depth is capped to a
+ * chunk that always fits the worker window. Breadth beyond one chunk is the
+ * caller's job: repeat the composed search with `dedupe.skipKnown` holding the
+ * already-collected noteIds.
+ */
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS = 5 as const;
+
+/**
+ * Semantic collection depth for delegated evidence runs. The caller picks a
+ * tier instead of free numeric knobs so a long tool loop cannot silently
+ * degrade to the minimum scroll budget. An explicit maximumDetails/comments
+ * field still overrides its own slice of the tier. maximumDetails is a
+ * PER-OPERATION chunk (bounded by XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS),
+ * never a run total: a run composes multiple chunked operations via skipKnown.
+ */
+export type XiaohongshuPublicNotesSearchDepth = 'standard' | 'deep';
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_TIERS = Object.freeze({
+  standard: Object.freeze({ maximumDetails: 5, maximumScrolls: 2 as const }),
+  deep: Object.freeze({ maximumDetails: 5, maximumScrolls: 3 as const })
 } as const);
-/** Upper bound for optional, same-document detail enrichment of ranked cards. */
-export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS = 20 as const;
+
+export function resolveXiaohongshuPublicNotesSearchDepth<T extends { query: string }>(
+  input: T
+): T {
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) return input;
+  const record = input as Record<string, unknown>;
+  const depth = record.depth;
+  if (depth === undefined) return input;
+  if (depth !== 'standard' && depth !== 'deep') {
+    throw new Error('xiaohongshu_search_depth_invalid');
+  }
+  const tier = XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_TIERS[depth];
+  const comments = record.comments as
+    | { maximumScrolls: 1 | 2 | 3 | 4 | 5 | 6; replies?: { maximumThreads: 1 | 2 | 3 | 4 | 5 | 6 } }
+    | undefined;
+  const {
+    depth: _removed,
+    maximumDetails: explicitMaximumDetails,
+    comments: explicitComments,
+    ...rest
+  } = record;
+  const maximumDetails = typeof explicitMaximumDetails === 'number'
+    ? explicitMaximumDetails
+    : tier.maximumDetails;
+  return {
+    ...rest,
+    maximumDetails,
+    comments: explicitComments ?? { maximumScrolls: tier.maximumScrolls }
+  } as unknown as T;
+}
+
 /**
  * Natural author-avatar discovery spends one trusted click before the profile
  * directory work. A platform-created profile document is bounded to one;
@@ -46,60 +89,40 @@ export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET = Object.freeze({
   maximumProjectedItems: 200,
   maximumRawPayloadBytesStored: 0
 } as const);
+export interface XiaohongshuPublicNotesSearchBudget {
+  maximumPlatformNavigations: 0 | 1;
+  maximumPageReloads: 0;
+  maximumPageInitiatedNewDocuments: 0;
+  maximumSemanticActions: number;
+  maximumNetworkResponseBodies: number;
+  maximumProjectedItems: number;
+  maximumRawPayloadBytesStored: 0;
+}
+
 /**
- * Detail enrichment is deliberately bounded to the existing search document:
- * it may click and close at most twenty visible cards, but it never navigates,
- * reloads, opens a page-initiated document, or stores raw payloads.
+ * Computes the safety budget from the RESOLVED request instead of a ladder of
+ * hand-picked constants. These are anti-runaway ceilings with generous
+ * headroom, never the collection target: the target is `maximumDetails`, and
+ * the deadline (work item expiresAt) is the real wall-clock bound.
  */
-export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET = Object.freeze({
-  maximumPlatformNavigations: 1,
-  maximumPageReloads: 0,
-  maximumPageInitiatedNewDocuments: 0,
-  maximumSemanticActions: 41,
-  maximumNetworkResponseBodies: 8,
-  maximumProjectedItems: 40,
-  maximumRawPayloadBytesStored: 0
-} as const);
-/**
- * Optional detail-plus-comments mode. The bound covers one search action,
- * twenty detail clicks, three bounded comment scrolls and one close action per
- * detail. Response/projected-item ceilings are aggregate safety ceilings for
- * the composed operation; raw payloads are still never stored.
- */
-export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET = Object.freeze({
-  maximumPlatformNavigations: 1,
-  maximumPageReloads: 0,
-  maximumPageInitiatedNewDocuments: 0,
-  maximumSemanticActions: 101,
-  maximumNetworkResponseBodies: 168,
-  maximumProjectedItems: 1640,
-  maximumRawPayloadBytesStored: 0
-} as const);
-/**
- * Optional detail-plus-comments-plus-one-reply-thread mode. The reply
- * expansion is still strictly bounded to one thread per requested detail;
- * its extra response-body ceiling is an aggregate upper bound, not a replay
- * budget. Raw payloads remain projection-only and are never persisted.
- */
-export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET = Object.freeze({
-  maximumPlatformNavigations: 1,
-  maximumPageReloads: 0,
-  maximumPageInitiatedNewDocuments: 0,
-  maximumSemanticActions: 121,
-  maximumNetworkResponseBodies: 328,
-  maximumProjectedItems: 2440,
-  maximumRawPayloadBytesStored: 0
-} as const);
-/** Aggregate upper bound when two or three reply threads are requested per detail. */
-export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET = Object.freeze({
-  maximumPlatformNavigations: 1,
-  maximumPageReloads: 0,
-  maximumPageInitiatedNewDocuments: 0,
-  maximumSemanticActions: 161,
-  maximumNetworkResponseBodies: 648,
-  maximumProjectedItems: 4040,
-  maximumRawPayloadBytesStored: 0
-} as const);
+export function computeXiaohongshuPublicNotesSearchBudget(input: {
+  maximumDetails: number;
+  maximumScrolls: number;
+  maximumThreads: number;
+}): XiaohongshuPublicNotesSearchBudget {
+  const details = Math.max(0, Math.min(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS, Math.floor(input.maximumDetails) || 0));
+  const scrolls = details > 0 ? Math.max(1, Math.min(30, Math.floor(input.maximumScrolls) || 1)) : 0;
+  const threads = scrolls > 0 ? Math.max(0, Math.min(10, Math.floor(input.maximumThreads) || 0)) : 0;
+  return {
+    maximumPlatformNavigations: 1,
+    maximumPageReloads: 0,
+    maximumPageInitiatedNewDocuments: 0,
+    maximumSemanticActions: 10 + details * (5 + scrolls) + details * threads * 3,
+    maximumNetworkResponseBodies: 8 + details * (scrolls * 6 + 4) + details * threads * 12,
+    maximumProjectedItems: 40 + details * (scrolls * 40 + 20) + details * threads * 120,
+    maximumRawPayloadBytesStored: 0
+  };
+}
 export const XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET = Object.freeze({
   maximumPlatformNavigations: 0,
   maximumPageReloads: 0,
@@ -300,6 +323,9 @@ export interface XiaohongshuPublicSearchItemProjection {
   authorId: string;
   authorNickname: string;
   likedCountText: string;
+  /** Present when the caller supplied a dedupe ledger: true means this note
+   * was already collected and its detail+comments were skipped. */
+  known?: boolean;
 }
 
 /**
@@ -319,6 +345,14 @@ export interface XiaohongshuPublicNoteDetailProjection {
   replyThread?: XiaohongshuPublicReplyThreadProjection;
   /** Present when the caller requests more than one reply thread. */
   replyThreads?: XiaohongshuPublicReplyThreadProjection[];
+  /** Comment-evidence outcome for this note. Present when comments were
+   * requested: 'captured' (comments embedded), 'confirmed_empty' (the overlay
+   * authoritatively reported zero comments), or 'unconfirmed' (the comment
+   * area produced no usable evidence within budget — absence of `comments`
+   * then means "unknown", never "zero"). */
+  commentsCapture?: 'captured' | 'confirmed_empty' | 'unconfirmed';
+  /** Same tri-state for reply threads when replies were requested. */
+  repliesCapture?: 'captured' | 'unconfirmed';
 }
 
 export interface XiaohongshuManagedSearchProjectionResult {
@@ -585,13 +619,13 @@ function isPublicSearchItemProjection(
   value: unknown,
   maximumRank: 40 | 200
 ): value is XiaohongshuPublicSearchItemProjection {
-  if (!record(value) || !exactKeys(value, [
-    'rank', 'noteId', 'title', 'contentType', 'authorId', 'authorNickname', 'likedCountText'
-  ])) return false;
+  const base = ['rank', 'noteId', 'title', 'contentType', 'authorId', 'authorNickname', 'likedCountText'] as const;
+  if (!record(value) || !(exactKeys(value, base) || exactKeys(value, [...base, 'known']))) return false;
   return Number.isSafeInteger(value.rank) && Number(value.rank) >= 1 && Number(value.rank) <= maximumRank &&
     boundedProjectionText(value.noteId, 80, true) && boundedProjectionText(value.title, 500, true) &&
     boundedProjectionText(value.contentType, 40) && boundedProjectionText(value.authorId, 80) &&
-    boundedProjectionText(value.authorNickname, 200) && boundedProjectionText(value.likedCountText, 40);
+    boundedProjectionText(value.authorNickname, 200) && boundedProjectionText(value.likedCountText, 40) &&
+    (value.known === undefined || typeof value.known === 'boolean');
 }
 
 function projectionKeys(value: Record<string, unknown>): boolean {
@@ -613,18 +647,22 @@ function optionalPublicNoteDetails(value: unknown, maximumItems: 40 | 200): bool
       (entry.comments === undefined || isXiaohongshuNotePublicCommentsProjection(entry.comments)) &&
       (entry.replyThread === undefined || isXiaohongshuPublicReplyThreadProjection(entry.replyThread)) &&
       (entry.replyThreads === undefined || (Array.isArray(entry.replyThreads) && entry.replyThreads.length >= 1 &&
-        entry.replyThreads.length <= 3 && entry.replyThreads.every(isXiaohongshuPublicReplyThreadProjection)));
+        entry.replyThreads.length <= 3 && entry.replyThreads.every(isXiaohongshuPublicReplyThreadProjection))) &&
+      (entry.commentsCapture === undefined || commentCapture(entry.commentsCapture)) &&
+      (entry.repliesCapture === undefined || entry.repliesCapture === 'captured' || entry.repliesCapture === 'unconfirmed');
   });
+}
+
+function commentCapture(value: unknown): boolean {
+  return value === 'captured' || value === 'confirmed_empty' || value === 'unconfirmed';
 }
 
 function detailProjectionKeys(value: Record<string, unknown>): boolean {
   const base = ['noteId', 'publicText', 'authorNickname', 'interactionText'] as const;
-  return exactKeys(value, base) || exactKeys(value, [...base, 'comments']) ||
-    exactKeys(value, [...base, 'replyThread']) || exactKeys(value, [...base, 'replyThreads']) ||
-    exactKeys(value, [...base, 'comments', 'replyThread']) ||
-    exactKeys(value, [...base, 'comments', 'replyThreads']) ||
-    exactKeys(value, [...base, 'replyThread', 'replyThreads']) ||
-    exactKeys(value, [...base, 'comments', 'replyThread', 'replyThreads']);
+  const optional = ['comments', 'replyThread', 'replyThreads', 'commentsCapture', 'repliesCapture'] as const;
+  const keys = Object.keys(value);
+  return base.every((key) => keys.includes(key)) &&
+    keys.every((key) => base.includes(key as typeof base[number]) || optional.includes(key as typeof optional[number]));
 }
 
 function isXiaohongshuNotePublicCommentsProjection(value: unknown): value is XiaohongshuNotePublicCommentsProjection {

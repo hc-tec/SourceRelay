@@ -53,6 +53,7 @@ function installChromeTabsMock(input: { foregroundAvailable?: boolean } = {}) {
   const movedListeners: Array<(tabId: number) => void> = [];
   const updatedListeners: Array<(tabId: number, changeInfo: chrome.tabs.TabChangeInfo) => void> = [];
   const sessionData = new Map<string, unknown>();
+  const localData = new Map<string, unknown>();
   let nextTabId = 2;
   let windowFocused = false;
 
@@ -125,6 +126,19 @@ function installChromeTabsMock(input: { foregroundAvailable?: boolean } = {}) {
       },
       windows: { update: windowsUpdate, get: windowsGet },
       storage: {
+        local: {
+          get: vi.fn(async (key?: string | string[]) => {
+            if (typeof key === 'string') return { [key]: localData.get(key) };
+            if (Array.isArray(key)) return Object.fromEntries(key.map((entry) => [entry, localData.get(entry)]));
+            return Object.fromEntries(localData.entries());
+          }),
+          set: vi.fn(async (value: Record<string, unknown>) => {
+            for (const [key, entry] of Object.entries(value)) localData.set(key, structuredClone(entry));
+          }),
+          remove: vi.fn(async (key: string | string[]) => {
+            for (const entry of Array.isArray(key) ? key : [key]) localData.delete(entry);
+          })
+        },
         session: {
           get: vi.fn(async (key?: string | string[]) => {
             if (typeof key === 'string') return { [key]: sessionData.get(key) };
@@ -148,6 +162,7 @@ function installChromeTabsMock(input: { foregroundAvailable?: boolean } = {}) {
     windowsUpdate,
     windowsGet,
     sessionData,
+    localData,
     activate,
     remove(tabId: number) {
       tabs.delete(tabId);
@@ -324,7 +339,7 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     expect(secondLease.acquisition).toBe('reused');
     expect(secondLease.tabId).toBe(firstLease.tabId);
     expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
-    expect(browser.sessionData.size).toBe(1);
+    expect(browser.localData.size).toBe(1);
   });
 
   test('reuses a normally released foreground tab instead of treating it as user takeover', async () => {
@@ -393,7 +408,7 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const stored = JSON.stringify([...browser.sessionData.values()]);
+    const stored = JSON.stringify([...browser.localData.values()]);
     expect(stored).not.toContain('xsec_token');
     expect(stored).toContain('/explore/note_123');
     const reused = await tabs.acquireExtensionWorkTab();
@@ -423,20 +438,21 @@ describe('extension-owned work-tab foreground lifecycle', () => {
     expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
   });
 
-  test('quarantines an unannounced person navigation but opens a fresh work tab', async () => {
+  test('keeps the work tab in the pool when an unattended URL change arrives', async () => {
     const browser = installChromeTabsMock();
     const tabs = await import('../src/background/extension-work-tabs.js');
     const lease = await tabs.acquireExtensionWorkTab();
     await tabs.navigateXiaohongshuExploreOnce(lease);
     expect(tabs.releaseExtensionWorkTab(lease)).toBe('idle_reusable');
 
+    // 无人值守运行：平台/人为的 URL 变化不淘汰工作标签页，下一次操作
+    // 仍然复用同一个标签页，而不是新建。
     await browser.update(lease.tabId, { url: 'https://www.xiaohongshu.com/explore/person_note' });
 
-    expect(tabs.currentExtensionWorkTabLossCause()).toBe('unexpected_url_update');
-    const replacement = await tabs.acquireExtensionWorkTab();
-    expect(replacement.acquisition).toBe('created');
-    expect(replacement.tabId).not.toBe(lease.tabId);
-    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
+    const next = await tabs.acquireExtensionWorkTab();
+    expect(next.acquisition).toBe('reused');
+    expect(next.tabId).toBe(lease.tabId);
+    expect((globalThis.chrome.tabs.create as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
   });
 
   test('closes an interrupted pre-navigation blank tab instead of retaining an orphan', async () => {
@@ -455,7 +471,7 @@ describe('extension-owned work-tab foreground lifecycle', () => {
 
     expect(browser.tabs.has(firstLease.tabId)).toBe(false);
     expect((globalThis.chrome.tabs.remove as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(firstLease.tabId);
-    expect(browser.sessionData.size).toBe(1);
+    expect(browser.localData.size).toBe(1);
   });
 
   test('clears a stale leased blank tab before the next queued work item', async () => {

@@ -14,12 +14,9 @@ import {
   isExtensionWorkResultForItem,
   normaliseBilibiliNativeSearchRoute,
   canonicalXiaohongshuPublicProfileUrl,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS,
+  computeXiaohongshuPublicNotesSearchBudget,
+  type XiaohongshuPublicNotesSearchBudget,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_LINK_BUDGET,
   XIAOHONGSHU_ACCOUNT_PUBLIC_NOTES_DISCOVERY_BUDGET,
@@ -54,7 +51,7 @@ const XIAOHONGSHU_MULTI_REPLY_WORK_TTL_MS = 120_000;
 // scrolls. Keep this finite but give the declared 20-scroll budget enough
 // time to deliver one result; this is still a one-shot lease with no renewal.
 const XIAOHONGSHU_PROFILE_LINK_WORK_TTL_MS = 120_000;
-const XIAOHONGSHU_COMPOSED_SEARCH_MAX_TTL_MS = 15 * 60_000;
+const XIAOHONGSHU_COMPOSED_SEARCH_MAX_TTL_MS = 8 * 60 * 60_000;
 const MAX_RETAINED_OPERATIONS = 500;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_ERROR_CODE = /^[a-z0-9_]{1,100}$/;
@@ -186,12 +183,12 @@ export interface EnqueueXiaohongshuNotePublicDetailWorkInput {
 export interface EnqueueXiaohongshuNotePublicCommentsWorkInput {
   operationId?: string;
   browserBindingId: string;
-  maximumScrolls: 1 | 2 | 3;
+  maximumScrolls: number;
 }
 export interface EnqueueXiaohongshuNotePublicCommentRepliesWorkInput {
   operationId?: string;
   browserBindingId: string;
-  maximumThreads: 1 | 2 | 3;
+  maximumThreads: number;
 }
 
 /**
@@ -219,11 +216,7 @@ interface RedactedXiaohongshuPublicNotesSearchWorkItem {
   issuedAt: string;
   expiresAt: string;
   input: { queryDigest: string };
-  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET;
+  budget: XiaohongshuPublicNotesSearchBudget;
 }
 
 interface RedactedXiaohongshuAccountPublicNotesWorkItem {
@@ -770,7 +763,8 @@ export class ExtensionWorkQueue {
   ): Promise<ExtensionWorkOperationSummary> {
     if (!isUuid(input.browserBindingId) || !isXiaohongshuQuery(input.query) ||
       (input.maximumDetails !== undefined && (!Number.isSafeInteger(input.maximumDetails) ||
-        input.maximumDetails < 0 || input.maximumDetails > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS)) ||
+        input.maximumDetails < 0 ||
+        input.maximumDetails > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS)) ||
       (input.comments !== undefined && (input.maximumDetails === undefined || input.maximumDetails < 1 ||
         !Number.isSafeInteger(input.comments.maximumScrolls) || input.comments.maximumScrolls < 1 ||
         input.comments.maximumScrolls > 3 ||
@@ -779,8 +773,8 @@ export class ExtensionWorkQueue {
         (input.comments.replies !== undefined &&
           (Object.keys(input.comments).length !== 2 ||
             !input.comments.replies || Object.keys(input.comments.replies).length !== 1 ||
-            (input.comments.replies.maximumThreads !== 1 && input.comments.replies.maximumThreads !== 2 &&
-              input.comments.replies.maximumThreads !== 3)))))) {
+            !Number.isSafeInteger(input.comments.replies.maximumThreads) ||
+            input.comments.replies.maximumThreads < 1 || input.comments.replies.maximumThreads > 3))))) {
       throw new Error('xiaohongshu_public_notes_search_input_invalid');
     }
     const expired = this.#expire(now);
@@ -803,15 +797,11 @@ export class ExtensionWorkQueue {
         ...(input.maximumDetails === undefined ? {} : { maximumDetails: input.maximumDetails }),
         ...(input.comments === undefined ? {} : { comments: input.comments })
       },
-      budget: input.maximumDetails && input.maximumDetails > 0
-        ? input.comments
-          ? input.comments.replies
-            ? input.comments.replies.maximumThreads > 1
-              ? XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET
-              : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET
-            : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET
-          : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET
-        : XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET
+      budget: computeXiaohongshuPublicNotesSearchBudget({
+        maximumDetails: input.maximumDetails ?? 0,
+        maximumScrolls: input.comments?.maximumScrolls ?? 0,
+        maximumThreads: input.comments?.replies?.maximumThreads ?? 0
+      })
     };
     return await this.#enqueueSigned(unsigned, issuedAt);
   }
@@ -1159,11 +1149,11 @@ function xiaohongshuSearchTtlMs(input: EnqueueXiaohongshuPublicNotesSearchWorkIn
   const maximumDetails = input.maximumDetails ?? 0;
   if (maximumDetails <= 0) return WORK_ITEM_TTL_MS;
   const perDetail = input.comments?.replies
-    ? input.comments.replies.maximumThreads > 1 ? 75_000 : 65_000
-    : input.comments ? 32_000 : 18_000;
+    ? input.comments.replies.maximumThreads > 1 ? 90_000 : 75_000
+    : input.comments ? 40_000 : 20_000;
   return Math.min(
     XIAOHONGSHU_COMPOSED_SEARCH_MAX_TTL_MS,
-    Math.max(WORK_ITEM_TTL_MS, 25_000 + maximumDetails * perDetail)
+    Math.max(WORK_ITEM_TTL_MS, 5 * 60_000 + maximumDetails * perDetail)
   );
 }
 
@@ -1201,11 +1191,17 @@ function isRedactedXiaohongshuPublicNotesSearchWorkItem(
     isTimestamp(value.expiresAt) && Date.parse(value.expiresAt) > Date.parse(value.issuedAt) &&
     isRecord(value.input) && hasExactKeys(value.input, ['queryDigest']) &&
     /^[a-f0-9]{64}$/.test(stringValue((value.input as Record<string, unknown>).queryDigest)) &&
-    (JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET) ||
-      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET) ||
-      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET) ||
-      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET) ||
-      JSON.stringify(value.budget) === JSON.stringify(XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET));
+    isRecord(value.budget) &&
+    value.budget.maximumPlatformNavigations === 1 &&
+    value.budget.maximumPageReloads === 0 &&
+    value.budget.maximumPageInitiatedNewDocuments === 0 &&
+    value.budget.maximumRawPayloadBytesStored === 0 &&
+    Number.isSafeInteger((value.budget as Record<string, unknown>).maximumSemanticActions) &&
+    Number((value.budget as Record<string, unknown>).maximumSemanticActions) > 0 &&
+    Number.isSafeInteger((value.budget as Record<string, unknown>).maximumNetworkResponseBodies) &&
+    Number((value.budget as Record<string, unknown>).maximumNetworkResponseBodies) > 0 &&
+    Number.isSafeInteger((value.budget as Record<string, unknown>).maximumProjectedItems) &&
+    Number((value.budget as Record<string, unknown>).maximumProjectedItems) > 0;
 }
 
 function isRedactedXiaohongshuAccountPublicNotesWorkItem(

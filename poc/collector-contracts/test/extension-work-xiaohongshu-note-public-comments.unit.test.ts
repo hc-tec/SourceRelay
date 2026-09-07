@@ -88,6 +88,7 @@ describe('signed Xiaohongshu public-comment work contract', () => {
 
   test('requires a URL-free bounded public projection for completion', () => {
     expect(isExtensionWorkResultForItem(completed, item)).toBe(true);
+    expect(isExtensionWorkResultForItem({ ...completed, evidence: 'captured' }, item)).toBe(true);
     expect(isExtensionWorkResultForItem({ ...completed, navigation: { attempted: true, attemptCount: 1 } }, item)).toBe(false);
     expect(isExtensionWorkResultForItem({
       ...completed,
@@ -97,6 +98,48 @@ describe('signed Xiaohongshu public-comment work contract', () => {
       ...completed,
       projection: { ...completed.projection, url: 'https://x' }
     }, item)).toBe(false);
+  });
+
+  test('accepts an authoritative zero-comment overlay as a completed confirmed_empty result', () => {
+    const confirmedEmpty = {
+      ...completed,
+      evidence: 'confirmed_empty',
+      semanticAction: { attempted: false, attemptCount: 0 },
+      scroll: { requestedCount: 1, completedCount: 0 },
+      projection: {
+        ...completed.projection,
+        renderedCommentCount: 0,
+        comments: []
+      }
+    };
+    expect(isExtensionWorkResultForItem(confirmedEmpty, item)).toBe(true);
+    // An empty list WITHOUT the confirmed_empty marker stays invalid: absence
+    // of comments must never silently mean "zero comments".
+    expect(isExtensionWorkResultForItem({ ...confirmedEmpty, evidence: undefined }, item)).toBe(false);
+    expect(isExtensionWorkResultForItem({ ...confirmedEmpty, evidence: 'captured' }, item)).toBe(false);
+    expect(isExtensionWorkResultForItem({ ...confirmedEmpty, evidence: 'sometimes' }, item)).toBe(false);
+  });
+
+  test('records unconfirmed evidence on a no-evidence stop so callers never read it as zero', () => {
+    const unconfirmed = {
+      ...completed,
+      state: 'stopped',
+      evidence: 'unconfirmed',
+      errorCode: 'xiaohongshu_comment_scroll_container_unavailable',
+      terminalReason: 'comment_scroll_container_unavailable',
+      scroll: { requestedCount: 1, completedCount: 0 },
+      page: null,
+      projection: null
+    };
+    expect(isExtensionWorkResultForItem(unconfirmed, item)).toBe(true);
+    // Platform/infra gates leave evidence unset — comments were never evaluated.
+    const gate = {
+      ...unconfirmed,
+      evidence: undefined,
+      errorCode: 'xiaohongshu_verification_required',
+      terminalReason: 'verification_required'
+    };
+    expect(isExtensionWorkResultForItem(gate, item)).toBe(true);
   });
 
   test('records an attempted scroll on a stopped result without claiming completion', () => {

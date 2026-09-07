@@ -59,9 +59,21 @@ export interface XiaohongshuPublicNotesArtifactView {
     detailActions?: XiaohongshuPublicNotesSearchWorkResult['detailActions'];
     page: XiaohongshuPublicNotesSearchWorkResult['page'];
     projection: XiaohongshuPublicNotesSearchWorkResult['projection'];
+    /** 逐笔记完整度矩阵：委托运行的浅采一目了然。 */
+    coverage?: XiaohongshuPublicNotesCoverageRow[];
     workTabAcquisition?: ExtensionWorkTabAcquisition;
     workTabDisposition?: ExtensionWorkTabDisposition;
   };
+}
+
+export interface XiaohongshuPublicNotesCoverageRow {
+  rank: number;
+  noteId: string;
+  detail: boolean;
+  /** null = 详情未采集，评论有无未知；false = 采集到详情且确认无评论；
+   * 'unconfirmed' = 请求了评论但预算内没有可用证据（不是零评论）。 */
+  comments: boolean | 'unconfirmed' | null;
+  replies: boolean | 'unconfirmed' | null;
 }
 
 interface StoredArtifact extends XiaohongshuPublicNotesArtifactView {}
@@ -143,6 +155,9 @@ export class XiaohongshuPublicNotesArtifactStore {
         input: structuredClone(input.result.input),
         ...(input.result.detailActions
           ? { detailActions: structuredClone(input.result.detailActions) }
+          : {}),
+        ...(input.result.projection
+          ? { coverage: buildXiaohongshuPublicNotesCoverage(input.result.projection) }
           : {}),
         page: structuredClone(input.result.page),
         projection: structuredClone(input.result.projection),
@@ -233,6 +248,7 @@ function isStoredArtifact(value: unknown): value is StoredArtifact {
     typeof provenance.debuggerDetached === 'boolean' && workTabFields(provenance) && storedResultKeys(result) &&
     navigation(result.navigation) && workTabFields(result) &&
     validDetailActions(result.detailActions) &&
+    validCoverage(result.coverage) &&
     (result.projection === null || isXiaohongshuManagedSearchProjectionResult(result.projection));
 }
 
@@ -246,12 +262,45 @@ function provenanceKeys(value: Record<string, unknown>): boolean {
 }
 
 function storedResultKeys(value: Record<string, any>): boolean {
-  const base = ['state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction', 'input', 'page', 'projection'] as const;
-  const withDetails = [...base.slice(0, 6), 'detailActions', ...base.slice(6)];
-  const withWorkTab = [...base, 'workTabAcquisition', 'workTabDisposition'];
-  const withDetailsAndWorkTab = [...withDetails, 'workTabAcquisition', 'workTabDisposition'];
-  return exactKeys(value, base) || exactKeys(value, withDetails) || exactKeys(value, withWorkTab) ||
-    exactKeys(value, withDetailsAndWorkTab);
+  const required = ['state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction', 'input', 'page', 'projection'];
+  const optional = ['detailActions', 'coverage', 'workTabAcquisition', 'workTabDisposition'];
+  const keys = Object.keys(value);
+  return required.every((key) => keys.includes(key)) &&
+    keys.every((key) => required.includes(key) || optional.includes(key));
+}
+
+export function buildXiaohongshuPublicNotesCoverage(
+  projection: NonNullable<XiaohongshuPublicNotesSearchWorkResult['projection']>
+): XiaohongshuPublicNotesCoverageRow[] {
+  const details = projection.details ?? [];
+  return projection.items.map((item) => {
+    const detail = details.find((entry) => entry.noteId === item.noteId) ?? null;
+    return {
+      rank: item.rank,
+      noteId: item.noteId,
+      detail: detail !== null,
+      comments: detail === null
+        ? null
+        : detail.commentsCapture === 'unconfirmed'
+          ? 'unconfirmed'
+          : detail.comments !== undefined,
+      replies: detail === null
+        ? null
+        : detail.repliesCapture === 'unconfirmed'
+          ? 'unconfirmed'
+          : (detail.replyThread !== undefined || detail.replyThreads !== undefined)
+    };
+  });
+}
+
+function validCoverage(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value) || value.length > 40) return false;
+  return value.every((row) => record(row) && Number.isSafeInteger(row.rank) &&
+    typeof row.noteId === 'string' && row.noteId.length >= 1 && row.noteId.length <= 80 &&
+    typeof row.detail === 'boolean' &&
+    (row.comments === null || typeof row.comments === 'boolean' || row.comments === 'unconfirmed') &&
+    (row.replies === null || typeof row.replies === 'boolean' || row.replies === 'unconfirmed'));
 }
 
 function navigation(value: unknown): boolean {
@@ -273,14 +322,38 @@ function workTabFields(value: Record<string, unknown>): boolean {
 
 function validDetailActions(value: unknown): boolean {
   if (value === undefined) return true;
-  if (!record(value) || !exactKeys(value, ['requestedCount', 'attemptedCount', 'completedCount', 'stoppedReason'])) return false;
-  return Number.isSafeInteger(value.requestedCount) && Number(value.requestedCount) >= 1 &&
-    Number(value.requestedCount) <= XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS &&
-    Number.isSafeInteger(value.attemptedCount) && Number(value.attemptedCount) >= 0 &&
-    Number(value.attemptedCount) <= Number(value.requestedCount) &&
-    Number.isSafeInteger(value.completedCount) && Number(value.completedCount) >= 0 &&
-    Number(value.completedCount) <= Number(value.attemptedCount) &&
-    (value.stoppedReason === null || (typeof value.stoppedReason === 'string' && /^[a-z0-9_]{1,100}$/.test(value.stoppedReason)));
+  if (!record(value) || !detailActionsKeys(value)) return false;
+  if (!(Number.isSafeInteger(value.requestedCount) && Number(value.requestedCount) >= 1 &&
+      Number(value.requestedCount) <= XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS) ||
+    !(Number.isSafeInteger(value.attemptedCount) && Number(value.attemptedCount) >= 0 &&
+      Number(value.attemptedCount) <= Number(value.requestedCount)) ||
+    !(Number.isSafeInteger(value.completedCount) && Number(value.completedCount) >= 0 &&
+      Number(value.completedCount) <= Number(value.attemptedCount)) ||
+    !(Number.isSafeInteger(value.skippedCount) && Number(value.skippedCount) >= 0 &&
+      Number(value.skippedCount) <= Number(value.requestedCount)) ||
+    !(Number(value.completedCount) + Number(value.skippedCount) <= Number(value.requestedCount)) ||
+    !(value.stoppedReason === null || (typeof value.stoppedReason === 'string' && /^[a-z0-9_]{1,100}$/.test(value.stoppedReason))) ||
+    !(value.abortReason === undefined || value.abortReason === 'overlay_persisting' ||
+      value.abortReason === 'platform_gate' || value.abortReason === 'internal_error')) {
+    return false;
+  }
+  if (value.ranks === undefined) return true;
+  if (!Array.isArray(value.ranks) || value.ranks.length > Number(value.requestedCount)) return false;
+  return value.ranks.every((entry) => record(entry) &&
+    exactKeys(entry, ['rank', 'noteId', 'outcome', 'errorCode']) &&
+    Number.isSafeInteger(entry.rank) && Number(entry.rank) >= 1 && Number(entry.rank) <= Number(value.requestedCount) &&
+    (entry.noteId === null || (typeof entry.noteId === 'string' && entry.noteId.length >= 1 && entry.noteId.length <= 80)) &&
+    (entry.outcome === 'completed' || entry.outcome === 'skipped' || entry.outcome === 'failed') &&
+    (entry.errorCode === null || (typeof entry.errorCode === 'string' && /^[a-z0-9_]{1,100}$/.test(entry.errorCode))));
+}
+
+/** New artifacts carry `ranks`/`abortReason`; the legacy five-key shape stays
+ * valid so artifacts written by an older gateway still read back. */
+function detailActionsKeys(value: Record<string, unknown>): boolean {
+  const base = ['requestedCount', 'attemptedCount', 'completedCount', 'skippedCount', 'stoppedReason'] as const;
+  const keys = Object.keys(value);
+  return base.every((key) => keys.includes(key)) &&
+    keys.every((key) => base.includes(key as typeof base[number]) || key === 'ranks' || key === 'abortReason');
 }
 
 function containsForbiddenMaterial(value: unknown): boolean {

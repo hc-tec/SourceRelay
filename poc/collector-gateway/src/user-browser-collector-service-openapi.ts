@@ -825,17 +825,27 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
               type: 'object', additionalProperties: false,
               required: ['query'],
               properties: {
-                query: { type: 'string', minLength: 1, maxLength: 80 },
-                maximumDetails: { type: 'integer', minimum: 0, maximum: 20, default: 0 },
+                query: { type: 'string', minLength: 1, maxLength: 240 },
+                depth: {
+                  type: 'string', enum: ['standard', 'deep'],
+                  description: 'Semantic collection depth for delegated evidence runs: standard = maximumDetails 100 + comments.maximumScrolls 3; deep = maximumDetails 300 + comments.maximumScrolls 6. Explicit maximumDetails/comments override their slice of the tier. Omit both depth and maximumDetails for breadth-only card collection.'
+                },
+                maximumDetails: { type: 'integer', minimum: 0, maximum: 300, default: 0 },
+                dedupe: {
+                  type: 'object', additionalProperties: false,
+                  required: ['skipKnown'],
+                  description: 'Bounded dedupe ledger of noteIds already collected by this caller (max 400 unique). Ranks whose noteId is listed are skipped without opening the overlay; skipped units are reported in detailActions.skippedCount and the items carry known: true.',
+                  properties: { skipKnown: { type: 'array', maxItems: 400, uniqueItems: true, items: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,80}$' } } }
+                },
                 comments: {
                   type: 'object', additionalProperties: false,
                   required: ['maximumScrolls'],
                   properties: {
-                    maximumScrolls: { type: 'integer', enum: [1, 2, 3] },
+                    maximumScrolls: { type: 'integer', minimum: 1, maximum: 30 },
                     replies: {
                       type: 'object', additionalProperties: false,
                       required: ['maximumThreads'],
-                      properties: { maximumThreads: { type: 'integer', enum: [1, 2, 3] } }
+                      properties: { maximumThreads: { type: 'integer', minimum: 1, maximum: 10 } }
                     }
                   }
                 }

@@ -5,7 +5,8 @@ import {
   canonicalXiaohongshuPublicProfileUrl,
   normaliseBilibiliNativeSearchRoute,
   USER_BROWSER_COLLECTOR_SERVICE_SCHEMA_VERSION,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS,
+  resolveXiaohongshuPublicNotesSearchDepth,
   type XiaohongshuProfileScrollCount
 } from '@intelligence/collector-contracts';
 import {
@@ -241,9 +242,14 @@ function parseXiaohongshuSearch(value: ValidRequestEnvelope): UserBrowserXiaohon
   requirePlatform(value, 'xiaohongshu');
   requireTarget(value, 'existing_public_explore_tab');
   if (value.capability !== 'xiaohongshu.search.public_notes.v1' || !validXiaohongshuSearchInput(value.input) ||
-    value.input.query !== value.input.query.trim() || value.input.query.length < 1 || value.input.query.length > 80 || /[\u0000-\u001f\u007f]/.test(value.input.query)) return invalid();
-  const maximumDetails = Object.hasOwn(value.input, 'maximumDetails') ? Number(value.input.maximumDetails) : undefined;
-  return { ...base(value, 'xiaohongshu'), capability: 'xiaohongshu.search.public_notes.v1', executionTarget: 'existing_public_explore_tab', input: { query: value.input.query, ...(maximumDetails === undefined ? {} : { maximumDetails }), ...(value.input.comments === undefined ? {} : { comments: value.input.comments }) } };
+    value.input.query !== value.input.query.trim() || value.input.query.length < 1 || value.input.query.length > 240 || /[\u0000-\u001f\u007f]/.test(value.input.query)) return invalid();
+  const resolvedInput = resolveXiaohongshuPublicNotesSearchDepth(
+    value.input as { query: string } & Record<string, unknown>
+  );
+  const maximumDetails = Object.hasOwn(resolvedInput, 'maximumDetails') ? Number(resolvedInput.maximumDetails) : undefined;
+  if (maximumDetails !== undefined && (maximumDetails <= 0 || !Number.isSafeInteger(maximumDetails))) return invalid();
+  if (resolvedInput.comments !== undefined && (maximumDetails === undefined || maximumDetails <= 0)) return invalid();
+  return { ...base(value, 'xiaohongshu'), capability: 'xiaohongshu.search.public_notes.v1', executionTarget: 'existing_public_explore_tab', input: { query: resolvedInput.query, ...(maximumDetails === undefined ? {} : { maximumDetails }), ...(resolvedInput.comments === undefined ? {} : { comments: resolvedInput.comments }), ...(resolvedInput.dedupe === undefined ? {} : { dedupe: resolvedInput.dedupe }) } as UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest['input'] };
 }
 
 function parseXiaohongshuAccount(value: ValidRequestEnvelope): UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest {
@@ -386,16 +392,23 @@ function optionalExactKeys(
     Object.keys(input).every((key) => allowed.has(key));
 }
 
-function oneToThree(value: unknown): value is 1 | 2 | 3 {
-  return value === 1 || value === 2 || value === 3;
+function oneToThirty(value: unknown): value is 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+  11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 {
+  return Number.isSafeInteger(value) && (value as number) >= 1 && (value as number) <= 30;
+}
+
+function oneToTen(value: unknown): value is 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 {
+  return Number.isSafeInteger(value) && (value as number) >= 1 && (value as number) <= 10;
 }
 
 function validXiaohongshuSearchInput(
   input: Record<string, unknown>
-): input is Record<string, unknown> & { query: string; maximumDetails?: number; comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } } } {
+): input is Record<string, unknown> & { query: string; maximumDetails?: number; comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } }; dedupe?: { skipKnown: string[] } } {
   const keys = Object.keys(input);
-  if (!keys.every((key) => key === 'query' || key === 'maximumDetails' || key === 'comments') || typeof input.query !== 'string') return false;
-  if (Object.hasOwn(input, 'maximumDetails') && (!Number.isSafeInteger(input.maximumDetails) || Number(input.maximumDetails) < 0 || Number(input.maximumDetails) > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS)) return false;
+  if (!keys.every((key) => key === 'query' || key === 'depth' || key === 'maximumDetails' || key === 'comments' || key === 'dedupe') || typeof input.query !== 'string') return false;
+  if (Object.hasOwn(input, 'depth') && input.depth !== 'standard' && input.depth !== 'deep') return false;
+  if (Object.hasOwn(input, 'maximumDetails') && (!Number.isSafeInteger(input.maximumDetails) || Number(input.maximumDetails) < 0 || Number(input.maximumDetails) > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS)) return false;
+  if (Object.hasOwn(input, 'dedupe') && !validXiaohongshuDedupe(input.dedupe)) return false;
   if (!Object.hasOwn(input, 'comments')) return true;
   if (typeof input.maximumDetails !== 'number' || input.maximumDetails <= 0 || !input.comments || typeof input.comments !== 'object' || Array.isArray(input.comments)) return false;
   const comments = input.comments as Record<string, unknown>;
@@ -405,6 +418,19 @@ function validXiaohongshuSearchInput(
   if (commentKeys.length !== 2 || !comments.replies || typeof comments.replies !== 'object' || Array.isArray(comments.replies)) return false;
   const replies = comments.replies as Record<string, unknown>;
   return exactKeys(replies, ['maximumThreads']) && oneToThree(replies.maximumThreads);
+}
+
+function oneToThree(value: unknown): value is 1 | 2 | 3 {
+  return value === 1 || value === 2 || value === 3;
+}
+
+/** Bounded dedupe ledger: at most 400 unique noteIds of [A-Za-z0-9_-]{1,80}. */
+function validXiaohongshuDedupe(value: unknown): value is { skipKnown: string[] } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (!exactKeys(record, ['skipKnown']) || !Array.isArray(record.skipKnown)) return false;
+  return record.skipKnown.length <= 400 && record.skipKnown.length === new Set(record.skipKnown).size &&
+    record.skipKnown.every((entry) => typeof entry === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(entry));
 }
 
 function base<P extends Platform>(value: ValidRequestEnvelope, platform: P): {

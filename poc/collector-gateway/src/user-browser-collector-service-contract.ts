@@ -91,7 +91,13 @@ export interface UserBrowserXiaohongshuPublicNotesSearchCollectorServiceRequest 
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.search.public_notes.v1';
   executionTarget: 'existing_public_explore_tab';
-  input: { query: string; maximumDetails?: number; comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } } };
+  input: {
+    query: string;
+    maximumDetails?: number;
+    comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } };
+    /** Bounded dedupe ledger: noteIds already collected by this caller. */
+    dedupe?: { skipKnown: string[] };
+  };
 }
 
 export interface UserBrowserXiaohongshuAccountPublicNotesCollectorServiceRequest {
@@ -121,7 +127,7 @@ export interface UserBrowserXiaohongshuNotePublicCommentsCollectorServiceRequest
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.note.public_comments.v1';
   executionTarget: 'existing_public_note_overlay';
-  input: { maximumScrolls: 1 | 2 | 3 };
+  input: { maximumScrolls: number };
 }
 
 export interface UserBrowserXiaohongshuReplyCollectorServiceRequest {
@@ -131,7 +137,7 @@ export interface UserBrowserXiaohongshuReplyCollectorServiceRequest {
   platform: 'xiaohongshu';
   capability: 'xiaohongshu.note.public_comment_replies.v1';
   executionTarget: 'existing_public_note_overlay';
-  input: { maximumThreads: 1 | 2 | 3 };
+  input: { maximumThreads: number };
 }
 
 export type UserBrowserCollectorServiceRequest =

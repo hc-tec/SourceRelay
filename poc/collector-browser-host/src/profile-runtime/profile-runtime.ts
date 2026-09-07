@@ -42,7 +42,7 @@ import {
   isXiaohongshuManagedPageNetworkObserverRequest,
   isXiaohongshuManagedSearchProjectionResult,
   isXiaohongshuPublicNotesSearchWorkResult,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
+  computeXiaohongshuPublicNotesSearchBudget,
   type XiaohongshuCurrentPageNetworkObservationResult,
   type XiaohongshuManagedPageNetworkObservationResult,
   type XiaohongshuManagedPageNetworkObserverArmResult,
@@ -502,7 +502,7 @@ export class ProfileRuntime {
       issuedAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + request.timeoutMs + 15_000).toISOString(),
       input: { query: request.query },
-      budget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
+      budget: computeXiaohongshuPublicNotesSearchBudget({ maximumDetails: 0, maximumScrolls: 0, maximumThreads: 0 }),
       gatewaySignature: 'v'.repeat(64)
     };
     const result = await this.#nativeBridgeCommands.command(this.profileId, this.browserSessionId, {

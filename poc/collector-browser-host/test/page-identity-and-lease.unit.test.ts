@@ -27,7 +27,7 @@ describe('Managed page identity and lease invariants', () => {
     );
   });
 
-  test('does not generically reuse a retained review page, but permits an unchanged exact target', () => {
+  test('reuses an unmoved retained review page for the same role, never one a person navigated away', () => {
     const retained = record({
       alias: 'retained',
       url: 'https://www.bilibili.com/video/BV1qZSLBYEpa',
@@ -41,9 +41,11 @@ describe('Managed page identity and lease invariants', () => {
       record: retained.record,
       selection: 'reused_exact_target'
     });
+    // The tab was kept open for this platform role and has not moved since:
+    // the next operation must reuse it instead of opening yet another page.
     expect(selectLeaseablePage([retained.record, generic.record], 'bilibili', 'detail', null)).toMatchObject({
-      record: generic.record,
-      selection: 'reused_same_profile'
+      record: retained.record,
+      selection: 'reused_same_role'
     });
 
     retained.browserPage.setUrl('https://www.bilibili.com/video/BV1xx411c7mD');
@@ -51,6 +53,35 @@ describe('Managed page identity and lease invariants', () => {
       record: null,
       selection: null
     });
+  });
+
+  test('keeps a delegated run to one tab: an unmoved retained search page is reused for a different keyword', () => {
+    const search = record({
+      alias: 'search-page',
+      url: 'https://search.bilibili.com/all?keyword=ai',
+      targetUrl: 'https://search.bilibili.com/all?keyword=ai',
+      state: 'retained_for_review',
+      platform: 'bilibili',
+      pageRole: 'public_search'
+    });
+    const nextKeywordUrl = 'https://search.bilibili.com/all?keyword=ai%20agents';
+
+    expect(selectLeaseablePage(
+      [search.record],
+      'bilibili',
+      'public_search',
+      digestUrl(nextKeywordUrl),
+      nextKeywordUrl
+    )).toMatchObject({ record: search.record, selection: 'reused_same_role' });
+
+    // A different role never claims the retained search tab.
+    expect(selectLeaseablePage(
+      [search.record],
+      'bilibili',
+      'video_discussion',
+      digestUrl('https://www.bilibili.com/video/BV1qZSLBYEpa'),
+      'https://www.bilibili.com/video/BV1qZSLBYEpa'
+    )).toEqual({ record: null, selection: null });
   });
 
   test('reuses a retained Bilibili discussion tab across the public vd_source URL variant', () => {

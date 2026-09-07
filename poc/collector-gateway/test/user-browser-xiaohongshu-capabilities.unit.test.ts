@@ -45,7 +45,7 @@ describe('user-owned browser Xiaohongshu capability catalog', () => {
         maximumPlatformNavigations: 1,
         maximumPageReloads: 0,
         maximumPageInitiatedNewDocuments: 0,
-        maximumSemanticActions: 1,
+        maximumSemanticActions: 10,
         maximumNetworkResponseBodies: 8,
         maximumProjectedItems: 40,
         maximumRawPayloadBytesStored: 0

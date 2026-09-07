@@ -13,6 +13,7 @@ import {
   isXiaohongshuManagedProfileNotesProjectionResult,
   isXiaohongshuManagedSearchProjectionResult,
   canonicalXiaohongshuPublicProfileUrl,
+  resolveXiaohongshuPublicNotesSearchDepth,
   xiaohongshuCurrentPageNetworkPublicSurface
 } from '../src/index.js';
 
@@ -375,4 +376,54 @@ describe('Xiaohongshu current-page network policy contract', () => {
     })).toBe(false);
   });
 
+});
+
+describe('resolveXiaohongshuPublicNotesSearchDepth', () => {
+  const base = { query: '咖啡' };
+
+  test('maps the standard tier to a 5-detail chunk with 2 comment scrolls', () => {
+    expect(resolveXiaohongshuPublicNotesSearchDepth({ ...base, depth: 'standard' })).toEqual({
+      query: '咖啡', maximumDetails: 5, comments: { maximumScrolls: 2 }
+    });
+  });
+
+  test('maps the deep tier to a 5-detail chunk with 3 comment scrolls', () => {
+    expect(resolveXiaohongshuPublicNotesSearchDepth({ ...base, depth: 'deep' })).toEqual({
+      query: '咖啡', maximumDetails: 5, comments: { maximumScrolls: 3 }
+    });
+  });
+
+  test('lets explicit maximumDetails and comments override their tier slice', () => {
+    expect(resolveXiaohongshuPublicNotesSearchDepth({ ...base, depth: 'deep', maximumDetails: 4 })).toEqual({
+      query: '咖啡', maximumDetails: 4, comments: { maximumScrolls: 3 }
+    });
+    expect(resolveXiaohongshuPublicNotesSearchDepth({
+      ...base, depth: 'standard', maximumDetails: 4,
+      comments: { maximumScrolls: 3, replies: { maximumThreads: 2 } }
+    })).toEqual({
+      query: '咖啡', maximumDetails: 4,
+      comments: { maximumScrolls: 3, replies: { maximumThreads: 2 } }
+    });
+  });
+
+  test('preserves dedupe through resolution', () => {
+    expect(resolveXiaohongshuPublicNotesSearchDepth({
+      ...base, depth: 'deep', dedupe: { skipKnown: ['note-1'] }
+    })).toEqual({
+      query: '咖啡', maximumDetails: 5, comments: { maximumScrolls: 3 },
+      dedupe: { skipKnown: ['note-1'] }
+    });
+  });
+
+  test('leaves inputs without a depth tier untouched (breadth-only stays breadth-only)', () => {
+    const breadth = { query: '咖啡' };
+    expect(resolveXiaohongshuPublicNotesSearchDepth(breadth)).toEqual(breadth);
+    const explicit = { query: '咖啡', maximumDetails: 3 };
+    expect(resolveXiaohongshuPublicNotesSearchDepth(explicit)).toEqual(explicit);
+  });
+
+  test('rejects unknown depth tiers', () => {
+    expect(() => resolveXiaohongshuPublicNotesSearchDepth({ ...base, depth: 'shallow' }))
+      .toThrow('xiaohongshu_search_depth_invalid');
+  });
 });

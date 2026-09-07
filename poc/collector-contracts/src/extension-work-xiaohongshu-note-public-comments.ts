@@ -93,6 +93,12 @@ export interface XiaohongshuNotePublicCommentsWorkResult {
   scroll: { requestedCount: 1 | 2 | 3; completedCount: 0 | 1 | 2 | 3 };
   page: { publicSurface: 'note_detail_overlay'; sameDocument: true } | null;
   projection: XiaohongshuNotePublicCommentsProjection | null;
+  /** Comment-evidence outcome: 'captured' (comments embedded),
+   * 'confirmed_empty' (overlay authoritatively reported zero comments — a
+   * valid completed result with an empty list), 'unconfirmed' (no usable
+   * evidence within budget — absence of comments means unknown, never zero),
+   * or absent (platform/infra gate: comments were never evaluated). */
+  evidence?: 'captured' | 'confirmed_empty' | 'unconfirmed';
   rawPayloadStored: false;
   responseUrlsStored: false;
   debuggerDetached: boolean;
@@ -132,11 +138,7 @@ export function isXiaohongshuNotePublicCommentsProjection(
 export function isXiaohongshuNotePublicCommentsWorkResult(
   value: unknown
 ): value is XiaohongshuNotePublicCommentsWorkResult {
-  if (!record(value) || !exactKeys(value, [
-    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
-    'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction',
-    'scroll', 'page', 'projection', 'rawPayloadStored', 'responseUrlsStored', 'debuggerDetached'
-  ])) return false;
+  if (!record(value) || !resultKeys(value)) return false;
   if (value.schemaVersion !== 1 || value.protocolVersion !== 1 || !uuid(value.workId) || !uuid(value.operationId) ||
     !uuid(value.browserBindingId) || value.platform !== 'xiaohongshu' ||
     value.capability !== XIAOHONGSHU_NOTE_PUBLIC_COMMENTS_CAPABILITY ||
@@ -145,15 +147,39 @@ export function isXiaohongshuNotePublicCommentsWorkResult(
     !terminalReason(value.terminalReason) || !timestamp(value.completedAt) || !zeroNavigation(value.navigation) ||
     !semanticAction(value.semanticAction) || !scroll(value.scroll) || !page(value.page) ||
     !(value.projection === null || isXiaohongshuNotePublicCommentsProjection(value.projection)) ||
+    !(value.evidence === undefined || value.evidence === 'captured' ||
+      value.evidence === 'confirmed_empty' || value.evidence === 'unconfirmed') ||
     value.rawPayloadStored !== false || value.responseUrlsStored !== false || typeof value.debuggerDetached !== 'boolean') return false;
   const candidate = value as unknown as XiaohongshuNotePublicCommentsWorkResult;
   if (candidate.semanticAction.attempted !== (candidate.semanticAction.attemptCount > 0) ||
     candidate.scroll.completedCount > candidate.semanticAction.attemptCount ||
     candidate.semanticAction.attemptCount > candidate.scroll.requestedCount) return false;
-  if (candidate.state === 'completed') return candidate.errorCode === null &&
-    candidate.terminalReason === 'note_comments_ready' && candidate.page !== null && candidate.projection !== null &&
-    candidate.projection.comments.length > 0 && candidate.debuggerDetached;
+  if (candidate.state === 'completed') {
+    // 'confirmed_empty' is a valid completed outcome: the overlay authoritatively
+    // reported zero comments. Any other completed capture needs real comments.
+    if (candidate.evidence === 'confirmed_empty') {
+      return candidate.errorCode === null && candidate.terminalReason === 'note_comments_ready' &&
+        candidate.page !== null && candidate.projection !== null &&
+        candidate.projection.comments.length === 0 && candidate.debuggerDetached;
+    }
+    return candidate.errorCode === null && candidate.terminalReason === 'note_comments_ready' &&
+      candidate.page !== null && candidate.projection !== null &&
+      candidate.projection.comments.length > 0 && candidate.debuggerDetached;
+  }
   return candidate.errorCode !== null;
+}
+
+/** New results always carry `evidence`; validators accept the legacy shape
+ * without it so stored/rolling results from an older extension still parse. */
+function resultKeys(value: Record<string, unknown>): boolean {
+  const base = [
+    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
+    'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction',
+    'scroll', 'page', 'projection', 'rawPayloadStored', 'responseUrlsStored', 'debuggerDetached'
+  ] as const;
+  const keys = Object.keys(value);
+  return base.every((key) => keys.includes(key)) &&
+    keys.every((key) => base.includes(key as typeof base[number]) || key === 'evidence');
 }
 
 export function isXiaohongshuNotePublicCommentsWorkResultForItem(

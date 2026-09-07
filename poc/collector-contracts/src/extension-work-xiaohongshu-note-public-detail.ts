@@ -35,6 +35,11 @@ export interface XiaohongshuNotePublicDetailProjection {
   comments?: XiaohongshuNotePublicCommentsProjection;
   replyThread?: XiaohongshuPublicReplyThreadProjection;
   replyThreads?: XiaohongshuPublicReplyThreadProjection[];
+  /** Comment-evidence outcome when comments were requested: absence of
+   * `comments` plus 'unconfirmed' means unknown, never zero. */
+  commentsCapture?: 'captured' | 'confirmed_empty' | 'unconfirmed';
+  /** Same tri-state for reply threads when replies were requested. */
+  repliesCapture?: 'captured' | 'unconfirmed';
   rawPayloadStored: false;
   responseUrlsStored: false;
 }
@@ -94,6 +99,12 @@ export interface XiaohongshuNotePublicDetailWorkResult {
   semanticAction: { attempted: boolean; attemptCount: 0 | 1 };
   page: { publicSurface: 'note_detail_overlay'; sameDocument: true } | null;
   projection: XiaohongshuNotePublicDetailProjection | null;
+  /** Overlay cleanup outcome, always emitted by the composed depth flow:
+   * 'closed' (the note overlay was closed and the search page is usable for
+   * the next rank), 'unclosed' (a failure left the overlay open — the caller
+   * must not attempt further ranks on this page), 'not_applicable' (no
+   * verified overlay was open, or the caller did not request close-on-done). */
+  overlayCleanup?: 'closed' | 'unclosed' | 'not_applicable';
   rawPayloadStored: false;
   responseUrlsStored: false;
   debuggerDetached: boolean;
@@ -129,17 +140,16 @@ export function isXiaohongshuNotePublicDetailProjection(
     (value.replyThread === undefined || isXiaohongshuPublicReplyThreadProjection(value.replyThread)) &&
     (value.replyThreads === undefined || (Array.isArray(value.replyThreads) && value.replyThreads.length >= 1 &&
       value.replyThreads.length <= 3 && value.replyThreads.every(isXiaohongshuPublicReplyThreadProjection))) &&
+    (value.commentsCapture === undefined || value.commentsCapture === 'captured' ||
+      value.commentsCapture === 'confirmed_empty' || value.commentsCapture === 'unconfirmed') &&
+    (value.repliesCapture === undefined || value.repliesCapture === 'captured' || value.repliesCapture === 'unconfirmed') &&
     value.rawPayloadStored === false && value.responseUrlsStored === false;
 }
 
 export function isXiaohongshuNotePublicDetailWorkResult(
   value: unknown
 ): value is XiaohongshuNotePublicDetailWorkResult {
-  if (!record(value) || !exactKeys(value, [
-    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
-    'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction',
-    'page', 'projection', 'rawPayloadStored', 'responseUrlsStored', 'debuggerDetached'
-  ])) return false;
+  if (!record(value) || !resultKeys(value)) return false;
   if (value.schemaVersion !== 1 || value.protocolVersion !== 1 || !uuid(value.workId) || !uuid(value.operationId) ||
     !uuid(value.browserBindingId) || value.platform !== 'xiaohongshu' ||
     value.capability !== XIAOHONGSHU_NOTE_PUBLIC_DETAIL_CAPABILITY ||
@@ -149,6 +159,8 @@ export function isXiaohongshuNotePublicDetailWorkResult(
     !terminalReason(value.terminalReason) || !timestamp(value.completedAt) || !zeroNavigation(value.navigation) ||
     !semanticAction(value.semanticAction) || !page(value.page) ||
     !(value.projection === null || isXiaohongshuNotePublicDetailProjection(value.projection)) ||
+    !(value.overlayCleanup === undefined || value.overlayCleanup === 'closed' ||
+      value.overlayCleanup === 'unclosed' || value.overlayCleanup === 'not_applicable') ||
     value.rawPayloadStored !== false || value.responseUrlsStored !== false || typeof value.debuggerDetached !== 'boolean') return false;
   const candidate = value as unknown as XiaohongshuNotePublicDetailWorkResult;
   if (candidate.semanticAction.attempted !== (candidate.semanticAction.attemptCount === 1)) return false;
@@ -156,6 +168,19 @@ export function isXiaohongshuNotePublicDetailWorkResult(
     candidate.semanticAction.attemptCount === 1 && candidate.page !== null && candidate.projection !== null &&
     candidate.debuggerDetached;
   return candidate.errorCode !== null;
+}
+
+/** New results always carry `overlayCleanup`; the legacy shape without it
+ * stays valid so results from an older extension still parse. */
+function resultKeys(value: Record<string, unknown>): boolean {
+  const base = [
+    'schemaVersion', 'protocolVersion', 'workId', 'operationId', 'browserBindingId', 'platform', 'capability',
+    'executionTarget', 'state', 'errorCode', 'terminalReason', 'completedAt', 'navigation', 'semanticAction',
+    'page', 'projection', 'rawPayloadStored', 'responseUrlsStored', 'debuggerDetached'
+  ] as const;
+  const keys = Object.keys(value);
+  return base.every((key) => keys.includes(key)) &&
+    keys.every((key) => base.includes(key as typeof base[number]) || key === 'overlayCleanup');
 }
 
 export function isXiaohongshuNotePublicDetailWorkResultForItem(
@@ -220,14 +245,8 @@ function detailProjectionKeys(value: Record<string, unknown>): boolean {
     'schemaVersion', 'sourceRank', 'captureMode', 'network', 'publicText', 'authorNickname', 'interactionText',
     'visibleMediaCount', 'commentEntryVisible', 'rawPayloadStored', 'responseUrlsStored'
   ] as const;
-  const withComments = [...base.slice(0, 9), 'comments', ...base.slice(9)];
-  const withReplies = [...base.slice(0, 9), 'replyThread', ...base.slice(9)];
-  const withReplyThreads = [...base.slice(0, 9), 'replyThreads', ...base.slice(9)];
-  const withBoth = [...base.slice(0, 9), 'comments', 'replyThread', ...base.slice(9)];
-  const withBothThreads = [...base.slice(0, 9), 'comments', 'replyThreads', ...base.slice(9)];
-  const withAllReplies = [...base.slice(0, 9), 'replyThread', 'replyThreads', ...base.slice(9)];
-  const withCommentsAndAllReplies = [...base.slice(0, 9), 'comments', 'replyThread', 'replyThreads', ...base.slice(9)];
-  return exactKeys(value, base) || exactKeys(value, withComments) || exactKeys(value, withReplies) ||
-    exactKeys(value, withReplyThreads) || exactKeys(value, withBoth) || exactKeys(value, withBothThreads) ||
-    exactKeys(value, withAllReplies) || exactKeys(value, withCommentsAndAllReplies);
+  const optional = ['comments', 'replyThread', 'replyThreads', 'commentsCapture', 'repliesCapture'] as const;
+  const keys = Object.keys(value);
+  return base.every((key) => keys.includes(key)) &&
+    keys.every((key) => base.includes(key as typeof base[number]) || optional.includes(key as typeof optional[number]));
 }

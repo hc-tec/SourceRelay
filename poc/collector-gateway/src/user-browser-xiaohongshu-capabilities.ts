@@ -13,12 +13,11 @@ import {
   XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_MULTI_BUDGET,
   XIAOHONGSHU_NOTE_PUBLIC_COMMENT_REPLIES_CAPABILITY,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_TIERS,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY,
+  computeXiaohongshuPublicNotesSearchBudget,
+  type XiaohongshuPublicNotesSearchBudget
 } from '@intelligence/collector-contracts';
 
 /**
@@ -56,11 +55,10 @@ export interface UserBrowserXiaohongshuPublicNotesSearchCapabilityDescriptor {
   captureMode: 'current_document_main_world_public_projection';
   responseBodies: 'temporarily_read_projected_not_stored';
   routeAdmission: 'public_payload_shape_verified_no_url_dependency';
-  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET;
-  depthBudget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET;
-  commentsDepthBudget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET;
-  commentsRepliesDepthBudget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET;
-  commentsRepliesMultiDepthBudget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET;
+  budget: XiaohongshuPublicNotesSearchBudget;
+  depthTiers: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_TIERS;
+  /** Per-operation depth chunk. A run composes chunks via skipKnown. */
+  maximumDetailsCeiling: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS;
   browserHostFallback: 'forbidden';
 }
 
@@ -152,11 +150,9 @@ export const USER_BROWSER_XIAOHONGSHU_CAPABILITIES = [
     captureMode: 'current_document_main_world_public_projection',
     responseBodies: 'temporarily_read_projected_not_stored',
     routeAdmission: 'public_payload_shape_verified_no_url_dependency',
-    budget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
-    depthBudget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
-    commentsDepthBudget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
-    commentsRepliesDepthBudget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
-    commentsRepliesMultiDepthBudget: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET,
+    budget: computeXiaohongshuPublicNotesSearchBudget({ maximumDetails: 0, maximumScrolls: 0, maximumThreads: 0 }),
+    depthTiers: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_TIERS,
+    maximumDetailsCeiling: XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS,
     browserHostFallback: 'forbidden'
   },
   {

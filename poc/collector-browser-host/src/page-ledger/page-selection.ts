@@ -65,6 +65,24 @@ export function selectLeaseablePage(
 
   const sameRole = idle.find((record) => record.platform === platform && record.pageRole === pageRole);
   if (sameRole) return { record: sameRole, selection: 'reused_same_role' };
+
+  // An unclaimed retained review page whose live URL still matches the
+  // identity it was kept with is the tab this workflow intentionally left
+  // open for the same platform role. Re-leasing it is what keeps a delegated
+  // run to one tab per role instead of opening a fresh page per operation.
+  // The digest recheck preserves the person-safety invariant: a tab a person
+  // has since navigated elsewhere is never hijacked.
+  const retainedSameRole = records
+    .filter((record) =>
+      record.state === 'retained_for_review' &&
+      record.activeLease === null &&
+      !record.page.isClosed() &&
+      record.platform === platform &&
+      record.pageRole === pageRole &&
+      digestUrl(record.page.url()) === record.expectedIdentity.targetUrlDigest)
+    .sort((left, right) => Date.parse(right.lastUsedAt) - Date.parse(left.lastUsedAt))[0] ?? null;
+  if (retainedSameRole) return { record: retainedSameRole, selection: 'reused_same_role' };
+
   return idle[0]
     ? { record: idle[0], selection: 'reused_same_profile' }
     : { record: null, selection: null };

@@ -1,13 +1,11 @@
 import {
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS,
-  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET,
+  XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS,
   XIAOHONGSHU_PUBLIC_NOTES_SEARCH_CAPABILITY,
+  computeXiaohongshuPublicNotesSearchBudget,
   isXiaohongshuManagedSearchProjectionResult,
-  type XiaohongshuManagedSearchProjectionResult
+  type XiaohongshuManagedSearchProjectionResult,
+  type XiaohongshuPublicNotesSearchBudget
 } from './xiaohongshu-current-page-network.js';
 import type { ExtensionWorkTabAcquisition, ExtensionWorkTabDisposition } from './extension-work.js';
 
@@ -30,12 +28,12 @@ export interface XiaohongshuPublicNotesSearchWorkItem {
     query: string;
     maximumDetails?: number;
     comments?: { maximumScrolls: 1 | 2 | 3; replies?: { maximumThreads: 1 | 2 | 3 } };
+    /** Cross-operation deduplication: noteIds whose detail+comments were
+     * already captured by this caller (bounded ledger). Skipped ranks are
+     * reported in detailActions.skippedCount. */
+    dedupe?: { skipKnown: string[] };
   };
-  budget: typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_DEPTH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_DEPTH_BUDGET |
-    typeof XIAOHONGSHU_PUBLIC_NOTES_SEARCH_COMMENTS_REPLIES_MULTI_DEPTH_BUDGET;
+  budget: XiaohongshuPublicNotesSearchBudget;
   gatewaySignature: string;
 }
 
@@ -93,7 +91,26 @@ export interface XiaohongshuPublicNotesSearchWorkResult {
     requestedCount: number;
     attemptedCount: number;
     completedCount: number;
+    /** Detail+comment units skipped because their noteId was already
+     * collected (input.dedupe.skipKnown). */
+    skippedCount: number;
     stoppedReason: string | null;
+    /** Per-rank truth: one entry per rank the loop touched (attempted or
+     * skipped), in order. `stoppedReason` alone hides the real distribution
+     * of failures; this makes post-hoc diagnosis exact. */
+    ranks?: Array<{
+      rank: number;
+      noteId: string | null;
+      outcome: 'completed' | 'skipped' | 'failed';
+      errorCode: string | null;
+    }>;
+    /** Why the depth loop stopped before the requested rank budget: present
+     * only on an early abort. 'overlay_persisting' = a failed rank left the
+     * note overlay open so every further rank would hit-test against the
+     * mask; 'platform_gate' = a login/verification/rate/source/document gate
+     * that every further rank would hit too; 'internal_error' = the composed
+     * run itself broke and cannot be trusted to continue. */
+    abortReason?: 'overlay_persisting' | 'platform_gate' | 'internal_error';
   };
   page: { publicSurface: 'search'; renderedCardCount: number } | null;
   projection: XiaohongshuManagedSearchProjectionResult | null;
@@ -140,7 +157,8 @@ export function isXiaohongshuPublicNotesSearchWorkResult(
     const depthRequested = depth?.requestedCount ?? 0;
     return candidate.errorCode === null &&
       (depthRequested > 0 ? candidate.terminalReason === 'search_depth_ready' &&
-        depth !== undefined && depth.completedCount === depth.requestedCount : candidate.terminalReason === 'search_ready') &&
+        depth !== undefined &&
+        depth.completedCount + depth.skippedCount === depth.requestedCount : candidate.terminalReason === 'search_ready') &&
       candidate.debuggerDetached === true && candidate.semanticAction.attempted &&
       candidate.semanticAction.attemptCount === 1 && candidate.input.queryEchoed &&
       candidate.input.enterAttempted && candidate.page !== null && candidate.page.renderedCardCount > 0 &&
@@ -162,18 +180,35 @@ export function isXiaohongshuPublicNotesSearchWorkResultForItem(
 function validInput(value: unknown): value is XiaohongshuPublicNotesSearchWorkItem['input'] {
   if (!record(value) || !query(value.query)) return false;
   const keys = Object.keys(value);
-  if (keys.some((key) => key !== 'query' && key !== 'maximumDetails' && key !== 'comments')) return false;
+  if (keys.some((key) => key !== 'query' && key !== 'maximumDetails' && key !== 'comments' && key !== 'dedupe')) return false;
   if (Object.hasOwn(value, 'maximumDetails') &&
     (!Number.isSafeInteger(value.maximumDetails) || Number(value.maximumDetails) < 0 ||
-      Number(value.maximumDetails) > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS)) return false;
+      Number(value.maximumDetails) > XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS)) return false;
+  if (Object.hasOwn(value, 'dedupe') && !validDedupe(value.dedupe)) return false;
   if (!Object.hasOwn(value, 'comments')) return true;
   if (!record(value.comments) || !exactKeysAllowingReplies(value.comments) ||
-    (value.comments.maximumScrolls !== 1 && value.comments.maximumScrolls !== 2 && value.comments.maximumScrolls !== 3) ||
+    (!Number.isSafeInteger((value.comments as Record<string, unknown>).maximumScrolls) ||
+      Number((value.comments as Record<string, unknown>).maximumScrolls) < 1 ||
+      Number((value.comments as Record<string, unknown>).maximumScrolls) > 3) ||
     Number(value.maximumDetails ?? 0) <= 0) return false;
   if (!Object.hasOwn(value.comments, 'replies')) return true;
   const replies = value.comments.replies;
   return record(replies) && exactKeys(replies, ['maximumThreads']) &&
-    (replies.maximumThreads === 1 || replies.maximumThreads === 2 || replies.maximumThreads === 3);
+    Number.isSafeInteger((replies as Record<string, unknown>).maximumThreads) &&
+    Number((replies as Record<string, unknown>).maximumThreads) >= 1 &&
+    Number((replies as Record<string, unknown>).maximumThreads) <= 3;
+}
+
+/** Bounded dedupe ledger: at most 400 noteIds, each a bounded identifier. */
+function validDedupe(value: unknown): value is { skipKnown: string[] } {
+  if (!record(value) || !exactKeys(value, ['skipKnown'])) return false;
+  return Array.isArray(value.skipKnown) && value.skipKnown.length <= 400 &&
+    value.skipKnown.every((entry) => boundedNoteId(entry)) &&
+    new Set(value.skipKnown).size === value.skipKnown.length;
+}
+
+function boundedNoteId(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value);
 }
 
 function isBudget(
@@ -194,20 +229,14 @@ function isBudget(
   const maximumRawPayloadBytesStored = Number(value.maximumRawPayloadBytesStored);
   if (maximumPlatformNavigations !== 1 || maximumPageReloads !== 0 || maximumPageInitiatedNewDocuments !== 0 ||
     maximumRawPayloadBytesStored !== 0) return false;
-  if (Number(input.maximumDetails ?? 0) <= 0) {
-    return maximumSemanticActions === 1 && maximumNetworkResponseBodies === 8 && maximumProjectedItems === 40;
-  }
-  if (Object.hasOwn(input, 'comments') && Object.hasOwn(input.comments!, 'replies')) {
-    const maximumThreads = Number(input.comments!.replies!.maximumThreads);
-    if (maximumThreads > 1) {
-      return maximumSemanticActions === 161 && maximumNetworkResponseBodies === 648 && maximumProjectedItems === 4040;
-    }
-    return maximumSemanticActions === 121 && maximumNetworkResponseBodies === 328 && maximumProjectedItems === 2440;
-  }
-  if (Object.hasOwn(input, 'comments')) {
-    return maximumSemanticActions === 101 && maximumNetworkResponseBodies === 168 && maximumProjectedItems === 1640;
-  }
-  return maximumSemanticActions === 41 && maximumNetworkResponseBodies === 8 && maximumProjectedItems === 40;
+  const expected = computeXiaohongshuPublicNotesSearchBudget({
+    maximumDetails: Number(input.maximumDetails ?? 0),
+    maximumScrolls: Number(input.comments?.maximumScrolls ?? 0),
+    maximumThreads: Number(input.comments?.replies?.maximumThreads ?? 0)
+  });
+  return maximumSemanticActions === expected.maximumSemanticActions &&
+    maximumNetworkResponseBodies === expected.maximumNetworkResponseBodies &&
+    maximumProjectedItems === expected.maximumProjectedItems;
 }
 
 function terminalReason(value: unknown): value is XiaohongshuPublicNotesSearchTerminalReason {
@@ -223,14 +252,38 @@ function terminalReason(value: unknown): value is XiaohongshuPublicNotesSearchTe
 
 function detailActions(value: unknown): boolean {
   if (value === undefined) return true;
-  if (!record(value) || !exactKeys(value, ['requestedCount', 'attemptedCount', 'completedCount', 'stoppedReason'])) return false;
-  return Number.isSafeInteger(value.requestedCount) && Number(value.requestedCount) >= 0 &&
-    Number(value.requestedCount) <= XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS &&
-    Number.isSafeInteger(value.attemptedCount) && Number(value.attemptedCount) >= 0 &&
-    Number(value.attemptedCount) <= Number(value.requestedCount) &&
-    Number.isSafeInteger(value.completedCount) && Number(value.completedCount) >= 0 &&
-    Number(value.completedCount) <= Number(value.attemptedCount) &&
-    (value.stoppedReason === null || (typeof value.stoppedReason === 'string' && SAFE_ERROR.test(value.stoppedReason)));
+  if (!record(value) || !detailActionsKeys(value)) return false;
+  if (!(Number.isSafeInteger(value.requestedCount) && Number(value.requestedCount) >= 0 &&
+      Number(value.requestedCount) <= XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS) ||
+    !(Number.isSafeInteger(value.attemptedCount) && Number(value.attemptedCount) >= 0 &&
+      Number(value.attemptedCount) <= Number(value.requestedCount)) ||
+    !(Number.isSafeInteger(value.completedCount) && Number(value.completedCount) >= 0 &&
+      Number(value.completedCount) <= Number(value.attemptedCount)) ||
+    !(Number.isSafeInteger(value.skippedCount) && Number(value.skippedCount) >= 0 &&
+      Number(value.skippedCount) <= Number(value.requestedCount)) ||
+    !(Number(value.completedCount) + Number(value.skippedCount) <= Number(value.requestedCount)) ||
+    !(value.stoppedReason === null || (typeof value.stoppedReason === 'string' && SAFE_ERROR.test(value.stoppedReason))) ||
+    !(value.abortReason === undefined || value.abortReason === 'overlay_persisting' ||
+      value.abortReason === 'platform_gate' || value.abortReason === 'internal_error')) {
+    return false;
+  }
+  if (value.ranks === undefined) return true;
+  const requestedCount = Number(value.requestedCount);
+  if (!Array.isArray(value.ranks) || value.ranks.length > requestedCount) return false;
+  return value.ranks.every((entry) => record(entry) && exactKeys(entry, ['rank', 'noteId', 'outcome', 'errorCode']) &&
+    Number.isSafeInteger(entry.rank) && Number(entry.rank) >= 1 && Number(entry.rank) <= requestedCount &&
+    (entry.noteId === null || (typeof entry.noteId === 'string' && entry.noteId.length >= 1 && entry.noteId.length <= 80)) &&
+    (entry.outcome === 'completed' || entry.outcome === 'skipped' || entry.outcome === 'failed') &&
+    (entry.errorCode === null || (typeof entry.errorCode === 'string' && SAFE_ERROR.test(entry.errorCode))));
+}
+
+/** New results carry `ranks`/`abortReason`; the legacy shape without them
+ * stays valid so stored artifacts from older extensions still parse. */
+function detailActionsKeys(value: Record<string, unknown>): boolean {
+  const base = ['requestedCount', 'attemptedCount', 'completedCount', 'skippedCount', 'stoppedReason'] as const;
+  const keys = Object.keys(value);
+  return base.every((key) => keys.includes(key)) &&
+    keys.every((key) => base.includes(key as typeof base[number]) || key === 'ranks' || key === 'abortReason');
 }
 
 function searchResultKeys(value: Record<string, unknown>): boolean {

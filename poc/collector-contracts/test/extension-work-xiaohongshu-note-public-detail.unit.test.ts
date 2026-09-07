@@ -79,6 +79,70 @@ describe('signed Xiaohongshu note public-detail work contract', () => {
     expect(isExtensionWorkResultForItem({ ...result, projection: { ...result.projection, sourceRank: 2 } }, item)).toBe(false);
   });
 
+  test('admits the overlay cleanup outcome and the comments/replies capture tri-state', () => {
+    const base = {
+      schemaVersion: 1,
+      protocolVersion: 1,
+      workId: item.workId,
+      operationId: item.operationId,
+      browserBindingId: item.browserBindingId,
+      platform: 'xiaohongshu',
+      capability: 'xiaohongshu.note.public_detail.v1',
+      executionTarget: 'existing_public_search_tab',
+      state: 'completed',
+      errorCode: null,
+      terminalReason: 'note_detail_ready',
+      completedAt: '2026-07-28T12:00:20.000Z',
+      navigation: { attempted: false, attemptCount: 0 },
+      semanticAction: { attempted: true, attemptCount: 1 },
+      page: { publicSurface: 'note_detail_overlay', sameDocument: true },
+      projection: {
+        schemaVersion: 1,
+        sourceRank: 1,
+        captureMode: 'dom_fallback',
+        network: { matchedPayloadCount: 0, bodyBytesRead: 0 },
+        publicText: '公开正文',
+        authorNickname: '公开作者',
+        interactionText: '',
+        visibleMediaCount: 1,
+        commentEntryVisible: true,
+        commentsCapture: 'unconfirmed',
+        repliesCapture: 'unconfirmed',
+        rawPayloadStored: false,
+        responseUrlsStored: false
+      },
+      overlayCleanup: 'closed',
+      rawPayloadStored: false,
+      responseUrlsStored: false,
+      debuggerDetached: true
+    };
+    expect(isExtensionWorkResultForItem(base, item)).toBe(true);
+    for (const overlayCleanup of ['closed', 'unclosed', 'not_applicable']) {
+      expect(isExtensionWorkResultForItem({ ...base, overlayCleanup }, item)).toBe(true);
+    }
+    expect(isExtensionWorkResultForItem({ ...base, overlayCleanup: 'maybe' }, item)).toBe(false);
+    for (const commentsCapture of ['captured', 'confirmed_empty', 'unconfirmed']) {
+      expect(isExtensionWorkResultForItem({
+        ...base, projection: { ...base.projection, commentsCapture }
+      }, item)).toBe(true);
+    }
+    expect(isExtensionWorkResultForItem({
+      ...base, projection: { ...base.projection, commentsCapture: 'zero' }
+    }, item)).toBe(false);
+    // A stopped result that failed to close the overlay must be able to say so.
+    const stoppedUnclosed = {
+      ...base,
+      state: 'stopped',
+      errorCode: 'xiaohongshu_note_comments_postcondition_unmet',
+      terminalReason: 'postcondition_unmet',
+      overlayCleanup: 'unclosed',
+      page: null,
+      projection: null,
+      debuggerDetached: false
+    };
+    expect(isExtensionWorkResultForItem(stoppedUnclosed, item)).toBe(true);
+  });
+
   test('accepts the same rank-only detail work on an existing public profile tab', () => {
     const profileItem = { ...item, executionTarget: 'existing_public_profile_tab' as const };
     const profileResult = {

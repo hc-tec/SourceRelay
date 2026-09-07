@@ -85,6 +85,13 @@ describe('Xiaohongshu public-notes artifact store', () => {
     try {
       const store = await XiaohongshuPublicNotesArtifactStore.create(directory);
       const summary = await store.record({ item, result });
+      // 逐笔记完整度矩阵：rank/noteId 对齐 items，detail/comments/replies
+      // 的有无一目了然，委托运行无法悄悄浅采。
+      expect(summary).toMatchObject({ itemCount: 1 });
+      const stored = JSON.parse(await readFile(join(directory, 'xiaohongshu-public-notes-artifacts', summary.artifactId + '.json'), 'utf8'));
+      expect(stored.result.coverage).toEqual([
+        { rank: 1, noteId: 'note-1', detail: true, comments: false, replies: false }
+      ]);
       expect(summary).toMatchObject({
         operationId: item.operationId,
         capability: 'xiaohongshu.search.public_notes.v1',
@@ -114,6 +121,95 @@ describe('Xiaohongshu public-notes artifact store', () => {
       expect(persisted).not.toContain('xsec_token');
       expect(persisted).not.toContain('cookie');
       expect(persisted).not.toContain('tabId');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('round-trips per-rank depth truth and the unconfirmed comment tri-state', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xiaohongshu-artifact-depth-'));
+    try {
+      const depthResult: XiaohongshuPublicNotesSearchWorkResult = {
+        ...result,
+        state: 'stopped',
+        errorCode: 'xiaohongshu_comment_scroll_container_unavailable',
+        terminalReason: 'search_depth_stopped',
+        detailActions: {
+          requestedCount: 2,
+          attemptedCount: 2,
+          completedCount: 1,
+          skippedCount: 0,
+          stoppedReason: 'xiaohongshu_comment_scroll_container_unavailable',
+          abortReason: 'overlay_persisting',
+          ranks: [
+            { rank: 1, noteId: 'note-1', outcome: 'completed', errorCode: null },
+            { rank: 2, noteId: 'note-2', outcome: 'failed', errorCode: 'xiaohongshu_comment_scroll_container_unavailable' }
+          ]
+        },
+        projection: {
+          ...result.projection!,
+          details: [{
+            noteId: 'note-1',
+            publicText: '公开正文描述',
+            authorNickname: '公开作者',
+            interactionText: '赞 10',
+            commentsCapture: 'unconfirmed',
+            repliesCapture: 'unconfirmed'
+          }]
+        }
+      };
+      const store = await XiaohongshuPublicNotesArtifactStore.create(directory);
+      const summary = await store.record({ item, result: depthResult });
+      const view = await store.get(summary.artifactId);
+      expect(view).toMatchObject({
+        result: {
+          detailActions: {
+            requestedCount: 2,
+            completedCount: 1,
+            abortReason: 'overlay_persisting',
+            ranks: [
+              { rank: 1, outcome: 'completed' },
+              { rank: 2, outcome: 'failed' }
+            ]
+          },
+          coverage: [
+            { rank: 1, noteId: 'note-1', detail: true, comments: 'unconfirmed', replies: 'unconfirmed' }
+          ]
+        }
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('still reads a legacy depth artifact whose detailActions predate ranks and abort reasons', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xiaohongshu-artifact-legacy-'));
+    try {
+      const legacyDepthResult: XiaohongshuPublicNotesSearchWorkResult = {
+        ...result,
+        state: 'stopped',
+        errorCode: 'xiaohongshu_comment_scroll_container_unavailable',
+        terminalReason: 'search_depth_stopped',
+        // Legacy shape: five keys only, no ranks/abortReason — what an older
+        // extension reported before per-rank truth existed.
+        detailActions: {
+          requestedCount: 2,
+          attemptedCount: 2,
+          completedCount: 1,
+          skippedCount: 0,
+          stoppedReason: 'xiaohongshu_comment_scroll_container_unavailable'
+        },
+        projection: { ...result.projection!, details: result.projection!.details }
+      };
+      const store = await XiaohongshuPublicNotesArtifactStore.create(directory);
+      const summary = await store.record({ item, result: legacyDepthResult });
+      const view = await store.get(summary.artifactId);
+      expect(view).toMatchObject({
+        result: {
+          state: 'stopped',
+          detailActions: { requestedCount: 2, completedCount: 1, stoppedReason: 'xiaohongshu_comment_scroll_container_unavailable' }
+        }
+      });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
