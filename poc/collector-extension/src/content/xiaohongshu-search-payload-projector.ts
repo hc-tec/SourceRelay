@@ -42,6 +42,11 @@ export interface XhsArchivedPublicComment {
 export interface XhsSearchShapeProbe {
   keys: string[];
   hosts: string[];
+  /** Raw values of the media URL fields on the probed card (cover.url*,
+   * image_list[0].url/url_default/info_list[].url). Public CDN references;
+   * needed to diagnose how the platform stores image URLs (empty vs
+   * protocol-relative vs absolute). */
+  mediaUrlSamples: Record<string, string>;
 }
 
 export interface XhsSearchProjection {
@@ -72,6 +77,7 @@ export function createXiaohongshuSearchPayloadProjector(deps: XhsSearchProjector
     const comments: XhsArchivedPublicComment[] = [];
     const mediaByNote: Record<string, { imageUrls: string[]; videoUrls: string[] }> = {};
     let shapeProbe: XhsSearchShapeProbe | null = null;
+    let mediaUrlSamples: Record<string, string> | null = null;
     let hasMore: boolean | null = null;
     let cursorObserved = false;
     const visit = (node: unknown, depth: number, inheritedParentCommentId = ''): void => {
@@ -169,7 +175,30 @@ export function createXiaohongshuSearchPayloadProjector(deps: XhsSearchProjector
             }
           };
           collectHosts(candidate, 0);
-          shapeProbe = { keys, hosts };
+          // Raw media URL field values for the first card: the exact strings
+          // the payload carries (empty / protocol-relative / absolute).
+          const samples: Record<string, string> = {};
+          const sampleUrlFields = (nodeValue: unknown, depth: number, path: string): void => {
+            if (depth > 5) return;
+            if (Array.isArray(nodeValue)) {
+              for (const [index, entry] of nodeValue.slice(0, 3).entries()) {
+                sampleUrlFields(entry, depth + 1, `${path}[${index}]`);
+              }
+              return;
+            }
+            const recordValue = object(nodeValue);
+            if (!recordValue) return;
+            for (const [key, child] of Object.entries(recordValue).slice(0, 40)) {
+              if (/^(url|url_default|url_pre|master_url|url_preload)$/i.test(key)) {
+                samples[`${path}.${key}`] = typeof child === 'string' ? child.slice(0, 160) : '<non-string>';
+              } else if (child && typeof child === 'object') {
+                sampleUrlFields(child, depth + 1, `${path}.${key}`);
+              }
+            }
+          };
+          sampleUrlFields(candidate, 0, '');
+          if (Object.keys(samples).length > 0) mediaUrlSamples = samples;
+          shapeProbe = { keys, hosts, mediaUrlSamples: samples };
         }
         // Media references ride every note card (image_list / cover / video
         // subtrees), independent of whether the card carries a description.

@@ -25,7 +25,7 @@ interface ObserverController {
   details: PublicDetail[];
   comments: ArchivedPublicComment[];
   noteMedia: Record<string, { imageUrls: string[]; videoUrls: string[] }>;
-  shapeProbe?: { keys: string[]; hosts: string[] } | null;
+  shapeProbe?: { keys: string[]; hosts: string[]; mediaUrlSamples?: Record<string, string> } | null;
   commentPagination: { hasMore: boolean | null; cursorObserved: boolean };
   selectedNoteId: string;
   commentArchiveExpiresAt: number;
