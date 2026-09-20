@@ -23,13 +23,13 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_MAX_DETAILS = 300 as const;
 /**
  * One composed search operation executes its whole depth loop inside a single
  * MV3 service-worker event: click + detail + comments + replies + overlay
- * close per rank. Empirically ~25–70s per rank, and a worker killed mid-run
- * loses the whole remaining depth, so the per-operation depth is capped to a
- * chunk that always fits the worker window. Breadth beyond one chunk is the
- * caller's job: repeat the composed search with `dedupe.skipKnown` holding the
- * already-collected noteIds.
+ * close per rank. The loop keeps the worker continuously active, per-rank
+ * failures are resilient and diagnosed, the feed is scrolled for further
+ * cards, and a soft deadline guard converges the run gracefully before the
+ * work-item expiry instead of losing the captured notes. Beyond the tier
+ * totals the caller composes further chunked operations via skipKnown.
  */
-export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS = 5 as const;
+export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS = 300 as const;
 
 /**
  * Semantic collection depth for delegated evidence runs. The caller picks a
@@ -41,8 +41,8 @@ export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_CHUNK_MAX_DETAILS = 5 as cons
  */
 export type XiaohongshuPublicNotesSearchDepth = 'standard' | 'deep';
 export const XIAOHONGSHU_PUBLIC_NOTES_SEARCH_DEPTH_TIERS = Object.freeze({
-  standard: Object.freeze({ maximumDetails: 5, maximumScrolls: 2 as const }),
-  deep: Object.freeze({ maximumDetails: 5, maximumScrolls: 3 as const })
+  standard: Object.freeze({ maximumDetails: 100, maximumScrolls: 3 as const }),
+  deep: Object.freeze({ maximumDetails: 100, maximumScrolls: 6 as const })
 } as const);
 
 export function resolveXiaohongshuPublicNotesSearchDepth<T extends { query: string }>(

@@ -381,21 +381,21 @@ describe('Xiaohongshu current-page network policy contract', () => {
 describe('resolveXiaohongshuPublicNotesSearchDepth', () => {
   const base = { query: '咖啡' };
 
-  test('maps the standard tier to a 5-detail chunk with 2 comment scrolls', () => {
+  test('maps the standard tier to a 100-detail page run with 2 comment scrolls', () => {
     expect(resolveXiaohongshuPublicNotesSearchDepth({ ...base, depth: 'standard' })).toEqual({
-      query: '咖啡', maximumDetails: 5, comments: { maximumScrolls: 2 }
+      query: '咖啡', maximumDetails: 100, comments: { maximumScrolls: 3 }
     });
   });
 
-  test('maps the deep tier to a 5-detail chunk with 3 comment scrolls', () => {
+  test('maps the deep tier to a 100-detail page run with 3 comment scrolls', () => {
     expect(resolveXiaohongshuPublicNotesSearchDepth({ ...base, depth: 'deep' })).toEqual({
-      query: '咖啡', maximumDetails: 5, comments: { maximumScrolls: 3 }
+      query: '咖啡', maximumDetails: 100, comments: { maximumScrolls: 6 }
     });
   });
 
   test('lets explicit maximumDetails and comments override their tier slice', () => {
     expect(resolveXiaohongshuPublicNotesSearchDepth({ ...base, depth: 'deep', maximumDetails: 4 })).toEqual({
-      query: '咖啡', maximumDetails: 4, comments: { maximumScrolls: 3 }
+      query: '咖啡', maximumDetails: 4, comments: { maximumScrolls: 6 }
     });
     expect(resolveXiaohongshuPublicNotesSearchDepth({
       ...base, depth: 'standard', maximumDetails: 4,
@@ -410,7 +410,7 @@ describe('resolveXiaohongshuPublicNotesSearchDepth', () => {
     expect(resolveXiaohongshuPublicNotesSearchDepth({
       ...base, depth: 'deep', dedupe: { skipKnown: ['note-1'] }
     })).toEqual({
-      query: '咖啡', maximumDetails: 5, comments: { maximumScrolls: 3 },
+      query: '咖啡', maximumDetails: 100, comments: { maximumScrolls: 6 },
       dedupe: { skipKnown: ['note-1'] }
     });
   });

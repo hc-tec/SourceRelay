@@ -51,7 +51,7 @@ const XIAOHONGSHU_MULTI_REPLY_WORK_TTL_MS = 120_000;
 // scrolls. Keep this finite but give the declared 20-scroll budget enough
 // time to deliver one result; this is still a one-shot lease with no renewal.
 const XIAOHONGSHU_PROFILE_LINK_WORK_TTL_MS = 120_000;
-const XIAOHONGSHU_COMPOSED_SEARCH_MAX_TTL_MS = 8 * 60 * 60_000;
+const XIAOHONGSHU_COMPOSED_SEARCH_MAX_TTL_MS = 90 * 60 * 60_000;
 const MAX_RETAINED_OPERATIONS = 500;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_ERROR_CODE = /^[a-z0-9_]{1,100}$/;

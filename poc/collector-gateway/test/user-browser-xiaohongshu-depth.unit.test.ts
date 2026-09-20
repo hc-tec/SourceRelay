@@ -17,30 +17,30 @@ const envelope = (input: Record<string, unknown>) => ({
 });
 
 describe('xiaohongshu search depth tiers', () => {
-  test('standard tier resolves to a 5-detail chunk with 2 comment scrolls', () => {
+  test('standard tier resolves to a 100-detail page run with 2 comment scrolls', () => {
     const request = userBrowserCollectorServiceRequestInput(envelope({ query: '咖啡', depth: 'standard' })) as {
       input: Record<string, unknown>;
     };
-    expect(request.input).toEqual({ query: '咖啡', maximumDetails: 5, comments: { maximumScrolls: 2 } });
+    expect(request.input).toEqual({ query: '咖啡', maximumDetails: 100, comments: { maximumScrolls: 3 } });
   });
 
-  test('deep tier resolves to a 5-detail chunk with 3 comment scrolls', () => {
+  test('deep tier resolves to a 100-detail page run with 3 comment scrolls', () => {
     const request = userBrowserCollectorServiceRequestInput(envelope({ query: '咖啡', depth: 'deep' })) as {
       input: Record<string, unknown>;
     };
-    expect(request.input).toEqual({ query: '咖啡', maximumDetails: 5, comments: { maximumScrolls: 3 } });
+    expect(request.input).toEqual({ query: '咖啡', maximumDetails: 100, comments: { maximumScrolls: 6 } });
   });
 
   test('explicit maximumDetails wins over the tier slice', () => {
     const request = userBrowserCollectorServiceRequestInput(envelope({ query: '咖啡', depth: 'deep', maximumDetails: 4 })) as {
       input: Record<string, unknown>;
     };
-    expect(request.input).toEqual({ query: '咖啡', maximumDetails: 4, comments: { maximumScrolls: 3 } });
+    expect(request.input).toEqual({ query: '咖啡', maximumDetails: 4, comments: { maximumScrolls: 6 } });
   });
 
   test('rejects a depth chunk above the per-operation MV3-safe ceiling', () => {
-    expect(() => userBrowserCollectorServiceRequestInput(envelope({ query: '咖啡', maximumDetails: 6 }))).toThrow();
-    expect(() => userBrowserCollectorServiceRequestInput(envelope({ query: '咖啡', depth: 'deep', maximumDetails: 20 }))).toThrow();
+    expect(() => userBrowserCollectorServiceRequestInput(envelope({ query: '咖啡', maximumDetails: 100 }))).not.toThrow();
+    expect(() => userBrowserCollectorServiceRequestInput(envelope({ query: '咖啡', depth: 'deep', maximumDetails: 301 }))).toThrow();
   });
 
   test('rejects an unknown tier', () => {

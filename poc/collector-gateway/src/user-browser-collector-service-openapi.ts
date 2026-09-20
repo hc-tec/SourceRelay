@@ -828,7 +828,7 @@ export function userBrowserCollectorServiceOpenApiDocument(loopbackOrigin: strin
                 query: { type: 'string', minLength: 1, maxLength: 240 },
                 depth: {
                   type: 'string', enum: ['standard', 'deep'],
-                  description: 'Semantic collection depth for delegated evidence runs: standard = maximumDetails 100 + comments.maximumScrolls 3; deep = maximumDetails 300 + comments.maximumScrolls 6. Explicit maximumDetails/comments override their slice of the tier. Omit both depth and maximumDetails for breadth-only card collection.'
+                  description: 'Semantic collection depth for delegated evidence runs: standard = maximumDetails 100 + comments.maximumScrolls 3; deep = maximumDetails 100 + comments.maximumScrolls 6. Explicit maximumDetails/comments override their slice of the tier. Omit both depth and maximumDetails for breadth-only card collection.'
                 },
                 maximumDetails: { type: 'integer', minimum: 0, maximum: 300, default: 0 },
                 dedupe: {

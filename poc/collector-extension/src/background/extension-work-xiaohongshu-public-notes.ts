@@ -6,7 +6,8 @@ import {
   type XiaohongshuNotePublicDetailWorkItem,
   type XiaohongshuPublicNotesSearchTerminalReason,
   type XiaohongshuPublicNotesSearchWorkItem,
-  type XiaohongshuPublicNotesSearchWorkResult
+  type XiaohongshuPublicNotesSearchWorkResult,
+  type XiaohongshuPublicSearchItemProjection
 } from '@intelligence/collector-contracts';
 import {
   armXiaohongshuExistingExploreWorkObserver,
@@ -28,6 +29,7 @@ import {
   type WorkTabAcquisition,
   type WorkTabDisposition
 } from './extension-work-tabs';
+import { sendDebuggerCommandBounded } from './bounded-debugger';
 
 export interface XiaohongshuPublicNotesSearchExtensionLifecycle {
   onWorkTabAcquired?(acquisition: WorkTabAcquisition): Promise<void>;
@@ -106,10 +108,11 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
             }))
           };
         }
-        const requestedCount = Math.min(
-          Math.max(0, Math.floor(item.input.maximumDetails ?? 0)),
-          projectionBox.value.items.length
-        );
+        // The requested total is the caller's intent, not the first page's
+        // card count: when the projected items run out, the feed is scrolled
+        // for further cards (see growSearchFeed) until the intent is met or
+        // the feed stops yielding new notes.
+        const requestedCount = Math.max(0, Math.floor(item.input.maximumDetails ?? 0));
         detailActions.requestedCount = requestedCount;
         if (requestedCount === 0) return;
         await waitForSearchDocumentStability(document.tabId, item.expiresAt);
@@ -130,8 +133,27 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
         // document gates (every further rank would fail identically).
         let firstDetailFailure: string | null = null;
         let completedUnits = 0;
+        // Soft deadline: converge gracefully BEFORE the work item expires.
+        // A hard kill would discard the whole depth loop's captured notes;
+        // stopping two minutes early keeps every completed note in the
+        // artifact and reports the remainder truthfully.
+        const softDeadline = Date.parse(item.expiresAt) - 120_000;
         for (let rank = 1; rank <= requestedCount; rank += 1) {
           detailActions.attemptedCount = rank;
+          if (Date.now() >= softDeadline) {
+            detailActions.ranks.push({ rank, noteId: projectionBox.value.items[rank - 1]?.noteId ?? null, outcome: 'skipped', errorCode: null });
+            continue;
+          }
+          if (rank > projectionBox.value.items.length) {
+            const grew = await growSearchFeed(document, { tabId: document.tabId }, projectionBox);
+            if (!grew) {
+              // The feed stopped yielding new notes: this is the honest end
+              // of the result set, not a per-rank failure. Converge with the
+              // captured partial depth intact.
+              firstDetailFailure ??= 'xiaohongshu_search_result_feed_exhausted';
+              break;
+            }
+          }
           const noteId = projectionBox.value.items[rank - 1]?.noteId ?? null;
           if (noteId && skipKnown.has(noteId)) {
             // Already collected by this caller: skip the overlay work entirely.
@@ -414,6 +436,126 @@ function terminalReason(errorCode: string | null): XiaohongshuPublicNotesSearchT
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
+}
+
+/**
+ * Grow the projected item list by scrolling the search feed for further
+ * cards. The initial network projection covers roughly the first result
+ * page; a caller-requested depth beyond that must scroll the feed (the
+ * platform then serves further notes and the DOM gains more cards). Cards
+ * are identified semantically — the same unique-note rule as the rank
+ * locator — and appended in discovery order. Returns whether any new note
+ * was found; a feed that stops growing is the honest end of the result set.
+ */
+async function growSearchFeed(
+  document: { tabId: number; documentId: string },
+  debuggee: { tabId: number },
+  box: { value: XiaohongshuManagedSearchProjectionResult | null }
+): Promise<boolean> {
+  if (!box.value) return false;
+  const seen = new Set(box.value.items.map((entry) => entry.noteId));
+  for (let round = 0; round < 4; round += 1) {
+    await scrollSearchFeed(debuggee);
+    const cards = await readSearchFeedCards(document.tabId, document.documentId);
+    let added = false;
+    for (const card of cards) {
+      if (seen.has(card.noteId)) continue;
+      seen.add(card.noteId);
+      const items: XiaohongshuPublicSearchItemProjection[] = box.value.items;
+      const extended: XiaohongshuPublicSearchItemProjection = {
+        rank: items.length + 1,
+        noteId: card.noteId,
+        title: card.title,
+        contentType: '',
+        authorId: '',
+        authorNickname: '',
+        likedCountText: ''
+      };
+      box.value = { ...box.value, items: [...items, extended] };
+      added = true;
+    }
+    if (added) return true;
+  }
+  return false;
+}
+
+async function scrollSearchFeed(debuggee: { tabId: number }): Promise<void> {
+  let center = { x: 400, y: 400 };
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: debuggee.tabId },
+      func: () => ({ x: Math.floor(window.innerWidth / 2), y: Math.floor(window.innerHeight / 2) })
+    });
+    const value = results[0]?.result;
+    if (value && Number.isFinite(value.x) && Number.isFinite(value.y)) center = value;
+  } catch {
+    // Fixed fallback coordinates are fine for wheel delivery.
+  }
+  for (let wheel = 0; wheel < 3; wheel += 1) {
+    await sendDebuggerCommandBounded(debuggee, 'Input.dispatchMouseEvent', {
+      type: 'mouseWheel', x: center.x, y: center.y, deltaX: 0, deltaY: 1600
+    }).catch(() => undefined);
+    await delay(200);
+  }
+  // The platform fetches the next waterfall page asynchronously; give the
+  // network a beat before the next DOM scan.
+  await delay(1_200);
+}
+
+/**
+ * Semantic scan of the current search feed: unique note cards in document
+ * order with a bounded title hint. Identifies cards by note links only
+ * (/explore/<id>, /discovery/item/<id>, /search_result/<id>) — no classes,
+ * hashes, or framework attributes.
+ */
+async function readSearchFeedCards(
+  tabId: number,
+  documentId: string
+): Promise<Array<{ noteId: string; title: string }>> {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, documentIds: [documentId] },
+    func: () => {
+      const visible = (element: Element): boolean => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
+          style.visibility !== 'hidden' && Number.parseFloat(style.opacity || '1') > 0.01;
+      };
+      const noteIdOf = (href: string): string => {
+        try {
+          return new URL(href).pathname
+            .match(/^\/(?:explore|discovery\/item|search_result)\/([A-Za-z0-9_-]+)(?:\/|$)/)?.[1] ?? '';
+        } catch { return ''; }
+      };
+      const seen = new Set<string>();
+      const cards: Array<{ noteId: string; title: string }> = [];
+      for (const link of Array.from(document.querySelectorAll('a[href]'))) {
+        if (!(link instanceof HTMLAnchorElement)) continue;
+        const noteId = noteIdOf(link.href);
+        if (noteId === '' || seen.has(noteId)) continue;
+        let holder: Element = link;
+        let pointer: Element | null = link.parentElement;
+        for (let depth = 0; pointer && depth < 8; depth += 1, pointer = pointer.parentElement) {
+          const rect = pointer.getBoundingClientRect();
+          if (rect.width >= 160 && rect.height >= 120) {
+            holder = pointer;
+            break;
+          }
+        }
+        if (!visible(holder)) continue;
+        seen.add(noteId);
+        cards.push({
+          noteId,
+          title: (holder.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 120)
+        });
+      }
+      return cards;
+    }
+  }).catch(() => [] as chrome.scripting.InjectionResult<Array<{ noteId: string; title: string }>>[]);
+  const value = results[0]?.result;
+  return Array.isArray(value)
+    ? value.filter((card) => card && typeof card.noteId === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(card.noteId))
+    : [];
 }
 
 function safeErrorCode(error: unknown): string {
