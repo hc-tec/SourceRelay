@@ -189,11 +189,15 @@ export function createXiaohongshuSearchPayloadProjector(deps: XhsSearchProjector
             for (const [key, child] of Object.entries(recordValue).slice(0, 60)) {
               if (/token|cookie|session|captcha|verify|secret|password|avatar/i.test(key)) continue;
               const childPath = `${path}.${key}`;
-              if (typeof child === 'string' && child.startsWith('https://') && child.length <= 1024) {
+              if (typeof child === 'string' && child.length <= 1024 &&
+                (child.startsWith('https://') || child.startsWith('//'))) {
+                // The payload stores image URLs protocol-relative ('//sns-…')
+                // or empty; the client prepends https: at render time.
+                const absolute = child.startsWith('//') ? `https:${child}` : child;
                 if (/master_?url|video_?url|play_?url|media_?url/i.test(key) || /video|stream/i.test(childPath)) {
-                  if (media.videoUrls.length < 4 && !media.videoUrls.includes(child)) media.videoUrls.push(child);
+                  if (media.videoUrls.length < 4 && !media.videoUrls.includes(absolute)) media.videoUrls.push(absolute);
                 } else if (/image|cover|pic/i.test(key) || /image|cover/i.test(childPath) || key === 'url') {
-                  if (media.imageUrls.length < 24 && !media.imageUrls.includes(child)) media.imageUrls.push(child);
+                  if (media.imageUrls.length < 24 && !media.imageUrls.includes(absolute)) media.imageUrls.push(absolute);
                 }
               } else if (child && typeof child === 'object') {
                 collectMediaUrl(child, depth + 1, childPath);

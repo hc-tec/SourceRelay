@@ -49,10 +49,10 @@ const SEARCH_PAYLOAD = {
           display_title: '拉花图文笔记',
           user: { user_id: 'u2', nick_name: '作者二' },
           interact_info: { liked_count: '3021' },
-          cover: { url: 'https://sns-webpic-qc.xhscdn.com/202609/img_cover.jpg' },
+          cover: { url_default: '//sns-webpic-qc.xhscdn.com/202609/img_cover.jpg' },
           image_list: [
-            { url_default: 'https://sns-webpic-qc.xhscdn.com/202609/img_a.jpg', url_pre: 'https://sns-webpic-qc.xhscdn.com/202609/img_a_pre.jpg' },
-            { url_default: 'https://sns-webpic-qc.xhscdn.com/202609/img_b.jpg' },
+            { url: '', url_default: '//sns-webpic-qc.xhscdn.com/202609/img_a.jpg', url_pre: '//sns-webpic-qc.xhscdn.com/202609/img_a_pre.jpg', info_list: [{ image_scene: 'WB_DFT', url: '//sns-webpic-qc.xhscdn.com/202609/img_a_dft.jpg' }] },
+            { url_default: '//sns-webpic-qc.xhscdn.com/202609/img_b.jpg' },
           ],
         },
       },
@@ -97,8 +97,10 @@ describe('xiaohongshu payload projector: media references from network payloads'
   test('collects cover and image_list references per note', () => {
     const result = projector(SEARCH_PAYLOAD);
     const imageNote = result.media['image-note-1']!;
+    // Protocol-relative payload URLs must be normalised to https.
     expect(imageNote.imageUrls).toContain('https://sns-webpic-qc.xhscdn.com/202609/img_cover.jpg');
     expect(imageNote.imageUrls).toContain('https://sns-webpic-qc.xhscdn.com/202609/img_a.jpg');
+    expect(imageNote.imageUrls).toContain('https://sns-webpic-qc.xhscdn.com/202609/img_a_dft.jpg');
     expect(imageNote.imageUrls).toContain('https://sns-webpic-qc.xhscdn.com/202609/img_b.jpg');
   });
 
