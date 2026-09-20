@@ -304,7 +304,8 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
           publicText: '目标笔记正文',
           authorNickname: '目标作者',
           interactionText: '目标互动'
-        }
+        },
+        media: null
       });
   });
 
@@ -342,7 +343,7 @@ describe('Xiaohongshu current-page network pre-arm state machine', () => {
     }]);
 
     await expect(subject.readXiaohongshuExistingSearchNoteDetailNetworkProjection(11, 'run-123'))
-      .resolves.toEqual({ matchedPayloadCount: 1, bodyBytesRead: 2_048, detail: null });
+      .resolves.toEqual({ matchedPayloadCount: 1, bodyBytesRead: 2_048, detail: null, media: null });
   });
 
   test('returns response-backed public descriptions together with ranked search cards', async () => {

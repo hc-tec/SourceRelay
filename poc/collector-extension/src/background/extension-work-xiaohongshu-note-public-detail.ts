@@ -215,10 +215,15 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
       visibleMediaCount: dom.visibleMediaCount,
       commentEntryVisible: dom.commentEntryVisible,
       // Media references are network-sourced only (the API payloads the
-      // platform itself renders from); when the detail payload was not
-      // observed the field stays absent — never DOM-scraped substitutes.
-      ...(networkDetail?.imageUrls ? { imageUrls: networkDetail.imageUrls } : {}),
-      ...(networkDetail?.videoUrls ? { videoUrls: networkDetail.videoUrls } : {}),
+      // platform itself renders from): the observed detail payload first,
+      // else the search-phase per-note media map. When neither was observed
+      // the field stays absent — never DOM-scraped substitutes.
+      ...((networkDetail?.imageUrls ?? network.media?.imageUrls)
+        ? { imageUrls: networkDetail?.imageUrls ?? network.media!.imageUrls! }
+        : {}),
+      ...((networkDetail?.videoUrls ?? network.media?.videoUrls)
+        ? { videoUrls: networkDetail?.videoUrls ?? network.media!.videoUrls! }
+        : {}),
       rawPayloadStored: false,
       responseUrlsStored: false
     };

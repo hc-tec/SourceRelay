@@ -403,6 +403,7 @@ export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
     imageUrls?: string[];
     videoUrls?: string[];
   } | null;
+  media: { imageUrls?: string[]; videoUrls?: string[] } | null;
 }> {
   const record = await loadActiveRecord();
   if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId ||
@@ -428,14 +429,23 @@ export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
   const rawDetail = rawDetails.find((value) => text(value.noteId, 80) === selectedNoteId) ??
     (resultRank >= 1 ? rawDetails[resultRank - 1] : undefined);
   const publicText = text(rawDetail?.publicText, 12_000);
-  const imageUrls = Array.isArray(rawDetail?.imageUrls)
-    ? (rawDetail.imageUrls as unknown[]).filter((url): url is string =>
-        typeof url === 'string' && url.startsWith('https://') && url.length <= 512).slice(0, 24)
-    : [];
-  const videoUrls = Array.isArray(rawDetail?.videoUrls)
-    ? (rawDetail.videoUrls as unknown[]).filter((url): url is string =>
-        typeof url === 'string' && url.startsWith('https://') && url.length <= 1024).slice(0, 4)
-    : [];
+  const sanitizeUrls = (value: unknown, maximum: number, maxLength: number): string[] =>
+    Array.isArray(value)
+      ? (value as unknown[]).filter((url): url is string =>
+          typeof url === 'string' && url.startsWith('https://') && url.length <= maxLength).slice(0, maximum)
+      : [];
+  // Search-response media is stored state-level per noteId (cards rarely
+  // carry desc, so the details list is often empty): prefer the detail entry,
+  // fall back to the noteMedia map keyed by the selected note.
+  const selectedMedia = (candidate?.noteMedia && typeof candidate.noteMedia === 'object'
+    ? (candidate.noteMedia as Record<string, { imageUrls?: string[]; videoUrls?: string[] }>)[selectedNoteId]
+    : undefined) ?? null;
+  const imageUrls = sanitizeUrls(rawDetail?.imageUrls, 24, 512).length > 0
+    ? sanitizeUrls(rawDetail?.imageUrls, 24, 512)
+    : sanitizeUrls(selectedMedia?.imageUrls, 24, 512);
+  const videoUrls = sanitizeUrls(rawDetail?.videoUrls, 4, 1024).length > 0
+    ? sanitizeUrls(rawDetail?.videoUrls, 4, 1024)
+    : sanitizeUrls(selectedMedia?.videoUrls, 4, 1024);
   return {
     matchedPayloadCount: Number.isSafeInteger(candidate?.matchedPayloadCount)
       ? Math.min(4, Math.max(0, Number(candidate?.matchedPayloadCount))) : 0,
@@ -447,7 +457,10 @@ export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
       interactionText: text(rawDetail?.interactionText, 1_000),
       ...(imageUrls.length > 0 ? { imageUrls } : {}),
       ...(videoUrls.length > 0 ? { videoUrls } : {})
-    } : null
+    } : null,
+    media: (imageUrls.length > 0 || videoUrls.length > 0)
+      ? { ...(imageUrls.length > 0 ? { imageUrls } : {}), ...(videoUrls.length > 0 ? { videoUrls } : {}) }
+      : null
   };
 }
 
