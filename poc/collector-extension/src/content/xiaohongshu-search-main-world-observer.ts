@@ -18,6 +18,7 @@ interface PublicDetail {
   publicText: string;
   authorNickname: string;
   interactionText: string;
+  imageUrls?: string[];
   videoUrls?: string[];
 }
 
@@ -177,33 +178,38 @@ if (!existing) {
             interactionText: clean(Object.values(interact).filter((entry) =>
               typeof entry === 'string' || typeof entry === 'number').join(' '), 1_000)
           };
-          // Video notes carry their CDN sources under the card's video
-          // subtree (stream.h264[].masterUrl and friends). Collect direct
-          // https references only — blob handles and manifests are useless
-          // as evidence links.
-          const videoUrls: string[] = [];
-          const collectVideoUrl = (value: unknown, depth: number): void => {
-            if (depth > 6 || videoUrls.length >= 4) return;
+          // Media references come from the API payload itself — the same
+          // source the platform renders from. The card subtree carries
+          // image_list/cover entries for image notes and
+          // video.media.stream[].masterUrl for video notes; classify each
+          // https string by its key path and keep bounded, deduplicated
+          // references. DOM scraping is never used for media.
+          const media: { imageUrls: string[]; videoUrls: string[] } = { imageUrls: [], videoUrls: [] };
+          const collectMediaUrl = (value: unknown, depth: number, path: string): void => {
+            if (depth > 7 || (media.imageUrls.length >= 24 && media.videoUrls.length >= 4)) return;
             if (Array.isArray(value)) {
-              for (const entry of value.slice(0, 20)) collectVideoUrl(entry, depth + 1);
+              for (const entry of value.slice(0, 40)) collectMediaUrl(entry, depth + 1, path);
               return;
             }
             const recordValue = object(value);
             if (!recordValue) return;
             for (const [key, child] of Object.entries(recordValue).slice(0, 60)) {
               if (/token|cookie|session|captcha|verify|secret|password/i.test(key)) continue;
-              if (typeof child === 'string' &&
-                /master_?url|video_?url|play_?url|media_?url/i.test(key) &&
-                child.startsWith('https://') && child.length <= 1024 &&
-                !videoUrls.includes(child)) {
-                videoUrls.push(child);
+              const childPath = `${path}.${key}`;
+              if (typeof child === 'string' && child.startsWith('https://') && child.length <= 1024) {
+                if (/master_?url|video_?url|play_?url|media_?url/i.test(key) || /video|stream/i.test(childPath)) {
+                  if (media.videoUrls.length < 4 && !media.videoUrls.includes(child)) media.videoUrls.push(child);
+                } else if (/image|cover|pic/i.test(key) || /image|cover/i.test(childPath) || /^\.url$/.test(childPath) || key === 'url') {
+                  if (media.imageUrls.length < 24 && !media.imageUrls.includes(child)) media.imageUrls.push(child);
+                }
               } else if (child && typeof child === 'object') {
-                collectVideoUrl(child, depth + 1);
+                collectMediaUrl(child, depth + 1, childPath);
               }
             }
           };
-          collectVideoUrl(candidate.video ?? candidate.video_media ?? record.video ?? null, 0);
-          if (videoUrls.length > 0) detail.videoUrls = videoUrls;
+          collectMediaUrl(candidate, 0, '');
+          if (media.imageUrls.length > 0) detail.imageUrls = media.imageUrls;
+          if (media.videoUrls.length > 0) detail.videoUrls = media.videoUrls;
           details.push(detail);
         }
       }

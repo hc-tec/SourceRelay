@@ -396,7 +396,13 @@ export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
 ): Promise<{
   matchedPayloadCount: number;
   bodyBytesRead: number;
-  detail: { publicText: string; authorNickname: string; interactionText: string; videoUrls?: string[] } | null;
+  detail: {
+    publicText: string;
+    authorNickname: string;
+    interactionText: string;
+    imageUrls?: string[];
+    videoUrls?: string[];
+  } | null;
 }> {
   const record = await loadActiveRecord();
   if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId ||
@@ -422,6 +428,10 @@ export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
   const rawDetail = rawDetails.find((value) => text(value.noteId, 80) === selectedNoteId) ??
     (resultRank >= 1 ? rawDetails[resultRank - 1] : undefined);
   const publicText = text(rawDetail?.publicText, 12_000);
+  const imageUrls = Array.isArray(rawDetail?.imageUrls)
+    ? (rawDetail.imageUrls as unknown[]).filter((url): url is string =>
+        typeof url === 'string' && url.startsWith('https://') && url.length <= 512).slice(0, 24)
+    : [];
   const videoUrls = Array.isArray(rawDetail?.videoUrls)
     ? (rawDetail.videoUrls as unknown[]).filter((url): url is string =>
         typeof url === 'string' && url.startsWith('https://') && url.length <= 1024).slice(0, 4)
@@ -435,6 +445,7 @@ export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
       publicText,
       authorNickname: text(rawDetail?.authorNickname, 200),
       interactionText: text(rawDetail?.interactionText, 1_000),
+      ...(imageUrls.length > 0 ? { imageUrls } : {}),
       ...(videoUrls.length > 0 ? { videoUrls } : {})
     } : null
   };
