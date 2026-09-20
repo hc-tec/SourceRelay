@@ -76,6 +76,7 @@ interface DomProjection {
   authorNickname: string;
   interactionText: string;
   visibleMediaCount: number;
+  imageUrls: string[];
   commentEntryVisible: boolean;
 }
 
@@ -214,6 +215,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
       interactionText: networkDetail?.interactionText || dom.interactionText,
       visibleMediaCount: dom.visibleMediaCount,
       commentEntryVisible: dom.commentEntryVisible,
+      ...(dom.imageUrls.length > 0 ? { imageUrls: dom.imageUrls } : {}),
       rawPayloadStored: false,
       responseUrlsStored: false
     };
@@ -1030,11 +1032,17 @@ async function waitForDomProjection(
           '[class*="interact"], [class*="engage"], [class*="footer"], [class*="count"]'
         )).filter(visible).map((element) => element.textContent ?? '').join(' ')
           .replace(/\s+/g, ' ').trim().slice(0, 1_000);
+        const imageUrls = Array.from(overlay.querySelectorAll('img')).filter(visible)
+          .map((image) => image.currentSrc || image.src)
+          .filter((src) => src.startsWith('https://'))
+          .filter((src, index, all) => all.indexOf(src) === index)
+          .slice(0, 24);
         return {
           publicText,
           authorNickname: (author?.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 200),
           interactionText,
           visibleMediaCount: Math.min(20, Array.from(overlay.querySelectorAll('img, video')).filter(visible).length),
+          imageUrls,
           commentEntryVisible: /评论/.test(publicText)
         };
       }

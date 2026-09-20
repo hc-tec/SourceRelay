@@ -199,6 +199,7 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
                 authorNickname: detailResult.projection.authorNickname,
                 interactionText: detailResult.projection.interactionText
               } as (typeof details)[number];
+              if (detailResult.projection.imageUrls) enriched.imageUrls = detailResult.projection.imageUrls;
               if (detailResult.projection.comments) enriched.comments = detailResult.projection.comments;
               if (detailResult.projection.replyThread) enriched.replyThread = detailResult.projection.replyThread;
               if (detailResult.projection.replyThreads) enriched.replyThreads = detailResult.projection.replyThreads;

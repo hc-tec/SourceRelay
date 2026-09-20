@@ -32,6 +32,9 @@ export interface XiaohongshuNotePublicDetailProjection {
   interactionText: string;
   visibleMediaCount: number;
   commentEntryVisible: boolean;
+  /** Bounded public CDN image URLs of the note's media, in overlay order.
+   * Public references only — never raw payloads. */
+  imageUrls?: string[];
   comments?: XiaohongshuNotePublicCommentsProjection;
   replyThread?: XiaohongshuPublicReplyThreadProjection;
   replyThreads?: XiaohongshuPublicReplyThreadProjection[];
@@ -136,6 +139,9 @@ export function isXiaohongshuNotePublicDetailProjection(
     boundedText(value.publicText, 1, 12_000) && boundedText(value.authorNickname, 0, 200) &&
     boundedText(value.interactionText, 0, 1_000) && boundedInteger(value.visibleMediaCount, 0, 20) &&
     typeof value.commentEntryVisible === 'boolean' &&
+    (value.imageUrls === undefined || (Array.isArray(value.imageUrls) && value.imageUrls.length >= 1 &&
+      value.imageUrls.length <= 24 && value.imageUrls.every((url) => typeof url === 'string' &&
+      url.startsWith('https://') && url.length <= 512))) &&
     (value.comments === undefined || isXiaohongshuNotePublicCommentsProjection(value.comments)) &&
     (value.replyThread === undefined || isXiaohongshuPublicReplyThreadProjection(value.replyThread)) &&
     (value.replyThreads === undefined || (Array.isArray(value.replyThreads) && value.replyThreads.length >= 1 &&
@@ -245,7 +251,7 @@ function detailProjectionKeys(value: Record<string, unknown>): boolean {
     'schemaVersion', 'sourceRank', 'captureMode', 'network', 'publicText', 'authorNickname', 'interactionText',
     'visibleMediaCount', 'commentEntryVisible', 'rawPayloadStored', 'responseUrlsStored'
   ] as const;
-  const optional = ['comments', 'replyThread', 'replyThreads', 'commentsCapture', 'repliesCapture'] as const;
+  const optional = ['comments', 'replyThread', 'replyThreads', 'commentsCapture', 'repliesCapture', 'imageUrls'] as const;
   const keys = Object.keys(value);
   return base.every((key) => keys.includes(key)) &&
     keys.every((key) => base.includes(key as typeof base[number]) || optional.includes(key as typeof optional[number]));
