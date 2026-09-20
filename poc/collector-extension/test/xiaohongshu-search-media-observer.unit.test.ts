@@ -124,6 +124,30 @@ describe('xiaohongshu payload projector: media references from network payloads'
     expect(detail!.videoUrls).toContain('https://sns-video-v.xhscdn.com/202609/latte_art.mp4');
   });
 
+  test('never classifies avatars as note media — even when embedded in image keys', () => {
+    const hostile = {
+      data: {
+        items: [{
+          id: 'avatar-note-1',
+          model_type: 'note',
+          note_card: {
+            display_title: '头像卡片',
+            user: { user_id: 'u3', nick_name: '作者三' },
+            cover: { url: 'https://sns-avatar-qc.xhscdn.com/avatar/1040g2jo?imageView2/2/w/120/format/jpg' },
+            image_list: [{ url_default: 'https://sns-avatar-qc.xhscdn.com/avatar/60e9054a.jpg?imageView2/2/w/120/format/jpg' }],
+          },
+        }],
+      },
+    };
+    const result = projector(hostile);
+    const media = result.media['avatar-note-1'];
+    if (media) {
+      for (const url of media.imageUrls) {
+        expect(url.includes('sns-avatar') || url.includes('/avatar/')).toBe(false);
+      }
+    }
+  });
+
   test('never classifies avatars as note media', () => {
     const result = projector(SEARCH_PAYLOAD);
     for (const media of Object.values(result.media)) {

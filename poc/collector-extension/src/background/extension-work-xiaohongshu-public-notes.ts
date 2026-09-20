@@ -115,6 +115,13 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
         // the feed stops yielding new notes.
         const requestedCount = Math.max(0, Math.floor(item.input.maximumDetails ?? 0));
         detailActions.requestedCount = requestedCount;
+        // Structure-only observer probe: what the observer actually holds
+        // (shape key tree, media map size). Must run BEFORE the observer is
+        // cleared for the depth loop.
+        try {
+          const probe = await readXiaohongshuObserverStateProbe(document.tabId, item.workId);
+          if (probe) void lifecycle.onDiagnostic?.('observer_state_probe', probe);
+        } catch { /* diagnostics never block collection */ }
         if (requestedCount === 0) return;
         await waitForSearchDocumentStability(document.tabId, item.expiresAt);
 
@@ -138,13 +145,6 @@ export async function executeXiaohongshuPublicNotesSearchExtensionWork(
         // A hard kill would discard the whole depth loop's captured notes;
         // stopping two minutes early keeps every completed note in the
         // artifact and reports the remainder truthfully.
-        // Structure-only observer probe: surfaces what the observer actually
-        // holds (shape key tree, media map size) so extraction mismatches are
-        // diagnosable from the gateway log without touching the browser.
-        try {
-          const probe = await readXiaohongshuObserverStateProbe(document.tabId, item.workId);
-          if (probe) void lifecycle.onDiagnostic?.('observer_state_probe', probe);
-        } catch { /* diagnostics never block collection */ }
         const softDeadline = Date.parse(item.expiresAt) - 120_000;
         for (let rank = 1; rank <= requestedCount; rank += 1) {
           detailActions.attemptedCount = rank;

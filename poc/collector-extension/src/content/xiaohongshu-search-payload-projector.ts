@@ -201,6 +201,11 @@ export function createXiaohongshuSearchPayloadProjector(deps: XhsSearchProjector
             }
           };
           collectMediaUrl(candidate, 0, '');
+          // URL-content filtering is authoritative: avatar/platform/comment
+          // references can surface under image-ish keys depending on the
+          // payload build, so classify by the URL itself.
+          media.imageUrls = media.imageUrls.filter((url) =>
+            !/\/avatar\/|sns-avatar|picasso-static|fe-platform|\/comment\//.test(url));
           if (media.imageUrls.length > 0 || media.videoUrls.length > 0) {
             const knownMedia = mediaByNote[noteId];
             mediaByNote[noteId] = {
