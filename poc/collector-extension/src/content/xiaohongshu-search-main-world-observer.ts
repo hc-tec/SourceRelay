@@ -18,6 +18,7 @@ interface PublicDetail {
   publicText: string;
   authorNickname: string;
   interactionText: string;
+  videoUrls?: string[];
 }
 
 interface PublicComment {
@@ -169,13 +170,41 @@ if (!existing) {
         const description = clean(candidate.desc ?? candidate.description ?? candidate.content ?? record.desc, 11_000);
         if (noteId && description && details.length < maximumItems) {
           const publicTitle = clean(candidate.title ?? candidate.display_title ?? title, 500);
-          details.push({
+          const detail: PublicDetail = {
             noteId,
             publicText: clean(`${publicTitle}\n${description}`, 12_000),
             authorNickname: clean(user.nickname ?? user.nick_name, 200),
             interactionText: clean(Object.values(interact).filter((entry) =>
               typeof entry === 'string' || typeof entry === 'number').join(' '), 1_000)
-          });
+          };
+          // Video notes carry their CDN sources under the card's video
+          // subtree (stream.h264[].masterUrl and friends). Collect direct
+          // https references only — blob handles and manifests are useless
+          // as evidence links.
+          const videoUrls: string[] = [];
+          const collectVideoUrl = (value: unknown, depth: number): void => {
+            if (depth > 6 || videoUrls.length >= 4) return;
+            if (Array.isArray(value)) {
+              for (const entry of value.slice(0, 20)) collectVideoUrl(entry, depth + 1);
+              return;
+            }
+            const recordValue = object(value);
+            if (!recordValue) return;
+            for (const [key, child] of Object.entries(recordValue).slice(0, 60)) {
+              if (/token|cookie|session|captcha|verify|secret|password/i.test(key)) continue;
+              if (typeof child === 'string' &&
+                /master_?url|video_?url|play_?url|media_?url/i.test(key) &&
+                child.startsWith('https://') && child.length <= 1024 &&
+                !videoUrls.includes(child)) {
+                videoUrls.push(child);
+              } else if (child && typeof child === 'object') {
+                collectVideoUrl(child, depth + 1);
+              }
+            }
+          };
+          collectVideoUrl(candidate.video ?? candidate.video_media ?? record.video ?? null, 0);
+          if (videoUrls.length > 0) detail.videoUrls = videoUrls;
+          details.push(detail);
         }
       }
       for (const [key, child] of Object.entries(record).slice(0, 80)) {

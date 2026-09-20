@@ -217,7 +217,9 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
       visibleMediaCount: dom.visibleMediaCount,
       commentEntryVisible: dom.commentEntryVisible,
       ...(dom.imageUrls.length > 0 ? { imageUrls: dom.imageUrls } : {}),
-      ...(dom.videoUrls.length > 0 ? { videoUrls: dom.videoUrls } : {}),
+      ...(dom.videoUrls.length > 0 || (networkDetail as { videoUrls?: string[] } | null)?.videoUrls
+        ? { videoUrls: ((networkDetail as { videoUrls?: string[] } | null)?.videoUrls ?? dom.videoUrls).slice(0, 8) }
+        : {}),
       rawPayloadStored: false,
       responseUrlsStored: false
     };
@@ -1037,9 +1039,11 @@ async function waitForDomProjection(
         const imageUrls = Array.from(overlay.querySelectorAll('img')).filter(visible)
           .map((image) => image.currentSrc || image.src)
           .filter((src) => src.startsWith('https://'))
-          // Exclude author avatars and platform chrome; keep note media only.
+          // Exclude author avatars, comment images, and platform chrome;
+          // keep note media only.
           .filter((src) => !src.includes('/avatar/') && !src.includes('sns-avatar') &&
-            !src.includes('picasso-static') && !src.includes('fe-platform'))
+            !src.includes('/comment/') && !src.includes('picasso-static') &&
+            !src.includes('fe-platform'))
           .filter((src, index, all) => all.indexOf(src) === index)
           .slice(0, 24);
         // Video notes expose their CDN source on the <video> element (direct
