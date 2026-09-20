@@ -25,6 +25,7 @@ interface ObserverController {
   details: PublicDetail[];
   comments: ArchivedPublicComment[];
   noteMedia: Record<string, { imageUrls: string[]; videoUrls: string[] }>;
+  shapeProbe?: { keys: string[]; hosts: string[] } | null;
   commentPagination: { hasMore: boolean | null; cursorObserved: boolean };
   selectedNoteId: string;
   commentArchiveExpiresAt: number;
@@ -107,6 +108,15 @@ if (!existing) {
           known.add(item.noteId);
           active.items.push(item);
         }
+      }
+      if (projected.shapeProbe && !active.shapeProbe) active.shapeProbe = projected.shapeProbe;
+      for (const [noteId, noteMedia] of Object.entries(projected.media ?? {})) {
+        if (Object.keys(active.noteMedia).length >= 200) break;
+        const knownMedia = active.noteMedia[noteId];
+        active.noteMedia[noteId] = {
+          imageUrls: knownMedia && knownMedia.imageUrls.length >= noteMedia.imageUrls.length ? knownMedia.imageUrls : noteMedia.imageUrls,
+          videoUrls: knownMedia && knownMedia.videoUrls.length >= noteMedia.videoUrls.length ? knownMedia.videoUrls : noteMedia.videoUrls
+        };
       }
       const knownDetails = new Set(active.details.map((detail) => detail.noteId));
       for (const detail of projected.details) {

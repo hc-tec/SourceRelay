@@ -39,11 +39,19 @@ export interface XhsArchivedPublicComment {
   parentCommentId: string;
 }
 
+export interface XhsSearchShapeProbe {
+  keys: string[];
+  hosts: string[];
+}
+
 export interface XhsSearchProjection {
   items: XhsPublicSearchItem[];
   details: XhsPublicNoteDetail[];
   comments: XhsArchivedPublicComment[];
   media: Record<string, { imageUrls: string[]; videoUrls: string[] }>;
+  /** Structure-only probe of the first note card seen (key tree to depth 4
+   * plus https hostname samples). Never carries content values. */
+  shapeProbe?: XhsSearchShapeProbe;
   hasMore: boolean | null;
   cursorObserved: boolean;
 }
@@ -63,6 +71,7 @@ export function createXiaohongshuSearchPayloadProjector(deps: XhsSearchProjector
     const details: XhsPublicNoteDetail[] = [];
     const comments: XhsArchivedPublicComment[] = [];
     const mediaByNote: Record<string, { imageUrls: string[]; videoUrls: string[] }> = {};
+    let shapeProbe: XhsSearchShapeProbe | null = null;
     let hasMore: boolean | null = null;
     let cursorObserved = false;
     const visit = (node: unknown, depth: number, inheritedParentCommentId = ''): void => {
@@ -119,6 +128,48 @@ export function createXiaohongshuSearchPayloadProjector(deps: XhsSearchProjector
             authorNickname: clean(user.nickname ?? user.nick_name, 200),
             likedCountText: clean(interact.liked_count ?? interact.likedCount, 40)
           });
+        }
+        // One structure-only probe per payload: the first card's key tree
+        // (depth 4) plus https hostname samples — no content values.
+        if (!shapeProbe && noteId) {
+          const keys: string[] = [];
+          const probeKeys = (nodeValue: unknown, depth: number, path: string): void => {
+            if (depth > 4 || keys.length >= 80) return;
+            if (Array.isArray(nodeValue)) {
+              if (nodeValue.length > 0) probeKeys(nodeValue[0], depth + 1, `${path}[]`);
+              return;
+            }
+            const recordValue = object(nodeValue);
+            if (!recordValue) return;
+            for (const [key, child] of Object.entries(recordValue).slice(0, 40)) {
+              const childPath = `${path}.${key}`;
+              keys.push(childPath);
+              if (child && typeof child === 'object') probeKeys(child, depth + 1, childPath);
+            }
+          };
+          probeKeys(candidate, 0, '');
+          const hosts: string[] = [];
+          const collectHosts = (nodeValue: unknown, depth: number): void => {
+            if (depth > 7 || hosts.length >= 8) return;
+            if (Array.isArray(nodeValue)) {
+              for (const entry of nodeValue.slice(0, 40)) collectHosts(entry, depth + 1);
+              return;
+            }
+            const recordValue = object(nodeValue);
+            if (!recordValue) return;
+            for (const child of Object.values(recordValue).slice(0, 60)) {
+              if (typeof child === 'string' && child.startsWith('https://')) {
+                try {
+                  const host = new URL(child).hostname;
+                  if (!hosts.includes(host)) hosts.push(host);
+                } catch { /* ignore */ }
+              } else if (child && typeof child === 'object') {
+                collectHosts(child, depth + 1);
+              }
+            }
+          };
+          collectHosts(candidate, 0);
+          shapeProbe = { keys, hosts };
         }
         // Media references ride every note card (image_list / cover / video
         // subtrees), independent of whether the card carries a description.
@@ -181,6 +232,10 @@ export function createXiaohongshuSearchPayloadProjector(deps: XhsSearchProjector
       }
     };
     visit(value, 0);
-    return { items, details, comments, media: mediaByNote, hasMore, cursorObserved };
+    return {
+      items, details, comments, media: mediaByNote,
+      ...(shapeProbe ? { shapeProbe } : {}),
+      hasMore, cursorObserved
+    };
   };
 }

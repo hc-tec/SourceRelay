@@ -389,6 +389,45 @@ async function mutateMainWorldCommentContinuity(
   });
 }
 
+/**
+ * Structure-only diagnostic: what the observer actually holds after a run —
+ * shape probe (key tree of the first card, hostname samples), media map size
+ * and details length. Emitted to the gateway operational log so extraction
+ * mismatches are diagnosable from logs alone.
+ */
+export async function readXiaohongshuObserverStateProbe(
+  tabId: number,
+  workId: string
+): Promise<Record<string, unknown> | null> {
+  const record = await loadActiveRecord();
+  if (!recordMatchesManagedPageRun(record, tabId, workId) || !record.documentId) return null;
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, documentIds: [record.documentId] },
+    world: 'MAIN',
+    func: () => {
+      const key = '__personalIntelligenceXiaohongshuPublicNotesObserverV2';
+      const state = (window as typeof window & { [key]?: unknown })[key] ?? null;
+      const recordState = state as {
+        shapeProbe?: unknown;
+        noteMedia?: Record<string, unknown>;
+        details?: unknown[];
+        items?: unknown[];
+        matchedPayloadCount?: number;
+      } | null;
+      if (!recordState) return null;
+      return {
+        shapeProbe: recordState.shapeProbe ?? null,
+        noteMediaEntries: recordState.noteMedia ? Object.keys(recordState.noteMedia).length : 0,
+        detailsLength: Array.isArray(recordState.details) ? recordState.details.length : -1,
+        itemsLength: Array.isArray(recordState.items) ? recordState.items.length : -1,
+        matchedPayloadCount: Number.isSafeInteger(recordState.matchedPayloadCount)
+          ? recordState.matchedPayloadCount : -1
+      };
+    }
+  }).catch(() => []);
+  return (results[0]?.result as Record<string, unknown> | undefined) ?? null;
+}
+
 export async function readXiaohongshuExistingSearchNoteDetailNetworkProjection(
   tabId: number,
   workId: string,
