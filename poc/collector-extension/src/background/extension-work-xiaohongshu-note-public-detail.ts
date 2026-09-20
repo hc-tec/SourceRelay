@@ -1035,6 +1035,9 @@ async function waitForDomProjection(
         const imageUrls = Array.from(overlay.querySelectorAll('img')).filter(visible)
           .map((image) => image.currentSrc || image.src)
           .filter((src) => src.startsWith('https://'))
+          // Exclude author avatars and platform chrome; keep note media only.
+          .filter((src) => !src.includes('/avatar/') && !src.includes('sns-avatar') &&
+            !src.includes('picasso-static') && !src.includes('fe-platform'))
           .filter((src, index, all) => all.indexOf(src) === index)
           .slice(0, 24);
         return {
