@@ -89,8 +89,9 @@ describe('xiaohongshu payload projector: media references from network payloads'
   test('projects note items from the real card envelope', () => {
     const result = projector(SEARCH_PAYLOAD);
     expect(result.items.map((item) => item.noteId)).toEqual(['video-note-1', 'image-note-1']);
-    expect(result.items[0].title).toBe('咖啡拉花视频教程');
-    expect(result.items[0].likedCountText).toBe('1.2万');
+    const first = result.items[0]!;
+    expect(first.title).toBe('咖啡拉花视频教程');
+    expect(first.likedCountText).toBe('1.2万');
   });
 
   test('collects cover and image_list references per note', () => {
