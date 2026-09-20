@@ -190,7 +190,8 @@ export function createXiaohongshuSearchPayloadProjector(deps: XhsSearchProjector
             if (!recordValue) return;
             for (const [key, child] of Object.entries(recordValue).slice(0, 40)) {
               if (/^(url|url_default|url_pre|master_url|url_preload)$/i.test(key)) {
-                samples[`${path}.${key}`] = typeof child === 'string' ? child.slice(0, 160) : '<non-string>';
+                const safeKey = `${path}.${key}`.replace(/^[.]+/, '').replace(/[^a-zA-Z0-9_.-]/g, '_');
+                samples[safeKey] = typeof child === 'string' ? child.slice(0, 160) : '<non-string>';
               } else if (child && typeof child === 'object') {
                 sampleUrlFields(child, depth + 1, `${path}.${key}`);
               }
@@ -219,10 +220,13 @@ export function createXiaohongshuSearchPayloadProjector(deps: XhsSearchProjector
               if (/token|cookie|session|captcha|verify|secret|password|avatar/i.test(key)) continue;
               const childPath = `${path}.${key}`;
               if (typeof child === 'string' && child.length <= 1024 &&
-                (child.startsWith('https://') || child.startsWith('//'))) {
-                // The payload stores image URLs protocol-relative ('//sns-…')
-                // or empty; the client prepends https: at render time.
-                const absolute = child.startsWith('//') ? `https:${child}` : child;
+                (child.startsWith('https://') || child.startsWith('http://') || child.startsWith('//'))) {
+                // Field probe proved the payload stores image URLs over plain
+                // http:// (occasionally protocol-relative); the CDN serves
+                // https, so normalise on capture.
+                const absolute = child.startsWith('//') ? `https:${child}`
+                  : child.startsWith('http://') ? `https://${child.slice(7)}`
+                  : child;
                 if (/master_?url|video_?url|play_?url|media_?url/i.test(key) || /video|stream/i.test(childPath)) {
                   if (media.videoUrls.length < 4 && !media.videoUrls.includes(absolute)) media.videoUrls.push(absolute);
                 } else if (/image|cover|pic/i.test(key) || /image|cover/i.test(childPath) || key === 'url') {
