@@ -77,6 +77,7 @@ interface DomProjection {
   interactionText: string;
   visibleMediaCount: number;
   imageUrls: string[];
+  videoUrls: string[];
   commentEntryVisible: boolean;
 }
 
@@ -216,6 +217,7 @@ export async function executeXiaohongshuNotePublicDetailExtensionWork(
       visibleMediaCount: dom.visibleMediaCount,
       commentEntryVisible: dom.commentEntryVisible,
       ...(dom.imageUrls.length > 0 ? { imageUrls: dom.imageUrls } : {}),
+      ...(dom.videoUrls.length > 0 ? { videoUrls: dom.videoUrls } : {}),
       rawPayloadStored: false,
       responseUrlsStored: false
     };
@@ -1040,12 +1042,31 @@ async function waitForDomProjection(
             !src.includes('picasso-static') && !src.includes('fe-platform'))
           .filter((src, index, all) => all.indexOf(src) === index)
           .slice(0, 24);
+        // Video notes expose their CDN source on the <video> element (direct
+        // mp4); blob/stream manifests are useless references and are dropped.
+        // The poster frame rides with the regular image list.
+        const videoUrls = Array.from(overlay.querySelectorAll('video')).filter(visible)
+          .map((video) => {
+            if (video.src && video.src.startsWith('https://')) return video.src;
+            const source = video.querySelector('source[src^="https://"]');
+            return source ? (source as HTMLSourceElement).src : '';
+          })
+          .filter((src) => src !== '' && !src.startsWith('https://blob:'))
+          .filter((src, index, all) => all.indexOf(src) === index)
+          .slice(0, 8);
+        const posterUrls = Array.from(overlay.querySelectorAll('video')).filter(visible)
+          .map((video) => video.poster)
+          .filter((src) => src.startsWith('https://'));
+        for (const poster of posterUrls) {
+          if (!imageUrls.includes(poster)) imageUrls.unshift(poster);
+        }
         return {
           publicText,
           authorNickname: (author?.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 200),
           interactionText,
           visibleMediaCount: Math.min(20, Array.from(overlay.querySelectorAll('img, video')).filter(visible).length),
           imageUrls,
+          videoUrls,
           commentEntryVisible: /评论/.test(publicText)
         };
       }

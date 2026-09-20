@@ -35,6 +35,9 @@ export interface XiaohongshuNotePublicDetailProjection {
   /** Bounded public CDN image URLs of the note's media, in overlay order.
    * Public references only — never raw payloads. */
   imageUrls?: string[];
+  /** Bounded public CDN video URLs for video notes (direct mp4 sources,
+   * never blob/stream manifests). Public references only. */
+  videoUrls?: string[];
   comments?: XiaohongshuNotePublicCommentsProjection;
   replyThread?: XiaohongshuPublicReplyThreadProjection;
   replyThreads?: XiaohongshuPublicReplyThreadProjection[];
@@ -142,6 +145,9 @@ export function isXiaohongshuNotePublicDetailProjection(
     (value.imageUrls === undefined || (Array.isArray(value.imageUrls) && value.imageUrls.length >= 1 &&
       value.imageUrls.length <= 24 && value.imageUrls.every((url) => typeof url === 'string' &&
       url.startsWith('https://') && url.length <= 512))) &&
+    (value.videoUrls === undefined || (Array.isArray(value.videoUrls) && value.videoUrls.length >= 1 &&
+      value.videoUrls.length <= 8 && value.videoUrls.every((url) => typeof url === 'string' &&
+      url.startsWith('https://') && !url.startsWith('https://blob:') && url.length <= 1024))) &&
     (value.comments === undefined || isXiaohongshuNotePublicCommentsProjection(value.comments)) &&
     (value.replyThread === undefined || isXiaohongshuPublicReplyThreadProjection(value.replyThread)) &&
     (value.replyThreads === undefined || (Array.isArray(value.replyThreads) && value.replyThreads.length >= 1 &&
@@ -251,7 +257,7 @@ function detailProjectionKeys(value: Record<string, unknown>): boolean {
     'schemaVersion', 'sourceRank', 'captureMode', 'network', 'publicText', 'authorNickname', 'interactionText',
     'visibleMediaCount', 'commentEntryVisible', 'rawPayloadStored', 'responseUrlsStored'
   ] as const;
-  const optional = ['comments', 'replyThread', 'replyThreads', 'commentsCapture', 'repliesCapture', 'imageUrls'] as const;
+  const optional = ['comments', 'replyThread', 'replyThreads', 'commentsCapture', 'repliesCapture', 'imageUrls', 'videoUrls'] as const;
   const keys = Object.keys(value);
   return base.every((key) => keys.includes(key)) &&
     keys.every((key) => base.includes(key as typeof base[number]) || optional.includes(key as typeof optional[number]));

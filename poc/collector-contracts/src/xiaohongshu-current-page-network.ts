@@ -341,6 +341,8 @@ export interface XiaohongshuPublicNoteDetailProjection {
   interactionText: string;
   /** Bounded public CDN image URLs of the note's media, in overlay order. */
   imageUrls?: string[];
+  /** Bounded public CDN video URLs for video notes (direct mp4 sources). */
+  videoUrls?: string[];
   /** Present only when the caller explicitly enables comment collection. */
   comments?: XiaohongshuNotePublicCommentsProjection;
   /** Present only when the caller explicitly enables one reply thread. */
@@ -654,7 +656,10 @@ function optionalPublicNoteDetails(value: unknown, maximumItems: 40 | 200): bool
       (entry.repliesCapture === undefined || entry.repliesCapture === 'captured' || entry.repliesCapture === 'unconfirmed') &&
       (entry.imageUrls === undefined || (Array.isArray(entry.imageUrls) && entry.imageUrls.length >= 1 &&
         entry.imageUrls.length <= 24 && entry.imageUrls.every((url) => typeof url === 'string' &&
-        url.startsWith('https://') && url.length <= 512)));
+        url.startsWith('https://') && url.length <= 512))) &&
+      (entry.videoUrls === undefined || (Array.isArray(entry.videoUrls) && entry.videoUrls.length >= 1 &&
+        entry.videoUrls.length <= 8 && entry.videoUrls.every((url) => typeof url === 'string' &&
+        url.startsWith('https://') && !url.startsWith('https://blob:') && url.length <= 1024)));
   });
 }
 
@@ -664,7 +669,7 @@ function commentCapture(value: unknown): boolean {
 
 function detailProjectionKeys(value: Record<string, unknown>): boolean {
   const base = ['noteId', 'publicText', 'authorNickname', 'interactionText'] as const;
-  const optional = ['comments', 'replyThread', 'replyThreads', 'commentsCapture', 'repliesCapture', 'imageUrls'] as const;
+  const optional = ['comments', 'replyThread', 'replyThreads', 'commentsCapture', 'repliesCapture', 'imageUrls', 'videoUrls'] as const;
   const keys = Object.keys(value);
   return base.every((key) => keys.includes(key)) &&
     keys.every((key) => base.includes(key as typeof base[number]) || optional.includes(key as typeof optional[number]));
